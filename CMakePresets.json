@@ -1,0 +1,46 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "installDir": "${sourceDir}/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "msvc2022-qt6",
+      "displayName": "MSVC 2022 Qt6",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_PREFIX_PATH": "F:/Qt/6.8.2/msvc2022_64"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "msvc2022-qt6",
+      "configurePreset": "msvc2022-qt6",
+      "configuration": "Debug"
+    }
+  ],
+  "vendor": {
+    "qt-project.org/Presets": {
+      "checksum": "67SmY24ZeVbebyKD0fGfIzb/bGI="
+    }
+  }
+}
