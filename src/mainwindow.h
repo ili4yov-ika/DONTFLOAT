@@ -52,6 +52,7 @@ private:
     void setupConnections();
     void readSettings();
     void writeSettings();
+    void updateTimeLabel(qint64 msPosition);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
 
     Ui::MainWindow *ui;
@@ -79,4 +80,4 @@ private:
     QSettings settings;
 };
 
-#endif // MAINWINDOW_H
+#endif // MAINWINDOW_H 

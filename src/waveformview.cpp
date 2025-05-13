@@ -3,11 +3,13 @@
 #include <QtCore/QPoint>
 #include <QtCore/QRect>
 #include <QtGui/QPainter>
+#include <QtCore/QTime>
 
 // Определение статических констант
-const QColor WaveformView::waveformColor = QColor(0, 255, 0);  // Зеленый цвет как в Reaper
+const QColor WaveformView::waveformColor = QColor(75, 0, 130);  // Индиго
 const QColor WaveformView::beatLineColor = QColor(255, 255, 255, 128);  // Полупрозрачный белый
 const QColor WaveformView::barLineColor = QColor(255, 255, 255, 200);   // Более яркий белый
+const QColor WaveformView::cursorColor = QColor(0, 0, 0);  // Чёрный цвет для курсора
 const int WaveformView::minZoom = 1;
 const int WaveformView::maxZoom = 1000;
 
@@ -18,14 +20,60 @@ WaveformView::WaveformView(QWidget *parent)
     , horizontalOffset(0.0f)
     , isDragging(false)
     , sampleRate(44100)
+    , playbackPosition(0)
+    , scrollStep(0.1f)    // 10% от ширины окна
+    , zoomStep(1.2f)      // 20% изменение масштаба
+    , showTimeDisplay(true)
+    , showBarsDisplay(false)
 {
     setMinimumHeight(100);
     setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus); // Разрешаем получение фокуса для обработки клавиш
 }
 
 void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
 {
-    audioChannels = channels;
+    // Проверка на пустые данные
+    if (channels.isEmpty()) {
+        return;
+    }
+
+    // Проверка на корректность данных
+    for (const auto& channel : channels) {
+        if (channel.isEmpty()) {
+            return;
+        }
+    }
+
+    // Нормализация данных
+    audioChannels.clear();
+    for (const auto& channel : channels) {
+        QVector<float> normalizedChannel;
+        normalizedChannel.reserve(channel.size());
+        
+        // Находим максимальное значение для нормализации
+        float maxValue = 0.0f;
+        for (float sample : channel) {
+            maxValue = qMax(maxValue, qAbs(sample));
+        }
+        
+        // Нормализуем значения
+        if (maxValue > 0.0f) {
+            for (float sample : channel) {
+                normalizedChannel.append(sample / maxValue);
+            }
+        } else {
+            normalizedChannel = channel;
+        }
+        
+        audioChannels.append(normalizedChannel);
+    }
+
+    // Сбрасываем масштаб и смещение
+    zoomLevel = 1.0f;
+    horizontalOffset = 0.0f;
+    emit zoomChanged(zoomLevel);
+
     update();
 }
 
@@ -37,8 +85,12 @@ void WaveformView::setBPM(float newBpm)
 
 void WaveformView::setZoomLevel(float zoom)
 {
-    zoomLevel = qBound(float(minZoom), zoom, float(maxZoom));
-    update();
+    float newZoom = qBound(float(minZoom), zoom, float(maxZoom));
+    if (!qFuzzyCompare(newZoom, zoomLevel)) {
+        zoomLevel = newZoom;
+        emit zoomChanged(zoomLevel);
+        update();
+    }
 }
 
 void WaveformView::setSampleRate(int rate)
@@ -69,6 +121,9 @@ void WaveformView::paintEvent(QPaintEvent* event)
         QRectF channelRect(0, i * channelHeight, width(), channelHeight);
         drawWaveform(painter, audioChannels[i], channelRect);
     }
+
+    // Рисуем курсор воспроизведения
+    drawPlaybackCursor(painter);
 }
 
 void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect)
@@ -78,19 +133,22 @@ void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples
     painter.setPen(waveformColor);
     
     // Количество сэмплов на пиксель с учетом масштаба
-    float samplesPerPixel = qMax(1.0f, float(samples.size()) / (rect.width() * zoomLevel));
+    float samplesPerPixel = float(samples.size()) / (rect.width() * zoomLevel);
     
-    float xOffset = horizontalOffset * rect.width();
+    // Вычисляем начальный сэмпл с учетом смещения и масштаба
+    int visibleSamples = int(rect.width() * samplesPerPixel);
+    int maxStartSample = qMax(0, samples.size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
     
     for (int x = 0; x < rect.width(); ++x) {
-        int startSample = int((x + xOffset) * samplesPerPixel);
-        int endSample = int((x + 1 + xOffset) * samplesPerPixel);
+        int currentSample = startSample + int(x * samplesPerPixel);
+        int nextSample = startSample + int((x + 1) * samplesPerPixel);
         
-        if (startSample >= samples.size()) break;
+        if (currentSample >= samples.size()) break;
         
         // Находим минимальное и максимальное значение для текущего пикселя
         float minValue = 0, maxValue = 0;
-        for (int s = startSample; s < qMin(endSample, samples.size()); ++s) {
+        for (int s = currentSample; s < qMin(nextSample, samples.size()); ++s) {
             minValue = qMin(minValue, samples[s]);
             maxValue = qMax(maxValue, samples[s]);
         }
@@ -118,25 +176,105 @@ void WaveformView::drawBeatLines(QPainter& painter)
     if (audioChannels.isEmpty()) return;
     
     // Вычисляем длительность одного такта в сэмплах
-    float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;  // Используем актуальную частоту дискретизации
+    float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
     float samplesPerBar = samplesPerBeat * 4;  // 4 удара в такте
     
     // Количество сэмплов на пиксель с учетом масштаба
     float samplesPerPixel = float(audioChannels[0].size()) / (width() * zoomLevel);
     
-    float xOffset = horizontalOffset * width();
+    // Вычисляем начальный сэмпл с учетом смещения и масштаба
+    int visibleSamples = int(width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioChannels[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    
+    // Находим первый бит и такт перед видимой областью
+    float firstBeat = floor(startSample / samplesPerBeat);
+    float firstBar = floor(startSample / samplesPerBar);
     
     // Рисуем линии тактов
     painter.setPen(QPen(barLineColor));
-    for (float x = -xOffset; x < width(); x += (samplesPerBar / samplesPerPixel)) {
-        painter.drawLine(QPointF(x, 0), QPointF(x, height()));
+    for (float bar = firstBar; ; bar++) {
+        float x = (bar * samplesPerBar - startSample) / samplesPerPixel;
+        if (x >= width()) break;
+        if (x >= 0) {
+            painter.drawLine(QPointF(x, 0), QPointF(x, height()));
+        }
     }
     
     // Рисуем линии битов
     painter.setPen(QPen(beatLineColor));
-    for (float x = -xOffset; x < width(); x += (samplesPerBeat / samplesPerPixel)) {
-        painter.drawLine(QPointF(x, 0), QPointF(x, height()));
+    for (float beat = firstBeat; ; beat++) {
+        float x = (beat * samplesPerBeat - startSample) / samplesPerPixel;
+        if (x >= width()) break;
+        if (x >= 0) {
+            painter.drawLine(QPointF(x, 0), QPointF(x, height()));
+        }
     }
+}
+
+void WaveformView::drawPlaybackCursor(QPainter& painter)
+{
+    if (audioChannels.isEmpty()) return;
+
+    // Количество сэмплов на пиксель с учетом масштаба
+    float samplesPerPixel = float(audioChannels[0].size()) / (width() * zoomLevel);
+    
+    // Вычисляем начальный сэмпл с учетом смещения и масштаба
+    int visibleSamples = int(width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioChannels[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    
+    // Вычисляем позицию курсора относительно видимой области
+    float cursorX = float(playbackPosition - startSample) / samplesPerPixel;
+
+    if (cursorX >= 0 && cursorX < width()) {
+        painter.setPen(QPen(cursorColor, 2));  // Толщина линии 2 пикселя
+        painter.drawLine(QPointF(cursorX, 0), QPointF(cursorX, height()));
+    }
+}
+
+QString WaveformView::getPositionText(qint64 position) const
+{
+    QString positionText;
+    
+    if (showTimeDisplay) {
+        // Конвертируем позицию в миллисекунды
+        qint64 msPosition = (position * 1000) / sampleRate;
+        int minutes = (msPosition / 60000);
+        int seconds = (msPosition / 1000) % 60;
+        int milliseconds = msPosition % 1000;
+        positionText = QString("%1:%2.%3")
+            .arg(minutes, 2, 10, QChar('0'))
+            .arg(seconds, 2, 10, QChar('0'))
+            .arg(milliseconds / 100);
+    }
+    
+    if (showBarsDisplay) {
+        // Вычисляем такты и доли
+        float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
+        float beatsFromStart = float(position) / samplesPerBeat;
+        int bar = int(beatsFromStart / 4) + 1;  // Такты начинаются с 1
+        int beat = int(beatsFromStart) % 4 + 1;  // Доли начинаются с 1
+        float subBeat = (beatsFromStart - float(int(beatsFromStart))) * 4.0f; // Доли такта в четвертях
+        
+        QString barText = QString("%1.%2.%3")
+            .arg(bar)
+            .arg(beat)
+            .arg(int(subBeat + 1));
+            
+        if (!positionText.isEmpty()) {
+            positionText += " | ";
+        }
+        positionText += barText;
+    }
+    
+    return positionText;
+}
+
+void WaveformView::setPlaybackPosition(qint64 position)
+{
+    playbackPosition = position;
+    update();
 }
 
 QPointF WaveformView::sampleToPoint(int sampleIndex, float value, const QRectF& rect) const
@@ -149,12 +287,14 @@ QPointF WaveformView::sampleToPoint(int sampleIndex, float value, const QRectF& 
 
 void WaveformView::wheelEvent(QWheelEvent* event)
 {
-    if (event->modifiers() & Qt::ControlModifier) {
-        // Масштабирование
-        float delta = event->angleDelta().y() / 120.f;
-        float newZoom = zoomLevel * (delta > 0 ? 1.1f : 0.9f);
-        setZoomLevel(newZoom);
+    float delta = event->angleDelta().y() / 120.f;
+    float newZoom = zoomLevel;
+    if (delta > 0) {
+        newZoom *= zoomStep;
+    } else {
+        newZoom /= zoomStep;
     }
+    setZoomLevel(newZoom);
     event->accept();
 }
 
@@ -163,6 +303,23 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton) {
         isDragging = true;
         lastMousePos = event->pos();
+
+        // Устанавливаем позицию воспроизведения по клику
+        if (!audioChannels.isEmpty()) {
+            float samplesPerPixel = float(audioChannels[0].size()) / (width() * zoomLevel);
+            float clickX = event->pos().x() + (horizontalOffset * width());
+            qint64 newPosition = qint64(clickX * samplesPerPixel);
+            playbackPosition = newPosition;
+            
+            // Показываем всплывающую подсказку
+            QString positionText = getPositionText(newPosition);
+            if (!positionText.isEmpty()) {
+                QToolTip::showText(event->globalPosition().toPoint(), positionText, this);
+            }
+            
+            emit positionChanged(newPosition);
+            update();
+        }
     }
 }
 
@@ -170,10 +327,8 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
 {
     if (isDragging) {
         QPoint delta = event->pos() - lastMousePos;
-        horizontalOffset -= float(delta.x()) / (width() * zoomLevel);
-        horizontalOffset = qBound(0.0f, horizontalOffset, 1.0f - (1.0f / zoomLevel));
+        adjustHorizontalOffset(-float(delta.x()) / (width() * zoomLevel));
         lastMousePos = event->pos();
-        update();
     }
 }
 
@@ -182,4 +337,61 @@ void WaveformView::mouseReleaseEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton) {
         isDragging = false;
     }
+}
+
+void WaveformView::keyPressEvent(QKeyEvent* event)
+{
+    switch (event->key()) {
+        case Qt::Key_Left:
+            adjustHorizontalOffset(-scrollStep);
+            break;
+        case Qt::Key_Right:
+            adjustHorizontalOffset(scrollStep);
+            break;
+        case Qt::Key_Up:
+            setZoomLevel(zoomLevel * zoomStep);
+            break;
+        case Qt::Key_Down:
+            setZoomLevel(zoomLevel / zoomStep);
+            break;
+        default:
+            QWidget::keyPressEvent(event);
+    }
+}
+
+void WaveformView::adjustHorizontalOffset(float delta)
+{
+    // Применяем смещение с ограничением от 0 до 1
+    horizontalOffset = qBound(0.0f, horizontalOffset + delta, 1.0f);
+    update();
+}
+
+void WaveformView::adjustZoomLevel(float delta)
+{
+    float newZoom = zoomLevel;
+    if (delta > 0) {
+        newZoom *= zoomStep;
+    } else {
+        newZoom /= zoomStep;
+    }
+    setZoomLevel(newZoom);
+}
+
+void WaveformView::setHorizontalOffset(float offset)
+{
+    // Ограничиваем смещение в пределах от 0 до 1
+    horizontalOffset = qBound(0.0f, offset, 1.0f);
+    
+    // При изменении смещения обновляем отображение
+    update();
+}
+
+void WaveformView::setTimeDisplayMode(bool showTime)
+{
+    showTimeDisplay = showTime;
+}
+
+void WaveformView::setBarsDisplayMode(bool showBars)
+{
+    showBarsDisplay = showBars;
 } 

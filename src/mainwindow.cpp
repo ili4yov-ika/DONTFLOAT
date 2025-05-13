@@ -11,6 +11,10 @@
 #include <QtGui/QCloseEvent>
 #include <QtMultimedia/QAudioDecoder>
 #include <QtMultimedia/QAudioBuffer>
+#include <QtGui/QKeyEvent>
+#include <QtWidgets/QScrollBar>
+#include <QtWidgets/QCheckBox>
+#include <QtWidgets/QComboBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -27,6 +31,15 @@ MainWindow::MainWindow(QWidget *parent)
         ui->waveformWidget->setLayout(new QVBoxLayout());
     }
     ui->waveformWidget->layout()->addWidget(waveformView);
+    
+    // Создаем и настраиваем скроллбар
+    horizontalScrollBar = new QScrollBar(Qt::Horizontal, this);
+    horizontalScrollBar->setMinimum(0);
+    horizontalScrollBar->setMaximum(1000); // Будем масштабировать значения
+    if (!ui->scrollBarWidget->layout()) {
+        ui->scrollBarWidget->setLayout(new QVBoxLayout());
+    }
+    ui->scrollBarWidget->layout()->addWidget(horizontalScrollBar);
     
     // Инициализация аудио
     mediaPlayer = new QMediaPlayer(this);
@@ -99,6 +112,68 @@ void MainWindow::setupConnections()
     connect(ui->playButton, &QPushButton::clicked, this, &MainWindow::playAudio);
     connect(ui->stopButton, &QPushButton::clicked, this, &MainWindow::stopAudio);
     connect(ui->bpmEdit, &QLineEdit::editingFinished, this, &MainWindow::updateBPM);
+    connect(mediaPlayer, &QMediaPlayer::positionChanged, this, &MainWindow::updatePlaybackPosition);
+    
+    // Подключаем комбобокс выбора режима отображения
+    connect(ui->displayModeCombo, &QComboBox::currentIndexChanged, this,
+        [this](int index) {
+            if (waveformView) {
+                waveformView->setTimeDisplayMode(index == 0);
+                waveformView->setBarsDisplayMode(index == 1);
+                updateTimeLabel(mediaPlayer->position());
+            }
+        });
+    
+    // Связываем скроллбар с WaveformView
+    connect(horizontalScrollBar, &QScrollBar::valueChanged, this,
+        [this](int value) {
+            if (waveformView) {
+                // Преобразуем значение скроллбара в смещение
+                float offset = float(value) / float(horizontalScrollBar->maximum());
+                waveformView->setHorizontalOffset(offset);
+            }
+        });
+
+    // Обновляем скроллбар при изменении масштаба
+    connect(waveformView, &WaveformView::zoomChanged, this,
+        [this](float zoom) {
+            if (zoom <= 1.0f) {
+                // При масштабе 100% или меньше показываем весь трек
+                horizontalScrollBar->setMaximum(0);
+                horizontalScrollBar->setPageStep(1000);
+                horizontalScrollBar->setValue(0);
+            } else {
+                // При увеличении масштаба регулируем размер и положение ползунка
+                int total = 10000; // Используем фиксированное большое значение для точности
+                int page = int(total / zoom);
+                horizontalScrollBar->setMaximum(total - page);
+                horizontalScrollBar->setPageStep(page);
+                
+                // Сохраняем текущую видимую позицию
+                float currentOffset = waveformView->getHorizontalOffset();
+                int value = int(currentOffset * total);
+                horizontalScrollBar->setValue(value);
+            }
+        });
+
+    // Подключаем сигнал изменения позиции от WaveformView
+    connect(waveformView, &WaveformView::positionChanged, this,
+        [this](qint64 samplePosition) {
+            if (waveformView) {
+                qint64 msPosition = (samplePosition * 1000) / waveformView->getSampleRate();
+                mediaPlayer->setPosition(msPosition);
+                updateTimeLabel(msPosition);
+            }
+        });
+
+    // Связываем скроллбар с горизонтальной прокруткой
+    connect(horizontalScrollBar, &QScrollBar::valueChanged, this,
+        [this](int value) {
+            if (waveformView) {
+                float offset = float(value) / float(horizontalScrollBar->maximum() + horizontalScrollBar->pageStep());
+                waveformView->setHorizontalOffset(offset);
+            }
+        });
 }
 
 void MainWindow::playAudio()
@@ -132,14 +207,14 @@ void MainWindow::stopAudio()
 void MainWindow::updateTime()
 {
     if (isPlaying) {
-        currentPosition += playbackTimer->interval();
-        int minutes = (currentPosition / 1000) / 60;
+        currentPosition = mediaPlayer->position();
+        int minutes = (currentPosition / 60000);
         int seconds = (currentPosition / 1000) % 60;
         int milliseconds = currentPosition % 1000;
-        ui->timeLabel->setText(QString("%1:%2:%3")
+        ui->timeLabel->setText(QString("%1:%2.%3")
             .arg(minutes, 2, 10, QChar('0'))
             .arg(seconds, 2, 10, QChar('0'))
-            .arg(milliseconds, 3, QChar('0')));
+            .arg(milliseconds / 100)); // Показываем только десятые доли секунды
     }
 }
 
@@ -153,6 +228,46 @@ void MainWindow::updateBPM()
     } else {
         ui->bpmEdit->setText("120.00");
         statusBar()->showMessage(tr("Неверное значение BPM"), 2000);
+    }
+}
+
+void MainWindow::updateTimeLabel(qint64 msPosition)
+{
+    if (ui->displayModeCombo->currentIndex() == 0) {
+        // Режим отображения времени
+        int minutes = (msPosition / 60000);
+        int seconds = (msPosition / 1000) % 60;
+        int milliseconds = msPosition % 1000;
+        ui->timeLabel->setText(QString("%1:%2.%3")
+            .arg(minutes, 2, 10, QChar('0'))
+            .arg(seconds, 2, 10, QChar('0'))
+            .arg(milliseconds / 100));
+    } else {
+        // Режим отображения тактов
+        if (waveformView) {
+            float beatsPerMinute = ui->bpmEdit->text().toFloat();
+            float beatsPerSecond = beatsPerMinute / 60.0f;
+            float secondsFromStart = float(msPosition) / 1000.0f;
+            float beatsFromStart = beatsPerSecond * secondsFromStart;
+            
+            int bar = int(beatsFromStart / 4) + 1;
+            int beat = int(beatsFromStart) % 4 + 1;
+            float subBeat = (beatsFromStart - float(int(beatsFromStart))) * 4.0f;
+            
+            ui->timeLabel->setText(QString("%1.%2.%3")
+                .arg(bar)
+                .arg(beat)
+                .arg(int(subBeat + 1)));
+        }
+    }
+}
+
+void MainWindow::updatePlaybackPosition(qint64 position)
+{
+    if (waveformView) {
+        qint64 samplePosition = (position * waveformView->getSampleRate()) / 1000;
+        waveformView->setPlaybackPosition(samplePosition);
+        updateTimeLabel(position);
     }
 }
 
@@ -205,18 +320,68 @@ QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath)
 {
     QVector<QVector<float>> channels;
     QAudioDecoder decoder;
+    
+    // Настраиваем формат аудио
+    QAudioFormat format;
+    format.setSampleRate(44100);
+    format.setChannelCount(2);
+    format.setSampleFormat(QAudioFormat::Float);
+    decoder.setAudioFormat(format);
+    
     decoder.setSource(QUrl::fromLocalFile(filePath));
+
+    // Проверяем, поддерживается ли формат
+    if (!decoder.audioFormat().isValid()) {
+        statusBar()->showMessage(tr("Ошибка: неподдерживаемый формат аудио"), 3000);
+        return channels;
+    }
 
     QEventLoop loop;
     QVector<float> leftChannel;
     QVector<float> rightChannel;
 
+    // Обработка ошибок декодера
+    connect(&decoder, QOverload<QAudioDecoder::Error>::of(&QAudioDecoder::error),
+        [&](QAudioDecoder::Error error) {
+            QString errorStr = tr("Ошибка декодирования: ");
+            switch (error) {
+                case QAudioDecoder::ResourceError:
+                    errorStr += tr("файл не найден или недоступен");
+                    break;
+                case QAudioDecoder::FormatError:
+                    errorStr += tr("неподдерживаемый формат");
+                    break;
+                case QAudioDecoder::AccessDeniedError:
+                    errorStr += tr("нет доступа к файлу");
+                    break;
+                default:
+                    errorStr += tr("неизвестная ошибка");
+            }
+            statusBar()->showMessage(errorStr, 3000);
+            loop.quit();
+        });
+
     connect(&decoder, &QAudioDecoder::bufferReady, this,
         [&]() {
             QAudioBuffer buffer = decoder.read();
+            if (!buffer.isValid() || buffer.frameCount() == 0) {
+                statusBar()->showMessage(tr("Ошибка: некорректные данные в буфере"), 3000);
+                return;
+            }
+
+            if (buffer.format().sampleFormat() != QAudioFormat::Float) {
+                statusBar()->showMessage(tr("Ошибка: неподдерживаемый формат данных"), 3000);
+                return;
+            }
+
             const float* data = buffer.constData<float>();
             int frameCount = buffer.frameCount();
             int channelCount = buffer.format().channelCount();
+
+            // Устанавливаем частоту дискретизации для визуализации
+            if (waveformView && buffer.format().sampleRate() > 0) {
+                waveformView->setSampleRate(buffer.format().sampleRate());
+            }
 
             for (int i = 0; i < frameCount; ++i) {
                 leftChannel.append(data[i * channelCount]);
@@ -231,9 +396,11 @@ QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath)
     decoder.start();
     loop.exec();
 
-    channels.append(leftChannel);
-    if (!rightChannel.isEmpty()) {
-        channels.append(rightChannel);
+    if (!leftChannel.isEmpty()) {
+        channels.append(leftChannel);
+        if (!rightChannel.isEmpty()) {
+            channels.append(rightChannel);
+        }
     }
 
     return channels;
@@ -247,4 +414,15 @@ void MainWindow::updateWindowTitle()
         title += " - " + fileInfo.fileName();
     }
     setWindowTitle(title);
+}
+
+void MainWindow::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Space) {
+        playAudio();
+    } else if (event->key() == Qt::Key_S) {
+        stopAudio();
+    } else {
+        QMainWindow::keyPressEvent(event);
+    }
 }
