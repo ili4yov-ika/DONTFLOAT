@@ -1,0 +1,20 @@
+{
+  "OutputFoldersPerTargetSystem": {
+    "Local Machine": [
+      "out\\build\\debug",
+      "out\\build\\release"
+    ]
+  },
+  "ExpandedNodes": [
+    "",
+    "\\include",
+    "\\out",
+    "\\resources",
+    "\\resources\\icons",
+    "\\src",
+    "\\translations",
+    "\\ui"
+  ],
+  "SelectedNode": "\\CMakeLists.txt",
+  "PreviewInSolutionExplorer": false
+}

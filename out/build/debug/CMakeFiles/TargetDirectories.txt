@@ -1,0 +1,8 @@
+F:/Devs/C++/DONTFLOAT/out/build/debug/CMakeFiles/DONTFLOAT.dir
+F:/Devs/C++/DONTFLOAT/out/build/debug/CMakeFiles/edit_cache.dir
+F:/Devs/C++/DONTFLOAT/out/build/debug/CMakeFiles/rebuild_cache.dir
+F:/Devs/C++/DONTFLOAT/out/build/debug/CMakeFiles/list_install_components.dir
+F:/Devs/C++/DONTFLOAT/out/build/debug/CMakeFiles/install.dir
+F:/Devs/C++/DONTFLOAT/out/build/debug/CMakeFiles/install/local.dir
+F:/Devs/C++/DONTFLOAT/out/build/debug/CMakeFiles/DONTFLOAT_autogen_timestamp_deps.dir
+F:/Devs/C++/DONTFLOAT/out/build/debug/CMakeFiles/DONTFLOAT_autogen.dir

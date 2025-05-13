@@ -1,0 +1,21 @@
+# ninja log v6
+22	274	7687836568139664	DONTFLOAT_autogen/timestamp	38fc3093a3842992
+22	274	7687836568139664	DONTFLOAT_autogen/mocs_compilation.cpp	38fc3093a3842992
+22	274	7687836568139664	F:/Devs/C++/DONTFLOAT/out/build/debug/DONTFLOAT_autogen/timestamp	38fc3093a3842992
+22	274	7687836568139664	F:/Devs/C++/DONTFLOAT/out/build/debug/DONTFLOAT_autogen/mocs_compilation.cpp	38fc3093a3842992
+278	312	7687831834435807	F:/Devs/C++/DONTFLOAT/out/build/debug/DONTFLOAT_autogen/EWIEGA46WW/qrc_resources.cpp	1a49f9acb3c5807
+278	312	7687831834435807	DONTFLOAT_autogen/EWIEGA46WW/qrc_resources.cpp	1a49f9acb3c5807
+285	318	7687836568689672	CMakeFiles/DONTFLOAT.dir/DONTFLOAT_autogen/EWIEGA46WW/qrc_resources.cpp.obj	6ecbd3a3cd6a07ee
+282	1451	7687836568659659	CMakeFiles/DONTFLOAT.dir/src/waveformview.cpp.obj	e8cacf8ef43eefe6
+277	1809	7687836568609654	CMakeFiles/DONTFLOAT.dir/src/main.cpp.obj	d85eac05e92176e6
+275	1826	7687836568589670	CMakeFiles/DONTFLOAT.dir/DONTFLOAT_autogen/mocs_compilation.cpp.obj	fc4972380a381b04
+279	1896	7687836568639656	CMakeFiles/DONTFLOAT.dir/src/mainwindow.cpp.obj	9d38c1fddbe919f8
+23	299	7687837830493482	DONTFLOAT_autogen/timestamp	38fc3093a3842992
+23	299	7687837830493482	DONTFLOAT_autogen/mocs_compilation.cpp	38fc3093a3842992
+23	299	7687837830493482	F:/Devs/C++/DONTFLOAT/out/build/debug/DONTFLOAT_autogen/timestamp	38fc3093a3842992
+23	299	7687837830493482	F:/Devs/C++/DONTFLOAT/out/build/debug/DONTFLOAT_autogen/mocs_compilation.cpp	38fc3093a3842992
+310	341	7687837831033479	CMakeFiles/DONTFLOAT.dir/DONTFLOAT_autogen/EWIEGA46WW/qrc_resources.cpp.obj	8abf3dc7056a667b
+307	1480	7687837831013479	CMakeFiles/DONTFLOAT.dir/src/waveformview.cpp.obj	a1f1c506c5f8c6fc
+303	1812	7687837830963485	CMakeFiles/DONTFLOAT.dir/src/main.cpp.obj	9ca67e5c9536dd5
+300	1851	7687837830943483	CMakeFiles/DONTFLOAT.dir/DONTFLOAT_autogen/mocs_compilation.cpp.obj	7befc2351f112e76
+305	1926	7687837830984538	CMakeFiles/DONTFLOAT.dir/src/mainwindow.cpp.obj	513b11dd5e43372b
