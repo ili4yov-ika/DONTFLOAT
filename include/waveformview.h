@@ -29,6 +29,7 @@ public:
     int getSampleRate() const { return sampleRate; }
     float getHorizontalOffset() const { return horizontalOffset; }
     float getZoomLevel() const { return zoomLevel; }
+    const QVector<QVector<float>>& getAudioData() const { return audioChannels; }
 
 signals:
     void positionChanged(qint64 position); // Сигнал для обновления позиции воспроизведения
@@ -47,10 +48,12 @@ private:
     void drawGrid(QPainter& painter);
     void drawBeatLines(QPainter& painter);
     void drawPlaybackCursor(QPainter& painter);
+    void drawBarMarkers(QPainter& painter, const QRectF& rect);
     QPointF sampleToPoint(int sampleIndex, float value, const QRectF& rect) const;
     void adjustHorizontalOffset(float delta);
     void adjustZoomLevel(float delta);
     QString getPositionText(qint64 position) const;
+    QString getBarText(float beatPosition) const;
 
     QVector<QVector<float>> audioChannels;
     float bpm;
@@ -69,8 +72,12 @@ private:
     static const QColor beatLineColor;
     static const QColor barLineColor;
     static const QColor cursorColor;
+    static const QColor markerTextColor;
+    static const QColor markerBackgroundColor;
     static const int minZoom;
     static const int maxZoom;
+    static const int markerHeight;
+    static const int markerSpacing;
 };
 
 #endif // WAVEFORMVIEW_H 

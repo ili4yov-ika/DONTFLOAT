@@ -15,6 +15,8 @@
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QComboBox>
+#include <QtCore/QDataStream>
+#include <QtCore/QFile>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -174,6 +176,12 @@ void MainWindow::setupConnections()
                 waveformView->setHorizontalOffset(offset);
             }
         });
+
+    // Добавляем кнопки загрузки и сохранения в тулбар
+    ui->loadButton->setIcon(QIcon(":/icons/resources/icons/load.svg"));
+    ui->saveButton->setIcon(QIcon(":/icons/resources/icons/save.svg"));
+    connect(ui->loadButton, &QPushButton::clicked, this, &MainWindow::openAudioFile);
+    connect(ui->saveButton, &QPushButton::clicked, this, &MainWindow::saveAudioFile);
 }
 
 void MainWindow::playAudio()
@@ -276,7 +284,14 @@ void MainWindow::createActions()
     openAct = new QAction(tr("&Открыть..."), this);
     openAct->setShortcuts(QKeySequence::Open);
     openAct->setStatusTip(tr("Открыть аудиофайл"));
+    openAct->setIcon(QIcon(":/icons/resources/icons/load.svg"));
     connect(openAct, &QAction::triggered, this, &MainWindow::openAudioFile);
+
+    saveAct = new QAction(tr("&Сохранить как..."), this);
+    saveAct->setShortcuts(QKeySequence::SaveAs);
+    saveAct->setStatusTip(tr("Сохранить аудиофайл"));
+    saveAct->setIcon(QIcon(":/icons/resources/icons/save.svg"));
+    connect(saveAct, &QAction::triggered, this, &MainWindow::saveAudioFile);
 
     exitAct = new QAction(tr("&Выход"), this);
     exitAct->setShortcuts(QKeySequence::Quit);
@@ -288,6 +303,7 @@ void MainWindow::createMenus()
 {
     fileMenu = menuBar()->addMenu(tr("&Файл"));
     fileMenu->addAction(openAct);
+    fileMenu->addAction(saveAct);
     fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
 }
@@ -404,6 +420,74 @@ QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath)
     }
 
     return channels;
+}
+
+void MainWindow::saveAudioFile()
+{
+    QString fileName = QFileDialog::getSaveFileName(this,
+        tr("Сохранить аудиофайл"), "",
+        tr("WAV файлы (*.wav);;Все файлы (*)"));
+
+    if (!fileName.isEmpty()) {
+        if (!fileName.endsWith(".wav", Qt::CaseInsensitive)) {
+            fileName += ".wav";
+        }
+
+        QFile file(fileName);
+        if (file.open(QIODevice::WriteOnly)) {
+            // Получаем данные из WaveformView
+            const QVector<QVector<float>>& audioData = waveformView->getAudioData();
+            if (!audioData.isEmpty()) {
+                // Заголовок WAV файла
+                QDataStream out(&file);
+                out.setByteOrder(QDataStream::LittleEndian);
+
+                // RIFF заголовок
+                out.writeRawData("RIFF", 4);
+                qint32 fileSize = 36 + audioData[0].size() * 2 * audioData.size(); // 2 байта на сэмпл
+                out << fileSize;
+                out.writeRawData("WAVE", 4);
+
+                // fmt подчанк
+                out.writeRawData("fmt ", 4);
+                qint32 fmtSize = 16;
+                out << fmtSize;
+                qint16 audioFormat = 1; // PCM
+                out << audioFormat;
+                qint16 numChannels = audioData.size();
+                out << numChannels;
+                qint32 sampleRate = waveformView->getSampleRate();
+                out << sampleRate;
+                qint32 byteRate = sampleRate * numChannels * 2;
+                out << byteRate;
+                qint16 blockAlign = numChannels * 2;
+                out << blockAlign;
+                qint16 bitsPerSample = 16;
+                out << bitsPerSample;
+
+                // data подчанк
+                out.writeRawData("data", 4);
+                qint32 dataSize = audioData[0].size() * 2 * numChannels;
+                out << dataSize;
+
+                // Записываем сэмплы
+                for (int i = 0; i < audioData[0].size(); ++i) {
+                    for (int channel = 0; channel < numChannels; ++channel) {
+                        float sample = audioData[channel][i];
+                        qint16 pcmSample = qint16(sample * 32767.0f);
+                        out << pcmSample;
+                    }
+                }
+
+                file.close();
+                statusBar()->showMessage(tr("Файл сохранен: %1").arg(fileName), 2000);
+            } else {
+                statusBar()->showMessage(tr("Ошибка: нет данных для сохранения"), 2000);
+            }
+        } else {
+            statusBar()->showMessage(tr("Ошибка: не удалось открыть файл для записи"), 2000);
+        }
+    }
 }
 
 void MainWindow::updateWindowTitle()

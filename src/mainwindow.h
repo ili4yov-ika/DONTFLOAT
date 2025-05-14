@@ -38,6 +38,7 @@ protected:
 
 private slots:
     void openAudioFile();
+    void saveAudioFile();
     void playAudio();
     void stopAudio();
     void updateTime();
@@ -64,6 +65,7 @@ private:
     
     // Actions
     QAction *openAct;
+    QAction *saveAct;
     QAction *exitAct;
 
     // Current file

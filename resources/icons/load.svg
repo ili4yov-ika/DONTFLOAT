@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Generator: Adobe Illustrator 24.1.2, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+
+<svg
+   version="1.1"
+   id="Слой_1"
+   x="0px"
+   y="0px"
+   viewBox="0 0 256 256"
+   style="enable-background:new 0 0 256 256;"
+   xml:space="preserve"
+   sodipodi:docname="load.svg"
+   inkscape:version="1.2.1 (9c6d41e410, 2022-07-14)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><defs
+   id="defs11" /><sodipodi:namedview
+   id="namedview9"
+   pagecolor="#505050"
+   bordercolor="#eeeeee"
+   borderopacity="1"
+   inkscape:showpageshadow="0"
+   inkscape:pageopacity="0"
+   inkscape:pagecheckerboard="0"
+   inkscape:deskcolor="#505050"
+   showgrid="false"
+   inkscape:zoom="3.4257812"
+   inkscape:cx="108.15051"
+   inkscape:cy="128.14595"
+   inkscape:window-width="1920"
+   inkscape:window-height="1057"
+   inkscape:window-x="-8"
+   inkscape:window-y="-8"
+   inkscape:window-maximized="1"
+   inkscape:current-layer="Слой_1" />
+<style
+   type="text/css"
+   id="style2">
+	.st0{fill:#43F1FF;}
+	.st1{fill:#4343FF;}
+</style>
+<rect
+   x="64"
+   y="64"
+   class="st0"
+   width="128"
+   height="128"
+   id="rect4" />
+
+<path
+   style="fill:#000000;fill-opacity:0.7"
+   d="m 106.54505,119.38883 -43.201835,72.97606 128.729755,-0.2919 38.82327,-73.85178 z"
+   id="path333"
+   sodipodi:nodetypes="ccccc" />
+
+<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z" fill="#ffffff"/>
+<path d="M10 17l2-3h-4l2 3z" fill="#ffffff"/>
+<path d="M10 11v4" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+</svg>

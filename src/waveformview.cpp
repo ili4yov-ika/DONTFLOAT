@@ -10,8 +10,12 @@ const QColor WaveformView::waveformColor = QColor(75, 0, 130);  // Индиго
 const QColor WaveformView::beatLineColor = QColor(255, 255, 255, 128);  // Полупрозрачный белый
 const QColor WaveformView::barLineColor = QColor(255, 255, 255, 200);   // Более яркий белый
 const QColor WaveformView::cursorColor = QColor(0, 0, 0);  // Чёрный цвет для курсора
+const QColor WaveformView::markerTextColor = QColor(200, 200, 200);  // Светло-серый для текста
+const QColor WaveformView::markerBackgroundColor = QColor(60, 60, 60);  // Темно-серый для фона
 const int WaveformView::minZoom = 1;
 const int WaveformView::maxZoom = 1000;
+const int WaveformView::markerHeight = 20;  // Высота области маркеров
+const int WaveformView::markerSpacing = 60;  // Минимальное расстояние между маркерами в пикселях
 
 WaveformView::WaveformView(QWidget *parent)
     : QWidget(parent)
@@ -107,6 +111,13 @@ void WaveformView::paintEvent(QPaintEvent* event)
     // Фон
     painter.fillRect(rect(), QColor(43, 43, 43));  // Темно-серый фон как в Reaper
     
+    // Область для маркеров тактов
+    QRectF markerRect(0, 0, width(), markerHeight);
+    drawBarMarkers(painter, markerRect);
+    
+    // Область для волны
+    QRectF waveformRect(0, markerHeight, width(), height() - markerHeight);
+    
     // Рисуем сетку и линии тактов
     drawGrid(painter);
     drawBeatLines(painter);
@@ -114,11 +125,11 @@ void WaveformView::paintEvent(QPaintEvent* event)
     if (audioChannels.isEmpty()) return;
     
     // Вычисляем высоту для каждого канала
-    float channelHeight = height() / float(audioChannels.size());
+    float channelHeight = (height() - markerHeight) / float(audioChannels.size());
     
     // Отрисовка каждого канала
     for (int i = 0; i < audioChannels.size(); ++i) {
-        QRectF channelRect(0, i * channelHeight, width(), channelHeight);
+        QRectF channelRect(0, markerHeight + i * channelHeight, width(), channelHeight);
         drawWaveform(painter, audioChannels[i], channelRect);
     }
 
@@ -230,6 +241,52 @@ void WaveformView::drawPlaybackCursor(QPainter& painter)
     if (cursorX >= 0 && cursorX < width()) {
         painter.setPen(QPen(cursorColor, 2));  // Толщина линии 2 пикселя
         painter.drawLine(QPointF(cursorX, 0), QPointF(cursorX, height()));
+    }
+}
+
+void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
+{
+    if (audioChannels.isEmpty()) return;
+    
+    painter.setPen(markerTextColor);
+    painter.setFont(QFont("Arial", 8));
+    
+    // Вычисляем длительность одного такта в сэмплах
+    float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
+    float samplesPerBar = samplesPerBeat * 4;  // 4 удара в такте
+    
+    // Количество сэмплов на пиксель с учетом масштаба
+    float samplesPerPixel = float(audioChannels[0].size()) / (width() * zoomLevel);
+    
+    // Вычисляем начальный сэмпл с учетом смещения и масштаба
+    int visibleSamples = int(width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioChannels[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    
+    // Находим первый такт перед видимой областью
+    float firstBar = floor(startSample / samplesPerBar);
+    
+    // Рисуем маркеры тактов
+    for (float bar = firstBar; ; bar++) {
+        float x = (bar * samplesPerBar - startSample) / samplesPerPixel;
+        if (x >= width()) break;
+        if (x >= 0) {
+            // Рисуем фон маркера
+            QRectF markerRect(x - markerSpacing/2, rect.top(), markerSpacing, rect.height());
+            painter.fillRect(markerRect, markerBackgroundColor);
+            
+            // Рисуем текст маркера
+            QString barText = QString::number(int(bar) + 1);
+            QRectF textRect = painter.fontMetrics().boundingRect(barText);
+            painter.drawText(QPointF(
+                x - textRect.width()/2,
+                rect.top() + rect.height() - 4
+            ), barText);
+            
+            // Рисуем вертикальную линию
+            painter.setPen(barLineColor);
+            painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, height()));
+        }
     }
 }
 
@@ -394,4 +451,16 @@ void WaveformView::setTimeDisplayMode(bool showTime)
 void WaveformView::setBarsDisplayMode(bool showBars)
 {
     showBarsDisplay = showBars;
+}
+
+QString WaveformView::getBarText(float beatPosition) const
+{
+    int bar = int(beatPosition / 4) + 1;
+    int beat = int(beatPosition) % 4 + 1;
+    float subBeat = (beatPosition - float(int(beatPosition))) * 4.0f;
+    
+    return QString("%1.%2.%3")
+        .arg(bar)
+        .arg(beat)
+        .arg(int(subBeat + 1));
 } 

@@ -38,6 +38,7 @@ protected:
 
 private slots:
     void openAudioFile();
+    void saveAudioFile();
     void playAudio();
     void stopAudio();
     void updateTime();
@@ -52,6 +53,7 @@ private:
     void setupConnections();
     void readSettings();
     void writeSettings();
+    void updateTimeLabel(qint64 msPosition);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
 
     Ui::MainWindow *ui;
@@ -63,6 +65,7 @@ private:
     
     // Actions
     QAction *openAct;
+    QAction *saveAct;
     QAction *exitAct;
 
     // Current file
