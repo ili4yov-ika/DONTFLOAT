@@ -56,7 +56,7 @@ cmake --build .
 ---
 
 ## Скриншот (в будущем)
-<!-- ![Screenshot](assets/screenshots/main_ui.png) -->
+[Screenshot](docs/main_ui.png)
 
 ---
 
