@@ -1,5 +1,4 @@
 #include "../include/mainwindow.h"
-#include "./ui_mainwindow.h"
 #include "../include/beatfixcommand.h"
 #include <QtGui/QGuiApplication>
 #include <QtCore/QFileInfo>
