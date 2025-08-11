@@ -46,6 +46,12 @@ public:
     static QVector<float> fixBeats(const QVector<float>& samples, 
                                  const AnalysisResult& analysis);
 
+    // Новый режим анализа: использовать уже известный BPM и посчитать неровности/доли
+    static AnalysisResult analyzeBeatsWithGivenBPM(const QVector<float>& samples,
+                                                  int sampleRate,
+                                                  float bpm,
+                                                  const AnalysisOptions& options = AnalysisOptions());
+
 private:
     // Улучшенные методы анализа
     static QVector<QPair<int, float>> detectPeaks(const QVector<float>& samples,

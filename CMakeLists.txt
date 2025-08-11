@@ -13,9 +13,9 @@ set(CMAKE_AUTORCC ON)
 # Указываем путь для поиска UI файлов
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 
-# Устанавливаем путь к Qt6
-set(QT_ROOT_DIR "F:/Qt/6.8.3/msvc2022_64")
-set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR})
+# Устанавливаем путь к Qt6 (опционально через CMAKE_PREFIX_PATH снаружи)
+# set(QT_ROOT_DIR "/opt/Qt/6.x")
+# set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR})
 
 # Ensure Qt6 is available
 set(QT_MIN_VERSION "6.8.0")
@@ -25,6 +25,19 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Widgets
     Multimedia
     MultimediaWidgets
+)
+
+# QM-DSP minimal sources needed by AnalyzerQueenMaryBeats
+add_library(qm_dsp STATIC
+    thirdparty/mixxx/lib/qm-dsp/dsp/onsets/DetectionFunction.cpp
+    thirdparty/mixxx/lib/qm-dsp/dsp/onsets/PeakPicking.cpp
+    thirdparty/mixxx/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp
+    thirdparty/mixxx/lib/qm-dsp/maths/MathUtilities.cpp
+)
+
+target_include_directories(qm_dsp PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp/include
 )
 
 # Add source files
@@ -37,6 +50,7 @@ set(SOURCES
     src/bpmanalyzer.cpp
     src/audiocommand.cpp
     src/beatfixcommand.cpp
+    src/mixxxbpmanalyzer.cpp
 )
 
 # Add header files
@@ -48,6 +62,7 @@ set(HEADERS
     include/bpmanalyzer.h
     include/audiocommand.h
     include/beatfixcommand.h
+    include/mixxxbpmanalyzer.h
 )
 
 # Add UI files
@@ -73,15 +88,19 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp/include
 )
 
-# Link Qt libraries
+# Link Qt libraries and QM-DSP
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
     Qt6::Multimedia
     Qt6::MultimediaWidgets
+    qm_dsp
 )
 
 # Set Windows executable properties
