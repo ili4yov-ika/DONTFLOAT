@@ -834,6 +834,31 @@ void MainWindow::processAudioFile(const QString& filePath)
         dialog.updateProgress(QString::fromUtf8("Анализ аудио..."), 50);
         BPMAnalyzer::AnalysisResult analysis = BPMAnalyzer::analyzeBPM(audioData[0], waveformView->getSampleRate(), options);
         
+        // После анализа сразу выставляем BPM и выравниваем отображение по тактовой сетке
+        waveformView->setAudioData(audioData);
+        waveformView->setBeatInfo(analysis.beats);
+        ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
+        waveformView->setBPM(analysis.bpm);
+        
+        // Обновляем PitchGridWidget
+        if (pitchGridWidget) {
+            pitchGridWidget->setAudioData(audioData);
+            pitchGridWidget->setSampleRate(waveformView->getSampleRate());
+            pitchGridWidget->setBPM(analysis.bpm);
+        }
+        
+        // Сбрасываем масштаб и выравниваем по сетке тактов
+        waveformView->setZoomLevel(1.0f);
+        float samplesPerBeat = (float(waveformView->getSampleRate()) * 60.0f) / analysis.bpm;
+        float samplesPerBar = samplesPerBeat * 4.0f;
+        if (!analysis.beats.isEmpty()) {
+            float offset = float(analysis.beats[0].position) / samplesPerBar;
+            offset = offset - floor(offset);
+            waveformView->setHorizontalOffset(offset);
+        } else {
+            waveformView->setHorizontalOffset(0.0f);
+        }
+        
         dialog.updateProgress(QString::fromUtf8("Анализ завершен"), 100);
         dialog.showResult(analysis);
         
@@ -856,31 +881,6 @@ void MainWindow::processAudioFile(const QString& filePath)
             dialog.updateProgress(QString::fromUtf8("Выравнивание завершено"), 100);
             statusBar()->showMessage(QString::fromUtf8("Доли выровнены"), 2000);
             hasUnsavedChanges = true;
-        } else {
-            // Если пользователь отказался от выравнивания, просто обновляем отображение
-            waveformView->setAudioData(audioData);
-            waveformView->setBeatInfo(analysis.beats);
-            ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
-            waveformView->setBPM(analysis.bpm);
-            
-            // Обновляем PitchGridWidget
-            if (pitchGridWidget) {
-                pitchGridWidget->setAudioData(audioData);
-                pitchGridWidget->setSampleRate(waveformView->getSampleRate());
-                pitchGridWidget->setBPM(analysis.bpm);
-            }
-            
-            // Выравниваем отображение по тактовой сетке и сбрасываем масштаб
-            waveformView->setZoomLevel(1.0f);
-            float samplesPerBeat = (float(waveformView->getSampleRate()) * 60.0f) / analysis.bpm;
-            float samplesPerBar = samplesPerBeat * 4.0f;
-            if (!analysis.beats.isEmpty()) {
-                float offset = float(analysis.beats[0].position) / samplesPerBar;
-                offset = offset - floor(offset);
-                waveformView->setHorizontalOffset(offset);
-            } else {
-                waveformView->setHorizontalOffset(0.0f);
-            }
         }
         
         // Обновляем скроллбар

@@ -21,6 +21,7 @@ public:
         bool hasIrregularBeats;
         float averageDeviation;
         bool isFixedTempo;  // Определяет, имеет ли трек фиксированный темп
+        float averageBpm;   // Средний BPM на основе найденных долей (для неровных долей)
     };
 
     struct AnalysisOptions {
