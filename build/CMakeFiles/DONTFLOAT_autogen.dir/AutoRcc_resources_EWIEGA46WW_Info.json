@@ -1,0 +1,30 @@
+{
+	"BUILD_DIR" : "/workspace/build/DONTFLOAT_autogen",
+	"CMAKE_BINARY_DIR" : "/workspace/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/workspace/build",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/workspace",
+	"CMAKE_SOURCE_DIR" : "/workspace",
+	"CROSS_CONFIG" : false,
+	"GENERATOR" : "Unix Makefiles",
+	"INCLUDE_DIR" : "/workspace/build/DONTFLOAT_autogen/include",
+	"INPUTS" : 
+	[
+		"/workspace/resources/icons/play.svg",
+		"/workspace/resources/icons/logo.svg",
+		"/workspace/resources/icons/pause.svg",
+		"/workspace/resources/icons/load.svg",
+		"/workspace/resources/icons/stop.svg",
+		"/workspace/resources/icons/save.svg"
+	],
+	"LOCK_FILE" : "/workspace/build/CMakeFiles/DONTFLOAT_autogen.dir/AutoRcc_resources_EWIEGA46WW_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "resources" ],
+	"OUTPUT_CHECKSUM" : "EWIEGA46WW",
+	"OUTPUT_NAME" : "qrc_resources.cpp",
+	"RCC_EXECUTABLE" : "/usr/lib/qt6/libexec/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/workspace/build/CMakeFiles/DONTFLOAT_autogen.dir/AutoRcc_resources_EWIEGA46WW_Used.txt",
+	"SOURCE" : "/workspace/resources.qrc",
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

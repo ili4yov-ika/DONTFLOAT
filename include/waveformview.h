@@ -31,6 +31,10 @@ public:
     float getZoomLevel() const { return zoomLevel; }
     const QVector<QVector<float>>& getAudioData() const { return audioChannels; }
 
+    // NEW: Beat grid and detected beats API
+    void setBeatGrid(float bpm, qint64 firstBeatSample);
+    void setDetectedBeats(const QVector<qint64>& beatSamples);
+
 signals:
     void positionChanged(qint64 position); // Сигнал для обновления позиции воспроизведения
     void zoomChanged(float zoom); // Сигнал для обновления скроллбара
@@ -67,6 +71,10 @@ private:
     float zoomStep;        // Шаг масштабирования
     bool showTimeDisplay;
     bool showBarsDisplay;
+
+    // NEW: grid start offset and explicit beats
+    qint64 firstBeatSample;
+    QVector<qint64> detectedBeatSamples;
 
     static const QColor waveformColor;
     static const QColor beatLineColor;

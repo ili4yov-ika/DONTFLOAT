@@ -56,6 +56,10 @@ private:
     void updateTimeLabel(qint64 msPosition);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
 
+    // NEW: analysis helpers
+    float analyzeInitialBpmAndGrid(const QVector<QVector<float>>& audioData, int sampleRate, qint64& outFirstBeatSample);
+    QVector<qint64> detectBeatsIrregular(const QVector<QVector<float>>& audioData, int sampleRate);
+
     Ui::MainWindow *ui;
     WaveformView *waveformView;
     QScrollBar *horizontalScrollBar;
