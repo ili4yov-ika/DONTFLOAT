@@ -7,5 +7,10 @@
         <file>resources/icons/load.svg</file>
         <file>resources/icons/save.svg</file>
         <file>resources/icons/logo.svg</file>
+        <file>resources/icons/metronome.svg</file>
+        <file>resources/icons/loop.svg</file>
+    </qresource>
+    <qresource prefix="/sounds">
+        <file>resources/sounds/metronome.wav</file>
     </qresource>
 </RCC>

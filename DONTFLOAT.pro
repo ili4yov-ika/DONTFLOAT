@@ -12,11 +12,25 @@ INCLUDEPATH += include/
 SOURCES += \
         src/main.cpp\
         src/mainwindow.cpp \
-        src/waveformview.cpp
+        src/waveformview.cpp \
+        src/pitchgridwidget.cpp \
+        src/waveformcolors.cpp \
+        src/bpmanalyzer.cpp \
+        src/audiocommand.cpp \
+        src/bpmfixdialog.cpp \
+        src/metronomesettingsdialog.cpp \
+        src/beatfixcommand.cpp
 
 HEADERS += \
         include/mainwindow.h \
-        include/waveformview.h
+        include/waveformview.h \
+        include/pitchgridwidget.h \
+        include/waveformcolors.h \
+        include/bpmanalyzer.h \
+        include/audiocommand.h \
+        include/bpmfixdialog.h \
+        include/metronomesettingsdialog.h \
+        include/beatfixcommand.h
 
 FORMS += \
         ui/mainwindow.ui
