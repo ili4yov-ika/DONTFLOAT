@@ -15,8 +15,10 @@
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QComboBox>
+#include <QtWidgets/QVBoxLayout>
 #include <QtCore/QDataStream>
 #include <QtCore/QFile>
+#include <algorithm>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -78,6 +80,21 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     writeSettings();
     event->accept();
+}
+
+void MainWindow::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Space) {
+        playAudio();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_S) {
+        stopAudio();
+        event->accept();
+        return;
+    }
+    QMainWindow::keyPressEvent(event);
 }
 
 void MainWindow::readSettings()
@@ -329,6 +346,49 @@ void MainWindow::processAudioFile(const QString& filePath)
     if (!audioData.isEmpty()) {
         waveformView->setAudioData(audioData);
         waveformView->setBPM(ui->bpmEdit->text().toFloat());
+
+        // Анализ: сначала находим bpm и выравниваем сетку по первому сильному удару
+        qint64 gridFirstBeatSample = 0;
+        int sr = waveformView->getSampleRate();
+        float estimatedBpm = analyzeInitialBpmAndGrid(audioData, sr, gridFirstBeatSample);
+        if (estimatedBpm > 0.0f) {
+            waveformView->setBeatGrid(estimatedBpm, gridFirstBeatSample);
+            ui->bpmEdit->setText(QString::number(estimatedBpm, 'f', 2));
+        }
+
+        // Затем ищем неровные доли и, если нашли, вычисляем средний BPM
+        QVector<qint64> detectedBeats = detectBeatsIrregular(audioData, sr);
+        if (!detectedBeats.isEmpty()) {
+            waveformView->setDetectedBeats(detectedBeats);
+            // Оценим средний BPM
+            QVector<qint64> intervals;
+            intervals.reserve(detectedBeats.size() - 1);
+            for (int i = 1; i < detectedBeats.size(); ++i) {
+                qint64 d = detectedBeats[i] - detectedBeats[i - 1];
+                if (d > 0) intervals.append(d);
+            }
+            if (!intervals.isEmpty()) {
+                // Уберем выбросы: медиана
+                QVector<qint64> sorted = intervals;
+                std::sort(sorted.begin(), sorted.end());
+                qint64 median = sorted[sorted.size() / 2];
+                // Усредним только интервалы в пределах 20% от медианы
+                double sum = 0.0;
+                int count = 0;
+                for (qint64 v : intervals) {
+                    if (qAbs(double(v) - double(median)) <= 0.2 * double(median)) {
+                        sum += double(v);
+                        ++count;
+                    }
+                }
+                if (count > 0) {
+                    double avgSamplesPerBeat = sum / double(count);
+                    double avgBpm = (double(sr) * 60.0) / avgSamplesPerBeat;
+                    ui->bpmEdit->setText(QString::number(avgBpm, 'f', 2));
+                    waveformView->setBeatGrid(float(avgBpm), gridFirstBeatSample);
+                }
+            }
+        }
     }
 }
 
@@ -500,13 +560,134 @@ void MainWindow::updateWindowTitle()
     setWindowTitle(title);
 }
 
-void MainWindow::keyPressEvent(QKeyEvent* event)
+// --- Simple onset/BPM analysis ---
+
+static QVector<float> downmixMono(const QVector<QVector<float>>& data)
 {
-    if (event->key() == Qt::Key_Space) {
-        playAudio();
-    } else if (event->key() == Qt::Key_S) {
-        stopAudio();
+    if (data.isEmpty()) return {};
+    int n = data[0].size();
+    QVector<float> mono;
+    mono.resize(n);
+    if (data.size() == 1) {
+        for (int i = 0; i < n; ++i) mono[i] = data[0][i];
     } else {
-        QMainWindow::keyPressEvent(event);
+        for (int i = 0; i < n; ++i) {
+            float s = 0.0f;
+            for (const auto& ch : data) s += ch[i];
+            mono[i] = s / float(data.size());
+        }
     }
+    return mono;
+}
+
+static QVector<float> highpassDiff(const QVector<float>& x)
+{
+    QVector<float> y;
+    y.resize(x.size());
+    float prev = 0.0f;
+    for (int i = 0; i < x.size(); ++i) {
+        float hp = x[i] - prev * 0.995f; // простая НЧ/ВЧ фильтрация
+        prev = x[i];
+        y[i] = qAbs(hp);
+    }
+    return y;
+}
+
+static QVector<float> movingAverage(const QVector<float>& x, int win)
+{
+    QVector<float> y(x.size());
+    double sum = 0.0;
+    int w = qMax(1, win);
+    for (int i = 0; i < x.size(); ++i) {
+        sum += x[i];
+        if (i >= w) sum -= x[i - w];
+        y[i] = float(sum / qMin(i + 1, w));
+    }
+    return y;
+}
+
+static QVector<int> findPeaks(const QVector<float>& x, float threshold, int minDistance)
+{
+    QVector<int> peaks;
+    int last = -minDistance;
+    for (int i = 1; i + 1 < x.size(); ++i) {
+        if (x[i] > threshold && x[i] > x[i - 1] && x[i] >= x[i + 1] && (i - last) >= minDistance) {
+            peaks.append(i);
+            last = i;
+        }
+    }
+    return peaks;
+}
+
+float MainWindow::analyzeInitialBpmAndGrid(const QVector<QVector<float>>& audioData, int sampleRate, qint64& outFirstBeatSample)
+{
+    outFirstBeatSample = 0;
+    if (audioData.isEmpty() || audioData[0].isEmpty()) return 0.0f;
+    QVector<float> mono = downmixMono(audioData);
+
+    // Энергетический онсет
+    QVector<float> env = highpassDiff(mono);
+    // Сглаживание 10мс
+    int maWin = qMax(1, sampleRate / 100);
+    env = movingAverage(env, maWin);
+
+    // Оценка периода: автокорреляция в диапазоне 60..200 BPM
+    int minLag = sampleRate * 60 / 200; // макс bpm
+    int maxLag = sampleRate * 60 / 60;  // мин bpm
+    if (maxLag >= env.size()) maxLag = env.size() - 1;
+    double bestScore = -1.0;
+    int bestLag = 0;
+    for (int lag = minLag; lag <= maxLag; ++lag) {
+        double score = 0.0;
+        int count = 0;
+        for (int i = lag; i < env.size(); i += 1) {
+            score += double(env[i]) * double(env[i - lag]);
+            ++count;
+        }
+        if (count > 0) score /= double(count);
+        if (score > bestScore) { bestScore = score; bestLag = lag; }
+    }
+    if (bestLag <= 0) return 0.0f;
+
+    // Предикт BPM
+    float bpm = float(sampleRate) * 60.0f / float(bestLag);
+
+    // Поиск первого сильного пика как начала сетки
+    float threshold = 0.5f * (*std::max_element(env.begin(), env.end()));
+    int minDist = bestLag / 2; // не ставить пики слишком близко
+    QVector<int> peaks = findPeaks(env, threshold, qMax(1, minDist));
+    if (!peaks.isEmpty()) {
+        outFirstBeatSample = peaks[0];
+    } else {
+        outFirstBeatSample = 0;
+    }
+    return bpm;
+}
+
+QVector<qint64> MainWindow::detectBeatsIrregular(const QVector<QVector<float>>& audioData, int sampleRate)
+{
+    QVector<qint64> beats;
+    if (audioData.isEmpty() || audioData[0].isEmpty()) return beats;
+    QVector<float> mono = downmixMono(audioData);
+    QVector<float> env = movingAverage(highpassDiff(mono), qMax(1, sampleRate / 200));
+
+    // Динамический порог: медиана + k * MAD
+    QVector<float> sorted = env;
+    std::sort(sorted.begin(), sorted.end());
+    float median = sorted[sorted.size() / 2];
+    QVector<float> dev(sorted.size());
+    for (int i = 0; i < sorted.size(); ++i) dev[i] = qAbs(sorted[i] - median);
+    std::sort(dev.begin(), dev.end());
+    float mad = dev[dev.size() / 2] + 1e-6f;
+    float thresh = median + 3.0f * mad;
+
+    // Минимальная дистанция между битами для 200 BPM
+    int minDistance = qMax(1, sampleRate * 60 / 200 / 2);
+    QVector<int> peakIdx = findPeaks(env, thresh, minDistance);
+
+    // Конвертируем в сэмплы
+    beats.reserve(peakIdx.size());
+    for (int idx : peakIdx) beats.append(qint64(idx));
+
+    return beats;
 }

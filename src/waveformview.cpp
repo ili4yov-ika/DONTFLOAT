@@ -29,6 +29,7 @@ WaveformView::WaveformView(QWidget *parent)
     , zoomStep(1.2f)      // 20% изменение масштаба
     , showTimeDisplay(true)
     , showBarsDisplay(false)
+    , firstBeatSample(0)
 {
     setMinimumHeight(100);
     setMouseTracking(true);
@@ -198,14 +199,17 @@ void WaveformView::drawBeatLines(QPainter& painter)
     int maxStartSample = qMax(0, audioChannels[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     
-    // Находим первый бит и такт перед видимой областью
-    float firstBeat = floor(startSample / samplesPerBeat);
-    float firstBar = floor(startSample / samplesPerBar);
+    // Сдвиг сетки по первому detected beat
+    qint64 gridOffset = firstBeatSample;
+
+    // Находим первый бит и такт перед видимой областью, учитывая gridOffset
+    float firstBeat = floor((startSample - gridOffset) / samplesPerBeat);
+    float firstBar = floor((startSample - gridOffset) / samplesPerBar);
     
     // Рисуем линии тактов
     painter.setPen(QPen(barLineColor));
     for (float bar = firstBar; ; bar++) {
-        float x = (bar * samplesPerBar - startSample) / samplesPerPixel;
+        float x = ((bar * samplesPerBar) + gridOffset - startSample) / samplesPerPixel;
         if (x >= width()) break;
         if (x >= 0) {
             painter.drawLine(QPointF(x, 0), QPointF(x, height()));
@@ -215,9 +219,20 @@ void WaveformView::drawBeatLines(QPainter& painter)
     // Рисуем линии битов
     painter.setPen(QPen(beatLineColor));
     for (float beat = firstBeat; ; beat++) {
-        float x = (beat * samplesPerBeat - startSample) / samplesPerPixel;
+        float x = ((beat * samplesPerBeat) + gridOffset - startSample) / samplesPerPixel;
         if (x >= width()) break;
         if (x >= 0) {
+            painter.drawLine(QPointF(x, 0), QPointF(x, height()));
+        }
+    }
+
+    // Отрисуем явно обнаруженные биты (если есть)
+    if (!detectedBeatSamples.isEmpty()) {
+        painter.setPen(QPen(QColor(0, 200, 255, 200))); // Голубые маркеры обнаруженных битов
+        for (qint64 beatSample : detectedBeatSamples) {
+            float x = float(beatSample - startSample) / samplesPerPixel;
+            if (x < 0) continue;
+            if (x >= width()) break;
             painter.drawLine(QPointF(x, 0), QPointF(x, height()));
         }
     }
@@ -263,12 +278,15 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
     int maxStartSample = qMax(0, audioChannels[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     
+    // Сдвиг сетки
+    qint64 gridOffset = firstBeatSample;
+
     // Находим первый такт перед видимой областью
-    float firstBar = floor(startSample / samplesPerBar);
+    float firstBar = floor((startSample - gridOffset) / samplesPerBar);
     
     // Рисуем маркеры тактов
     for (float bar = firstBar; ; bar++) {
-        float x = (bar * samplesPerBar - startSample) / samplesPerPixel;
+        float x = ((bar * samplesPerBar) + gridOffset - startSample) / samplesPerPixel;
         if (x >= width()) break;
         if (x >= 0) {
             // Рисуем фон маркера
@@ -309,7 +327,7 @@ QString WaveformView::getPositionText(qint64 position) const
     if (showBarsDisplay) {
         // Вычисляем такты и доли
         float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
-        float beatsFromStart = float(position) / samplesPerBeat;
+        float beatsFromStart = float(position - firstBeatSample) / samplesPerBeat;
         int bar = int(beatsFromStart / 4) + 1;  // Такты начинаются с 1
         int beat = int(beatsFromStart) % 4 + 1;  // Доли начинаются с 1
         float subBeat = (beatsFromStart - float(int(beatsFromStart))) * 4.0f; // Доли такта в четвертях
@@ -463,4 +481,17 @@ QString WaveformView::getBarText(float beatPosition) const
         .arg(bar)
         .arg(beat)
         .arg(int(subBeat + 1));
+}
+
+void WaveformView::setBeatGrid(float newBpm, qint64 newFirstBeatSample)
+{
+    bpm = newBpm;
+    firstBeatSample = qMax<qint64>(0, newFirstBeatSample);
+    update();
+}
+
+void WaveformView::setDetectedBeats(const QVector<qint64>& beatSamples)
+{
+    detectedBeatSamples = beatSamples;
+    update();
 } 
