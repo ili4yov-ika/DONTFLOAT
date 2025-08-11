@@ -68,14 +68,12 @@ void BPMFixDialog::showResult(const BPMAnalyzer::AnalysisResult& analysis)
         message = QString::fromUtf8(
             "Обнаружены неровные доли в треке:\n\n"
             "BPM: %1 (уверенность: %2%%)\n"
-            "Средний BPM: %3\n"
-            "Тип темпа: %4\n"
-            "Среднее отклонение: %5%%\n"
-            "Количество неровных долей: %6 из %7\n\n"
+            "Тип темпа: %3\n"
+            "Среднее отклонение: %4%%\n"
+            "Количество неровных долей: %5 из %6\n\n"
             "Рекомендуется выровнять доли для лучшего звучания.")
             .arg(analysis.bpm, 0, 'f', 1)
             .arg(analysis.confidence * 100.0f, 0, 'f', 0)
-            .arg(analysis.averageBpm > 0.0f ? QString::number(analysis.averageBpm, 'f', 1) : QString::fromUtf8("—"))
             .arg(tempoType)
             .arg(analysis.averageDeviation * 100.0f, 0, 'f', 1)
             .arg(int(analysis.beats.size() * analysis.averageDeviation))

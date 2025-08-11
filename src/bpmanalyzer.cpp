@@ -11,7 +11,6 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
     result.hasIrregularBeats = false;
     result.averageDeviation = 0.0f;
     result.isFixedTempo = true;
-    result.averageBpm = 0.0f;
 
     // Обнаружение пиков с минимальным порогом энергии
     auto peaks = detectPeaks(samples, 0.1f);
@@ -49,25 +48,6 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
         result.hasIrregularBeats = (maxDeviation > options.tolerancePercent / 100.0f);
         result.isFixedTempo = !result.hasIrregularBeats && 
                              (result.averageDeviation < options.tolerancePercent / 200.0f);
-
-        // Если доли неровные, вычисляем средний BPM из интервалов между битами
-        if (result.hasIrregularBeats && result.beats.size() >= 2) {
-            double totalFrames = 0.0;
-            int intervals = 0;
-            // beat.position хранит сэмплы; переводим в кадры для sampleRate на канал? Здесь используем прямую длительность в сэмплах
-            for (int i = 1; i < result.beats.size(); ++i) {
-                totalFrames += std::abs(result.beats[i].position - result.beats[i - 1].position);
-                intervals++;
-            }
-            if (intervals > 0) {
-                double avgFrames = totalFrames / intervals;
-                double avgBpm = 60.0 * sampleRate / avgFrames;
-                // Нормализуем в допустимый диапазон
-                while (avgBpm < options.minBPM && avgBpm > 0) avgBpm *= 2.0;
-                while (avgBpm > options.maxBPM) avgBpm *= 0.5;
-                result.averageBpm = static_cast<float>(avgBpm);
-            }
-        }
     }
 
     return result;
