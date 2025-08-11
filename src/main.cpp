@@ -20,7 +20,7 @@ int main(int argc, char *argv[])
     QIcon appIcon(":/icons/resources/icons/logo.svg");
     a.setWindowIcon(appIcon);
 
-    // Устанавливаем тёмную тему
+    // Устанавливаем тему Fusion с тёмной палитрой
     qApp->setStyle(QStyleFactory::create("Fusion"));
     
     QPalette darkPalette;
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
     darkPalette.setColor(QPalette::Link, QColor(42, 130, 218));
     darkPalette.setColor(QPalette::Highlight, QColor(42, 130, 218));
     darkPalette.setColor(QPalette::HighlightedText, Qt::black);
-    
+	darkPalette.setColor(QPalette::Shadow, QColor(53, 53, 53));
     qApp->setPalette(darkPalette);
 
     QTranslator translator;
