@@ -310,4 +310,37 @@ bool BPMAnalyzer::isValidBPM(float bpm, const AnalysisOptions& options) {
 float BPMAnalyzer::normalizeConfidence(float rawConfidence) {
     // Сигмоидная нормализация для получения значения в диапазоне [0,1]
     return 1.0f / (1.0f + std::exp(-5.0f * (rawConfidence - 0.5f)));
+}
+
+BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBeatsWithGivenBPM(const QVector<float>& samples,
+                                                                 int sampleRate,
+                                                                 float bpm,
+                                                                 const AnalysisOptions& options) {
+    AnalysisResult result;
+    result.bpm = bpm;
+    result.confidence = 1.0f; // доверяем заданному BPM
+    result.hasIrregularBeats = false;
+    result.averageDeviation = 0.0f;
+    result.isFixedTempo = true;
+
+    if (samples.isEmpty() || bpm <= 0.0f || sampleRate <= 0) {
+        return result;
+    }
+
+    result.beats = findBeats(samples, bpm, sampleRate, options);
+
+    if (!result.beats.isEmpty()) {
+        float totalDeviation = 0.0f;
+        float maxDeviation = 0.0f;
+        for (const auto& beat : result.beats) {
+            totalDeviation += std::abs(beat.deviation);
+            maxDeviation = std::max(maxDeviation, std::abs(beat.deviation));
+        }
+        result.averageDeviation = result.beats.isEmpty() ? 0.0f : (totalDeviation / result.beats.size());
+        result.hasIrregularBeats = (maxDeviation > options.tolerancePercent / 100.0f);
+        result.isFixedTempo = !result.hasIrregularBeats &&
+                              (result.averageDeviation < options.tolerancePercent / 200.0f);
+    }
+
+    return result;
 } 
