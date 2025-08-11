@@ -143,7 +143,7 @@ QVector<QPair<int, float>> BPMAnalyzer::detectPeaks(const QVector<float>& sample
         }
 
         if (isPeak) {
-            peaks.append({i, energy[i]});
+            peaks.append(QPair<int, float>(i, energy[i]));
         }
     }
 
