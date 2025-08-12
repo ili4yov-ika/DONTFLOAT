@@ -8,6 +8,9 @@ TARGET = DONTFLOAT
 TEMPLATE = app
 
 INCLUDEPATH += include/
+INCLUDEPATH += thirdparty/mixxx/src
+INCLUDEPATH += thirdparty/mixxx/lib/qm-dsp
+INCLUDEPATH += thirdparty/mixxx/lib/qm-dsp/include
 
 SOURCES += \
         src/main.cpp\
@@ -19,7 +22,12 @@ SOURCES += \
         src/audiocommand.cpp \
         src/bpmfixdialog.cpp \
         src/metronomesettingsdialog.cpp \
-        src/beatfixcommand.cpp
+        src/beatfixcommand.cpp \
+        src/mixxxbpmanalyzer.cpp \
+        thirdparty/mixxx/lib/qm-dsp/dsp/onsets/DetectionFunction.cpp \
+        thirdparty/mixxx/lib/qm-dsp/dsp/onsets/PeakPicking.cpp \
+        thirdparty/mixxx/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp \
+        thirdparty/mixxx/lib/qm-dsp/maths/MathUtilities.cpp
 
 HEADERS += \
         include/mainwindow.h \
@@ -30,7 +38,8 @@ HEADERS += \
         include/audiocommand.h \
         include/bpmfixdialog.h \
         include/metronomesettingsdialog.h \
-        include/beatfixcommand.h
+        include/beatfixcommand.h \
+        include/mixxxbpmanalyzer.h
 
 FORMS += \
         ui/mainwindow.ui
