@@ -128,22 +128,20 @@ void PitchGridWidget::paintEvent(QPaintEvent*)
 void PitchGridWidget::drawPitchGrid(QPainter& painter, const QRect& rect)
 {
     painter.setPen(QPen(gridColor, 1));
-    
+
     // Применяем вертикальное смещение
     int verticalOffsetPixels = int(verticalOffset * rect.height());
-    
+
     // Горизонтальные линии для каждой ноты
     for (int pitch = minPitch; pitch <= maxPitch; ++pitch) {
         int y = (maxPitch - pitch) * pitchHeight - verticalOffsetPixels;
         painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
     }
-    
-    // Вертикальные линии для временных меток
+
+    // Вертикальные линии для временных меток (без вычисления смещений)
     if (!audioData.isEmpty()) {
-        float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-        Q_UNUSED(samplesPerPixel);
-        for (int x = 0; x < rect.width(); x += timeGridSpacing) {
-            painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+        for (int xpos = 0; xpos < rect.width(); xpos += timeGridSpacing) {
+            painter.drawLine(QPointF(xpos, rect.top()), QPointF(xpos, rect.bottom()));
         }
     }
 }
