@@ -26,7 +26,10 @@ SOURCES += \
         thirdparty/mixxx/lib/qm-dsp/dsp/onsets/DetectionFunction.cpp \
         thirdparty/mixxx/lib/qm-dsp/dsp/onsets/PeakPicking.cpp \
         thirdparty/mixxx/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp \
-        thirdparty/mixxx/lib/qm-dsp/maths/MathUtilities.cpp
+        thirdparty/mixxx/lib/qm-dsp/maths/MathUtilities.cpp \
+        thirdparty/mixxx/lib/qm-dsp/dsp/phasevocoder/PhaseVocoder.cpp \
+        thirdparty/mixxx/lib/qm-dsp/dsp/signalconditioning/DFProcess.cpp \
+        thirdparty/mixxx/lib/qm-dsp/dsp/tempotracking/TempoTrack.cpp
 
 HEADERS += \
         include/mainwindow.h \
