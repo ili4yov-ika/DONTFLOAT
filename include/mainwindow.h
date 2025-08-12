@@ -109,28 +109,28 @@ private:
 
     // File management
     QString currentFileName;
-    bool hasUnsavedChanges;
+    bool hasUnsavedChanges = false;
     
     // Playback components
-    bool isPlaying;
-    qint64 currentPosition;
-    QTimer *playbackTimer;
-    QMediaPlayer *mediaPlayer;
-    QAudioOutput *audioOutput;
+    bool isPlaying = false;
+    qint64 currentPosition = 0;
+    QTimer *playbackTimer = nullptr;
+    QMediaPlayer *mediaPlayer = nullptr;
+    QAudioOutput *audioOutput = nullptr;
 
     // Settings
     QSettings settings;
 
     // Metronome components
-    QTimer *metronomeTimer;
-    QSoundEffect *metronomeSound;
-    bool isMetronomeEnabled;
-    qint64 lastBeatTime;
+    QTimer *metronomeTimer = nullptr;
+    QSoundEffect *metronomeSound = nullptr;
+    bool isMetronomeEnabled = false;
+    qint64 lastBeatTime = 0;
     
     // Loop components
-    bool isLoopEnabled;
-    qint64 loopStartPosition;
-    qint64 loopEndPosition;
+    bool isLoopEnabled = false;
+    qint64 loopStartPosition = 0;
+    qint64 loopEndPosition = 0;
 
     // Undo/Redo stack
     QUndoStack *undoStack;
