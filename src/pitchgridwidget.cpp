@@ -163,7 +163,7 @@ void PitchGridWidget::drawTimeGrid(QPainter& painter, const QRect& rect)
     // Рисуем временные метки
     for (int x = 0; x < rect.width(); x += timeGridSpacing) {
         int sampleIndex = startSample + int(x * samplesPerPixel);
-        qint64 timeMs = (sampleIndex * 1000) / sampleRate;
+        qint64 timeMs = (qint64(sampleIndex) * 1000) / sampleRate;
         
         QString timeText = QString("%1:%2")
             .arg(timeMs / 60000)
@@ -248,7 +248,7 @@ qint64 PitchGridWidget::getPositionFromX(int x, const QRect& rect) const
     int startSample = int(horizontalOffset * maxStartSample);
     
     int sampleIndex = startSample + int(x * samplesPerPixel);
-    return (sampleIndex * 1000) / sampleRate;
+    return (qint64(sampleIndex) * 1000) / sampleRate;
 }
 
 void PitchGridWidget::mousePressEvent(QMouseEvent *event)
