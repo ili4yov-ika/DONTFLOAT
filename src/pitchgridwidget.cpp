@@ -141,8 +141,6 @@ void PitchGridWidget::drawPitchGrid(QPainter& painter, const QRect& rect)
     // Вертикальные линии для временных меток
     if (!audioData.isEmpty()) {
         float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-        int visibleSamples = int(rect.width() * samplesPerPixel);
-        int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
         
         // Рисуем вертикальные линии каждые 100 пикселей
         for (int x = 0; x < rect.width(); x += timeGridSpacing) {
