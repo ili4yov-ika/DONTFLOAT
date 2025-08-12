@@ -48,11 +48,11 @@ MainWindow::MainWindow(QWidget *parent)
     , settingsMenu(nullptr)
     , colorSchemeMenu(nullptr)
     , currentFileName("")
+    , hasUnsavedChanges(false)
     , isPlaying(false)
     , currentPosition(0)
     , playbackTimer(nullptr)
     , mediaPlayer(nullptr)
-    , hasUnsavedChanges(false)
     , audioOutput(nullptr)
     , settings("DONTFLOAT", "DONTFLOAT")
     , metronomeTimer(nullptr)
@@ -79,11 +79,12 @@ MainWindow::MainWindow(QWidget *parent)
     metronomeAct = nullptr;
     loopStartAct = nullptr;
     loopEndAct = nullptr;
+
     undoStack = new QUndoStack(this);
 
-    createActions();  // Create actions first
-    ui->setupUi(this);  // Then setup UI
-    createMenus();   // Then create menus
+    createActions();
+    ui->setupUi(this);
+    createMenus();
 
     // Настраиваем валидатор для поля BPM
     QRegularExpressionValidator* bpmValidator = new QRegularExpressionValidator(

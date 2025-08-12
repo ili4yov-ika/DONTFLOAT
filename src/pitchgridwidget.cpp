@@ -138,7 +138,7 @@ void PitchGridWidget::drawPitchGrid(QPainter& painter, const QRect& rect)
         painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
     }
 
-    // Вертикальные линии для временных меток (без вычисления смещений)
+    // Вертикальные линии для временных меток (фиксированный шаг)
     if (!audioData.isEmpty()) {
         for (int xpos = 0; xpos < rect.width(); xpos += timeGridSpacing) {
             painter.drawLine(QPointF(xpos, rect.top()), QPointF(xpos, rect.bottom()));

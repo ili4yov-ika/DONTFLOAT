@@ -29,7 +29,7 @@ WaveformView::WaveformView(QWidget *parent)
 {
     setMinimumHeight(100);
     setMouseTracking(true);
-    setFocusPolicy(Qt::StrongFocus); // Разрешаем получение фокуса для обработки клавиш
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
