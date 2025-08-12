@@ -38,7 +38,6 @@ void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
     if (channels.isEmpty()) {
         return;
     }
-
     // Проверка на корректность данных
     for (const auto& channel : channels) {
         if (channel.isEmpty()) {
@@ -120,13 +119,15 @@ void WaveformView::paintEvent(QPaintEvent*)
     // Рисуем отклонения битов
     drawBeatDeviations(painter, rect());
     
-    // Рисуем волну
-    if (!audioData.isEmpty()) {
+    // Рисуем волну (без антиалиасинга для производительности)
+    if (!audioData.isEmpty() && width() > 0) {
+        painter.setRenderHint(QPainter::Antialiasing, false);
         float channelHeight = height() / float(audioData.size());
         for (int i = 0; i < audioData.size(); ++i) {
             QRectF channelRect(0, i * channelHeight, width(), channelHeight);
             drawWaveform(painter, audioData[i], channelRect);
         }
+        painter.setRenderHint(QPainter::Antialiasing, true);
     }
     
     // Рисуем линии тактов
@@ -145,10 +146,11 @@ void WaveformView::paintEvent(QPaintEvent*)
 
 void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect)
 {
-    if (samples.isEmpty()) return;
+    if (samples.isEmpty() || rect.width() <= 0) return;
 
     // Количество сэмплов на пиксель с учетом масштаба
     float samplesPerPixel = float(samples.size()) / (rect.width() * zoomLevel);
+    if (samplesPerPixel <= 0.0f) return;
     
     // Вычисляем начальный сэмпл с учетом смещения и масштаба
     int visibleSamples = int(rect.width() * samplesPerPixel);
@@ -162,12 +164,14 @@ void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples
     for (int x = 0; x < rect.width(); ++x) {
         int currentSample = startSample + int(x * samplesPerPixel);
         int nextSample = startSample + int((x + 1) * samplesPerPixel);
-        
         if (currentSample >= samples.size()) break;
-        
-        // Находим минимальное и максимальное значение для текущего пикселя
-        float minValue = 0, maxValue = 0;
-        for (int s = currentSample; s < qMin(nextSample, samples.size()); ++s) {
+        int endIndex = qMin(nextSample, samples.size());
+        if (endIndex <= currentSample) continue;
+
+        // Инициализация min/max первым значением диапазона
+        float minValue = samples[currentSample];
+        float maxValue = samples[currentSample];
+        for (int s = currentSample + 1; s < endIndex; ++s) {
             minValue = qMin(minValue, samples[s]);
             maxValue = qMax(maxValue, samples[s]);
         }
