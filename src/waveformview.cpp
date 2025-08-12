@@ -14,12 +14,12 @@ const int WaveformView::markerSpacing = 60;  // Минимальное расс�
 WaveformView::WaveformView(QWidget *parent)
     : QWidget(parent)
     , bpm(120.0f)
-    , zoomLevel(1.0f)
-    , horizontalOffset(0.0f)
-    , verticalOffset(0.0f)
-    , isDragging(false)
     , sampleRate(44100)
     , playbackPosition(0)
+    , horizontalOffset(0.0f)
+    , verticalOffset(0.0f)
+    , zoomLevel(1.0f)
+    , isDragging(false)
     , scrollStep(0.1f)    // 10% от ширины окна
     , zoomStep(1.2f)      // 20% изменение масштаба
     , showTimeDisplay(true)
