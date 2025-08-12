@@ -7,10 +7,10 @@ CONFIG += c++17
 TARGET = DONTFLOAT
 TEMPLATE = app
 
-INCLUDEPATH += include/
-INCLUDEPATH += thirdparty/mixxx/src
-INCLUDEPATH += thirdparty/mixxx/lib/qm-dsp
-INCLUDEPATH += thirdparty/mixxx/lib/qm-dsp/include
+INCLUDEPATH += $$PWD/include/
+INCLUDEPATH += $$PWD/thirdparty/mixxx/src
+INCLUDEPATH += $$PWD/thirdparty/mixxx/lib/qm-dsp
+INCLUDEPATH += $$PWD/thirdparty/mixxx/lib/qm-dsp/include
 
 SOURCES += \
         src/main.cpp\
@@ -24,6 +24,8 @@ SOURCES += \
         src/metronomesettingsdialog.cpp \
         src/beatfixcommand.cpp \
         src/mixxxbpmanalyzer.cpp \
+        thirdparty/mixxx/src/analyzer/plugins/analyzerqueenmarybeats.cpp \
+        thirdparty/mixxx/src/analyzer/plugins/buffering_utils.cpp \
         thirdparty/mixxx/lib/qm-dsp/dsp/onsets/DetectionFunction.cpp \
         thirdparty/mixxx/lib/qm-dsp/dsp/onsets/PeakPicking.cpp \
         thirdparty/mixxx/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp \

@@ -2,7 +2,6 @@
 
 // Mixxx headers (vendored in thirdparty)
 #include "../thirdparty/mixxx/src/analyzer/plugins/analyzerqueenmarybeats.h"
-#include "../thirdparty/mixxx/src/analyzer/plugins/analyzersoundtouchbeats.h"
 #include "../thirdparty/mixxx/src/analyzer/constants.h"
 #include "../thirdparty/mixxx/src/audio/types.h"
 #include "../thirdparty/mixxx/src/audio/frame.h"
@@ -18,7 +17,7 @@ MixxxBeatAnalysis MixxxBpmAnalyzerFacade::analyzeStereoInterleaved(const QVector
         return out;
     }
 
-    // Prefer beat tracking plugin (QM DSP)
+    // Use beat tracking plugin (QM DSP)
     mixxx::AnalyzerQueenMaryBeats qm;
     if (!qm.initialize(mixxx::audio::SampleRate(sampleRate))) {
         return out;
@@ -52,27 +51,8 @@ MixxxBeatAnalysis MixxxBpmAnalyzerFacade::analyzeStereoInterleaved(const QVector
         }
     }
 
-    // Fallback constant BPM via SoundTouch if no beats
-    if (!out.supportsBeatTracking) {
-        mixxx::AnalyzerSoundTouchBeats st;
-        if (st.initialize(mixxx::audio::SampleRate(sampleRate))) {
-            offset = 0;
-            while (offset < totalSamples) {
-                int remaining = totalSamples - offset;
-                int len = remaining < chunkSize ? remaining : chunkSize;
-                const mixxx::CSAMPLE* p = reinterpret_cast<const mixxx::CSAMPLE*>(samplesInterleaved.constData() + offset);
-                st.processSamples(p, len);
-                offset += len;
-            }
-            if (st.finalize()) {
-                out.bpm = static_cast<float>(st.getBpm().valueOr(0.0));
-            }
-        }
-    }
-
     // If we have beats, compute predominant BPM using spacing
     if (out.supportsBeatTracking && out.beatPositionsFrames.size() >= 2) {
-        // Compute average beat length in frames
         double total = 0.0;
         int count = 0;
         for (int i = 1; i < out.beatPositionsFrames.size(); ++i) {
