@@ -1,16 +1,15 @@
-QT       += core gui multimedia
-
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+QT += core gui widgets multimedia
 
 CONFIG += c++17
-DEFINES += kiss_fft_scalar=double
 
-TARGET = DONTFLOAT
 TEMPLATE = app
+TARGET = DONTFLOAT
 
-INCLUDEPATH += $$PWD/include/
+INCLUDEPATH += $$PWD/include
 INCLUDEPATH += $$PWD/thirdparty/mixxx/lib/qm-dsp
 INCLUDEPATH += $$PWD/thirdparty/mixxx/lib/qm-dsp/include
+
+DEFINES += kiss_fft_scalar=double
 
 SOURCES += \
     src/main.cpp \
@@ -32,9 +31,12 @@ SOURCES += \
     thirdparty/mixxx/lib/qm-dsp/dsp/signalconditioning/DFProcess.cpp \
     thirdparty/mixxx/lib/qm-dsp/dsp/signalconditioning/FiltFilt.cpp \
     thirdparty/mixxx/lib/qm-dsp/dsp/signalconditioning/Framer.cpp \
+    thirdparty/mixxx/lib/qm-dsp/dsp/signalconditioning/Filter.cpp \
     thirdparty/mixxx/lib/qm-dsp/maths/Correlation.cpp \
     thirdparty/mixxx/lib/qm-dsp/dsp/transforms/FFT.cpp \
-    thirdparty/mixxx/lib/qm-dsp/maths/MathUtilities.cpp
+    thirdparty/mixxx/lib/qm-dsp/maths/MathUtilities.cpp \
+    thirdparty/mixxx/lib/qm-dsp/ext/kissfft/kiss_fft.c \
+    thirdparty/mixxx/lib/qm-dsp/ext/kissfft/tools/kiss_fftr.c
 
 HEADERS += \
     include/mainwindow.h \
