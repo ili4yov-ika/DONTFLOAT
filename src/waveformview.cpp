@@ -20,12 +20,12 @@ WaveformView::WaveformView(QWidget *parent)
     , verticalOffset(0.0f)
     , zoomLevel(1.0f)
     , isDragging(false)
+    , loopStartPosition(0)
+    , loopEndPosition(0)
     , scrollStep(0.1f)    // 10% от ширины окна
     , zoomStep(1.2f)      // 20% изменение масштаба
     , showTimeDisplay(true)
     , showBarsDisplay(false)
-    , loopStartPosition(0)
-    , loopEndPosition(0)
 {
     setMinimumHeight(100);
     setMouseTracking(true);

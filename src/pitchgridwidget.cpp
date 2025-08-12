@@ -141,8 +141,7 @@ void PitchGridWidget::drawPitchGrid(QPainter& painter, const QRect& rect)
     // Вертикальные линии для временных меток
     if (!audioData.isEmpty()) {
         float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-        
-        // Рисуем вертикальные линии каждые 100 пикселей
+        Q_UNUSED(samplesPerPixel);
         for (int x = 0; x < rect.width(); x += timeGridSpacing) {
             painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
         }
@@ -215,8 +214,8 @@ void PitchGridWidget::drawPlaybackCursor(QPainter& painter, const QRect& rect)
         // Рисуем треугольник на курсоре
         QPolygonF triangle;
         triangle << QPointF(cursorX - 5, rect.top() + 5)
-                << QPointF(cursorX + 5, rect.top() + 5)
-                << QPointF(cursorX, rect.top() + 15);
+                 << QPointF(cursorX + 5, rect.top() + 5)
+                 << QPointF(cursorX, rect.top() + 15);
         painter.setBrush(cursorColor);
         painter.drawPolygon(triangle);
     }
