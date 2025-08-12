@@ -8,7 +8,6 @@ TARGET = DONTFLOAT
 TEMPLATE = app
 
 INCLUDEPATH += $$PWD/include/
-INCLUDEPATH += $$PWD/thirdparty/mixxx/src
 INCLUDEPATH += $$PWD/thirdparty/mixxx/lib/qm-dsp
 INCLUDEPATH += $$PWD/thirdparty/mixxx/lib/qm-dsp/include
 
@@ -24,8 +23,6 @@ SOURCES += \
         src/metronomesettingsdialog.cpp \
         src/beatfixcommand.cpp \
         src/mixxxbpmanalyzer.cpp \
-        thirdparty/mixxx/src/analyzer/plugins/analyzerqueenmarybeats.cpp \
-        thirdparty/mixxx/src/analyzer/plugins/buffering_utils.cpp \
         thirdparty/mixxx/lib/qm-dsp/dsp/onsets/DetectionFunction.cpp \
         thirdparty/mixxx/lib/qm-dsp/dsp/onsets/PeakPicking.cpp \
         thirdparty/mixxx/lib/qm-dsp/dsp/tempotracking/TempoTrackV2.cpp \
