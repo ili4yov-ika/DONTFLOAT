@@ -26,7 +26,6 @@
 #include "../include/bpmanalyzer.h"
 #include "../include/bpmfixdialog.h"
 #include "../include/metronomesettingsdialog.h"
-#include "../include/mixxxbpmanalyzer.h"
 #include <QUndoStack>
 #include <QtGui/QShortcut>
 #include <QtWidgets/QDialogButtonBox>
@@ -831,53 +830,9 @@ void MainWindow::processAudioFile(const QString& filePath)
         options.maxBPM = 200.0f;
         options.tolerancePercent = 5.0f;
         
-        // Анализируем BPM и сетку битов через Mixxx, затем детектим неровности
-        dialog.updateProgress(QString::fromUtf8("Анализ аудио (Mixxx)..."), 30);
-        QVector<float> interleaved;
-        // собрать interleaved стерео
-        if (audioData.size() >= 2) {
-            const auto& L = audioData[0];
-            const auto& R = audioData[1];
-            int frames = qMin(L.size(), R.size());
-            interleaved.resize(frames * 2);
-            for (int i = 0, j = 0; i < frames; ++i) {
-                interleaved[j++] = L[i];
-                interleaved[j++] = R[i];
-            }
-        } else {
-            // моно -> дублируем
-            const auto& M = audioData[0];
-            int frames = M.size();
-            interleaved.resize(frames * 2);
-            for (int i = 0, j = 0; i < frames; ++i) {
-                interleaved[j++] = M[i];
-                interleaved[j++] = M[i];
-            }
-        }
-        auto mixxxRes = MixxxBpmAnalyzerFacade::analyzeStereoInterleaved(interleaved, waveformView->getSampleRate(), /*fast*/ false);
-
-        BPMAnalyzer::AnalysisOptions opt2 = options;
-        float bpmForIrregular = mixxxRes.bpm > 0.0f ? mixxxRes.bpm : options.minBPM;
-        dialog.updateProgress(QString::fromUtf8("Детект неровностей..."), 60);
-        BPMAnalyzer::AnalysisResult analysis = BPMAnalyzer::analyzeBeatsWithGivenBPM(audioData[0], waveformView->getSampleRate(), bpmForIrregular, opt2);
-        if (mixxxRes.supportsBeatTracking && !mixxxRes.beatPositionsFrames.isEmpty()) {
-            // Подменим найденные биты Mixxx как идеальные позиции, сохранив bpm
-            analysis.bpm = mixxxRes.bpm > 0.0f ? mixxxRes.bpm : analysis.bpm;
-            analysis.beats.clear();
-            analysis.beats.reserve(mixxxRes.beatPositionsFrames.size());
-            for (int posFrames : mixxxRes.beatPositionsFrames) {
-                BPMAnalyzer::BeatInfo bi{};
-                // posFrames уже в фреймах (1 фрейм = 1 сэмпл на канал)
-                bi.position = static_cast<qint64>(posFrames);
-                bi.confidence = 1.0f;
-                bi.deviation = 0.0f;
-                bi.energy = 0.0f;
-                analysis.beats.append(bi);
-            }
-            analysis.isFixedTempo = true;
-            analysis.hasIrregularBeats = false;
-            analysis.averageDeviation = 0.0f;
-        }
+        // Анализируем BPM с отображением прогресса
+        dialog.updateProgress(QString::fromUtf8("Анализ аудио..."), 50);
+        BPMAnalyzer::AnalysisResult analysis = BPMAnalyzer::analyzeBPM(audioData[0], waveformView->getSampleRate(), options);
         
         dialog.updateProgress(QString::fromUtf8("Анализ завершен"), 100);
         dialog.showResult(analysis);
