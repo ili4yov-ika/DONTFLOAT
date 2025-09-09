@@ -111,7 +111,7 @@ cmake --build . --config Release
 
 2. **Клонируйте репозиторий**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/ili4yov-ika/DONTFLOAT.git
    cd DONTFLOAT
    ```
 
