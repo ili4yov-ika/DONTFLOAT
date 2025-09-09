@@ -159,7 +159,7 @@ cmake --build . --config Debug
 
 ## Лицензия
 
-MIT License - см. файл [LICENSE](LICENSE) для деталей.
+GNU GPL- см. файл [LICENSE](LICENSE) для деталей.
 
 ---
 
