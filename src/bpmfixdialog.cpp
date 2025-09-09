@@ -8,8 +8,8 @@ BPMFixDialog::BPMFixDialog(QWidget *parent, const BPMAnalyzer::AnalysisResult&)
     , fix(false)
 {
     setWindowTitle(QString::fromUtf8("Анализ и выравнивание долей"));
-    setMinimumWidth(400);
-    setMinimumHeight(200);
+    setMinimumWidth(450);
+    setMinimumHeight(300);
 
     auto layout = new QVBoxLayout(this);
 
@@ -27,6 +27,24 @@ BPMFixDialog::BPMFixDialog(QWidget *parent, const BPMAnalyzer::AnalysisResult&)
     infoLabel = new QLabel(this);
     infoLabel->setWordWrap(true);
     layout->addWidget(infoLabel);
+
+    // Информация о BPM
+    preliminaryBPMLabel = new QLabel(this);
+    preliminaryBPMLabel->setText(QString::fromUtf8("Предварительный BPM (на основе Mixxx): -- BPM"));
+    layout->addWidget(preliminaryBPMLabel);
+    
+    computedBPMLabel = new QLabel(this);
+    computedBPMLabel->setText(QString::fromUtf8("Вычисленный BPM (уверенность --%): -- BPM"));
+    layout->addWidget(computedBPMLabel);
+    
+    deviationLabel = new QLabel(this);
+    deviationLabel->setText(QString::fromUtf8("Среднее отклонение: --%"));
+    layout->addWidget(deviationLabel);
+    
+    // Чекбокс для пометки неровных долей
+    markIrregularCheckbox = new QCheckBox(QString::fromUtf8("Пометить неровные доли"), this);
+    markIrregularCheckbox->setChecked(true); // По умолчанию включен
+    layout->addWidget(markIrregularCheckbox);
 
     // Кнопки
     auto buttonLayout = new QHBoxLayout;
@@ -59,45 +77,46 @@ void BPMFixDialog::updateProgress(const QString& status, int progress)
 
 void BPMFixDialog::showResult(const BPMAnalyzer::AnalysisResult& analysis)
 {
-    QString message;
-    QString tempoType = analysis.isFixedTempo ? 
-        QString::fromUtf8("фиксированный") : 
-        QString::fromUtf8("переменный");
+    // Общее сообщение
+    infoLabel->setText(QString::fromUtf8("Анализ завершён."));
     
-    if (analysis.hasIrregularBeats) {
-        message = QString::fromUtf8(
-            "Обнаружены неровные доли в треке:\n\n"
-            "BPM: %1 (уверенность: %2%%)\n"
-            "Тип темпа: %3\n"
-            "Среднее отклонение: %4%%\n"
-            "Количество неровных долей: %5 из %6\n\n"
-            "Рекомендуется выровнять доли для лучшего звучания.")
-            .arg(analysis.bpm, 0, 'f', 1)
-            .arg(analysis.confidence * 100.0f, 0, 'f', 0)
-            .arg(tempoType)
-            .arg(analysis.averageDeviation * 100.0f, 0, 'f', 1)
-            .arg(int(analysis.beats.size() * analysis.averageDeviation))
-            .arg(analysis.beats.size());
+    // Предварительный BPM (на основе Mixxx), если доступен
+    if (analysis.hasPreliminaryBPM) {
+        preliminaryBPMLabel->setText(QString::fromUtf8("Предварительный BPM (на основе Mixxx): %1 BPM")
+            .arg(analysis.preliminaryBPM, 0, 'f', 3));
     } else {
-        message = QString::fromUtf8(
-            "Анализ завершен:\n\n"
-            "BPM: %1 (уверенность: %2%%)\n"
-            "Тип темпа: %3\n"
-            "Среднее отклонение: %4%%\n"
-            "Доли расположены достаточно ровно.")
-            .arg(analysis.bpm, 0, 'f', 1)
-            .arg(analysis.confidence * 100.0f, 0, 'f', 0)
-            .arg(tempoType)
-            .arg(analysis.averageDeviation * 100.0f, 0, 'f', 1);
+        preliminaryBPMLabel->setText(QString::fromUtf8("Предварительный BPM (на основе Mixxx): -- BPM"));
     }
-
-    infoLabel->setText(message);
-    fixButton->setEnabled(analysis.hasIrregularBeats);
+    
+    // Вычисленный BPM (уверенность)
+    computedBPMLabel->setText(QString::fromUtf8("Вычисленный BPM (уверенность %1%): %2 BPM")
+        .arg(analysis.confidence * 100.0f, 0, 'f', 0)
+        .arg(analysis.bpm, 0, 'f', 0));
+    
+    // Среднее отклонение
+    deviationLabel->setText(QString::fromUtf8("Среднее отклонение: %1%")
+        .arg(analysis.averageDeviation * 100.0f, 0, 'f', 1));
+    
+    // Настраиваем чекбокс в зависимости от наличия неровных долей
+    markIrregularCheckbox->setChecked(analysis.hasIrregularBeats);
+    markIrregularCheckbox->setEnabled(true); // Всегда доступен для выбора
+    
+    // Обновляем текст чекбокса в зависимости от наличия неровных долей
+    if (analysis.hasIrregularBeats) {
+        markIrregularCheckbox->setText(QString::fromUtf8("Пометить неровные доли (рекомендуется)"));
+    } else {
+        markIrregularCheckbox->setText(QString::fromUtf8("Пометить неровные доли (доли ровные)"));
+    }
+    
+    // Кнопки
+    fixButton->setEnabled(true);
     skipButton->setEnabled(true);
     
-    // Если доли ровные и уверенность высокая, автоматически закрываем диалог
+    // Если доли ровные и уверенность высокая, предлагаем пропустить
     if (!analysis.hasIrregularBeats && analysis.confidence > 0.8f) {
-        QTimer::singleShot(2000, this, &QDialog::accept);
+        skipButton->setText(QString::fromUtf8("Пропустить (доли ровные)"));
+    } else {
+        skipButton->setText(QString::fromUtf8("Пропустить"));
     }
 }
 

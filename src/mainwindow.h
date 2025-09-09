@@ -14,11 +14,14 @@
 #include <QStatusBar>
 #include <QSettings>
 #include <QScrollBar>
+#include <QResizeEvent>
 #include <QtMultimedia/QAudioFormat>
 #include <QtMultimedia/QMediaPlayer>
 #include <QtMultimedia/QAudioOutput>
 #include <QtMultimedia/QAudioDecoder>
+#include <QUndoStack>
 #include "waveformview.h"
+#include "pitchgridwidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -34,6 +37,8 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     void keyPressEvent(QKeyEvent* event) override;
 
 private slots:
@@ -43,8 +48,19 @@ private slots:
     void stopAudio();
     void updateTime();
     void updateBPM();
+    void increaseBPM();
+    void decreaseBPM();
+    void updateTimeLabel(qint64 msPosition);
     void updatePlaybackPosition(qint64 position);
-    void processAudioFile(const QString& filePath);
+    void toggleMetronome();
+    void toggleLoop();
+    void updateLoopPoints();
+    void showMetronomeSettings();
+    void setColorScheme(const QString& scheme);
+    void setTheme(const QString& theme);
+    void showKeyboardShortcuts();
+    void setLoopStart();
+    void setLoopEnd();
 
 private:
     void createMenus();
@@ -53,25 +69,53 @@ private:
     void setupConnections();
     void readSettings();
     void writeSettings();
-    void updateTimeLabel(qint64 msPosition);
+    void setupShortcuts();
+    bool maybeSave();
+    bool doSaveAudioFile();
+    void resetAudioState();
+    void processAudioFile(const QString& filePath);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
+    void createSimpleMetronomeSound();
+    QString formatTime(qint64 msPosition);
+    void updateHorizontalScrollBar(float zoom);
 
+    // UI components
     Ui::MainWindow *ui;
     WaveformView *waveformView;
+    PitchGridWidget *pitchGridWidget;
     QScrollBar *horizontalScrollBar;
+    QScrollBar *waveformVerticalScrollBar;
+    QScrollBar *pitchGridVerticalScrollBar;
     
-    // Menus
+    // Menu components
     QMenu *fileMenu;
+    QMenu *editMenu;
+    QMenu *viewMenu;
+    QMenu *settingsMenu;
+    QMenu *colorSchemeMenu;
     
-    // Actions
+    // Action components
     QAction *openAct;
     QAction *saveAct;
     QAction *exitAct;
+    QAction *undoAct;
+    QAction *redoAct;
+    QAction *defaultThemeAct;
+    QAction *darkSchemeAct;
+    QAction *lightSchemeAct;
+    QAction *metronomeSettingsAct;
+    QAction *keyboardShortcutsAct;
+    QAction *playPauseAct;
+    QAction *stopAct;
+    QAction *metronomeAct;
+    QAction *loopStartAct;
+    QAction *loopEndAct;
 
-    // Current file
+    // File management
     QString currentFileName;
+    bool hasUnsavedChanges;
     
-    // Playback state
+    // Playback components
     bool isPlaying;
     qint64 currentPosition;
     QTimer *playbackTimer;
@@ -80,6 +124,20 @@ private:
 
     // Settings
     QSettings settings;
+
+    // Metronome components
+    QTimer *metronomeTimer;
+    QMediaPlayer *metronomeSound;
+    bool isMetronomeEnabled;
+    qint64 lastBeatTime;
+    
+    // Loop components
+    bool isLoopEnabled;
+    qint64 loopStartPosition;
+    qint64 loopEndPosition;
+
+    // Undo/Redo stack
+    QUndoStack *undoStack;
 };
 
-#endif // MAINWINDOW_H 
+#endif // MAINWINDOW_H

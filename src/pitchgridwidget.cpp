@@ -14,6 +14,7 @@ PitchGridWidget::PitchGridWidget(QWidget *parent)
     , verticalOffset(0.0f)
     , zoomLevel(1.0f)
     , bpm(120.0f)
+    , beatsPerBar(4)
     , minPitch(minPitchDefault)
     , maxPitch(maxPitchDefault)
     , isDragging(false)
@@ -29,6 +30,7 @@ PitchGridWidget::PitchGridWidget(QWidget *parent)
     setMinimumHeight((maxPitch - minPitch + 1) * pitchHeight);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
+    
 }
 
 void PitchGridWidget::setAudioData(const QVector<QVector<float>>& data)
@@ -70,6 +72,12 @@ void PitchGridWidget::setZoomLevel(float zoom)
 void PitchGridWidget::setBPM(float newBpm)
 {
     bpm = newBpm;
+    update();
+}
+
+void PitchGridWidget::setBeatsPerBar(int beats)
+{
+    beatsPerBar = beats;
     update();
 }
 
@@ -127,53 +135,106 @@ void PitchGridWidget::paintEvent(QPaintEvent*)
 
 void PitchGridWidget::drawPitchGrid(QPainter& painter, const QRect& rect)
 {
-    painter.setPen(QPen(gridColor, 1));
+    painter.setPen(gridColor);
     
     // Применяем вертикальное смещение
     int verticalOffsetPixels = int(verticalOffset * rect.height());
     
-    // Горизонтальные линии для каждой ноты
+    // Горизонтальные линии для нот
     for (int pitch = minPitch; pitch <= maxPitch; ++pitch) {
         int y = (maxPitch - pitch) * pitchHeight - verticalOffsetPixels;
         painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
     }
+}
+
+void PitchGridWidget::drawTimeGrid(QPainter& painter, const QRect& rect)
+{
     
-    // Вертикальные линии для временных меток
+    painter.setPen(timeLabelColor);
+    painter.setFont(QFont("Arial", 8));
+    
+    // Рисуем временные метки только если есть аудио данные
     if (!audioData.isEmpty()) {
         float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
         int visibleSamples = int(rect.width() * samplesPerPixel);
         int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
         int startSample = int(horizontalOffset * maxStartSample);
         
-        // Рисуем вертикальные линии каждые 100 пикселей
+        // Рисуем временные метки
         for (int x = 0; x < rect.width(); x += timeGridSpacing) {
-            painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+            int sampleIndex = startSample + int(x * samplesPerPixel);
+            qint64 timeMs = (sampleIndex * 1000) / sampleRate;
+            
+            QString timeText = QString("%1:%2")
+                .arg(timeMs / 60000)
+                .arg((timeMs % 60000) / 1000, 2, 10, QChar('0'));
+            
+            painter.drawText(QPointF(x + 2, 12), timeText);
         }
-    }
-}
-
-void PitchGridWidget::drawTimeGrid(QPainter& painter, const QRect& rect)
-{
-    if (audioData.isEmpty()) return;
-    
-    painter.setPen(timeLabelColor);
-    painter.setFont(QFont("Arial", 8));
-    
-    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-    int visibleSamples = int(rect.width() * samplesPerPixel);
-    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-    int startSample = int(horizontalOffset * maxStartSample);
-    
-    // Рисуем временные метки
-    for (int x = 0; x < rect.width(); x += timeGridSpacing) {
-        int sampleIndex = startSample + int(x * samplesPerPixel);
-        qint64 timeMs = (sampleIndex * 1000) / sampleRate;
         
-        QString timeText = QString("%1:%2")
-            .arg(timeMs / 60000)
-            .arg((timeMs % 60000) / 1000, 2, 10, QChar('0'));
-        
-        painter.drawText(QPointF(x + 2, 12), timeText);
+        // Рисуем вертикальные линии тактов, если установлен BPM
+        if (bpm > 0.0f && beatsPerBar > 0) {
+            
+            // Делаем линии тактов более заметными
+            painter.setPen(QPen(Qt::red, 3, Qt::SolidLine));
+            
+            // Вычисляем количество сэмплов на один такт
+            float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
+            float samplesPerBar = samplesPerBeat * float(beatsPerBar);
+            
+            // Находим первый такт, который попадает в видимую область
+            int firstBar = int(startSample / samplesPerBar);
+            float firstBarSample = firstBar * samplesPerBar;
+            
+            // Рисуем такты, начиная с первого видимого
+            for (int bar = firstBar; bar * samplesPerBar < startSample + visibleSamples; ++bar) {
+                float barSample = bar * samplesPerBar;
+                
+                if (barSample >= startSample) {
+                    // Вычисляем позицию такта в пикселях
+                    float barX = (barSample - startSample) / samplesPerPixel;
+                    
+                    if (barX >= 0 && barX < rect.width()) {
+                        // Рисуем вертикальную линию такта
+                        painter.drawLine(QPointF(barX, rect.top()), QPointF(barX, rect.bottom()));
+                        
+                        // Подписываем номер такта
+                        QString barText = QString::number(bar + 1);
+                        painter.drawText(QPointF(barX + 2, 20), barText);
+                    }
+                }
+            }
+        }
+    } else {
+        // Если нет аудио данных, но установлены BPM и размер такта, рисуем такты по времени
+        if (bpm > 0.0f && beatsPerBar > 0) {
+            
+            // Делаем линии тактов более заметными
+            painter.setPen(QPen(Qt::red, 3, Qt::SolidLine));
+            
+            // Вычисляем время на один такт
+            float secondsPerBeat = 60.0f / bpm;
+            float secondsPerBar = secondsPerBeat * float(beatsPerBar);
+            
+            // Рисуем такты каждые 2 секунды для видимости
+            float timeStep = qMax(2.0f, secondsPerBar);
+            int maxBars = int(rect.width() / 50); // Максимум 50 пикселей на такт
+            
+            for (int bar = 0; bar < maxBars; ++bar) {
+                float barTime = bar * secondsPerBar;
+                float barX = (barTime / timeStep) * rect.width();
+                
+                if (barX < rect.width()) {
+                    // Рисуем вертикальную линию такта
+                    painter.drawLine(QPointF(barX, rect.top()), QPointF(barX, rect.bottom()));
+                    
+                    // Подписываем номер такта
+                    QString barText = QString::number(bar + 1);
+                    painter.drawText(QPointF(barX + 2, 20), barText);
+                }
+            }
+        } else {
+        }
     }
 }
 

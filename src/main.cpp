@@ -3,6 +3,8 @@
 #include <QTranslator>
 #include <QIcon>
 #include <QCoreApplication>
+#include <QPalette>
+#include <QColor>
 #include "mainwindow.h"
 #include <QStyleFactory>
 

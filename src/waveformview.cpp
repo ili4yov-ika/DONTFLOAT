@@ -18,8 +18,11 @@ WaveformView::WaveformView(QWidget *parent)
     , horizontalOffset(0.0f)
     , verticalOffset(0.0f)
     , isDragging(false)
+    , isRightMousePanning(false)
     , sampleRate(44100)
     , playbackPosition(0)
+    , gridStartSample(0)
+    , beatsPerBar(4)
     , scrollStep(0.1f)    // 10% от ширины окна
     , zoomStep(1.2f)      // 20% изменение масштаба
     , showTimeDisplay(true)
@@ -73,6 +76,7 @@ void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
     // Сбрасываем масштаб и смещение
     zoomLevel = 1.0f;
     horizontalOffset = 0.0f;
+    gridStartSample = 0;
     emit zoomChanged(zoomLevel);
 
     update();
@@ -103,6 +107,9 @@ void WaveformView::setSampleRate(int rate)
 void WaveformView::setBeatInfo(const QVector<BPMAnalyzer::BeatInfo>& newBeats)
 {
     beats = newBeats;
+    if (!beats.isEmpty()) {
+        gridStartSample = beats.first().position;
+    }
     update();
 }
 
@@ -218,13 +225,22 @@ void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     
-    // Находим первый такт
-    int firstBeat = int(startSample / samplesPerBeat);
+    // Находим первый такт, выровненный по первой обнаруженной доле
+    int firstBeat = 0;
+    if (gridStartSample > 0) {
+        // количество ударов от опорной точки до стартового сэмпла
+        float beatsFromGridStart = float(startSample - gridStartSample) / samplesPerBeat;
+        firstBeat = int(qFloor(beatsFromGridStart));
+    } else {
+        firstBeat = int(startSample / samplesPerBeat);
+    }
     
     // Рисуем линии тактов
     painter.setPen(QPen(colors.getBeatColor()));
     for (int beat = firstBeat; ; ++beat) {
-        int samplePos = int(beat * samplesPerBeat);
+        int samplePos = gridStartSample > 0
+            ? int(gridStartSample + beat * samplesPerBeat)
+            : int(beat * samplesPerBeat);
         if (samplePos < startSample) continue;
         
         float x = (samplePos - startSample) / samplesPerPixel;
@@ -278,23 +294,32 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
     
     // Вычисляем длительность одного такта в сэмплах
     float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
-    float samplesPerBar = samplesPerBeat * 4;  // 4 удара в такте
+    float samplesPerBar = samplesPerBeat * qMax(1, beatsPerBar);
     
     // Количество сэмплов на пиксель с учетом масштаба
-    float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
+    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
     
     // Вычисляем начальный сэмпл с учетом смещения и масштаба
-    int visibleSamples = int(width() * samplesPerPixel);
+    int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     
-    // Находим первый такт перед видимой областью
-    float firstBar = floor(startSample / samplesPerBar);
+    // Находим первый такт перед видимой областью, выровненный по опорной доле
+    float firstBar = 0.0f;
+    if (gridStartSample > 0) {
+        float barsFromGridStart = float(startSample - gridStartSample) / samplesPerBar;
+        firstBar = floor(barsFromGridStart);
+    } else {
+        firstBar = floor(startSample / samplesPerBar);
+    }
     
     // Рисуем маркеры тактов
     for (float bar = firstBar; ; bar++) {
-        float x = (bar * samplesPerBar - startSample) / samplesPerPixel;
-        if (x >= width()) break;
+        float barSample = gridStartSample > 0
+            ? (gridStartSample + bar * samplesPerBar)
+            : (bar * samplesPerBar);
+        float x = (barSample - startSample) / samplesPerPixel;
+        if (x >= rect.width()) break;
         if (x >= 0) {
             // Рисуем фон маркера
             QRectF markerRect(x - markerSpacing/2, rect.top(), markerSpacing, rect.height());
@@ -321,8 +346,11 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
         return;
     }
 
-    float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
-    int startSample = int(horizontalOffset * audioData[0].size());
+    // Используем ту же логику, что и в drawWaveform
+    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
+    int visibleSamples = int(rect.width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
     
     for (int i = 1; i < beats.size(); ++i) {
         const auto& prevBeat = beats[i - 1];
@@ -333,7 +361,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
             float x1 = float(prevBeat.position - startSample) / samplesPerPixel;
             float x2 = float(currentBeat.position - startSample) / samplesPerPixel;
             
-            if (x2 < 0 || x1 > width()) {
+            if (x2 < 0 || x1 > rect.width()) {
                 continue;
             }
             
@@ -369,9 +397,10 @@ QString WaveformView::getPositionText(qint64 position) const
         // Вычисляем такты и доли
         float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
         float beatsFromStart = float(position) / samplesPerBeat;
-        int bar = int(beatsFromStart / 4) + 1;  // Такты начинаются с 1
-        int beat = int(beatsFromStart) % 4 + 1;  // Доли начинаются с 1
-        float subBeat = (beatsFromStart - float(int(beatsFromStart))) * 4.0f; // Доли такта в четвертях
+        const int bpb = qMax(1, beatsPerBar);
+        int bar = int(beatsFromStart / bpb) + 1;  // Такты начинаются с 1
+        int beat = int(beatsFromStart) % bpb + 1;  // Доли начинаются с 1
+        float subBeat = (beatsFromStart - float(int(beatsFromStart))) * float(bpb); // Доли такта в beat units
         
         QString barText = QString("%1.%2.%3")
             .arg(bar)
@@ -404,14 +433,61 @@ QPointF WaveformView::sampleToPoint(int sampleIndex, float value, const QRectF& 
 
 void WaveformView::wheelEvent(QWheelEvent* event)
 {
+    if (audioData.isEmpty()) {
+        event->ignore();
+        return;
+    }
+    
     float delta = event->angleDelta().y() / 120.f;
-    float newZoom = zoomLevel;
+    float oldZoom = zoomLevel;
+    float newZoom = oldZoom;
+    
     if (delta > 0) {
         newZoom *= zoomStep;
     } else {
         newZoom /= zoomStep;
     }
-    setZoomLevel(newZoom);
+    
+    // Ограничиваем масштаб
+    newZoom = qBound(float(minZoom), newZoom, float(maxZoom));
+    
+    if (qFuzzyCompare(newZoom, oldZoom)) {
+        event->accept();
+        return;
+    }
+    
+    // Получаем позицию мыши относительно виджета
+    QPoint mousePos = event->position().toPoint();
+    
+    // Вычисляем текущую позицию в сэмплах под курсором мыши
+    float samplesPerPixel = float(audioData[0].size()) / (width() * oldZoom);
+    int visibleSamples = int(width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    qint64 mouseSample = startSample + qint64(mousePos.x() * samplesPerPixel);
+    
+    // Обновляем масштаб
+    zoomLevel = newZoom;
+    
+    // Вычисляем новую позицию, чтобы курсор мыши остался над тем же сэмплом
+    float newSamplesPerPixel = float(audioData[0].size()) / (width() * newZoom);
+    int newVisibleSamples = int(width() * newSamplesPerPixel);
+    int newMaxStartSample = qMax(0, audioData[0].size() - newVisibleSamples);
+    
+    // Вычисляем новое смещение
+    float newOffset = 0.0f;
+    if (newMaxStartSample > 0) {
+        newOffset = float(mouseSample - mousePos.x() * newSamplesPerPixel) / newMaxStartSample;
+        newOffset = qBound(0.0f, newOffset, 1.0f);
+    }
+    
+    horizontalOffset = newOffset;
+    
+    // Эмитируем сигналы для обновления скроллбара
+    emit zoomChanged(zoomLevel);
+    emit horizontalOffsetChanged(horizontalOffset);
+    update();
+    
     event->accept();
 }
 
@@ -447,6 +523,11 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
             emit positionChanged(newPosition);
             update();
         }
+    } else if (event->button() == Qt::RightButton) {
+        // Начинаем панорамирование правой кнопкой мыши
+        isRightMousePanning = true;
+        lastMousePos = event->pos();
+        setCursor(Qt::ClosedHandCursor);
     }
 }
 
@@ -485,6 +566,16 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
         }
         
         lastMousePos = event->pos();
+    } else if (event->buttons() & Qt::RightButton && isRightMousePanning) {
+        // Панорамирование правой кнопкой мыши
+        QPoint delta = event->pos() - lastMousePos;
+        adjustHorizontalOffset(-float(delta.x()) / (width() * zoomLevel));
+        lastMousePos = event->pos();
+    } else {
+        // При наведении мыши без нажатых кнопок показываем курсор "рука"
+        if (!isRightMousePanning) {
+            setCursor(Qt::OpenHandCursor);
+        }
     }
 }
 
@@ -492,6 +583,9 @@ void WaveformView::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton) {
         isDragging = false;
+    } else if (event->button() == Qt::RightButton) {
+        isRightMousePanning = false;
+        setCursor(Qt::ArrowCursor);
     }
 }
 
@@ -521,18 +615,63 @@ void WaveformView::adjustHorizontalOffset(float delta)
 {
     // Применяем смещение с ограничением от 0 до 1
     horizontalOffset = qBound(0.0f, horizontalOffset + delta, 1.0f);
+    emit horizontalOffsetChanged(horizontalOffset);
     update();
 }
 
 void WaveformView::adjustZoomLevel(float delta)
 {
-    float newZoom = zoomLevel;
+    if (audioData.isEmpty()) {
+        return;
+    }
+    
+    float oldZoom = zoomLevel;
+    float newZoom = oldZoom;
+    
     if (delta > 0) {
         newZoom *= zoomStep;
     } else {
         newZoom /= zoomStep;
     }
-    setZoomLevel(newZoom);
+    
+    // Ограничиваем масштаб
+    newZoom = qBound(float(minZoom), newZoom, float(maxZoom));
+    
+    if (qFuzzyCompare(newZoom, oldZoom)) {
+        return;
+    }
+    
+    // Масштабируем относительно центра экрана
+    QPoint centerPos = QPoint(width() / 2, height() / 2);
+    
+    // Вычисляем текущую позицию в сэмплах под центром экрана
+    float samplesPerPixel = float(audioData[0].size()) / (width() * oldZoom);
+    int visibleSamples = int(width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    qint64 centerSample = startSample + qint64(centerPos.x() * samplesPerPixel);
+    
+    // Обновляем масштаб
+    zoomLevel = newZoom;
+    
+    // Вычисляем новую позицию, чтобы центр экрана остался над тем же сэмплом
+    float newSamplesPerPixel = float(audioData[0].size()) / (width() * newZoom);
+    int newVisibleSamples = int(width() * newSamplesPerPixel);
+    int newMaxStartSample = qMax(0, audioData[0].size() - newVisibleSamples);
+    
+    // Вычисляем новое смещение
+    float newOffset = 0.0f;
+    if (newMaxStartSample > 0) {
+        newOffset = float(centerSample - centerPos.x() * newSamplesPerPixel) / newMaxStartSample;
+        newOffset = qBound(0.0f, newOffset, 1.0f);
+    }
+    
+    horizontalOffset = newOffset;
+    
+    // Эмитируем сигналы для обновления скроллбара
+    emit zoomChanged(zoomLevel);
+    emit horizontalOffsetChanged(horizontalOffset);
+    update();
 }
 
 void WaveformView::setHorizontalOffset(float offset)
@@ -541,6 +680,7 @@ void WaveformView::setHorizontalOffset(float offset)
     horizontalOffset = qBound(0.0f, offset, 1.0f);
     
     // При изменении смещения обновляем отображение
+    emit horizontalOffsetChanged(horizontalOffset);
     update();
 }
 
@@ -563,11 +703,18 @@ void WaveformView::setBarsDisplayMode(bool showBars)
     showBarsDisplay = showBars;
 }
 
+void WaveformView::setBeatsPerBar(int beats)
+{
+    beatsPerBar = qBound(1, beats, 32);
+    update();
+}
+
 QString WaveformView::getBarText(float beatPosition) const
 {
-    int bar = int(beatPosition / 4) + 1;
-    int beat = int(beatPosition) % 4 + 1;
-    float subBeat = (beatPosition - float(int(beatPosition))) * 4.0f;
+    const int bpb = qMax(1, beatsPerBar);
+    int bar = int(beatPosition / bpb) + 1;
+    int beat = int(beatPosition) % bpb + 1;
+    float subBeat = (beatPosition - float(int(beatPosition))) * float(bpb);
     
     return QString("%1.%2.%3")
         .arg(bar)
@@ -593,53 +740,104 @@ void WaveformView::setLoopEnd(qint64 position)
     update();
 }
 
+void WaveformView::enterEvent(QEnterEvent *event)
+{
+    Q_UNUSED(event)
+    // Устанавливаем курсор "рука" при входе в виджет
+    if (!isRightMousePanning) {
+        setCursor(Qt::OpenHandCursor);
+    }
+}
+
+void WaveformView::leaveEvent(QEvent *event)
+{
+    Q_UNUSED(event)
+    // Возвращаем обычный курсор при выходе из виджета
+    if (!isRightMousePanning) {
+        setCursor(Qt::ArrowCursor);
+    }
+}
+
 void WaveformView::drawLoopMarkers(QPainter& painter, const QRect& rect)
 {
-    if (loopStartPosition > 0 || loopEndPosition > 0) {
-        // Настраиваем перо для маркеров цикла
-        QPen loopPen;
-        loopPen.setWidth(2);
-        loopPen.setStyle(Qt::DashLine);
+    if (audioData.isEmpty() || (loopStartPosition <= 0 && loopEndPosition <= 0)) {
+        return;
+    }
+    
+    // Используем ту же логику, что и в drawWaveform
+    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
+    int visibleSamples = int(rect.width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    
+    // Настраиваем перо для маркеров цикла
+    QPen loopPen;
+    loopPen.setWidth(2);
+    loopPen.setStyle(Qt::DashLine);
 
-        // Рисуем маркер начала цикла
-        if (loopStartPosition > 0) {
+    // Рисуем маркер начала цикла
+    if (loopStartPosition > 0) {
+        qint64 startSamplePos = (loopStartPosition * sampleRate) / 1000;
+        
+        // Проверяем, попадает ли маркер в видимую область
+        if (startSamplePos >= startSample && startSamplePos < startSample + visibleSamples) {
             loopPen.setColor(QColor(0, 255, 0, 180)); // Зелёный для начала
             painter.setPen(loopPen);
-            qint64 startSample = (loopStartPosition * sampleRate) / 1000;
-            int x = int((float(startSample) / float(audioData[0].size())) * rect.width());
-            painter.drawLine(x, 0, x, rect.height());
             
-            // Рисуем метку "A"
-            QFont font = painter.font();
-            font.setBold(true);
-            painter.setFont(font);
-            painter.drawText(x + 5, 20, "A");
+            // Вычисляем позицию маркера в пикселях
+            float x = (startSamplePos - startSample) / samplesPerPixel;
+            
+            if (x >= 0 && x < rect.width()) {
+                painter.drawLine(QPointF(rect.x() + x, rect.top()), QPointF(rect.x() + x, rect.bottom()));
+                
+                // Рисуем метку "A"
+                QFont font = painter.font();
+                font.setBold(true);
+                painter.setFont(font);
+                painter.drawText(QPointF(rect.x() + x + 5, rect.top() + 20), "A");
+            }
         }
+    }
 
-        // Рисуем маркер конца цикла
-        if (loopEndPosition > 0) {
+    // Рисуем маркер конца цикла
+    if (loopEndPosition > 0) {
+        qint64 endSamplePos = (loopEndPosition * sampleRate) / 1000;
+        
+        // Проверяем, попадает ли маркер в видимую область
+        if (endSamplePos >= startSample && endSamplePos < startSample + visibleSamples) {
             loopPen.setColor(QColor(255, 0, 0, 180)); // Красный для конца
             painter.setPen(loopPen);
-            qint64 endSample = (loopEndPosition * sampleRate) / 1000;
-            int x = int((float(endSample) / float(audioData[0].size())) * rect.width());
-            painter.drawLine(x, 0, x, rect.height());
             
-            // Рисуем метку "B"
-            QFont font = painter.font();
-            font.setBold(true);
-            painter.setFont(font);
-            painter.drawText(x + 5, 20, "B");
+            // Вычисляем позицию маркера в пикселях
+            float x = (endSamplePos - startSample) / samplesPerPixel;
+            
+            if (x >= 0 && x < rect.width()) {
+                painter.drawLine(QPointF(rect.x() + x, rect.top()), QPointF(rect.x() + x, rect.bottom()));
+                
+                // Рисуем метку "B"
+                QFont font = painter.font();
+                font.setBold(true);
+                painter.setFont(font);
+                painter.drawText(QPointF(rect.x() + x + 5, rect.top() + 20), "B");
+            }
         }
+    }
 
-        // Если установлены оба маркера, заливаем область между ними
-        if (loopStartPosition > 0 && loopEndPosition > 0) {
-            qint64 startSample = (loopStartPosition * sampleRate) / 1000;
-            qint64 endSample = (loopEndPosition * sampleRate) / 1000;
-            int x1 = int((float(startSample) / float(audioData[0].size())) * rect.width());
-            int x2 = int((float(endSample) / float(audioData[0].size())) * rect.width());
+    // Если установлены оба маркера, заливаем область между ними
+    if (loopStartPosition > 0 && loopEndPosition > 0) {
+        qint64 startSamplePos = (loopStartPosition * sampleRate) / 1000;
+        qint64 endSamplePos = (loopEndPosition * sampleRate) / 1000;
+        
+        // Проверяем, попадает ли хотя бы часть области цикла в видимую область
+        if (endSamplePos >= startSample && startSamplePos < startSample + visibleSamples) {
+            // Вычисляем позиции в пикселях
+            float x1 = qMax(0.0f, (startSamplePos - startSample) / samplesPerPixel);
+            float x2 = qMin(float(rect.width()), (endSamplePos - startSample) / samplesPerPixel);
             
-            QColor fillColor(128, 128, 255, 40); // Полупрозрачный синий
-            painter.fillRect(QRect(x1, 0, x2 - x1, rect.height()), fillColor);
+            if (x2 > x1) {
+                QColor fillColor(128, 128, 255, 40); // Полупрозрачный синий
+                painter.fillRect(QRectF(rect.x() + x1, rect.top(), x2 - x1, rect.height()), fillColor);
+            }
         }
     }
 } 

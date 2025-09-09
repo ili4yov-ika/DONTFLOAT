@@ -1,7 +1,7 @@
 #include "../include/mainwindow.h"
-#include "./ui_mainwindow.h"
 #include "../include/beatfixcommand.h"
-#include <QtGui/QGuiApplication>
+#include "ui_mainwindow.h"
+#include <QtWidgets/QApplication>
 #include <QtCore/QFileInfo>
 #include <QtGui/QIcon>
 #include <QtCore/QTimer>
@@ -12,15 +12,21 @@
 #include <QtGui/QCloseEvent>
 #include <QtMultimedia/QAudioDecoder>
 #include <QtMultimedia/QAudioBuffer>
+#include <QtMultimedia/QAudioFormat>
+
 #include <QtGui/QKeyEvent>
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QComboBox>
 #include <QtCore/QDataStream>
 #include <QtCore/QFile>
-#include <QtMultimedia/QSoundEffect>
+
 #include <QtWidgets/QMessageBox>
 #include <QtCore/QDir>
+#include <QtCore/QtGlobal>
+#include <QtCore/QDebug>
+#include <QtCore/QEventLoop>
+#include <QtCore/QtMath>
 #include <QtWidgets/QStyleFactory>
 #include <QtWidgets/QInputDialog>
 #include "../include/bpmanalyzer.h"
@@ -29,9 +35,16 @@
 #include <QUndoStack>
 #include <QtGui/QShortcut>
 #include <QtWidgets/QDialogButtonBox>
+#include <QtGui/QValidator>
 #include <QtGui/QRegularExpressionValidator>
+#include <QtWidgets/QHBoxLayout>
+#include <QtWidgets/QVBoxLayout>
+#include <QtCore/QRegularExpression>
 #include <cmath>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -39,7 +52,6 @@ MainWindow::MainWindow(QWidget *parent)
     , waveformView(nullptr)
     , pitchGridWidget(nullptr)
     , horizontalScrollBar(nullptr)
-    , waveformVerticalScrollBar(nullptr)
     , pitchGridVerticalScrollBar(nullptr)
     , fileMenu(nullptr)
     , editMenu(nullptr)
@@ -82,12 +94,28 @@ MainWindow::MainWindow(QWidget *parent)
 
     createActions();  // Create actions first
     ui->setupUi(this);  // Then setup UI
+    
+    // Устанавливаем флаги окна для поддержки разворачивания, минимизации и изменения размера
+    setWindowFlags(Qt::Window | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+    
+    // Явно разрешаем изменение размера окна
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    
+    // Убираем все ограничения размера
+    setMinimumSize(800, 500);
+    setMaximumSize(16777215, 16777215);
+    
     createMenus();   // Then create menus
 
     // Настраиваем валидатор для поля BPM
-    QRegularExpressionValidator* bpmValidator = new QRegularExpressionValidator(
-        QRegularExpression("^\\d{1,4}(\\.\\d{1,2})?$"), this);
-    ui->bpmEdit->setValidator(bpmValidator);
+    // QValidator* bpmValidator = new QRegularExpressionValidator(
+    //     QRegularExpression("^\\d{1,4}(\\.\\d{1,2})?$"), this);
+    // ui->bpmEdit->setValidator(bpmValidator);
+
+    // Настраиваем валидатор для поля Такты (целое 1..32)
+    // QValidator* barsValidator = new QRegularExpressionValidator(
+    //     QRegularExpression("^(?:[1-9]|[12]\\d|3[0-2])$"), this);
+    // if (ui->barsEdit) ui->barsEdit->setValidator(barsValidator);
 
     // Create and setup WaveformView
     waveformView = new WaveformView(this);
@@ -103,27 +131,31 @@ MainWindow::MainWindow(QWidget *parent)
     }
     ui->pitchGridWidget->layout()->addWidget(pitchGridWidget);
     
+    // Синхронизируем размер такта по умолчанию между виджетами
+    int defaultBeatsPerBar = 4; // Размер такта по умолчанию
+    waveformView->setBeatsPerBar(defaultBeatsPerBar);
+    pitchGridWidget->setBeatsPerBar(defaultBeatsPerBar);
+    
+    // Синхронизируем BPM по умолчанию между виджетами
+    float defaultBPM = 120.0f; // BPM по умолчанию
+    waveformView->setBPM(defaultBPM);
+    pitchGridWidget->setBPM(defaultBPM);
+    
+    // Устанавливаем значения по умолчанию в UI
+    ui->bpmEdit->setText(QString::number(defaultBPM, 'f', 2));
+    ui->barsEdit->setText(QString::number(defaultBeatsPerBar));
+    
     // Create and setup horizontal scrollbar
     horizontalScrollBar = new QScrollBar(Qt::Horizontal, this);
     horizontalScrollBar->setMinimum(0);
-    horizontalScrollBar->setMaximum(1000);
-    horizontalScrollBar->setSingleStep(10);  // Small step
-    horizontalScrollBar->setPageStep(100);   // Large step (for PageUp/PageDown)
+    horizontalScrollBar->setMaximum(0); // Начинаем с 0 - скроллбар не нужен при масштабе 1.0
+    horizontalScrollBar->setSingleStep(10);
+    horizontalScrollBar->setPageStep(100);
+    horizontalScrollBar->setFixedHeight(20);
     if (!ui->scrollBarWidget->layout()) {
-        ui->scrollBarWidget->setLayout(new QVBoxLayout());
+        ui->scrollBarWidget->setLayout(new QHBoxLayout());
     }
     ui->scrollBarWidget->layout()->addWidget(horizontalScrollBar);
-    
-    // Create and setup vertical scrollbar for waveform
-    waveformVerticalScrollBar = new QScrollBar(Qt::Vertical, this);
-    waveformVerticalScrollBar->setMinimum(0);
-    waveformVerticalScrollBar->setMaximum(1000);
-    waveformVerticalScrollBar->setSingleStep(10);  // Small step
-    waveformVerticalScrollBar->setPageStep(100);   // Large step (for PageUp/PageDown)
-    if (!ui->waveformVerticalScrollBarWidget->layout()) {
-        ui->waveformVerticalScrollBarWidget->setLayout(new QVBoxLayout());
-    }
-    ui->waveformVerticalScrollBarWidget->layout()->addWidget(waveformVerticalScrollBar);
     
     // Create and setup vertical scrollbar for pitch grid
     pitchGridVerticalScrollBar = new QScrollBar(Qt::Vertical, this);
@@ -131,17 +163,70 @@ MainWindow::MainWindow(QWidget *parent)
     pitchGridVerticalScrollBar->setMaximum(1000);
     pitchGridVerticalScrollBar->setSingleStep(10);  // Small step
     pitchGridVerticalScrollBar->setPageStep(100);   // Large step (for PageUp/PageDown)
-    if (!ui->pitchGridVerticalScrollBarWidget->layout()) {
-        ui->pitchGridVerticalScrollBarWidget->setLayout(new QVBoxLayout());
-    }
-    ui->pitchGridVerticalScrollBarWidget->layout()->addWidget(pitchGridVerticalScrollBar);
     
-    // Устанавливаем ширину вертикальных скроллбаров равной высоте горизонтального скроллбара
-    int horizontalScrollBarHeight = horizontalScrollBar->sizeHint().height();
-    ui->waveformVerticalScrollBarWidget->setMaximumWidth(horizontalScrollBarHeight);
-    ui->waveformVerticalScrollBarWidget->setMinimumWidth(horizontalScrollBarHeight);
-    ui->pitchGridVerticalScrollBarWidget->setMaximumWidth(horizontalScrollBarHeight);
-    ui->pitchGridVerticalScrollBarWidget->setMinimumWidth(horizontalScrollBarHeight);
+    // Создаем отдельный контейнер для вертикального скроллбара питч-сетки
+    QWidget* pitchGridScrollContainer = new QWidget(this);
+    QHBoxLayout* pitchGridScrollLayout = new QHBoxLayout(pitchGridScrollContainer);
+    pitchGridScrollLayout->setContentsMargins(0, 0, 0, 0);
+    pitchGridScrollLayout->setSpacing(0);
+    pitchGridScrollLayout->addWidget(pitchGridWidget);
+    pitchGridScrollLayout->addWidget(pitchGridVerticalScrollBar);
+    
+    // Заменяем содержимое pitchGridWidget
+    QLayout* oldPitchLayout = ui->pitchGridWidget->layout();
+    delete oldPitchLayout;
+    ui->pitchGridWidget->setLayout(new QVBoxLayout());
+    ui->pitchGridWidget->layout()->addWidget(pitchGridScrollContainer);
+    
+    // Устанавливаем ширину вертикального скроллбара
+    int scrollBarWidth = 16; // Стандартная ширина скроллбара
+    pitchGridVerticalScrollBar->setFixedWidth(scrollBarWidth);
+    
+    // Настраиваем цвета скроллбаров
+    QString currentScheme = settings.value("colorScheme", "default").toString();
+    if (currentScheme == "dark") {
+        horizontalScrollBar->setStyleSheet(
+            "QScrollBar:horizontal {"
+            "    background: #404040;"
+            "    height: 20px;"
+            "    border: none;"
+            "}"
+            "QScrollBar::handle:horizontal {"
+            "    background: #606060;"
+            "    min-width: 20px;"
+            "    border-radius: 0px;"
+            "}"
+            "QScrollBar::handle:horizontal:hover {"
+            "    background: #707070;"
+            "}"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+            "    background: none;"
+            "    border: none;"
+            "}"
+        );
+        
+
+        
+        pitchGridVerticalScrollBar->setStyleSheet(
+            "QScrollBar:vertical {"
+            "    background: #404040;"
+            "    width: 16px;"
+            "    border: none;"
+            "}"
+            "QScrollBar::handle:vertical {"
+            "    background: #606060;"
+            "    min-height: 20px;"
+            "    border-radius: 0px;"
+            "}"
+            "QScrollBar::handle:vertical:hover {"
+            "    background: #707070;"
+            "}"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+            "    background: none;"
+            "    border: none;"
+            "}"
+        );
+    }
     
     // Initialize audio
     mediaPlayer = new QMediaPlayer(this);
@@ -154,10 +239,136 @@ MainWindow::MainWindow(QWidget *parent)
     // Set application icon
     QIcon appIcon(":/icons/resources/icons/logo.svg");
     setWindowIcon(appIcon);
-    QGuiApplication::setWindowIcon(appIcon);
+    QApplication::setWindowIcon(appIcon);
 
     // Restore window state
     readSettings();
+    
+    // Применяем текущую цветовую схему к виджетам
+    currentScheme = settings.value("colorScheme", "default").toString();
+    if (currentScheme == "dark") {
+        if (ui->waveformWidget) {
+            ui->waveformWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
+        }
+        if (ui->scrollBarWidget) {
+            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #404040; }");
+        }
+        // rulerWidget больше не существует в новой структуре UI
+    } else if (currentScheme == "light") {
+        if (ui->waveformWidget) {
+            ui->waveformWidget->setStyleSheet("QWidget { background-color: #f5f5f5; }");
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #f5f5f5; }");
+        }
+        if (ui->scrollBarWidget) {
+            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #e0e0e0; }");
+        }
+        // rulerWidget больше не существует в новой структуре UI
+        
+        // Применяем светлые стили к скроллбарам для светлой темы
+        if (horizontalScrollBar) {
+            horizontalScrollBar->setStyleSheet(
+                "QScrollBar:horizontal {"
+                "    background: #e0e0e0;"
+                "    height: 20px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:horizontal {"
+                "    background: #c0c0c0;"
+                "    min-width: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:horizontal:hover {"
+                "    background: #a0a0a0;"
+                "}"
+                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+        if (pitchGridVerticalScrollBar) {
+            pitchGridVerticalScrollBar->setStyleSheet(
+                "QScrollBar:vertical {"
+                "    background: #e0e0e0;"
+                "    width: 16px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:vertical {"
+                "    background: #c0c0c0;"
+                "    min-height: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:vertical:hover {"
+                "    background: #a0a0a0;"
+                "}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+    } else {
+        // По умолчанию - тёмная схема
+        if (ui->waveformWidget) {
+            ui->waveformWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
+        }
+        if (ui->scrollBarWidget) {
+            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #404040; }");
+        }
+        // rulerWidget больше не существует в новой структуре UI
+        
+        // Применяем тёмные стили к скроллбарам для темы по умолчанию
+        if (horizontalScrollBar) {
+            horizontalScrollBar->setStyleSheet(
+                "QScrollBar:horizontal {"
+                "    background: #404040;"
+                "    height: 16px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:horizontal {"
+                "    background: #606060;"
+                "    min-width: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:horizontal:hover {"
+                "    background: #707070;"
+                "}"
+                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+        if (pitchGridVerticalScrollBar) {
+            pitchGridVerticalScrollBar->setStyleSheet(
+                "QScrollBar:vertical {"
+                "    background: #404040;"
+                "    width: 16px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:vertical {"
+                "    background: #606060;"
+                "    min-height: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:vertical:hover {"
+                "    background: #707070;"
+                "}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+    }
     
     // Initialize timer for time updates
     playbackTimer = new QTimer(this);
@@ -166,6 +377,18 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Initial window title
     updateWindowTitle();
+    
+    // Принудительно обновляем размеры виджетов
+    QTimer::singleShot(100, this, [this]() {
+        if (ui->waveformWidget) {
+            ui->waveformWidget->updateGeometry();
+            ui->waveformWidget->update();
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->updateGeometry();
+            ui->pitchGridWidget->update();
+        }
+    });
 }
 
 MainWindow::~MainWindow()
@@ -205,9 +428,7 @@ MainWindow::~MainWindow()
     if (horizontalScrollBar) {
         delete horizontalScrollBar;
     }
-    if (waveformVerticalScrollBar) {
-        delete waveformVerticalScrollBar;
-    }
+    
     if (pitchGridVerticalScrollBar) {
         delete pitchGridVerticalScrollBar;
     }
@@ -228,15 +449,53 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 }
 
+void MainWindow::showEvent(QShowEvent *event)
+{
+    QMainWindow::showEvent(event);
+    
+    // Принудительно обновляем размеры виджетов при показе окна
+    QTimer::singleShot(100, this, [this]() {
+        if (ui->waveformWidget) {
+            ui->waveformWidget->updateGeometry();
+            ui->waveformWidget->update();
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->updateGeometry();
+            ui->pitchGridWidget->update();
+        }
+    });
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    
+    // Принудительно обновляем размеры виджетов при изменении размера окна
+    QTimer::singleShot(50, this, [this]() {
+        if (ui->waveformWidget) {
+            ui->waveformWidget->updateGeometry();
+            ui->waveformWidget->update();
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->updateGeometry();
+            ui->pitchGridWidget->update();
+        }
+    });
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    // Обрабатываем изменения состояния окна стандартным способом
+    QMainWindow::changeEvent(event);
+}
+
 void MainWindow::readSettings()
 {
     settings.beginGroup("MainWindow");
     
     // Восстановление геометрии окна
     const QByteArray geometry = settings.value("geometry", QByteArray()).toByteArray();
-    if (geometry.isEmpty()) {
-        setWindowState(Qt::WindowMaximized);
-    } else {
+    if (!geometry.isEmpty()) {
         restoreGeometry(geometry);
     }
     
@@ -266,6 +525,23 @@ void MainWindow::setupConnections()
     connect(ui->playButton, &QPushButton::clicked, this, &MainWindow::playAudio);
     connect(ui->stopButton, &QPushButton::clicked, this, &MainWindow::stopAudio);
     connect(ui->bpmEdit, &QLineEdit::editingFinished, this, &MainWindow::updateBPM);
+    connect(ui->barsEdit, &QLineEdit::editingFinished, this, [this]() {
+        bool ok = false;
+        int bpb = ui->barsEdit->text().toInt(&ok);
+        if (ok && waveformView) {
+            waveformView->setBeatsPerBar(bpb);
+            // Синхронизируем размер такта с PitchGridWidget
+            if (pitchGridWidget) {
+                pitchGridWidget->setBeatsPerBar(bpb);
+            }
+            // Принудительно обновляем отображение тактов
+            waveformView->update();
+            if (pitchGridWidget) {
+                pitchGridWidget->update();
+            }
+            statusBar()->showMessage(QString::fromUtf8("Размер такта: %1").arg(bpb), 2000);
+        }
+    });
     // Временно закомментировано до пересборки UI
     // После пересборки проекта в Qt Creator раскомментировать эти строки:
     // connect(ui->bpmIncreaseButton, &QPushButton::clicked, this, &MainWindow::increaseBPM);
@@ -282,26 +558,22 @@ void MainWindow::setupConnections()
             }
         });
     
-    // Связываем скроллбар с WaveformView
+    // Связываем горизонтальный скроллбар с WaveformView и PitchGridWidget
     connect(horizontalScrollBar, &QScrollBar::valueChanged, this,
         [this](int value) {
-            if (waveformView) {
-                float maxOffset = waveformView->getZoomLevel() > 1.0f ? 1.0f : 0.0f;
+            if (waveformView && horizontalScrollBar->maximum() > 0) {
                 float offset = float(value) / float(horizontalScrollBar->maximum());
-                offset = qBound(0.0f, offset, maxOffset);
+                offset = qBound(0.0f, offset, 1.0f);
                 waveformView->setHorizontalOffset(offset);
+            }
+            if (pitchGridWidget && horizontalScrollBar->maximum() > 0) {
+                float offset = float(value) / float(horizontalScrollBar->maximum());
+                offset = qBound(0.0f, offset, 1.0f);
+                pitchGridWidget->setHorizontalOffset(offset);
             }
         });
 
-    // Связываем вертикальный скроллбар для WaveformView
-    connect(waveformVerticalScrollBar, &QScrollBar::valueChanged, this,
-        [this](int value) {
-            if (waveformView) {
-                float offset = float(value) / float(waveformVerticalScrollBar->maximum());
-                offset = qBound(0.0f, offset, 1.0f);
-                waveformView->setVerticalOffset(offset);
-            }
-        });
+
 
     // Связываем вертикальный скроллбар для PitchGridWidget
     connect(pitchGridVerticalScrollBar, &QScrollBar::valueChanged, this,
@@ -313,24 +585,16 @@ void MainWindow::setupConnections()
             }
         });
 
-    // Обновляем скроллбар при изменении масштаба
+    // Обновляем горизонтальный скроллбар при изменении масштаба
     connect(waveformView, &WaveformView::zoomChanged, this,
         [this](float zoom) {
-            if (zoom <= 1.0f) {
-                horizontalScrollBar->setMaximum(0);
-                horizontalScrollBar->setPageStep(1000);
-                horizontalScrollBar->setValue(0);
-                waveformView->setHorizontalOffset(0.0f);
-            } else {
-                int total = 10000;
-                int page = int(total / zoom);
-                horizontalScrollBar->setMaximum(total - page);
-                horizontalScrollBar->setPageStep(page);
-                
-                float currentOffset = waveformView->getHorizontalOffset();
-                int value = int(currentOffset * total);
-                horizontalScrollBar->setValue(value);
-            }
+            updateHorizontalScrollBar(zoom);
+        });
+
+    // Обновляем горизонтальный скроллбар при изменении смещения
+    connect(waveformView, &WaveformView::horizontalOffsetChanged, this,
+        [this](float offset) {
+            updateHorizontalScrollBarFromOffset(offset);
         });
 
     // Подключаем сигнал изменения позиции от WaveformView
@@ -391,19 +655,49 @@ void MainWindow::setupConnections()
 
     // Подключаем метроном и циклы
     connect(ui->metronomeButton, &QPushButton::clicked, this, &MainWindow::toggleMetronome);
+    connect(ui->loopStartButton, &QPushButton::clicked, this, &MainWindow::setLoopStart);
+    connect(ui->loopEndButton, &QPushButton::clicked, this, &MainWindow::setLoopEnd);
     connect(ui->loopButton, &QPushButton::clicked, this, &MainWindow::toggleLoop);
+    
+    // Подключаем правую кнопку мыши для удаления меток цикла
+    ui->loopStartButton->setContextMenuPolicy(Qt::CustomContextMenu);
+    ui->loopEndButton->setContextMenuPolicy(Qt::CustomContextMenu);
+    
+    connect(ui->loopStartButton, &QPushButton::customContextMenuRequested, this, [this]() {
+        clearLoopStart();
+    });
+    
+    connect(ui->loopEndButton, &QPushButton::customContextMenuRequested, this, [this]() {
+        clearLoopEnd();
+    });
+    
+    // Добавляем подсказки для кнопок цикла
+    ui->loopStartButton->setToolTip(tr("ЛКМ: Установить точку A (начало цикла)\nПКМ: Удалить точку A\nA: Установить точку A\nShift+A: Удалить точку A"));
+    ui->loopEndButton->setToolTip(tr("ЛКМ: Установить точку B (конец цикла)\nПКМ: Удалить точку B\nB: Установить точку B\nShift+B: Удалить точку B"));
+    
+    connect(ui->loopStartButton, &QPushButton::pressed, this, [this]() {
+        if (loopStartPosition > 0) {
+            statusBar()->showMessage(tr("Точка A: %1").arg(formatTime(loopStartPosition)), 2000);
+        }
+    });
+    
+    connect(ui->loopEndButton, &QPushButton::pressed, this, [this]() {
+        if (loopEndPosition > 0) {
+            statusBar()->showMessage(tr("Точка B: %1").arg(formatTime(loopEndPosition)), 2000);
+        }
+    });
     
     // Инициализация метронома
     metronomeTimer = new QTimer(this);
     metronomeTimer->setInterval(10); // Проверяем каждые 10мс
-    metronomeSound = new QSoundEffect(this);
+    metronomeSound = new QMediaPlayer(this);
     
     // Создаем простой звук метронома программно
     createSimpleMetronomeSound();
     
     // Проверяем, загрузился ли звук
-    if (metronomeSound->status() != QSoundEffect::Ready) {
-        qWarning() << "Failed to load metronome sound:" << metronomeSound->status();
+    if (metronomeSound->mediaStatus() != QMediaPlayer::LoadedMedia) {
+        qWarning() << "Failed to load metronome sound:" << metronomeSound->mediaStatus();
     }
     
     isMetronomeEnabled = false;
@@ -421,8 +715,8 @@ void MainWindow::setupConnections()
             qint64 beatInterval = qint64(60000.0f / bpm); // интервал между ударами в мс
             
             if (currentTime - lastBeatTime >= beatInterval) {
-                // Просто воспроизводим звук через QSoundEffect
-                if (metronomeSound->status() == QSoundEffect::Ready) {
+                // Просто воспроизводим звук через QMediaPlayer
+                if (metronomeSound->mediaStatus() == QMediaPlayer::LoadedMedia) {
                     metronomeSound->play();
                 }
                 lastBeatTime = currentTime;
@@ -436,6 +730,18 @@ void MainWindow::setupConnections()
 
     // Добавляем горячие клавиши
     setupShortcuts();
+    
+    // Принудительно обновляем размеры виджетов после настройки соединений
+    QTimer::singleShot(200, this, [this]() {
+        if (ui->waveformWidget) {
+            ui->waveformWidget->updateGeometry();
+            ui->waveformWidget->update();
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->updateGeometry();
+            ui->pitchGridWidget->update();
+        }
+    });
 }
 
 void MainWindow::playAudio()
@@ -486,6 +792,15 @@ void MainWindow::updateBPM()
     float bpm = ui->bpmEdit->text().toFloat(&ok);
     if (ok && bpm > 0.0f && bpm <= 9999.99f) {
         waveformView->setBPM(bpm);
+        // Синхронизируем BPM с PitchGridWidget
+        if (pitchGridWidget) {
+            pitchGridWidget->setBPM(bpm);
+        }
+        // Принудительно обновляем отображение тактов
+        waveformView->update();
+        if (pitchGridWidget) {
+            pitchGridWidget->update();
+        }
         statusBar()->showMessage(tr("BPM установлен: %1").arg(bpm), 2000);
     } else {
         ui->bpmEdit->setText("120.00");
@@ -537,15 +852,22 @@ void MainWindow::updateTimeLabel(qint64 msPosition)
             float beatsPerSecond = beatsPerMinute / 60.0f;
             float secondsFromStart = float(msPosition) / 1000.0f;
             float beatsFromStart = beatsPerSecond * secondsFromStart;
-            
-            int bar = int(beatsFromStart / 4) + 1;
-            int beat = int(beatsFromStart) % 4 + 1;
-            float subBeat = (beatsFromStart - float(int(beatsFromStart))) * 4.0f;
-            
+            const int bpb = waveformView->getBeatsPerBar();
+            int bar = int(beatsFromStart / bpb) + 1;
+            int beat = int(beatsFromStart) % bpb + 1;
+            float subBeat = (beatsFromStart - float(int(beatsFromStart))) * float(bpb);
             ui->timeLabel->setText(QString("%1.%2.%3")
                 .arg(bar)
                 .arg(beat)
                 .arg(int(subBeat + 1)));
+        }
+    }
+    
+    // Показываем информацию о цикле в статусной строке
+    if (isLoopEnabled && loopStartPosition > 0 && loopEndPosition > 0) {
+        QString loopInfo = tr("Цикл: %1 - %2").arg(formatTime(loopStartPosition)).arg(formatTime(loopEndPosition));
+        if (msPosition >= loopStartPosition && msPosition <= loopEndPosition) {
+            statusBar()->showMessage(loopInfo, 1000);
         }
     }
 }
@@ -676,6 +998,21 @@ void MainWindow::setupShortcuts()
     QShortcut* playShortcut = new QShortcut(QKeySequence(Qt::Key_P), this);
     connect(playShortcut, &QShortcut::activated, this, &MainWindow::playAudio);
 
+    // Добавляем QShortcut для Shift+A и Shift+B
+    QShortcut* shiftAShortcut = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_A), this);
+    shiftAShortcut->setContext(Qt::ApplicationShortcut);
+    connect(shiftAShortcut, &QShortcut::activated, this, [this]() {
+        qDebug() << "QShortcut Shift+A activated";
+        clearLoopStart();
+    });
+    
+    QShortcut* shiftBShortcut = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_B), this);
+    shiftBShortcut->setContext(Qt::ApplicationShortcut);
+    connect(shiftBShortcut, &QShortcut::activated, this, [this]() {
+        qDebug() << "QShortcut Shift+B activated";
+        clearLoopEnd();
+    });
+
     // Добавляем действия в окно для обработки клавиш
     addAction(playPauseAct);
     addAction(stopAct);
@@ -698,8 +1035,10 @@ void MainWindow::showKeyboardShortcuts()
         "<p><b>Пробел или P</b> - Воспроизведение/Пауза</p>"
         "<p><b>S</b> - Стоп</p>"
         "<p><b>M</b> - Включить/выключить метроном</p>"
-        "<p><b>A</b> - Установить начало цикла</p>"
-        "<p><b>B</b> - Установить конец цикла</p>"
+        "<p><b>A</b> - Установить точку A (начало цикла)</p>"
+        "<p><b>B</b> - Установить точку B (конец цикла)</p>"
+        "<p><b>Shift+A</b> - Удалить точку A</p>"
+        "<p><b>Shift+B</b> - Удалить точку B</p>"
         "<p><b>Ctrl+Z</b> - Отменить</p>"
         "<p><b>Ctrl+Y</b> - Повторить</p>"
         "<p><b>Ctrl+O</b> - Открыть файл</p>"
@@ -720,10 +1059,16 @@ void MainWindow::setLoopStart()
     if (waveformView && mediaPlayer) {
         loopStartPosition = mediaPlayer->position();
         waveformView->setLoopStart(loopStartPosition);
-        if (!isLoopEnabled) {
-            toggleLoop();
+        
+        // Визуально показываем, что точка A установлена
+        ui->loopStartButton->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; border: 2px solid #45a049; }");
+        
+        statusBar()->showMessage(QString::fromUtf8("Установлена точка A (начало цикла): %1").arg(formatTime(loopStartPosition)), 3000);
+        
+        // Если точка B уже установлена, показываем сообщение в статусбаре
+        if (loopEndPosition > 0 && loopEndPosition > loopStartPosition) {
+            statusBar()->showMessage(tr("Цикл готов! Нажмите кнопку Цикл для включения."), 3000);
         }
-        statusBar()->showMessage(QString::fromUtf8("Установлено начало цикла"), 2000);
     }
 }
 
@@ -732,10 +1077,71 @@ void MainWindow::setLoopEnd()
     if (waveformView && mediaPlayer) {
         loopEndPosition = mediaPlayer->position();
         waveformView->setLoopEnd(loopEndPosition);
-        if (!isLoopEnabled) {
-            toggleLoop();
+        
+        // Проверяем, что точка B больше точки A
+        if (loopEndPosition <= loopStartPosition) {
+            statusBar()->showMessage(tr("Ошибка: Точка B должна быть больше точки A!"), 3000);
+            loopEndPosition = 0;
+            return;
         }
-        statusBar()->showMessage(QString::fromUtf8("Установлен конец цикла"), 2000);
+        
+        // Визуально показываем, что точка B установлена
+        ui->loopEndButton->setStyleSheet("QPushButton { background-color: #f44336; color: white; border: 2px solid #da190b; }");
+        
+        statusBar()->showMessage(QString::fromUtf8("Установлена точка B (конец цикла): %1").arg(formatTime(loopEndPosition)), 3000);
+        
+        // Если точка A уже установлена, показываем сообщение в статусбаре
+        if (loopStartPosition > 0) {
+            statusBar()->showMessage(tr("Цикл готов! Нажмите кнопку Цикл для включения."), 3000);
+        }
+    }
+}
+
+void MainWindow::clearLoopStart()
+{
+    qDebug() << "clearLoopStart() called";
+    if (waveformView) {
+        loopStartPosition = 0;
+        waveformView->setLoopStart(0);
+        
+        // Сбрасываем визуальное состояние кнопки
+        ui->loopStartButton->setStyleSheet("");
+        
+        // Если цикл был включен, выключаем его
+        if (isLoopEnabled) {
+            isLoopEnabled = false;
+            ui->loopButton->setChecked(false);
+            ui->loopButton->setStyleSheet("");
+        }
+        
+        statusBar()->showMessage(tr("Точка A (начало цикла) удалена"), 2000);
+        qDebug() << "Loop start cleared successfully";
+    } else {
+        qDebug() << "waveformView is null";
+    }
+}
+
+void MainWindow::clearLoopEnd()
+{
+    qDebug() << "clearLoopEnd() called";
+    if (waveformView) {
+        loopEndPosition = 0;
+        waveformView->setLoopEnd(0);
+        
+        // Сбрасываем визуальное состояние кнопки
+        ui->loopEndButton->setStyleSheet("");
+        
+        // Если цикл был включен, выключаем его
+        if (isLoopEnabled) {
+            isLoopEnabled = false;
+            ui->loopButton->setChecked(false);
+            ui->loopButton->setStyleSheet("");
+        }
+        
+        statusBar()->showMessage(tr("Точка B (конец цикла) удалена"), 2000);
+        qDebug() << "Loop end cleared successfully";
+    } else {
+        qDebug() << "waveformView is null";
     }
 }
 
@@ -770,6 +1176,16 @@ void MainWindow::resetAudioState()
     if (isLoopEnabled) {
         toggleLoop();
     }
+    
+    // Сбрасываем точки цикла
+    loopStartPosition = 0;
+    loopEndPosition = 0;
+    
+    // Сбрасываем визуальное оформление кнопок
+    ui->loopStartButton->setStyleSheet("");
+    ui->loopEndButton->setStyleSheet("");
+    ui->loopButton->setStyleSheet("");
+    ui->loopButton->setChecked(false);
     
     // Сбрасываем позицию воспроизведения
     currentPosition = 0;
@@ -829,6 +1245,7 @@ void MainWindow::processAudioFile(const QString& filePath)
         options.minBPM = 60.0f;
         options.maxBPM = 200.0f;
         options.tolerancePercent = 5.0f;
+        options.useMixxxAlgorithm = true; // Используем алгоритм Mixxx для лучшей точности
         
         // Анализируем BPM с отображением прогресса
         dialog.updateProgress(QString::fromUtf8("Анализ аудио..."), 50);
@@ -843,19 +1260,45 @@ void MainWindow::processAudioFile(const QString& filePath)
         if (dialog.exec() == QDialog::Accepted && dialog.shouldFixBeats()) {
             dialog.updateProgress(QString::fromUtf8("Выравнивание долей..."), 50);
             
+            // Используем обнаруженный BPM для выравнивания
+            qDebug() << "Using detected BPM:" << analysis.bpm;
+            
             // Создаем копию для исправленных данных
             QVector<QVector<float>> fixedData = audioData;
-            for (int i = 0; i < fixedData.size(); ++i) {
-                fixedData[i] = BPMAnalyzer::fixBeats(fixedData[i], analysis);
+            
+            // Если пользователь хочет пометить неровные доли, выполняем выравнивание
+            if (dialog.markIrregularBeats()) {
+                qDebug() << "Marking irregular beats with BPM:" << analysis.bpm;
+                for (int i = 0; i < fixedData.size(); ++i) {
+                    fixedData[i] = BPMAnalyzer::fixBeats(fixedData[i], analysis);
+                }
+                
+                // Создаем и выполняем команду отмены
+                BeatFixCommand* command = new BeatFixCommand(waveformView, originalData, fixedData, analysis.bpm, analysis.beats);
+                undoStack->push(command);
+                
+                dialog.updateProgress(QString::fromUtf8("Выравнивание завершено"), 100);
+                statusBar()->showMessage(QString::fromUtf8("Доли выровнены по BPM: %1").arg(analysis.bpm, 0, 'f', 1), 2000);
+                hasUnsavedChanges = true;
+            } else {
+                // Если пользователь не хочет помечать неровные доли, просто обновляем отображение
+                qDebug() << "Skipping beat alignment, showing original data";
+                waveformView->setAudioData(audioData);
+                waveformView->setBeatInfo(analysis.beats);
+                ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
+                waveformView->setBPM(analysis.bpm);
+                
+                // Обновляем PitchGridWidget
+                if (pitchGridWidget) {
+                    pitchGridWidget->setAudioData(audioData);
+                    pitchGridWidget->setSampleRate(waveformView->getSampleRate());
+                    pitchGridWidget->setBPM(analysis.bpm);
+                    pitchGridWidget->update();
+                }
+                
+                dialog.updateProgress(QString::fromUtf8("Отображение без выравнивания"), 100);
+                statusBar()->showMessage(QString::fromUtf8("Трек загружен без выравнивания долей"), 2000);
             }
-            
-            // Создаем и выполняем команду отмены
-            BeatFixCommand* command = new BeatFixCommand(waveformView, originalData, fixedData, analysis.bpm, analysis.beats);
-            undoStack->push(command);
-            
-            dialog.updateProgress(QString::fromUtf8("Выравнивание завершено"), 100);
-            statusBar()->showMessage(QString::fromUtf8("Доли выровнены"), 2000);
-            hasUnsavedChanges = true;
         } else {
             // Если пользователь отказался от выравнивания, просто обновляем отображение
             waveformView->setAudioData(audioData);
@@ -868,7 +1311,12 @@ void MainWindow::processAudioFile(const QString& filePath)
                 pitchGridWidget->setAudioData(audioData);
                 pitchGridWidget->setSampleRate(waveformView->getSampleRate());
                 pitchGridWidget->setBPM(analysis.bpm);
+                // Принудительно обновляем отображение тактов
+                pitchGridWidget->update();
             }
+            
+            // Принудительно обновляем отображение тактов в WaveformView
+            waveformView->update();
             
             // Выравниваем отображение по тактовой сетке и сбрасываем масштаб
             waveformView->setZoomLevel(1.0f);
@@ -884,7 +1332,16 @@ void MainWindow::processAudioFile(const QString& filePath)
         }
         
         // Обновляем скроллбар
-        horizontalScrollBar->setValue(0);
+        updateHorizontalScrollBar(waveformView->getZoomLevel());
+        
+        // Сбрасываем точки цикла при загрузке нового файла
+        loopStartPosition = 0;
+        loopEndPosition = 0;
+        isLoopEnabled = false;
+        ui->loopStartButton->setStyleSheet("");
+        ui->loopEndButton->setStyleSheet("");
+        ui->loopButton->setStyleSheet("");
+        ui->loopButton->setChecked(false);
 
         // Разблокируем главное окно
         setEnabled(true);
@@ -916,7 +1373,7 @@ QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath)
     QVector<float> rightChannel;
 
     // Обработка ошибок декодера
-    connect(&decoder, QOverload<QAudioDecoder::Error>::of(&QAudioDecoder::error),
+    connect(&decoder, static_cast<void(QAudioDecoder::*)(QAudioDecoder::Error)>(&QAudioDecoder::error),
         [&](QAudioDecoder::Error error) {
             QString errorStr = tr("Ошибка декодирования: ");
             switch (error) {
@@ -1078,6 +1535,24 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         playAudio();
     } else if (event->key() == Qt::Key_S) {
         stopAudio();
+    } else if (event->key() == Qt::Key_A) {
+        qDebug() << "A key pressed, modifiers:" << event->modifiers() << "ShiftModifier:" << Qt::ShiftModifier;
+        if (event->modifiers() & Qt::ShiftModifier) {
+            qDebug() << "Shift+A pressed - clearing loop start";
+            clearLoopStart();
+        } else {
+            qDebug() << "A pressed - setting loop start";
+            setLoopStart();
+        }
+    } else if (event->key() == Qt::Key_B) {
+        qDebug() << "B key pressed, modifiers:" << event->modifiers() << "ShiftModifier:" << Qt::ShiftModifier;
+        if (event->modifiers() & Qt::ShiftModifier) {
+            qDebug() << "Shift+B pressed - clearing loop end";
+            clearLoopEnd();
+        } else {
+            qDebug() << "B pressed - setting loop end";
+            setLoopEnd();
+        }
     } else if (event->key() == Qt::Key_Up && event->modifiers() == Qt::ControlModifier) {
         increaseBPM();
     } else if (event->key() == Qt::Key_Down && event->modifiers() == Qt::ControlModifier) {
@@ -1104,20 +1579,23 @@ void MainWindow::toggleMetronome()
 
 void MainWindow::toggleLoop()
 {
+    // Проверяем, что точки A и B установлены
+    if (loopStartPosition <= 0 || loopEndPosition <= 0) {
+        statusBar()->showMessage(tr("Ошибка: Сначала установите точки A и B для цикла!"), 3000);
+        ui->loopButton->setChecked(false);
+        return;
+    }
+    
     isLoopEnabled = !isLoopEnabled;
     ui->loopButton->setChecked(isLoopEnabled);
     
     if (isLoopEnabled) {
-        // Устанавливаем точки цикла
-        loopStartPosition = mediaPlayer->position();
-        loopEndPosition = waveformView ? 
-            (waveformView->getAudioData()[0].size() * 1000LL) / waveformView->getSampleRate() : 
-            mediaPlayer->duration();
-        
-        statusBar()->showMessage(tr("Цикл включен"), 2000);
+        // Включаем цикл
+        ui->loopButton->setStyleSheet("QPushButton { background-color: #2196F3; color: white; border: 2px solid #1976D2; }");
+        statusBar()->showMessage(tr("Цикл включен: %1 - %2").arg(formatTime(loopStartPosition)).arg(formatTime(loopEndPosition)), 3000);
     } else {
-        loopStartPosition = 0;
-        loopEndPosition = 0;
+        // Выключаем цикл
+        ui->loopButton->setStyleSheet("");
         statusBar()->showMessage(tr("Цикл выключен"), 2000);
     }
 }
@@ -1127,7 +1605,19 @@ void MainWindow::updateLoopPoints()
     if (isLoopEnabled && isPlaying) {
         qint64 position = mediaPlayer->position();
         if (position >= loopEndPosition) {
+            // Возвращаемся к началу цикла
             mediaPlayer->setPosition(loopStartPosition);
+            
+            // Обновляем позицию в визуализации
+            if (waveformView) {
+                waveformView->setPlaybackPosition(loopStartPosition);
+            }
+            if (pitchGridWidget) {
+                pitchGridWidget->setPlaybackPosition(loopStartPosition);
+            }
+            
+            // Показываем сообщение о цикле
+            statusBar()->showMessage(tr("Цикл: %1 - %2").arg(formatTime(loopStartPosition)).arg(formatTime(loopEndPosition)), 1000);
         }
     }
 }
@@ -1140,8 +1630,9 @@ void MainWindow::showMetronomeSettings()
     if (dialog.exec() == QDialog::Accepted) {
         // Применяем новые настройки метронома
         if (metronomeSound) {
-            int volume = settings.value("Metronome/Volume", 50).toInt();
-            metronomeSound->setVolume(volume / 100.0f);
+            // В Qt6 громкость устанавливается через QAudioOutput
+            // int volume = settings.value("Metronome/Volume", 50).toInt();
+            // metronomeSound->setVolume(volume / 100.0f);
             
             QString soundType = settings.value("Metronome/Sound", "click").toString();
             // TODO: Обновить звук метронома в зависимости от выбранного типа
@@ -1168,10 +1659,43 @@ void MainWindow::setTheme(const QString& theme)
         defaultPalette.setColor(QPalette::Highlight, QColor(61, 174, 233));
         defaultPalette.setColor(QPalette::HighlightedText, QColor(239, 240, 241));
         qApp->setPalette(defaultPalette);
+        
+        // Применяем цвета по умолчанию к виджетам
+        if (ui->waveformWidget) {
+            ui->waveformWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
+        }
+        if (ui->scrollBarWidget) {
+            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #404040; }");
+        }
+        // rulerWidget больше не существует в новой структуре UI
     } else {
         // System theme
         qApp->setStyle(QStyleFactory::create("Fusion"));
         qApp->setPalette(QApplication::style()->standardPalette());
+        
+        // Сбрасываем стили виджетов для системной темы
+        if (ui->waveformWidget) {
+            ui->waveformWidget->setStyleSheet("");
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->setStyleSheet("");
+        }
+        if (ui->scrollBarWidget) {
+            ui->scrollBarWidget->setStyleSheet("");
+        }
+        // rulerWidget больше не существует в новой структуре UI
+        
+        // Сбрасываем стили скроллбаров для системной темы
+        if (horizontalScrollBar) {
+            horizontalScrollBar->setStyleSheet("");
+        }
+
+        if (pitchGridVerticalScrollBar) {
+            pitchGridVerticalScrollBar->setStyleSheet("");
+        }
     }
     
     settings.setValue("theme", theme);
@@ -1198,6 +1722,19 @@ void MainWindow::setColorScheme(const QString& scheme)
         darkPalette.setColor(QPalette::Highlight, QColor(42, 130, 218));
         darkPalette.setColor(QPalette::HighlightedText, Qt::black);
         qApp->setPalette(darkPalette);
+        
+        // Применяем тёмные цвета к виджетам
+        if (ui->waveformWidget) {
+            ui->waveformWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
+        }
+        if (ui->scrollBarWidget) {
+            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #404040; }");
+        }
+        // rulerWidget больше не существует в новой структуре UI
+        
     } else if (scheme == "light") {
         // Установка светлой темы для всего приложения
         qApp->setStyle(QStyleFactory::create("Fusion"));
@@ -1216,6 +1753,18 @@ void MainWindow::setColorScheme(const QString& scheme)
         lightPalette.setColor(QPalette::Highlight, QColor(0, 120, 215));
         lightPalette.setColor(QPalette::HighlightedText, Qt::white);
         qApp->setPalette(lightPalette);
+        
+        // Применяем светлые цвета к виджетам
+        if (ui->waveformWidget) {
+            ui->waveformWidget->setStyleSheet("QWidget { background-color: #f5f5f5; }");
+        }
+        if (ui->pitchGridWidget) {
+            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #f5f5f5; }");
+        }
+        if (ui->scrollBarWidget) {
+            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #e0e0e0; }");
+        }
+        // rulerWidget больше не существует в новой структуре UI
     }
 
     // Применяем схему к WaveformView
@@ -1226,6 +1775,141 @@ void MainWindow::setColorScheme(const QString& scheme)
     // Применяем схему к PitchGridWidget
     if (pitchGridWidget) {
         pitchGridWidget->setColorScheme(scheme);
+    }
+    
+    // Обновляем стили скроллбаров
+    if (scheme == "dark") {
+        if (horizontalScrollBar) {
+            horizontalScrollBar->setStyleSheet(
+                "QScrollBar:horizontal {"
+                "    background: #404040;"
+                "    height: 20px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:horizontal {"
+                "    background: #606060;"
+                "    min-width: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:horizontal:hover {"
+                "    background: #707070;"
+                "}"
+                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+        if (pitchGridVerticalScrollBar) {
+            pitchGridVerticalScrollBar->setStyleSheet(
+                "QScrollBar:vertical {"
+                "    background: #404040;"
+                "    width: 16px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:vertical {"
+                "    background: #606060;"
+                "    min-height: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:vertical:hover {"
+                "    background: #707070;"
+                "}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+    } else if (scheme == "light") {
+        if (horizontalScrollBar) {
+            horizontalScrollBar->setStyleSheet(
+                "QScrollBar:horizontal {"
+                "    background: #e0e0e0;"
+                "    height: 20px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:horizontal {"
+                "    background: #c0c0c0;"
+                "    min-width: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:horizontal:hover {"
+                "    background: #a0a0a0;"
+                "}"
+                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+
+        if (pitchGridVerticalScrollBar) {
+            pitchGridVerticalScrollBar->setStyleSheet(
+                "QScrollBar:vertical {"
+                "    background: #e0e0e0;"
+                "    width: 16px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:vertical {"
+                "    background: #c0c0c0;"
+                "    min-height: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:vertical:hover {"
+                "    background: #a0a0a0;"
+                "}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+    } else {
+        // По умолчанию - тёмная схема
+        if (horizontalScrollBar) {
+            horizontalScrollBar->setStyleSheet(
+                "QScrollBar:horizontal {"
+                "    background: #404040;"
+                "    height: 20px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:horizontal {"
+                "    background: #606060;"
+                "    min-width: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:horizontal:hover {"
+                "    background: #707070;"
+                "}"
+                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
+
+        if (pitchGridVerticalScrollBar) {
+            pitchGridVerticalScrollBar->setStyleSheet(
+                "QScrollBar:vertical {"
+                "    background: #404040;"
+                "    width: 16px;"
+                "    border: none;"
+                "}"
+                "QScrollBar::handle:vertical {"
+                "    background: #606060;"
+                "    min-height: 20px;"
+                "    border-radius: 0px;"
+                "}"
+                "QScrollBar::handle:vertical:hover {"
+                "    background: #707070;"
+                "}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+            );
+        }
     }
     
     settings.setValue("colorScheme", scheme);
@@ -1289,8 +1973,87 @@ void MainWindow::createSimpleMetronomeSound()
         // Обновляем источник звука
         metronomeSound->setSource(QUrl::fromLocalFile(tempFile));
         
+        // Ждем загрузки звука
+        QEventLoop loop;
+        connect(metronomeSound, &QMediaPlayer::mediaStatusChanged, &loop, [&](QMediaPlayer::MediaStatus status) {
+            if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::InvalidMedia) {
+                loop.quit();
+            }
+        });
+        loop.exec();
+        
         qDebug() << "Created metronome sound file:" << tempFile;
     } else {
         qWarning() << "Failed to create metronome sound file";
     }
+}
+
+void MainWindow::updateHorizontalScrollBar(float zoom)
+{
+    if (!horizontalScrollBar) return;
+    
+    // Если масштаб 1.0 или меньше, скроллбар не нужен
+    if (zoom <= 1.0f) {
+        horizontalScrollBar->setMaximum(0);
+        horizontalScrollBar->setPageStep(100);
+        horizontalScrollBar->setValue(0);
+        return;
+    }
+    
+    // Вычисляем максимальное значение для скроллбара
+    int maxValue = static_cast<int>((zoom - 1.0f) * 1000.0f);
+    int pageSize = static_cast<int>(1000.0f / zoom);
+    
+    horizontalScrollBar->setMaximum(maxValue);
+    horizontalScrollBar->setPageStep(pageSize);
+    horizontalScrollBar->setSingleStep(qMax(1, pageSize / 10));
+    
+    // Устанавливаем текущее значение, сохраняя относительную позицию
+    int newValue = qBound(0, horizontalScrollBar->value(), maxValue);
+    horizontalScrollBar->setValue(newValue);
+}
+
+void MainWindow::updateHorizontalScrollBarFromOffset(float offset)
+{
+    if (!horizontalScrollBar || !waveformView) return;
+    
+    float zoom = waveformView->getZoomLevel();
+    
+    // Если масштаб 1.0 или меньше, скроллбар не нужен
+    if (zoom <= 1.0f) {
+        return;
+    }
+    
+    // Вычисляем максимальное значение для скроллбара
+    int maxValue = static_cast<int>((zoom - 1.0f) * 1000.0f);
+    
+    // Конвертируем offset (0.0-1.0) в значение скроллбара
+    int scrollValue = static_cast<int>(offset * maxValue);
+    scrollValue = qBound(0, scrollValue, maxValue);
+    
+    // Обновляем значение скроллбара без эмитирования сигнала
+    horizontalScrollBar->blockSignals(true);
+    horizontalScrollBar->setValue(scrollValue);
+    horizontalScrollBar->blockSignals(false);
+}
+
+void MainWindow::constrainWindowSize()
+{
+    // Полностью убираем ограничения размера окна
+    // Позволяем Qt самому управлять окном для разворачивания и минимизации
+    setMaximumHeight(16777215); // Максимальное значение для размера
+    setMaximumWidth(16777215);  // Максимальное значение для размера
+    
+    // Убираем все ограничения, чтобы окно могло разворачиваться на весь экран
+}
+
+QString MainWindow::formatTime(qint64 msPosition)
+{
+    int minutes = (msPosition / 60000);
+    int seconds = (msPosition / 1000) % 60;
+    int milliseconds = msPosition % 1000;
+    return QString("%1:%2.%3")
+        .arg(minutes, 2, 10, QChar('0'))
+        .arg(seconds, 2, 10, QChar('0'))
+        .arg(milliseconds / 100);
 }
