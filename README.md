@@ -91,7 +91,7 @@
 ### Быстрый старт
 ```bash
 # Клонирование репозитория
-git clone <repository-url>
+git clone https://github.com/ili4yov-ika/DONTFLOAT.git
 cd DONTFLOAT
 
 # Создание директории сборки
