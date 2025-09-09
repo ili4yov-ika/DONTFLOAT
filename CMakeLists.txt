@@ -35,6 +35,8 @@ set(SOURCES
     src/pitchgridwidget.cpp
     src/waveformcolors.cpp
     src/bpmanalyzer.cpp
+    src/keyanalyzer.cpp
+    src/waveformanalyzer.cpp
     src/audiocommand.cpp
     src/beatfixcommand.cpp
 )
@@ -46,6 +48,8 @@ set(HEADERS
     include/pitchgridwidget.h
     include/waveformcolors.h
     include/bpmanalyzer.h
+    include/keyanalyzer.h
+    include/waveformanalyzer.h
     include/audiocommand.h
     include/beatfixcommand.h
 )
@@ -83,6 +87,25 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Multimedia
     Qt6::MultimediaWidgets
 )
+
+# Third-party: Mixxx qm-dsp (for Mixxx-style BPM analysis)
+set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
+if(EXISTS ${QM_DSP_ROOT})
+    file(GLOB_RECURSE QM_DSP_SOURCES
+        ${QM_DSP_ROOT}/*.cpp
+        ${QM_DSP_ROOT}/*.c
+    )
+    add_library(qm_dsp STATIC ${QM_DSP_SOURCES})
+    target_include_directories(qm_dsp PUBLIC ${QM_DSP_ROOT})
+
+    # Enable Mixxx algorithm in our analyzer
+    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MIXXX_QM_DSP)
+    target_link_libraries(${PROJECT_NAME} PRIVATE qm_dsp)
+
+    message(STATUS "Mixxx qm-dsp enabled: ${QM_DSP_ROOT}")
+else()
+    message(WARNING "Mixxx qm-dsp not found at ${QM_DSP_ROOT}. Building with simplified BPM analyzer.")
+endif()
 
 # Set Windows executable properties
 if(WIN32)
