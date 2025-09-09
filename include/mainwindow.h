@@ -14,6 +14,7 @@
 #include <QStatusBar>
 #include <QSettings>
 #include <QScrollBar>
+#include <QResizeEvent>
 #include <QtMultimedia/QAudioFormat>
 #include <QtMultimedia/QMediaPlayer>
 #include <QtMultimedia/QAudioOutput>
@@ -37,6 +38,9 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void changeEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent* event) override;
 
 private slots:
@@ -59,6 +63,8 @@ private slots:
     void showKeyboardShortcuts();
     void setLoopStart();
     void setLoopEnd();
+    void clearLoopStart();
+    void clearLoopEnd();
 
 private:
     void createMenus();
@@ -74,13 +80,16 @@ private:
     void processAudioFile(const QString& filePath);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
     void createSimpleMetronomeSound();
+    QString formatTime(qint64 msPosition);
+    void updateHorizontalScrollBar(float zoom);
+    void updateHorizontalScrollBarFromOffset(float offset);
+    void constrainWindowSize();
 
     // UI components
     Ui::MainWindow *ui;
     WaveformView *waveformView;
     PitchGridWidget *pitchGridWidget;
     QScrollBar *horizontalScrollBar;
-    QScrollBar *waveformVerticalScrollBar;
     QScrollBar *pitchGridVerticalScrollBar;
     
     // Menu components
@@ -123,7 +132,7 @@ private:
 
     // Metronome components
     QTimer *metronomeTimer;
-    QSoundEffect *metronomeSound;
+    QMediaPlayer *metronomeSound;
     bool isMetronomeEnabled;
     qint64 lastBeatTime;
     

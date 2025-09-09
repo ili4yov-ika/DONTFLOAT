@@ -3,6 +3,12 @@
 
 #include <QtCore/QVector>
 #include <QtCore/QPair>
+#include <memory>
+#include <vector>
+
+// Forward declarations for Mixxx integration
+class DetectionFunction;
+class TempoTrackV2;
 
 class BPMAnalyzer
 {
@@ -21,6 +27,9 @@ public:
         bool hasIrregularBeats;
         float averageDeviation;
         bool isFixedTempo;  // Определяет, имеет ли трек фиксированный темп
+        qint64 gridStartSample; // Опорная позиция сетки (первая доля)
+        float preliminaryBPM;   // Предварительный BPM (например, базовый из Mixxx до гармоник)
+        bool hasPreliminaryBPM; // Признак наличия предварительного BPM
     };
 
     struct AnalysisOptions {
@@ -29,6 +38,9 @@ public:
         float minBPM;            // Минимальный допустимый BPM
         float maxBPM;           // Максимальный допустимый BPM
         float tolerancePercent;    // Допустимое отклонение в процентах
+        bool useMixxxAlgorithm;   // Использовать ли алгоритм от Mixxx
+        float initialBPM;        // Предварительно определенный BPM (0 = автоопределение)
+        bool useInitialBPM;      // Использовать ли предварительно определенный BPM
 
         AnalysisOptions() 
             : assumeFixedTempo(true)
@@ -36,6 +48,9 @@ public:
             , minBPM(60.0f)
             , maxBPM(200.0f)
             , tolerancePercent(5.0f)
+            , useMixxxAlgorithm(true)  // По умолчанию используем Mixxx
+            , initialBPM(0.0f)
+            , useInitialBPM(false)
         {}
     };
 
@@ -45,6 +60,22 @@ public:
     
     static QVector<float> fixBeats(const QVector<float>& samples, 
                                  const AnalysisResult& analysis);
+    
+    // Методы для работы с предварительно определенным BPM
+    static AnalysisResult createBeatGridFromBPM(const QVector<float>& samples,
+                                              int sampleRate,
+                                              float bpm,
+                                              const AnalysisOptions& options = AnalysisOptions());
+    
+    static QVector<float> alignToBeatGrid(const QVector<float>& samples,
+                                        int sampleRate,
+                                        float bpm,
+                                        qint64 gridStartSample = 0);
+    
+    // Методы интеграции с Mixxx
+    static AnalysisResult analyzeBPMUsingMixxx(const QVector<float>& samples, 
+                                              int sampleRate,
+                                              const AnalysisOptions& options);
 
 private:
     // Улучшенные методы анализа
@@ -72,6 +103,15 @@ private:
     static bool isValidBPM(float bpm, const AnalysisOptions& options);
     
     static float normalizeConfidence(float rawConfidence);
+    
+    // Вспомогательные методы для Mixxx интеграции
+    static QVector<double> detectOnsets(const QVector<float>& samples, 
+                                       int sampleRate,
+                                       int& stepSize,
+                                       int& windowSize);
+    static QVector<BeatInfo> trackBeats(const QVector<double>& detectionFunction, 
+                                       int sampleRate,
+                                       int stepSize);
 };
 
 #endif // BPMANALYZER_H 

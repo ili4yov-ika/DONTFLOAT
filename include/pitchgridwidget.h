@@ -23,6 +23,7 @@ public:
     void setVerticalOffset(float offset);
     void setZoomLevel(float zoom);
     void setBPM(float bpm);
+    void setBeatsPerBar(int beatsPerBar);
     void setPitchRange(int minPitch, int maxPitch);
     void setColorScheme(const QString& scheme);
 
@@ -54,6 +55,7 @@ private:
     float verticalOffset;
     float zoomLevel;
     float bpm;
+    int beatsPerBar;
     int minPitch;
     int maxPitch;
     bool isDragging;

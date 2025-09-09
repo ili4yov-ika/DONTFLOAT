@@ -7,6 +7,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QProgressBar>
+#include <QCheckBox>
 #include "bpmanalyzer.h"
 
 class BPMFixDialog : public QDialog
@@ -16,6 +17,7 @@ class BPMFixDialog : public QDialog
 public:
     BPMFixDialog(QWidget *parent, const BPMAnalyzer::AnalysisResult&);
     bool shouldFixBeats() const { return fix; }
+    bool markIrregularBeats() const { return markIrregularCheckbox->isChecked(); }
     void updateProgress(const QString& status, int progress);
     void showResult(const BPMAnalyzer::AnalysisResult& analysis);
 
@@ -25,6 +27,10 @@ private:
     QLabel *infoLabel;
     QPushButton *fixButton;
     QPushButton *skipButton;
+    QCheckBox *markIrregularCheckbox;
+    QLabel *preliminaryBPMLabel;
+    QLabel *computedBPMLabel;
+    QLabel *deviationLabel;
     bool fix;
 
 private slots:

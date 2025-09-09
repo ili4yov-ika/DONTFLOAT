@@ -22,6 +22,7 @@ public:
 
     void setAudioData(const QVector<QVector<float>>& data);
     void setBeatInfo(const QVector<BPMAnalyzer::BeatInfo>& beats);
+    void setGridStartSample(qint64 sample) { gridStartSample = sample; update(); }
     void setBPM(float bpm);
     void setSampleRate(int rate);
     int getSampleRate() const { return sampleRate; }
@@ -38,10 +39,13 @@ public:
     void setLoopEnd(qint64 position);
     void setTimeDisplayMode(bool showTime);
     void setBarsDisplayMode(bool showBars);
+    void setBeatsPerBar(int beats);
+    int getBeatsPerBar() const { return beatsPerBar; }
 
 signals:
     void positionChanged(qint64 position); // Сигнал для обновления позиции воспроизведения (в миллисекундах)
     void zoomChanged(float zoom); // Сигнал для обновления скроллбара
+    void horizontalOffsetChanged(float offset); // Сигнал для обновления горизонтального скроллбара
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -50,6 +54,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void enterEvent(QEnterEvent *event) override;
+    void leaveEvent(QEvent *event) override;
 
 private:
     void drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
@@ -71,10 +77,12 @@ private:
     float bpm;
     int sampleRate;
     qint64 playbackPosition;
+    qint64 gridStartSample;
     float horizontalOffset;
     float verticalOffset;
     float zoomLevel;
     bool isDragging;
+    bool isRightMousePanning;
     QPoint lastMousePos;
     QString colorScheme;
     qint64 loopStartPosition;
@@ -83,6 +91,7 @@ private:
     float zoomStep;      // 20% изменение масштаба
     bool showTimeDisplay;
     bool showBarsDisplay;
+    int beatsPerBar;
     
     WaveformColors colors; // Объект для управления цветами
 
