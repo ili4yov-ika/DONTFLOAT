@@ -66,6 +66,7 @@ private slots:
     void setLoopEnd();
     void clearLoopStart();
     void clearLoopEnd();
+    void togglePitchGrid();
 
 private:
     void createMenus();
@@ -117,6 +118,7 @@ private:
     QAction *metronomeAct;
     QAction *loopStartAct;
     QAction *loopEndAct;
+    QAction *togglePitchGridAct;
 
     // File management
     QString currentFileName;
@@ -142,6 +144,9 @@ private:
     bool isLoopEnabled;
     qint64 loopStartPosition;
     qint64 loopEndPosition;
+
+    // Pitch grid visibility
+    bool isPitchGridVisible;
 
     // Undo/Redo stack
     QUndoStack *undoStack;

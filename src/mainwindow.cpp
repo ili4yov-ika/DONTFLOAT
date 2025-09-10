@@ -74,6 +74,7 @@ MainWindow::MainWindow(QWidget *parent)
     , isLoopEnabled(false)
     , loopStartPosition(0)
     , loopEndPosition(0)
+    , isPitchGridVisible(true)
 {
     // Initialize all pointers to nullptr first
     openAct = nullptr;
@@ -91,6 +92,7 @@ MainWindow::MainWindow(QWidget *parent)
     metronomeAct = nullptr;
     loopStartAct = nullptr;
     loopEndAct = nullptr;
+    togglePitchGridAct = nullptr;
     undoStack = new QUndoStack(this);
 
     createActions();  // Create actions first
@@ -493,6 +495,21 @@ void MainWindow::showEvent(QShowEvent *event)
             ui->pitchGridWidget->updateGeometry();
             ui->pitchGridWidget->update();
         }
+        
+        // Обновляем размеры сплиттера в зависимости от видимости питч-сетки
+        if (mainSplitter) {
+            QWidget* pitchGridContainer = mainSplitter->widget(1);
+            
+            if (pitchGridContainer) {
+                if (!isPitchGridVisible) {
+                    // Если питч-сетка скрыта, убеждаемся что волна занимает всё пространство
+                    QList<int> sizes;
+                    int totalHeight = mainSplitter->height();
+                    sizes << totalHeight << 0;
+                    mainSplitter->setSizes(sizes);
+                }
+            }
+        }
     });
 }
 
@@ -509,6 +526,21 @@ void MainWindow::resizeEvent(QResizeEvent *event)
         if (ui->pitchGridWidget) {
             ui->pitchGridWidget->updateGeometry();
             ui->pitchGridWidget->update();
+        }
+        
+        // Обновляем размеры сплиттера в зависимости от видимости питч-сетки
+        if (mainSplitter) {
+            QWidget* pitchGridContainer = mainSplitter->widget(1);
+            
+            if (pitchGridContainer) {
+                if (!isPitchGridVisible) {
+                    // Если питч-сетка скрыта, убеждаемся что волна занимает всё пространство
+                    QList<int> sizes;
+                    int totalHeight = mainSplitter->height();
+                    sizes << totalHeight << 0;
+                    mainSplitter->setSizes(sizes);
+                }
+            }
         }
     });
 }
@@ -539,8 +571,43 @@ void MainWindow::readSettings()
     QString colorScheme = settings.value("colorScheme", "default").toString();
     setColorScheme(colorScheme);
     
-    // Восстановление состояния сплиттера
+    // Восстанавливаем видимость питч-сетки
+    isPitchGridVisible = settings.value("pitchGridVisible", true).toBool();
+    
+    // Применяем состояние к сплиттеру
     if (mainSplitter) {
+        QWidget* pitchGridContainer = mainSplitter->widget(1);
+        
+        if (pitchGridContainer) {
+            if (isPitchGridVisible) {
+                // Показываем питч-сетку
+                pitchGridContainer->setVisible(true);
+                mainSplitter->setChildrenCollapsible(false);
+            } else {
+                // Скрываем питч-сетку
+                pitchGridContainer->setVisible(false);
+                mainSplitter->setChildrenCollapsible(true);
+                
+                // Устанавливаем размеры так, чтобы волна заняла всё пространство
+                QList<int> sizes;
+                int totalHeight = mainSplitter->height();
+                sizes << totalHeight << 0;
+                mainSplitter->setSizes(sizes);
+            }
+        }
+    }
+    
+    // Обновляем текст действия
+    if (togglePitchGridAct) {
+        if (isPitchGridVisible) {
+            togglePitchGridAct->setText(QString::fromUtf8("Убрать питч-сетку"));
+        } else {
+            togglePitchGridAct->setText(QString::fromUtf8("Показать питч-сетку"));
+        }
+    }
+    
+    // Восстановление состояния сплиттера (только если питч-сетка видима)
+    if (mainSplitter && isPitchGridVisible) {
         const QByteArray splitterState = settings.value("splitterState", QByteArray()).toByteArray();
         if (!splitterState.isEmpty()) {
             mainSplitter->restoreState(splitterState);
@@ -556,10 +623,13 @@ void MainWindow::writeSettings()
     settings.setValue("geometry", saveGeometry());
     settings.setValue("windowState", saveState());
     
-    // Сохранение состояния сплиттера
-    if (mainSplitter) {
+    // Сохранение состояния сплиттера (только если питч-сетка видима)
+    if (mainSplitter && isPitchGridVisible) {
         settings.setValue("splitterState", mainSplitter->saveState());
     }
+    
+    // Сохраняем видимость питч-сетки
+    settings.setValue("pitchGridVisible", isPitchGridVisible);
     
     settings.endGroup();
 }
@@ -993,6 +1063,12 @@ void MainWindow::createActions()
     loopEndAct->setShortcut(QKeySequence(Qt::Key_B));
     connect(loopEndAct, &QAction::triggered, this, &MainWindow::setLoopEnd);
 
+    // Pitch grid toggle action
+    togglePitchGridAct = new QAction(QString::fromUtf8("Убрать питч-сетку"), this);
+    togglePitchGridAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
+    togglePitchGridAct->setStatusTip(QString::fromUtf8("Переключить видимость питч-сетки"));
+    connect(togglePitchGridAct, &QAction::triggered, this, &MainWindow::togglePitchGrid);
+
     // Edit actions - use QUndoStack's built-in actions
     undoAct = undoStack->createUndoAction(this);
     undoAct->setText(QString::fromUtf8("&Отменить"));
@@ -1030,6 +1106,10 @@ void MainWindow::createMenus()
     colorSchemeMenu->addAction(darkSchemeAct);
     colorSchemeMenu->addAction(lightSchemeAct);
     
+    // Add pitch grid toggle to View menu
+    viewMenu->addSeparator();
+    viewMenu->addAction(togglePitchGridAct);
+    
     // Settings menu
     settingsMenu = menuBar()->addMenu(QString::fromUtf8("&Настройки"));
     settingsMenu->addAction(metronomeSettingsAct);
@@ -1063,6 +1143,7 @@ void MainWindow::setupShortcuts()
     addAction(metronomeAct);
     addAction(loopStartAct);
     addAction(loopEndAct);
+    addAction(togglePitchGridAct);
 }
 
 void MainWindow::showKeyboardShortcuts()
@@ -1087,6 +1168,7 @@ void MainWindow::showKeyboardShortcuts()
         "<p><b>Ctrl+Y</b> - Повторить</p>"
         "<p><b>Ctrl+O</b> - Открыть файл</p>"
         "<p><b>Ctrl+S</b> - Сохранить файл</p>"
+        "<p><b>Ctrl+G</b> - Переключить питч-сетку</p>"
     ));
 
     auto buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok);
@@ -2100,4 +2182,47 @@ QString MainWindow::formatTime(qint64 msPosition)
         .arg(minutes, 2, 10, QChar('0'))
         .arg(seconds, 2, 10, QChar('0'))
         .arg(milliseconds / 100);
+}
+
+void MainWindow::togglePitchGrid()
+{
+    isPitchGridVisible = !isPitchGridVisible;
+    
+    if (mainSplitter) {
+        QWidget* pitchGridContainer = mainSplitter->widget(1); // pitchGridContainer - второй виджет в сплиттере
+        
+        if (pitchGridContainer) {
+            if (isPitchGridVisible) {
+                // Показываем питч-сетку и восстанавливаем сплиттер
+                pitchGridContainer->setVisible(true);
+                mainSplitter->setChildrenCollapsible(false);
+                
+                // Восстанавливаем пропорции сплиттера (75% для волны, 25% для питч-сетки)
+                QList<int> sizes;
+                int totalHeight = mainSplitter->height();
+                sizes << static_cast<int>(totalHeight * 0.75) << static_cast<int>(totalHeight * 0.25);
+                mainSplitter->setSizes(sizes);
+            } else {
+                // Скрываем питч-сетку и делаем волну на весь экран
+                pitchGridContainer->setVisible(false);
+                mainSplitter->setChildrenCollapsible(true);
+                
+                // Устанавливаем размеры так, чтобы волна заняла всё пространство
+                QList<int> sizes;
+                int totalHeight = mainSplitter->height();
+                sizes << totalHeight << 0; // Вся высота для волны, 0 для питч-сетки
+                mainSplitter->setSizes(sizes);
+            }
+        }
+    }
+    
+    // Обновляем текст действия
+    if (isPitchGridVisible) {
+        togglePitchGridAct->setText(QString::fromUtf8("Убрать питч-сетку"));
+    } else {
+        togglePitchGridAct->setText(QString::fromUtf8("Показать питч-сетку"));
+    }
+    
+    // Сохраняем настройку
+    settings.setValue("pitchGridVisible", isPitchGridVisible);
 }
