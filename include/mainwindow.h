@@ -14,6 +14,7 @@
 #include <QStatusBar>
 #include <QSettings>
 #include <QScrollBar>
+#include <QSplitter>
 #include <QResizeEvent>
 #include <QtMultimedia/QAudioFormat>
 #include <QtMultimedia/QMediaPlayer>
@@ -91,6 +92,7 @@ private:
     PitchGridWidget *pitchGridWidget;
     QScrollBar *horizontalScrollBar;
     QScrollBar *pitchGridVerticalScrollBar;
+    QSplitter *mainSplitter;
     
     // Menu components
     QMenu *fileMenu;

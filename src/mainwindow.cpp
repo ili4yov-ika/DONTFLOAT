@@ -53,6 +53,7 @@ MainWindow::MainWindow(QWidget *parent)
     , pitchGridWidget(nullptr)
     , horizontalScrollBar(nullptr)
     , pitchGridVerticalScrollBar(nullptr)
+    , mainSplitter(nullptr)
     , fileMenu(nullptr)
     , editMenu(nullptr)
     , viewMenu(nullptr)
@@ -130,6 +131,35 @@ MainWindow::MainWindow(QWidget *parent)
         ui->pitchGridWidget->setLayout(new QVBoxLayout());
     }
     ui->pitchGridWidget->layout()->addWidget(pitchGridWidget);
+    
+    // Initialize main splitter
+    mainSplitter = ui->mainSplitter;
+    if (mainSplitter) {
+        // Set initial splitter sizes (75% for waveform, 25% for pitch grid)
+        QList<int> sizes;
+        sizes << 450 << 150; // 75% and 25% of 600px total height
+        mainSplitter->setSizes(sizes);
+        
+        // Set minimum sizes
+        mainSplitter->setChildrenCollapsible(false);
+        
+        // Set minimum sizes programmatically for better control
+        QWidget* waveformContainer = mainSplitter->widget(0);
+        QWidget* pitchGridContainer = mainSplitter->widget(1);
+        
+        if (waveformContainer) {
+            waveformContainer->setMinimumHeight(150);
+        }
+        if (pitchGridContainer) {
+            pitchGridContainer->setMinimumHeight(80);
+        }
+        
+        // Connect splitter signals if needed
+        connect(mainSplitter, &QSplitter::splitterMoved, this, [this]() {
+            // Update any dependent UI elements when splitter moves
+            update();
+        });
+    }
     
     // Синхронизируем размер такта по умолчанию между виджетами
     int defaultBeatsPerBar = 4; // Размер такта по умолчанию
@@ -509,6 +539,14 @@ void MainWindow::readSettings()
     QString colorScheme = settings.value("colorScheme", "default").toString();
     setColorScheme(colorScheme);
     
+    // Восстановление состояния сплиттера
+    if (mainSplitter) {
+        const QByteArray splitterState = settings.value("splitterState", QByteArray()).toByteArray();
+        if (!splitterState.isEmpty()) {
+            mainSplitter->restoreState(splitterState);
+        }
+    }
+    
     settings.endGroup();
 }
 
@@ -517,6 +555,12 @@ void MainWindow::writeSettings()
     settings.beginGroup("MainWindow");
     settings.setValue("geometry", saveGeometry());
     settings.setValue("windowState", saveState());
+    
+    // Сохранение состояния сплиттера
+    if (mainSplitter) {
+        settings.setValue("splitterState", mainSplitter->saveState());
+    }
+    
     settings.endGroup();
 }
 
