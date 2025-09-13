@@ -16,8 +16,10 @@ SOURCES += \
         src/pitchgridwidget.cpp \
         src/waveformcolors.cpp \
         src/bpmanalyzer.cpp \
+        src/keyanalyzer.cpp \
+        src/waveformanalyzer.cpp \
         src/audiocommand.cpp \
-        src/bpmfixdialog.cpp \
+        src/loadfiledialog.cpp \
         src/metronomesettingsdialog.cpp \
         src/beatfixcommand.cpp
 
@@ -27,13 +29,17 @@ HEADERS += \
         include/pitchgridwidget.h \
         include/waveformcolors.h \
         include/bpmanalyzer.h \
+        include/keyanalyzer.h \
+        include/waveformanalyzer.h \
         include/audiocommand.h \
-        include/bpmfixdialog.h \
+        include/loadfiledialog.h \
         include/metronomesettingsdialog.h \
         include/beatfixcommand.h
 
 FORMS += \
-        ui/mainwindow.ui
+        ui/mainwindow.ui \
+        ui/loadfiledialog.ui \
+        ui/metronomesettingsdialog.ui
 
 TRANSLATIONS += \
         translations/DONTFLOAT_ru_RU.ts

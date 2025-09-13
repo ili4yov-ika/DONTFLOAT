@@ -13,4 +13,9 @@
     <qresource prefix="/sounds">
         <file>resources/sounds/metronome.wav</file>
     </qresource>
+    <qresource prefix="/ui">
+        <file>ui/mainwindow.ui</file>
+        <file>ui/loadfiledialog.ui</file>
+        <file>ui/metronomesettingsdialog.ui</file>
+    </qresource>
 </RCC>

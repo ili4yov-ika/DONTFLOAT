@@ -38,6 +38,8 @@ set(SOURCES
     src/keyanalyzer.cpp
     src/waveformanalyzer.cpp
     src/audiocommand.cpp
+    src/loadfiledialog.cpp
+    src/metronomesettingsdialog.cpp
     src/beatfixcommand.cpp
 )
 
@@ -51,17 +53,26 @@ set(HEADERS
     include/keyanalyzer.h
     include/waveformanalyzer.h
     include/audiocommand.h
+    include/loadfiledialog.h
+    include/metronomesettingsdialog.h
     include/beatfixcommand.h
 )
 
 # Add UI files
 set(UI_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/mainwindow.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/loadfiledialog.ui
 )
 
 # Add resource files
 set(RESOURCE_FILES
     resources.qrc
+)
+
+# Add translation files
+set(TRANSLATION_FILES
+    translations/DONTFLOAT_ru_RU.ts
+    translations/DONTFLOAT_en_US.ts
 )
 
 # Create executable
@@ -77,6 +88,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/Desktop_Qt_6_8_3_MSVC2022_64bit-Debug
 )
 
 # Link Qt libraries
@@ -87,6 +99,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Multimedia
     Qt6::MultimediaWidgets
 )
+
+# Translation files are handled manually
 
 # Third-party: Mixxx qm-dsp (for Mixxx-style BPM analysis)
 set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
