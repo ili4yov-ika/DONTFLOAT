@@ -1,4 +1,4 @@
-#include "bpmanalyzer.h"
+#include "../include/bpmanalyzer.h"
 #include <QtCore/QDebug>
 #include <cmath>
 #include <algorithm>

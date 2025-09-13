@@ -30,7 +30,7 @@
 #include <QtWidgets/QStyleFactory>
 #include <QtWidgets/QInputDialog>
 #include "../include/bpmanalyzer.h"
-#include "../include/bpmfixdialog.h"
+#include "../include/loadfiledialog.h"
 #include "../include/metronomesettingsdialog.h"
 #include <QUndoStack>
 #include <QtGui/QShortcut>
@@ -75,6 +75,10 @@ MainWindow::MainWindow(QWidget *parent)
     , loopStartPosition(0)
     , loopEndPosition(0)
     , isPitchGridVisible(true)
+    , currentKey("")
+    , currentKey2("")
+    , keyContextMenu(nullptr)
+    , keyContextMenu2(nullptr)
 {
     // Initialize all pointers to nullptr first
     openAct = nullptr;
@@ -93,10 +97,19 @@ MainWindow::MainWindow(QWidget *parent)
     loopStartAct = nullptr;
     loopEndAct = nullptr;
     togglePitchGridAct = nullptr;
+    toggleBeatDeviationsAct = nullptr;
     undoStack = new QUndoStack(this);
+    
+    // Initialize key actions arrays
+    for (int i = 0; i < 28; ++i) {
+        keyActions[i] = nullptr;
+        keyActions2[i] = nullptr;
+    }
 
     createActions();  // Create actions first
     ui->setupUi(this);  // Then setup UI
+    createKeyContextMenu();  // Create key context menu
+    createKeyContextMenu2();  // Create second key context menu
     
     // Устанавливаем флаги окна для поддержки разворачивания, минимизации и изменения размера
     setWindowFlags(Qt::Window | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
@@ -115,7 +128,7 @@ MainWindow::MainWindow(QWidget *parent)
     //     QRegularExpression("^\\d{1,4}(\\.\\d{1,2})?$"), this);
     // ui->bpmEdit->setValidator(bpmValidator);
 
-    // Настраиваем валидатор для поля Такты (целое 1..32)
+    // Настраиваем валидатор для поля Размер такта (целое 1..32)
     // QValidator* barsValidator = new QRegularExpressionValidator(
     //     QRegularExpression("^(?:[1-9]|[12]\\d|3[0-2])$"), this);
     // if (ui->barsEdit) ui->barsEdit->setValidator(barsValidator);
@@ -129,10 +142,10 @@ MainWindow::MainWindow(QWidget *parent)
     
     // Create and setup PitchGridWidget
     pitchGridWidget = new PitchGridWidget(this);
-    if (!ui->pitchGridWidget->layout()) {
-        ui->pitchGridWidget->setLayout(new QVBoxLayout());
+    if (!ui->pitchGridTableContainer->layout()) {
+        ui->pitchGridTableContainer->setLayout(new QVBoxLayout());
     }
-    ui->pitchGridWidget->layout()->addWidget(pitchGridWidget);
+    ui->pitchGridTableContainer->layout()->addWidget(pitchGridWidget);
     
     // Initialize main splitter
     mainSplitter = ui->mainSplitter;
@@ -173,9 +186,18 @@ MainWindow::MainWindow(QWidget *parent)
     waveformView->setBPM(defaultBPM);
     pitchGridWidget->setBPM(defaultBPM);
     
+    // Устанавливаем цветовую схему для виджетов
+    QString widgetColorScheme = settings.value("colorScheme", "dark").toString();
+    if (waveformView) {
+        waveformView->setColorScheme(widgetColorScheme);
+    }
+    if (pitchGridWidget) {
+        pitchGridWidget->setColorScheme(widgetColorScheme);
+    }
+    
     // Устанавливаем значения по умолчанию в UI
     ui->bpmEdit->setText(QString::number(defaultBPM, 'f', 2));
-    ui->barsEdit->setText(QString::number(defaultBeatsPerBar));
+    ui->barsEdit->setText(QString("%1/4").arg(defaultBeatsPerBar));
     
     // Create and setup horizontal scrollbar
     horizontalScrollBar = new QScrollBar(Qt::Horizontal, this);
@@ -215,7 +237,7 @@ MainWindow::MainWindow(QWidget *parent)
     pitchGridVerticalScrollBar->setFixedWidth(scrollBarWidth);
     
     // Настраиваем цвета скроллбаров
-    QString currentScheme = settings.value("colorScheme", "default").toString();
+    QString currentScheme = settings.value("colorScheme", "dark").toString();
     if (currentScheme == "dark") {
         horizontalScrollBar->setStyleSheet(
             "QScrollBar:horizontal {"
@@ -241,19 +263,28 @@ MainWindow::MainWindow(QWidget *parent)
         
         pitchGridVerticalScrollBar->setStyleSheet(
             "QScrollBar:vertical {"
-            "    background: #404040;"
+            "    background: rgba(64, 64, 64, 128);"
             "    width: 16px;"
             "    border: none;"
+            "    border-radius: 8px;"
             "}"
             "QScrollBar::handle:vertical {"
-            "    background: #606060;"
+            "    background: rgba(96, 96, 96, 180);"
             "    min-height: 20px;"
-            "    border-radius: 0px;"
+            "    border-radius: 8px;"
+            "    margin: 2px;"
             "}"
             "QScrollBar::handle:vertical:hover {"
-            "    background: #707070;"
+            "    background: rgba(112, 112, 112, 200);"
+            "}"
+            "QScrollBar::handle:vertical:pressed {"
+            "    background: rgba(160, 160, 160, 255);"
             "}"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+            "    background: none;"
+            "    border: none;"
+            "}"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
             "    background: none;"
             "    border: none;"
             "}"
@@ -326,19 +357,28 @@ MainWindow::MainWindow(QWidget *parent)
         if (pitchGridVerticalScrollBar) {
             pitchGridVerticalScrollBar->setStyleSheet(
                 "QScrollBar:vertical {"
-                "    background: #e0e0e0;"
+                "    background: rgba(224, 224, 224, 128);"
                 "    width: 16px;"
                 "    border: none;"
+                "    border-radius: 8px;"
                 "}"
                 "QScrollBar::handle:vertical {"
-                "    background: #c0c0c0;"
+                "    background: rgba(192, 192, 192, 180);"
                 "    min-height: 20px;"
-                "    border-radius: 0px;"
+                "    border-radius: 8px;"
+                "    margin: 2px;"
                 "}"
                 "QScrollBar::handle:vertical:hover {"
-                "    background: #a0a0a0;"
+                "    background: rgba(160, 160, 160, 200);"
+                "}"
+                "QScrollBar::handle:vertical:pressed {"
+                "    background: rgba(128, 128, 128, 255);"
                 "}"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
                 "    background: none;"
                 "    border: none;"
                 "}"
@@ -382,19 +422,28 @@ MainWindow::MainWindow(QWidget *parent)
         if (pitchGridVerticalScrollBar) {
             pitchGridVerticalScrollBar->setStyleSheet(
                 "QScrollBar:vertical {"
-                "    background: #404040;"
+                "    background: rgba(64, 64, 64, 128);"
                 "    width: 16px;"
                 "    border: none;"
+                "    border-radius: 8px;"
                 "}"
                 "QScrollBar::handle:vertical {"
-                "    background: #606060;"
+                "    background: rgba(96, 96, 96, 180);"
                 "    min-height: 20px;"
-                "    border-radius: 0px;"
+                "    border-radius: 8px;"
+                "    margin: 2px;"
                 "}"
                 "QScrollBar::handle:vertical:hover {"
-                "    background: #707070;"
+                "    background: rgba(112, 112, 112, 200);"
+                "}"
+                "QScrollBar::handle:vertical:pressed {"
+                "    background: rgba(160, 160, 160, 255);"
                 "}"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
                 "    background: none;"
                 "    border: none;"
                 "}"
@@ -421,6 +470,16 @@ MainWindow::MainWindow(QWidget *parent)
             ui->pitchGridWidget->update();
         }
     });
+    
+    // Инициализируем текст пункта меню для переключения меток неровных долей
+    if (waveformView) {
+        bool showDeviations = waveformView->getShowBeatDeviations();
+        if (showDeviations) {
+            toggleBeatDeviationsAct->setText(QString::fromUtf8("Убрать метки неровных долей"));
+        } else {
+            toggleBeatDeviationsAct->setText(QString::fromUtf8("Пометить неровные доли"));
+        }
+    }
 }
 
 MainWindow::~MainWindow()
@@ -568,11 +627,18 @@ void MainWindow::readSettings()
     }
     
     // Восстанавливаем цветовую схему
-    QString colorScheme = settings.value("colorScheme", "default").toString();
+    QString colorScheme = settings.value("colorScheme", "dark").toString();
     setColorScheme(colorScheme);
     
     // Восстанавливаем видимость питч-сетки
     isPitchGridVisible = settings.value("pitchGridVisible", true).toBool();
+    
+    // Восстанавливаем текущие тональности
+    currentKey = settings.value("currentKey", "").toString();
+    setKey(currentKey);
+    
+    currentKey2 = settings.value("currentKey2", "").toString();
+    setKey2(currentKey2);
     
     // Применяем состояние к сплиттеру
     if (mainSplitter) {
@@ -631,6 +697,10 @@ void MainWindow::writeSettings()
     // Сохраняем видимость питч-сетки
     settings.setValue("pitchGridVisible", isPitchGridVisible);
     
+    // Сохраняем текущие тональности
+    settings.setValue("currentKey", currentKey);
+    settings.setValue("currentKey2", currentKey2);
+    
     settings.endGroup();
 }
 
@@ -640,11 +710,55 @@ void MainWindow::setupConnections()
     connect(ui->stopButton, &QPushButton::clicked, this, &MainWindow::stopAudio);
     connect(ui->bpmEdit, &QLineEdit::editingFinished, this, &MainWindow::updateBPM);
     connect(ui->barsEdit, &QLineEdit::editingFinished, this, [this]() {
-        bool ok = false;
-        int bpb = ui->barsEdit->text().toInt(&ok);
-        if (ok && waveformView) {
+        QString text = ui->barsEdit->text().trimmed();
+        int numerator = 4; // Числитель по умолчанию
+        int denominator = 4; // Знаменатель по умолчанию
+        bool isValid = false;
+        
+        // Парсим значение в формате X/Y или просто X
+        if (text.contains("/")) {
+            QStringList parts = text.split("/");
+            if (parts.size() == 2) {
+                bool ok1 = false, ok2 = false;
+                int num = parts[0].toInt(&ok1);
+                int den = parts[1].toInt(&ok2);
+                
+                // Проверяем валидность размера такта
+                if (ok1 && ok2 && num >= 1 && num <= 32 && 
+                    (den == 2 || den == 4 || den == 8 || den == 16)) {
+                    numerator = num;
+                    denominator = den;
+                    isValid = true;
+                }
+            }
+        } else {
+            // Если введено просто число, считаем это числителем с знаменателем 4
+            bool ok = false;
+            int num = text.toInt(&ok);
+            if (ok && num >= 1 && num <= 32) {
+                numerator = num;
+                denominator = 4;
+                isValid = true;
+            }
+        }
+        
+        // Если ввод некорректный, показываем сообщение об ошибке
+        if (!isValid) {
+            statusBar()->showMessage(QString::fromUtf8("Некорректный размер такта. Используйте формат X/Y (например, 4/4, 3/4, 2/4, 6/8)"), 3000);
+            ui->barsEdit->setText("4/4"); // Возвращаем к значению по умолчанию
+            return;
+        }
+        
+        // Обновляем отображение в поле ввода
+        ui->barsEdit->setText(QString("%1/%2").arg(numerator).arg(denominator));
+        
+        // Для внутренней логики используем только числитель (количество долей)
+        // Знаменатель влияет на отображение, но не на логику воспроизведения
+        int bpb = numerator;
+        
+        if (waveformView) {
             waveformView->setBeatsPerBar(bpb);
-            // Синхронизируем размер такта с PitchGridWidget
+            // Синхронизируем количество долей в такте с PitchGridWidget
             if (pitchGridWidget) {
                 pitchGridWidget->setBeatsPerBar(bpb);
             }
@@ -653,7 +767,7 @@ void MainWindow::setupConnections()
             if (pitchGridWidget) {
                 pitchGridWidget->update();
             }
-            statusBar()->showMessage(QString::fromUtf8("Размер такта: %1").arg(bpb), 2000);
+            statusBar()->showMessage(QString::fromUtf8("Размер такта изменен на %1/%2").arg(numerator).arg(denominator), 2000);
         }
     });
     // Временно закомментировано до пересборки UI
@@ -703,12 +817,26 @@ void MainWindow::setupConnections()
     connect(waveformView, &WaveformView::zoomChanged, this,
         [this](float zoom) {
             updateHorizontalScrollBar(zoom);
+            // Обновляем позицию каретки в PitchGridWidget при изменении масштаба
+            if (pitchGridWidget) {
+                float cursorX = waveformView->getCursorXPosition();
+                pitchGridWidget->setCursorPosition(cursorX);
+                // Обновляем прозрачность скроллбара
+                updateScrollBarTransparency();
+            }
         });
 
     // Обновляем горизонтальный скроллбар при изменении смещения
     connect(waveformView, &WaveformView::horizontalOffsetChanged, this,
         [this](float offset) {
             updateHorizontalScrollBarFromOffset(offset);
+            // Обновляем позицию каретки в PitchGridWidget при изменении смещения
+            if (pitchGridWidget) {
+                float cursorX = waveformView->getCursorXPosition();
+                pitchGridWidget->setCursorPosition(cursorX);
+                // Обновляем прозрачность скроллбара
+                updateScrollBarTransparency();
+            }
         });
 
     // Подключаем сигнал изменения позиции от WaveformView
@@ -718,6 +846,13 @@ void MainWindow::setupConnections()
                 // Теперь WaveformView отправляет позицию в миллисекундах
                 mediaPlayer->setPosition(msPosition);
                 updateTimeLabel(msPosition);
+                // Обновляем позицию каретки в PitchGridWidget
+                if (pitchGridWidget) {
+                    float cursorX = waveformView->getCursorXPosition();
+                    pitchGridWidget->setCursorPosition(cursorX);
+                }
+                // Обновляем прозрачность скроллбара
+                updateScrollBarTransparency();
             }
         });
 
@@ -738,6 +873,9 @@ void MainWindow::setupConnections()
             [this](qint64 msPosition) {
                 if (pitchGridWidget) {
                     pitchGridWidget->setPlaybackPosition(msPosition);
+                    // Передаем позицию каретки в пикселях для точной синхронизации
+                    float cursorX = waveformView->getCursorXPosition();
+                    pitchGridWidget->setCursorPosition(cursorX);
                 }
             });
 
@@ -746,6 +884,11 @@ void MainWindow::setupConnections()
             [this](float zoom) {
                 if (pitchGridWidget) {
                     pitchGridWidget->setZoomLevel(zoom);
+                    // Обновляем позицию каретки при изменении масштаба
+                    float cursorX = waveformView->getCursorXPosition();
+                    pitchGridWidget->setCursorPosition(cursorX);
+                    // Обновляем прозрачность скроллбара
+                    updateScrollBarTransparency();
                 }
             });
 
@@ -757,6 +900,11 @@ void MainWindow::setupConnections()
                     float offset = float(value) / float(horizontalScrollBar->maximum());
                     offset = qBound(0.0f, offset, maxOffset);
                     pitchGridWidget->setHorizontalOffset(offset);
+                    // Обновляем позицию каретки при изменении смещения
+                    float cursorX = waveformView->getCursorXPosition();
+                    pitchGridWidget->setCursorPosition(cursorX);
+                    // Обновляем прозрачность скроллбара
+                    updateScrollBarTransparency();
                 }
             });
     }
@@ -842,6 +990,13 @@ void MainWindow::setupConnections()
     connect(undoStack, &QUndoStack::canUndoChanged, undoAct, &QAction::setEnabled);
     connect(undoStack, &QUndoStack::canRedoChanged, redoAct, &QAction::setEnabled);
 
+    // Подключаем контекстные меню для полей ввода тональности
+    ui->keyInput->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->keyInput, &QLineEdit::customContextMenuRequested, this, &MainWindow::showKeyContextMenu);
+    
+    ui->keyInput2->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->keyInput2, &QLineEdit::customContextMenuRequested, this, &MainWindow::showKeyContextMenu2);
+    
     // Добавляем горячие клавиши
     setupShortcuts();
     
@@ -998,6 +1153,11 @@ void MainWindow::updatePlaybackPosition(qint64 position)
     // Обновляем позицию в PitchGridWidget
     if (pitchGridWidget) {
         pitchGridWidget->setPlaybackPosition(position);
+        // Обновляем позицию каретки в пикселях для точной синхронизации
+        if (waveformView) {
+            float cursorX = waveformView->getCursorXPosition();
+            pitchGridWidget->setCursorPosition(cursorX);
+        }
     }
 }
 
@@ -1069,6 +1229,12 @@ void MainWindow::createActions()
     togglePitchGridAct->setStatusTip(QString::fromUtf8("Переключить видимость питч-сетки"));
     connect(togglePitchGridAct, &QAction::triggered, this, &MainWindow::togglePitchGrid);
 
+    // Beat deviations toggle action
+    toggleBeatDeviationsAct = new QAction(QString::fromUtf8("Пометить неровные доли"), this);
+    toggleBeatDeviationsAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    toggleBeatDeviationsAct->setStatusTip(QString::fromUtf8("Переключить отображение меток неровных долей"));
+    connect(toggleBeatDeviationsAct, &QAction::triggered, this, &MainWindow::toggleBeatDeviations);
+
     // Edit actions - use QUndoStack's built-in actions
     undoAct = undoStack->createUndoAction(this);
     undoAct->setText(QString::fromUtf8("&Отменить"));
@@ -1077,6 +1243,16 @@ void MainWindow::createActions()
     redoAct = undoStack->createRedoAction(this);
     redoAct->setText(QString::fromUtf8("&Повторить"));
     redoAct->setShortcuts(QKeySequence::Redo);
+
+    // Language actions
+    russianAction = new QAction(QString::fromUtf8("Русский"), this);
+    russianAction->setCheckable(true);
+    russianAction->setChecked(true);
+    connect(russianAction, &QAction::triggered, this, &MainWindow::setRussianLanguage);
+
+    englishAction = new QAction(QString::fromUtf8("English"), this);
+    englishAction->setCheckable(true);
+    connect(englishAction, &QAction::triggered, this, &MainWindow::setEnglishLanguage);
 }
 
 void MainWindow::createMenus()
@@ -1109,11 +1285,17 @@ void MainWindow::createMenus()
     // Add pitch grid toggle to View menu
     viewMenu->addSeparator();
     viewMenu->addAction(togglePitchGridAct);
-    
-    // Settings menu
+    viewMenu->addAction(toggleBeatDeviationsAct);
+
+    // Settings menu (last)
     settingsMenu = menuBar()->addMenu(QString::fromUtf8("&Настройки"));
     settingsMenu->addAction(metronomeSettingsAct);
     settingsMenu->addAction(keyboardShortcutsAct);
+    
+    // Language submenu in Settings menu
+    QMenu* languageMenu = settingsMenu->addMenu(QString::fromUtf8("Language"));
+    languageMenu->addAction(russianAction);
+    languageMenu->addAction(englishAction);
 }
 
 void MainWindow::setupShortcuts()
@@ -1359,7 +1541,7 @@ void MainWindow::processAudioFile(const QString& filePath)
         setEnabled(false);
         
         // Создаем диалог до начала анализа с корректной кодировкой текста
-        BPMFixDialog dialog(this, BPMAnalyzer::AnalysisResult());
+        LoadFileDialog dialog(this, BPMAnalyzer::AnalysisResult());
         dialog.setWindowTitle(QString::fromUtf8("Анализ и выравнивание долей"));
         dialog.setWindowModality(Qt::ApplicationModal);
         dialog.show();
@@ -1380,6 +1562,12 @@ void MainWindow::processAudioFile(const QString& filePath)
         dialog.updateProgress(QString::fromUtf8("Анализ завершен"), 100);
         dialog.showResult(analysis);
         
+        // Устанавливаем галочку на основе текущего состояния отображения меток
+        if (waveformView) {
+            bool currentShowDeviations = waveformView->getShowBeatDeviations();
+            dialog.setMarkIrregularBeats(currentShowDeviations);
+        }
+        
         // Сохраняем оригинальные данные
         QVector<QVector<float>> originalData = audioData;
         
@@ -1395,6 +1583,12 @@ void MainWindow::processAudioFile(const QString& filePath)
             // Если пользователь хочет пометить неровные доли, выполняем выравнивание
             if (dialog.markIrregularBeats()) {
                 qDebug() << "Marking irregular beats with BPM:" << analysis.bpm;
+                
+                // Включаем отображение меток только если пользователь хочет помечать
+                if (waveformView) {
+                    waveformView->setShowBeatDeviations(true);
+                }
+                
                 for (int i = 0; i < fixedData.size(); ++i) {
                     fixedData[i] = BPMAnalyzer::fixBeats(fixedData[i], analysis);
                 }
@@ -1407,8 +1601,14 @@ void MainWindow::processAudioFile(const QString& filePath)
                 statusBar()->showMessage(QString::fromUtf8("Доли выровнены по BPM: %1").arg(analysis.bpm, 0, 'f', 1), 2000);
                 hasUnsavedChanges = true;
             } else {
-                // Если пользователь не хочет помечать неровные доли, просто обновляем отображение
-                qDebug() << "Skipping beat alignment, showing original data";
+                // Если пользователь не хочет помечать неровные доли, отключаем метки
+                qDebug() << "Skipping beat alignment, showing original data without deviations";
+                
+                // Отключаем отображение меток если пользователь не хочет помечать
+                if (waveformView) {
+                    waveformView->setShowBeatDeviations(false);
+                }
+                
                 waveformView->setAudioData(audioData);
                 waveformView->setBeatInfo(analysis.beats);
                 ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
@@ -1425,8 +1625,23 @@ void MainWindow::processAudioFile(const QString& filePath)
                 dialog.updateProgress(QString::fromUtf8("Отображение без выравнивания"), 100);
                 statusBar()->showMessage(QString::fromUtf8("Трек загружен без выравнивания долей"), 2000);
             }
+            
+            // Обновляем текст пункта меню в соответствии с текущим состоянием
+            if (waveformView) {
+                bool showDeviations = waveformView->getShowBeatDeviations();
+                if (showDeviations) {
+                    toggleBeatDeviationsAct->setText(QString::fromUtf8("Убрать метки неровных долей"));
+                } else {
+                    toggleBeatDeviationsAct->setText(QString::fromUtf8("Пометить неровные доли"));
+                }
+            }
         } else {
-            // Если пользователь отказался от выравнивания, просто обновляем отображение
+            // Если пользователь отказался от выравнивания, обновляем отображение с учетом галочки
+            // Устанавливаем флаг отображения меток в зависимости от состояния галочки
+            if (waveformView) {
+                waveformView->setShowBeatDeviations(dialog.markIrregularBeats());
+            }
+            
             waveformView->setAudioData(audioData);
             waveformView->setBeatInfo(analysis.beats);
             ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
@@ -1454,6 +1669,16 @@ void MainWindow::processAudioFile(const QString& filePath)
                 waveformView->setHorizontalOffset(offset);
             } else {
                 waveformView->setHorizontalOffset(0.0f);
+            }
+            
+            // Обновляем текст пункта меню в соответствии с текущим состоянием
+            if (waveformView) {
+                bool showDeviations = waveformView->getShowBeatDeviations();
+                if (showDeviations) {
+                    toggleBeatDeviationsAct->setText(QString::fromUtf8("Убрать метки неровных долей"));
+                } else {
+                    toggleBeatDeviationsAct->setText(QString::fromUtf8("Пометить неровные доли"));
+                }
             }
         }
         
@@ -1929,19 +2154,28 @@ void MainWindow::setColorScheme(const QString& scheme)
         if (pitchGridVerticalScrollBar) {
             pitchGridVerticalScrollBar->setStyleSheet(
                 "QScrollBar:vertical {"
-                "    background: #404040;"
+                "    background: rgba(64, 64, 64, 128);"
                 "    width: 16px;"
                 "    border: none;"
+                "    border-radius: 8px;"
                 "}"
                 "QScrollBar::handle:vertical {"
-                "    background: #606060;"
+                "    background: rgba(96, 96, 96, 180);"
                 "    min-height: 20px;"
-                "    border-radius: 0px;"
+                "    border-radius: 8px;"
+                "    margin: 2px;"
                 "}"
                 "QScrollBar::handle:vertical:hover {"
-                "    background: #707070;"
+                "    background: rgba(112, 112, 112, 200);"
+                "}"
+                "QScrollBar::handle:vertical:pressed {"
+                "    background: rgba(160, 160, 160, 255);"
                 "}"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
                 "    background: none;"
                 "    border: none;"
                 "}"
@@ -1973,19 +2207,28 @@ void MainWindow::setColorScheme(const QString& scheme)
         if (pitchGridVerticalScrollBar) {
             pitchGridVerticalScrollBar->setStyleSheet(
                 "QScrollBar:vertical {"
-                "    background: #e0e0e0;"
+                "    background: rgba(224, 224, 224, 128);"
                 "    width: 16px;"
                 "    border: none;"
+                "    border-radius: 8px;"
                 "}"
                 "QScrollBar::handle:vertical {"
-                "    background: #c0c0c0;"
+                "    background: rgba(192, 192, 192, 180);"
                 "    min-height: 20px;"
-                "    border-radius: 0px;"
+                "    border-radius: 8px;"
+                "    margin: 2px;"
                 "}"
                 "QScrollBar::handle:vertical:hover {"
-                "    background: #a0a0a0;"
+                "    background: rgba(160, 160, 160, 200);"
+                "}"
+                "QScrollBar::handle:vertical:pressed {"
+                "    background: rgba(128, 128, 128, 255);"
                 "}"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
                 "    background: none;"
                 "    border: none;"
                 "}"
@@ -2018,19 +2261,28 @@ void MainWindow::setColorScheme(const QString& scheme)
         if (pitchGridVerticalScrollBar) {
             pitchGridVerticalScrollBar->setStyleSheet(
                 "QScrollBar:vertical {"
-                "    background: #404040;"
+                "    background: rgba(64, 64, 64, 128);"
                 "    width: 16px;"
                 "    border: none;"
+                "    border-radius: 8px;"
                 "}"
                 "QScrollBar::handle:vertical {"
-                "    background: #606060;"
+                "    background: rgba(96, 96, 96, 180);"
                 "    min-height: 20px;"
-                "    border-radius: 0px;"
+                "    border-radius: 8px;"
+                "    margin: 2px;"
                 "}"
                 "QScrollBar::handle:vertical:hover {"
-                "    background: #707070;"
+                "    background: rgba(112, 112, 112, 200);"
+                "}"
+                "QScrollBar::handle:vertical:pressed {"
+                "    background: rgba(160, 160, 160, 255);"
                 "}"
                 "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
                 "    background: none;"
                 "    border: none;"
                 "}"
@@ -2225,4 +2477,341 @@ void MainWindow::togglePitchGrid()
     
     // Сохраняем настройку
     settings.setValue("pitchGridVisible", isPitchGridVisible);
+}
+
+void MainWindow::createKeyContextMenu()
+{
+    keyContextMenu = new QMenu(this);
+    
+    // Создаем действия для всех тональностей
+    QStringList majorKeys = {
+        "C Major", "C# Major", "D Major", "D# Major", "E Major", "F Major", 
+        "F# Major", "G Major", "G# Major", "A Major", "A# Major", "B Major"
+    };
+    
+    QStringList minorKeys = {
+        "C Minor", "C# Minor", "D Minor", "D# Minor", "E Minor", "F Minor", 
+        "F# Minor", "G Minor", "G# Minor", "A Minor", "A# Minor", "B Minor"
+    };
+    
+    // Добавляем мажорные тональности
+    QMenu* majorMenu = keyContextMenu->addMenu("Мажорные");
+    for (int i = 0; i < majorKeys.size(); ++i) {
+        keyActions[i] = new QAction(majorKeys[i], this);
+        keyActions[i]->setData(majorKeys[i]);
+        connect(keyActions[i], &QAction::triggered, this, [this, majorKeys, i]() {
+            setKey(majorKeys[i]);
+        });
+        majorMenu->addAction(keyActions[i]);
+    }
+    
+    // Добавляем минорные тональности
+    QMenu* minorMenu = keyContextMenu->addMenu("Минорные");
+    for (int i = 0; i < minorKeys.size(); ++i) {
+        keyActions[i + 12] = new QAction(minorKeys[i], this);
+        keyActions[i + 12]->setData(minorKeys[i]);
+        connect(keyActions[i + 12], &QAction::triggered, this, [this, minorKeys, i]() {
+            setKey(minorKeys[i]);
+        });
+        minorMenu->addAction(keyActions[i + 12]);
+    }
+    
+    // Добавляем разделитель и опцию "Не определена"
+    keyContextMenu->addSeparator();
+    QAction* unknownAction = new QAction("Не определена", this);
+    connect(unknownAction, &QAction::triggered, this, [this]() {
+        setKey("");
+    });
+    keyContextMenu->addAction(unknownAction);
+}
+
+void MainWindow::createKeyContextMenu2()
+{
+    keyContextMenu2 = new QMenu(this);
+    
+    // Создаем действия для всех тональностей
+    QStringList majorKeys = {
+        "C Major", "C# Major", "D Major", "D# Major", "E Major", "F Major", 
+        "F# Major", "G Major", "G# Major", "A Major", "A# Major", "B Major"
+    };
+    
+    QStringList minorKeys = {
+        "C Minor", "C# Minor", "D Minor", "D# Minor", "E Minor", "F Minor", 
+        "F# Minor", "G Minor", "G# Minor", "A Minor", "A# Minor", "B Minor"
+    };
+    
+    // Добавляем мажорные тональности
+    QMenu* majorMenu = keyContextMenu2->addMenu("Мажорные");
+    for (int i = 0; i < majorKeys.size(); ++i) {
+        keyActions2[i] = new QAction(majorKeys[i], this);
+        keyActions2[i]->setData(majorKeys[i]);
+        connect(keyActions2[i], &QAction::triggered, this, [this, majorKeys, i]() {
+            setKey2(majorKeys[i]);
+        });
+        majorMenu->addAction(keyActions2[i]);
+    }
+    
+    // Добавляем минорные тональности
+    QMenu* minorMenu = keyContextMenu2->addMenu("Минорные");
+    for (int i = 0; i < minorKeys.size(); ++i) {
+        keyActions2[i + 12] = new QAction(minorKeys[i], this);
+        keyActions2[i + 12]->setData(minorKeys[i]);
+        connect(keyActions2[i + 12], &QAction::triggered, this, [this, minorKeys, i]() {
+            setKey2(minorKeys[i]);
+        });
+        minorMenu->addAction(keyActions2[i + 12]);
+    }
+    
+    // Добавляем разделитель и опцию "Не определена"
+    keyContextMenu2->addSeparator();
+    QAction* unknownAction = new QAction("Не определена", this);
+    connect(unknownAction, &QAction::triggered, this, [this]() {
+        setKey2("");
+    });
+    keyContextMenu2->addAction(unknownAction);
+}
+
+void MainWindow::analyzeKey()
+{
+    if (!waveformView || waveformView->getAudioData().isEmpty()) {
+        statusBar()->showMessage(tr("Сначала загрузите аудиофайл"), 3000);
+        return;
+    }
+    
+    // Получаем аудиоданные
+    const QVector<QVector<float>>& audioData = waveformView->getAudioData();
+    if (audioData.isEmpty()) {
+        statusBar()->showMessage(tr("Нет аудиоданных для анализа"), 3000);
+        return;
+    }
+    
+    // Берем первый канал для анализа
+    const QVector<float>& samples = audioData[0];
+    int sampleRate = waveformView->getSampleRate();
+    
+    // Показываем сообщение о начале анализа
+    statusBar()->showMessage(tr("Анализ тональности..."), 0);
+    
+    // Выполняем анализ в отдельном потоке (упрощенная версия)
+    QTimer::singleShot(100, this, [this, samples, sampleRate]() {
+        // Здесь должен быть вызов KeyAnalyzer::analyzeKey
+        // Пока что используем заглушку
+        QString detectedKey = "C Major"; // Заглушка
+        
+        setKey(detectedKey);
+        statusBar()->showMessage(tr("Тональность определена: %1").arg(detectedKey), 3000);
+    });
+}
+
+void MainWindow::showKeyContextMenu(const QPoint& pos)
+{
+    if (keyContextMenu) {
+        keyContextMenu->exec(ui->keyInput->mapToGlobal(pos));
+    }
+}
+
+void MainWindow::showKeyContextMenu2(const QPoint& pos)
+{
+    if (keyContextMenu2) {
+        keyContextMenu2->exec(ui->keyInput2->mapToGlobal(pos));
+    }
+}
+
+void MainWindow::setKey(const QString& key)
+{
+    currentKey = key;
+    ui->keyInput->setText(key.isEmpty() ? "Не определена" : key);
+    
+    // Обновляем стиль поля ввода в зависимости от того, определена ли тональность
+    if (key.isEmpty()) {
+        ui->keyInput->setStyleSheet(
+            "QLineEdit {"
+            "    background-color: #2b2b2b;"
+            "    border: 1px solid #555;"
+            "    border-radius: 3px;"
+            "    padding: 2px 5px;"
+            "    color: #666;"
+            "    font-size: 12px;"
+            "}"
+        );
+    } else {
+        ui->keyInput->setStyleSheet(
+            "QLineEdit {"
+            "    background-color: #2b2b2b;"
+            "    border: 1px solid #42a5f5;"
+            "    border-radius: 3px;"
+            "    padding: 2px 5px;"
+            "    color: white;"
+            "    font-size: 12px;"
+            "}"
+        );
+    }
+    
+    // Сохраняем настройку
+    settings.setValue("currentKey", currentKey);
+}
+
+void MainWindow::setKey2(const QString& key)
+{
+    currentKey2 = key;
+    ui->keyInput2->setText(key.isEmpty() ? "Модуляция" : key);
+    
+    // Обновляем стиль поля ввода в зависимости от того, определена ли тональность
+    if (key.isEmpty()) {
+        ui->keyInput2->setStyleSheet(
+            "QLineEdit {"
+            "    background-color: #2b2b2b;"
+            "    border: 1px solid #555;"
+            "    border-radius: 2px;"
+            "    padding: 2px 6px;"
+            "    color: #666;"
+            "    font-size: 11px;"
+            "    min-width: 120px;"
+            "}"
+        );
+    } else {
+        ui->keyInput2->setStyleSheet(
+            "QLineEdit {"
+            "    background-color: #2b2b2b;"
+            "    border: 1px solid #42a5f5;"
+            "    border-radius: 2px;"
+            "    padding: 2px 6px;"
+            "    color: white;"
+            "    font-size: 11px;"
+            "    min-width: 120px;"
+            "}"
+        );
+    }
+    
+    // Сохраняем настройку
+    settings.setValue("currentKey2", currentKey2);
+}
+
+void MainWindow::updateScrollBarTransparency()
+{
+    if (!pitchGridVerticalScrollBar || !waveformView) return;
+    
+    // Получаем позицию каретки воспроизведения
+    qint64 playbackPos = waveformView->getPlaybackPosition();
+    if (playbackPos < 0) return;
+    
+    // Вычисляем позицию каретки в пикселях относительно скроллбара
+    QRect scrollBarRect = pitchGridVerticalScrollBar->geometry();
+    QRect pitchGridRect = pitchGridWidget->geometry();
+    
+    // Используем позицию каретки напрямую от WaveformView
+    float cursorX = waveformView->getCursorXPosition();
+    
+    // Вычисляем расстояние от каретки до скроллбара
+    float distanceToScrollBar = qAbs(cursorX - pitchGridRect.width());
+    
+    // Определяем прозрачность на основе расстояния
+    int alpha = 128; // Базовая прозрачность (50%)
+    
+    if (distanceToScrollBar < 50) { // Если каретка близко к скроллбару
+        alpha = 13; // 5% прозрачности (255 * 0.05 ≈ 13)
+    } else if (distanceToScrollBar < 100) { // Если каретка в средней зоне
+        alpha = 64; // 25% прозрачности
+    }
+    
+    // Применяем новую прозрачность к скроллбару
+    QString currentScheme = settings.value("colorScheme", "dark").toString();
+    if (currentScheme == "dark") {
+        pitchGridVerticalScrollBar->setStyleSheet(
+            QString("QScrollBar:vertical {"
+                "    background: rgba(64, 64, 64, %1);"
+                "    width: 16px;"
+                "    border: none;"
+                "    border-radius: 8px;"
+                "}"
+                "QScrollBar::handle:vertical {"
+                "    background: rgba(96, 96, 96, %2);"
+                "    min-height: 20px;"
+                "    border-radius: 8px;"
+                "    margin: 2px;"
+                "}"
+                "QScrollBar::handle:vertical:hover {"
+                "    background: rgba(112, 112, 112, %3);"
+                "}"
+                "QScrollBar::handle:vertical:pressed {"
+                "    background: rgba(160, 160, 160, 255);"
+                "}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}")
+            .arg(alpha)
+            .arg(qMin(255, alpha + 50))
+            .arg(qMin(255, alpha + 70))
+        );
+    } else {
+        pitchGridVerticalScrollBar->setStyleSheet(
+            QString("QScrollBar:vertical {"
+                "    background: rgba(224, 224, 224, %1);"
+                "    width: 16px;"
+                "    border: none;"
+                "    border-radius: 8px;"
+                "}"
+                "QScrollBar::handle:vertical {"
+                "    background: rgba(192, 192, 192, %2);"
+                "    min-height: 20px;"
+                "    border-radius: 8px;"
+                "    margin: 2px;"
+                "}"
+                "QScrollBar::handle:vertical:hover {"
+                "    background: rgba(160, 160, 160, %3);"
+                "}"
+                "QScrollBar::handle:vertical:pressed {"
+                "    background: rgba(128, 128, 128, 255);"
+                "}"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
+                "    background: none;"
+                "    border: none;"
+                "}")
+            .arg(alpha)
+            .arg(qMin(255, alpha + 50))
+            .arg(qMin(255, alpha + 70))
+        );
+    }
+}
+
+void MainWindow::setRussianLanguage()
+{
+    // Пока без функционала - заглушка для будущего
+    russianAction->setChecked(true);
+    englishAction->setChecked(false);
+    qDebug() << "Russian language selected";
+}
+
+void MainWindow::setEnglishLanguage()
+{
+    // Пока без функционала - заглушка для будущего
+    englishAction->setChecked(true);
+    russianAction->setChecked(false);
+    qDebug() << "English language selected";
+}
+
+void MainWindow::toggleBeatDeviations()
+{
+    if (waveformView) {
+        bool currentState = waveformView->getShowBeatDeviations();
+        waveformView->setShowBeatDeviations(!currentState);
+        
+        // Обновляем текст пункта меню
+        if (!currentState) {
+            toggleBeatDeviationsAct->setText(QString::fromUtf8("Убрать метки неровных долей"));
+            statusBar()->showMessage(QString::fromUtf8("Метки неровных долей включены"), 2000);
+        } else {
+            toggleBeatDeviationsAct->setText(QString::fromUtf8("Пометить неровные доли"));
+            statusBar()->showMessage(QString::fromUtf8("Метки неровных долей отключены"), 2000);
+        }
+    }
 }

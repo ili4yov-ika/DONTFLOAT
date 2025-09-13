@@ -1,4 +1,4 @@
-#include "waveformview.h"
+#include "../include/waveformview.h"
 #include <QtCore/QtMath>
 #include <QtCore/QPoint>
 #include <QtCore/QRect>
@@ -27,6 +27,7 @@ WaveformView::WaveformView(QWidget *parent)
     , zoomStep(1.2f)      // 20% изменение масштаба
     , showTimeDisplay(true)
     , showBarsDisplay(false)
+    , showBeatDeviations(true)
     , loopStartPosition(0)
     , loopEndPosition(0)
 {
@@ -235,8 +236,7 @@ void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
         firstBeat = int(startSample / samplesPerBeat);
     }
     
-    // Рисуем линии тактов
-    painter.setPen(QPen(colors.getBeatColor()));
+    // Рисуем линии тактов с разной толщиной для сильных и слабых долей
     for (int beat = firstBeat; ; ++beat) {
         int samplePos = gridStartSample > 0
             ? int(gridStartSample + beat * samplesPerBeat)
@@ -245,6 +245,18 @@ void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
         
         float x = (samplePos - startSample) / samplesPerPixel;
         if (x >= rect.width()) break;
+        
+        // Определяем, является ли это сильной долей (первая доля такта)
+        bool isStrongBeat = (beat % beatsPerBar) == 0;
+        
+        // Устанавливаем толщину и цвет пера в зависимости от типа доли
+        if (isStrongBeat) {
+            // Сильная доля - более жирная линия
+            painter.setPen(QPen(colors.getBeatColor(), 2.0));
+        } else {
+            // Слабая доля - обычная линия
+            painter.setPen(QPen(colors.getBeatColor(), 1.0));
+        }
         
         painter.drawLine(QPointF(rect.x() + x, rect.top()), QPointF(rect.x() + x, rect.bottom()));
     }
@@ -333,8 +345,9 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
                 rect.top() + rect.height() - 4
             ), barText);
             
-            // Рисуем вертикальную линию
-            painter.setPen(colors.getBarLineColor());
+            // Рисуем вертикальную линию с разной толщиной для сильных долей
+            // Линии тактов всегда сильные (начало нового такта)
+            painter.setPen(QPen(colors.getBarLineColor(), 2.0));
             painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, height()));
         }
     }
@@ -342,7 +355,7 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
 
 void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
 {
-    if (beats.isEmpty() || audioData.isEmpty()) {
+    if (beats.isEmpty() || audioData.isEmpty() || !showBeatDeviations) {
         return;
     }
 
@@ -422,6 +435,27 @@ void WaveformView::setPlaybackPosition(qint64 position)
     playbackPosition = position;
     update();
 }
+
+float WaveformView::getCursorXPosition() const
+{
+    if (audioData.isEmpty()) return 0.0f;
+
+    // playbackPosition уже в миллисекундах, конвертируем в сэмплы
+    qint64 cursorSample = (playbackPosition * sampleRate) / 1000;
+    
+    // Ограничиваем позицию каретки границами аудио
+    cursorSample = qBound(qint64(0), cursorSample, qint64(audioData[0].size() - 1));
+    
+    // Используем ту же логику, что и в drawPlaybackCursor
+    float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
+    int visibleSamples = int(width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    
+    // Вычисляем позицию каретки в пикселях
+    return (cursorSample - startSample) / samplesPerPixel;
+}
+
 
 QPointF WaveformView::sampleToPoint(int sampleIndex, float value, const QRectF& rect) const
 {
@@ -706,6 +740,12 @@ void WaveformView::setBarsDisplayMode(bool showBars)
 void WaveformView::setBeatsPerBar(int beats)
 {
     beatsPerBar = qBound(1, beats, 32);
+    update();
+}
+
+void WaveformView::setShowBeatDeviations(bool show)
+{
+    showBeatDeviations = show;
     update();
 }
 

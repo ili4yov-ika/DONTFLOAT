@@ -1,9 +1,8 @@
-#include "waveformanalyzer.h"
+#include "../include/waveformanalyzer.h"
 #include <QtCore/QDebug>
 #include <QtCore/QtMath>
 #include <cmath>
 #include <algorithm>
-#include <numeric>
 
 // Заглушки для Mixxx библиотек
 #ifdef USE_MIXXX_QM_DSP
@@ -34,6 +33,7 @@ WaveformAnalyzer::WaveformData WaveformAnalyzer::analyzeWaveform(const QVector<f
                                                                 const QVector<float>& rightChannel,
                                                                 int sampleRate,
                                                                 const AnalysisOptions& options) {
+    (void)options; // Подавляем предупреждение о неиспользуемом параметре
     WaveformData data;
     data.sampleRate = sampleRate;
     
@@ -79,7 +79,7 @@ WaveformAnalyzer::WaveformVisualization WaveformAnalyzer::generateVisualization(
     }
     
     // Генерируем пики волновой формы
-    visualization.peaks = calculatePeaks(data.monoChannel, options.resolution);
+    visualization.peaks = calculatePeaks(static_cast<QVector<float>>(data.monoChannel), options.resolution);
     
     // Вычисляем RMS значения
     QVector<float> rmsValues = calculateRMS(data.monoChannel, DEFAULT_WINDOW_SIZE);
@@ -127,7 +127,7 @@ QVector<float> WaveformAnalyzer::calculateRMS(const QVector<float>& samples, int
     
     for (int i = 0; i < numWindows; ++i) {
         int start = i * windowSize;
-        int end = std::min(start + windowSize, samples.size());
+        int end = std::min(start + windowSize, static_cast<int>(samples.size()));
         
         float sumSquares = 0.0f;
         int count = 0;
@@ -216,8 +216,8 @@ QVector<float> WaveformAnalyzer::calculateFrequencyBands(const QVector<float>& s
         int lowBin = static_cast<int>((lowFreq * fftSize) / sampleRate);
         int highBin = static_cast<int>((highFreq * fftSize) / sampleRate);
         
-        lowBin = std::max(0, std::min(lowBin, magnitudeSpectrum.size() - 1));
-        highBin = std::max(0, std::min(highBin, magnitudeSpectrum.size() - 1));
+        lowBin = std::max(0, std::min(lowBin, static_cast<int>(magnitudeSpectrum.size()) - 1));
+        highBin = std::max(0, std::min(highBin, static_cast<int>(magnitudeSpectrum.size()) - 1));
         
         float bandEnergy = 0.0f;
         for (int j = lowBin; j <= highBin; ++j) {
@@ -246,7 +246,7 @@ QVector<float> WaveformAnalyzer::calculateSpectralCentroid(const QVector<float>&
     
     for (int i = 0; i < numFrames; ++i) {
         int start = i * hopSize;
-        int end = std::min(start + fftSize, samples.size());
+        int end = std::min(start + fftSize, static_cast<int>(samples.size()));
         
         QVector<float> frame(samples.begin() + start, samples.begin() + end);
         if (frame.size() < fftSize) {
@@ -287,7 +287,7 @@ QVector<float> WaveformAnalyzer::calculateZeroCrossingRate(const QVector<float>&
     
     for (int i = 0; i < numWindows; ++i) {
         int start = i * windowSize;
-        int end = std::min(start + windowSize, samples.size());
+        int end = std::min(start + windowSize, static_cast<int>(samples.size()));
         
         int crossings = 0;
         for (int j = start + 1; j < end; ++j) {
@@ -376,7 +376,7 @@ QVector<float> WaveformAnalyzer::calculateFFT(const QVector<float>& samples, int
     
     // Простая реализация FFT (заглушка)
     // В реальной реализации здесь должен быть эффективный FFT алгоритм
-    for (int i = 0; i < std::min(samples.size(), fftSize); ++i) {
+    for (int i = 0; i < std::min(static_cast<int>(samples.size()), fftSize); ++i) {
         result[i * 2] = samples[i]; // Real part
         result[i * 2 + 1] = 0.0f;   // Imaginary part
     }

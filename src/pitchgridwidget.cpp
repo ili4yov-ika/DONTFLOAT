@@ -1,4 +1,4 @@
-#include "pitchgridwidget.h"
+#include "../include/pitchgridwidget.h"
 #include <QtCore/QtMath>
 #include <QtCore/QPoint>
 #include <QtCore/QRect>
@@ -10,6 +10,7 @@ PitchGridWidget::PitchGridWidget(QWidget *parent)
     : QWidget(parent)
     , sampleRate(44100)
     , playbackPosition(0)
+    , cursorXPosition(0.0f)
     , horizontalOffset(0.0f)
     , verticalOffset(0.0f)
     , zoomLevel(1.0f)
@@ -18,14 +19,14 @@ PitchGridWidget::PitchGridWidget(QWidget *parent)
     , minPitch(minPitchDefault)
     , maxPitch(maxPitchDefault)
     , isDragging(false)
-    , colorScheme("default")
+    , colorScheme("dark")
     , selectedPitch(-1)
-    , backgroundColor(Qt::white)
-    , gridColor(Qt::lightGray)
-    , cursorColor(Qt::red)
-    , pitchLabelColor(Qt::black)
-    , timeLabelColor(Qt::darkGray)
-    , selectionColor(Qt::blue)
+    , backgroundColor(QColor(40, 40, 40))  // Тёмный фон по умолчанию
+    , gridColor(QColor(80, 80, 80))        // Тёмная сетка по умолчанию
+    , cursorColor(QColor(255, 100, 100))   // Красный курсор
+    , pitchLabelColor(QColor(220, 220, 220)) // Светлые метки нот
+    , timeLabelColor(QColor(180, 180, 180))  // Светлые метки времени
+    , selectionColor(QColor(100, 150, 255))  // Синий цвет выделения
 {
     setMinimumHeight((maxPitch - minPitch + 1) * pitchHeight);
     setMouseTracking(true);
@@ -50,6 +51,13 @@ void PitchGridWidget::setPlaybackPosition(qint64 position)
     playbackPosition = position;
     update();
 }
+
+void PitchGridWidget::setCursorPosition(float xPosition)
+{
+    cursorXPosition = xPosition;
+    update();
+}
+
 
 void PitchGridWidget::setHorizontalOffset(float offset)
 {
@@ -93,20 +101,30 @@ void PitchGridWidget::setColorScheme(const QString& scheme)
 {
     colorScheme = scheme;
     
-    if (scheme == "dark") {
+    if (scheme == "dark" || scheme == "default") {
+        // Тёмная схема (по умолчанию)
         backgroundColor = QColor(40, 40, 40);
         gridColor = QColor(80, 80, 80);
         cursorColor = QColor(255, 100, 100);
         pitchLabelColor = QColor(220, 220, 220);
         timeLabelColor = QColor(180, 180, 180);
         selectionColor = QColor(100, 150, 255);
-    } else {
+    } else if (scheme == "light") {
+        // Светлая схема
         backgroundColor = Qt::white;
         gridColor = Qt::lightGray;
         cursorColor = Qt::red;
         pitchLabelColor = Qt::black;
         timeLabelColor = Qt::darkGray;
         selectionColor = Qt::blue;
+    } else {
+        // Системная схема - используем тёмные цвета
+        backgroundColor = QColor(40, 40, 40);
+        gridColor = QColor(80, 80, 80);
+        cursorColor = QColor(255, 100, 100);
+        pitchLabelColor = QColor(220, 220, 220);
+        timeLabelColor = QColor(180, 180, 180);
+        selectionColor = QColor(100, 150, 255);
     }
     
     update();
@@ -123,8 +141,6 @@ void PitchGridWidget::paintEvent(QPaintEvent*)
     // Рисуем сетку питчей
     drawPitchGrid(painter, rect());
     
-    // Рисуем временную сетку
-    drawTimeGrid(painter, rect());
     
     // Рисуем метки питчей
     drawPitchLabels(painter, rect());
@@ -147,96 +163,6 @@ void PitchGridWidget::drawPitchGrid(QPainter& painter, const QRect& rect)
     }
 }
 
-void PitchGridWidget::drawTimeGrid(QPainter& painter, const QRect& rect)
-{
-    
-    painter.setPen(timeLabelColor);
-    painter.setFont(QFont("Arial", 8));
-    
-    // Рисуем временные метки только если есть аудио данные
-    if (!audioData.isEmpty()) {
-        float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-        int visibleSamples = int(rect.width() * samplesPerPixel);
-        int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-        int startSample = int(horizontalOffset * maxStartSample);
-        
-        // Рисуем временные метки
-        for (int x = 0; x < rect.width(); x += timeGridSpacing) {
-            int sampleIndex = startSample + int(x * samplesPerPixel);
-            qint64 timeMs = (sampleIndex * 1000) / sampleRate;
-            
-            QString timeText = QString("%1:%2")
-                .arg(timeMs / 60000)
-                .arg((timeMs % 60000) / 1000, 2, 10, QChar('0'));
-            
-            painter.drawText(QPointF(x + 2, 12), timeText);
-        }
-        
-        // Рисуем вертикальные линии тактов, если установлен BPM
-        if (bpm > 0.0f && beatsPerBar > 0) {
-            
-            // Делаем линии тактов более заметными
-            painter.setPen(QPen(Qt::red, 3, Qt::SolidLine));
-            
-            // Вычисляем количество сэмплов на один такт
-            float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
-            float samplesPerBar = samplesPerBeat * float(beatsPerBar);
-            
-            // Находим первый такт, который попадает в видимую область
-            int firstBar = int(startSample / samplesPerBar);
-            float firstBarSample = firstBar * samplesPerBar;
-            
-            // Рисуем такты, начиная с первого видимого
-            for (int bar = firstBar; bar * samplesPerBar < startSample + visibleSamples; ++bar) {
-                float barSample = bar * samplesPerBar;
-                
-                if (barSample >= startSample) {
-                    // Вычисляем позицию такта в пикселях
-                    float barX = (barSample - startSample) / samplesPerPixel;
-                    
-                    if (barX >= 0 && barX < rect.width()) {
-                        // Рисуем вертикальную линию такта
-                        painter.drawLine(QPointF(barX, rect.top()), QPointF(barX, rect.bottom()));
-                        
-                        // Подписываем номер такта
-                        QString barText = QString::number(bar + 1);
-                        painter.drawText(QPointF(barX + 2, 20), barText);
-                    }
-                }
-            }
-        }
-    } else {
-        // Если нет аудио данных, но установлены BPM и размер такта, рисуем такты по времени
-        if (bpm > 0.0f && beatsPerBar > 0) {
-            
-            // Делаем линии тактов более заметными
-            painter.setPen(QPen(Qt::red, 3, Qt::SolidLine));
-            
-            // Вычисляем время на один такт
-            float secondsPerBeat = 60.0f / bpm;
-            float secondsPerBar = secondsPerBeat * float(beatsPerBar);
-            
-            // Рисуем такты каждые 2 секунды для видимости
-            float timeStep = qMax(2.0f, secondsPerBar);
-            int maxBars = int(rect.width() / 50); // Максимум 50 пикселей на такт
-            
-            for (int bar = 0; bar < maxBars; ++bar) {
-                float barTime = bar * secondsPerBar;
-                float barX = (barTime / timeStep) * rect.width();
-                
-                if (barX < rect.width()) {
-                    // Рисуем вертикальную линию такта
-                    painter.drawLine(QPointF(barX, rect.top()), QPointF(barX, rect.bottom()));
-                    
-                    // Подписываем номер такта
-                    QString barText = QString::number(bar + 1);
-                    painter.drawText(QPointF(barX + 2, 20), barText);
-                }
-            }
-        } else {
-        }
-    }
-}
 
 void PitchGridWidget::drawPitchLabels(QPainter& painter, const QRect& rect)
 {
@@ -257,22 +183,11 @@ void PitchGridWidget::drawPlaybackCursor(QPainter& painter, const QRect& rect)
 {
     if (audioData.isEmpty()) return;
 
-    // playbackPosition уже в миллисекундах, конвертируем в сэмплы
-    qint64 cursorSample = (playbackPosition * sampleRate) / 1000;
+    // Используем позицию каретки, переданную от WaveformView
+    float cursorX = cursorXPosition;
     
-    // Ограничиваем позицию каретки границами аудио
-    cursorSample = qBound(qint64(0), cursorSample, qint64(audioData[0].size() - 1));
-    
-    // Используем ту же логику, что и в других методах рисования
-    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-    int visibleSamples = int(rect.width() * samplesPerPixel);
-    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-    int startSample = int(horizontalOffset * maxStartSample);
-    
-    // Вычисляем позицию каретки в пикселях
-    float cursorX = (cursorSample - startSample) / samplesPerPixel;
-    
-    if (cursorX >= 0 && cursorX < rect.width()) {
+    // Рисуем каретку даже если она немного за границами для лучшей синхронизации
+    if (cursorX >= -10 && cursorX < rect.width() + 10) {
         painter.setPen(QPen(cursorColor, 2));
         painter.drawLine(QPointF(rect.x() + cursorX, rect.top()), QPointF(rect.x() + cursorX, rect.bottom()));
         

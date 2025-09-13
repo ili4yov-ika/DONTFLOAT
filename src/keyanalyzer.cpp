@@ -1,8 +1,7 @@
-#include "keyanalyzer.h"
+#include "../include/keyanalyzer.h"
 #include <QtCore/QDebug>
 #include <cmath>
 #include <algorithm>
-#include <numeric>
 
 // Заглушки для qm-dsp библиотек
 #ifdef USE_MIXXX_QM_DSP
@@ -76,7 +75,7 @@ KeyAnalyzer::AnalysisResult KeyAnalyzer::analyzeKey(const QVector<float>& sample
         
         for (int i = 0; i < frameCount; ++i) {
             int start = i * options.hopSize;
-            int end = std::min(start + options.frameSize, samples.size());
+            int end = std::min(start + options.frameSize, static_cast<int>(samples.size()));
             
             if (end - start >= options.frameSize) {
                 QVector<float> frame(samples.begin() + start, samples.begin() + end);
@@ -179,6 +178,7 @@ QVector<float> KeyAnalyzer::extractChromaFeatures(const QVector<float>& samples,
                                                  int sampleRate,
                                                  int frameSize, 
                                                  int hopSize) {
+    (void)sampleRate; // Подавляем предупреждение о неиспользуемом параметре
     QVector<float> chromaVector(12, 0.0f);
     
     if (samples.isEmpty()) {
