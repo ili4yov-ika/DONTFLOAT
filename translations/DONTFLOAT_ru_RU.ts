@@ -177,9 +177,73 @@
         <source>Сохранен: %1</source>
         <translation>Сохранен: %1</translation>
     </message>
+    <message>
+        <source>Настройки</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>Язык</translation>
+    </message>
+    <message>
+        <source>Русский</source>
+        <translation>Русский</translation>
+    </message>
+    <message>
+        <source>English</source>
+        <translation>English</translation>
+    </message>
 </context>
 <context>
-    <name>BPMFixDialog</name>
+    <name>LoadFileDialog</name>
+    <message>
+        <source>Анализ и выравнивание долей</source>
+        <translation>Анализ и выравнивание долей</translation>
+    </message>
+    <message>
+        <source>Анализ аудио...</source>
+        <translation>Анализ аудио...</translation>
+    </message>
+    <message>
+        <source>Анализ завершён.</source>
+        <translation>Анализ завершён.</translation>
+    </message>
+    <message>
+        <source>Предварительный BPM (на основе Mixxx): %1 BPM</source>
+        <translation>Предварительный BPM (на основе Mixxx): %1 BPM</translation>
+    </message>
+    <message>
+        <source>Предварительный BPM (на основе Mixxx): -- BPM</source>
+        <translation>Предварительный BPM (на основе Mixxx): -- BPM</translation>
+    </message>
+    <message>
+        <source>Вычисленный BPM (уверенность %1%): %2 BPM</source>
+        <translation>Вычисленный BPM (уверенность %1%): %2 BPM</translation>
+    </message>
+    <message>
+        <source>Среднее отклонение: %1%</source>
+        <translation>Среднее отклонение: %1%</translation>
+    </message>
+    <message>
+        <source>Пометить неровные доли (рекомендуется)</source>
+        <translation>Пометить неровные доли (рекомендуется)</translation>
+    </message>
+    <message>
+        <source>Пометить неровные доли (доли ровные)</source>
+        <translation>Пометить неровные доли (доли ровные)</translation>
+    </message>
+    <message>
+        <source>Выровнять</source>
+        <translation>Выровнять</translation>
+    </message>
+    <message>
+        <source>Пропустить</source>
+        <translation>Пропустить</translation>
+    </message>
+    <message>
+        <source>Пропустить (доли ровные)</source>
+        <translation>Пропустить (доли ровные)</translation>
+    </message>
     <message>
         <source>Исправление ритма</source>
         <translation>Исправление ритма</translation>
@@ -195,10 +259,6 @@
     <message>
         <source>Уверенность: %1%</source>
         <translation>Уверенность: %1%</translation>
-    </message>
-    <message>
-        <source>Среднее отклонение: %1%</source>
-        <translation>Среднее отклонение: %1%</translation>
     </message>
     <message>
         <source>&amp;Исправить</source>
