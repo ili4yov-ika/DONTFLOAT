@@ -27,6 +27,8 @@ public:
     void setSampleRate(int rate);
     int getSampleRate() const { return sampleRate; }
     void setPlaybackPosition(qint64 position); // position в миллисекундах
+    qint64 getPlaybackPosition() const { return playbackPosition; }
+    float getCursorXPosition() const; // Позиция каретки в пикселях
     void setHorizontalOffset(float offset);
     void setVerticalOffset(float offset);
     void setZoomLevel(float zoom);
@@ -41,6 +43,8 @@ public:
     void setBarsDisplayMode(bool showBars);
     void setBeatsPerBar(int beats);
     int getBeatsPerBar() const { return beatsPerBar; }
+    void setShowBeatDeviations(bool show);
+    bool getShowBeatDeviations() const { return showBeatDeviations; }
 
 signals:
     void positionChanged(qint64 position); // Сигнал для обновления позиции воспроизведения (в миллисекундах)
@@ -91,6 +95,7 @@ private:
     float zoomStep;      // 20% изменение масштаба
     bool showTimeDisplay;
     bool showBarsDisplay;
+    bool showBeatDeviations;
     int beatsPerBar;
     
     WaveformColors colors; // Объект для управления цветами

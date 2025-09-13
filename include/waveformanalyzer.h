@@ -68,7 +68,7 @@ public:
 
     // Вспомогательные методы
     static QVector<float> calculateRMS(const QVector<float>& samples, int windowSize);
-    static QVector<float> calculatePeaks(const QVector<float>& samples, int resolution);
+    static QVector<QPair<float, float>> calculatePeaks(const QVector<float>& samples, int resolution);
     static QVector<QColor> generateColors(const QVector<float>& samples, 
                                          float saturation, 
                                          float brightness);

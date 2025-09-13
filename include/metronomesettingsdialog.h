@@ -2,11 +2,18 @@
 #define METRONOMESETTINGSDIALOG_H
 
 #include <QDialog>
-#include <QSpinBox>
-#include <QComboBox>
-#include <QPushButton>
 #include <QSettings>
 #include <QSoundEffect>
+
+QT_BEGIN_NAMESPACE
+class QSpinBox;
+class QComboBox;
+class QPushButton;
+QT_END_NAMESPACE
+
+namespace Ui {
+class MetronomeSettingsDialog;
+}
 
 class MetronomeSettingsDialog : public QDialog
 {
@@ -23,10 +30,7 @@ private slots:
     void onSelectSoundButtonClicked();
 
 private:
-    QSpinBox *volumeSpinBox;
-    QComboBox *soundComboBox;
-    QPushButton *testButton;
-    QPushButton *selectSoundButton; // Новая кнопка
+    Ui::MetronomeSettingsDialog *ui;
     QSettings settings;
     QSoundEffect *metronomeSound; // Объект для тестового воспроизведения
 };

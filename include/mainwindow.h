@@ -67,10 +67,21 @@ private slots:
     void clearLoopStart();
     void clearLoopEnd();
     void togglePitchGrid();
+    void analyzeKey();
+    void showKeyContextMenu(const QPoint& pos);
+    void showKeyContextMenu2(const QPoint& pos);
+    void setKey(const QString& key);
+    void setKey2(const QString& key);
+    void updateScrollBarTransparency();
+    void setRussianLanguage();
+    void setEnglishLanguage();
+    void toggleBeatDeviations();
 
 private:
     void createMenus();
     void createActions();
+    void createKeyContextMenu();
+    void createKeyContextMenu2();
     void updateWindowTitle();
     void setupConnections();
     void readSettings();
@@ -119,6 +130,9 @@ private:
     QAction *loopStartAct;
     QAction *loopEndAct;
     QAction *togglePitchGridAct;
+    QAction *toggleBeatDeviationsAct;
+    QAction *russianAction;
+    QAction *englishAction;
 
     // File management
     QString currentFileName;
@@ -147,6 +161,14 @@ private:
 
     // Pitch grid visibility
     bool isPitchGridVisible;
+
+    // Key analysis
+    QString currentKey;
+    QString currentKey2; // For modulation
+    QMenu *keyContextMenu;
+    QMenu *keyContextMenu2; // For second key field
+    QAction *keyActions[28]; // 14 major + 14 minor keys
+    QAction *keyActions2[28]; // 14 major + 14 minor keys for second field
 
     // Undo/Redo stack
     QUndoStack *undoStack;
