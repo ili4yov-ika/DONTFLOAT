@@ -14,6 +14,10 @@ MetronomeSettingsDialog::MetronomeSettingsDialog(QWidget *parent)
     connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(this, &QDialog::accepted, this, &MetronomeSettingsDialog::saveSettings);
+    
+    // Подключаем сигналы ползунков
+    connect(ui->strongBeatSlider, &QSlider::valueChanged, this, &MetronomeSettingsDialog::onStrongBeatVolumeChanged);
+    connect(ui->weakBeatSlider, &QSlider::valueChanged, this, &MetronomeSettingsDialog::onWeakBeatVolumeChanged);
 
     // Загружаем сохраненные настройки
     loadSettings();
@@ -27,13 +31,15 @@ MetronomeSettingsDialog::~MetronomeSettingsDialog()
 
 void MetronomeSettingsDialog::saveSettings()
 {
-    settings.setValue("Metronome/Volume", ui->volumeSpinBox->value());
+    settings.setValue("Metronome/StrongBeatVolume", ui->strongBeatSlider->value());
+    settings.setValue("Metronome/WeakBeatVolume", ui->weakBeatSlider->value());
     settings.setValue("Metronome/Sound", ui->soundComboBox->currentData());
 }
 
 void MetronomeSettingsDialog::loadSettings()
 {
-    ui->volumeSpinBox->setValue(settings.value("Metronome/Volume", 50).toInt());
+    ui->strongBeatSlider->setValue(settings.value("Metronome/StrongBeatVolume", 100).toInt());
+    ui->weakBeatSlider->setValue(settings.value("Metronome/WeakBeatVolume", 90).toInt());
     QString sound = settings.value("Metronome/Sound", "click").toString();
     int index = ui->soundComboBox->findData(sound);
     if (index != -1)
@@ -45,7 +51,7 @@ void MetronomeSettingsDialog::loadSettings()
 void MetronomeSettingsDialog::onTestButtonClicked()
 {
     QString selectedSound = ui->soundComboBox->currentData().toString();
-    int volume = ui->volumeSpinBox->value();
+    int strongVolume = ui->strongBeatSlider->value();
 
     QString soundPath;
 
@@ -59,7 +65,7 @@ void MetronomeSettingsDialog::onTestButtonClicked()
         // Пользовательский путь
         metronomeSound->setSource(QUrl::fromLocalFile(selectedSound));
     }
-    metronomeSound->setVolume(volume / 100.0f);
+    metronomeSound->setVolume(strongVolume / 100.0f);
     
     // Проверяем, загрузился ли звук
     if (metronomeSound->status() != QSoundEffect::Ready) {
@@ -68,6 +74,16 @@ void MetronomeSettingsDialog::onTestButtonClicked()
     }
     
     metronomeSound->play();
+}
+
+void MetronomeSettingsDialog::onStrongBeatVolumeChanged(int value)
+{
+    ui->strongBeatValueLabel->setText(QString::number(value) + "%");
+}
+
+void MetronomeSettingsDialog::onWeakBeatVolumeChanged(int value)
+{
+    ui->weakBeatValueLabel->setText(QString::number(value) + "%");
 }
 
 void MetronomeSettingsDialog::onSelectSoundButtonClicked()

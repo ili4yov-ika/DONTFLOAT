@@ -40,6 +40,13 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
         return createBeatGridFromBPM(samples, sampleRate, options.initialBPM, options);
     }
     
+    // Проверяем, есть ли метаданные BPM в файле (если доступны)
+    // Это можно расширить для чтения тегов из аудиофайлов
+    if (options.trustFileBPM && options.fileBPM > 0.0f) {
+        qDebug() << "Using file BPM:" << options.fileBPM;
+        return createBeatGridFromBPM(samples, sampleRate, options.fileBPM, options);
+    }
+    
     // Улучшенный алгоритм анализа BPM
     AnalysisResult result;
     result.confidence = 0.0f;
@@ -121,6 +128,14 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
     result.preliminaryBPM = 0.0f;
     result.hasPreliminaryBPM = false;
     
+    // Корректируем основной результат к стандартным BPM
+    float correctedMainBPM = correctToStandardBPM(result.bpm);
+    if (std::abs(correctedMainBPM - result.bpm) < 10.0f) {
+        qDebug() << "Corrected main BPM from" << result.bpm << "to" << correctedMainBPM;
+        result.bpm = correctedMainBPM;
+        result.beats = findBeats(samples, result.bpm, sampleRate, options);
+    }
+    
     // Дополнительная проверка: ищем близкие BPM и выбираем наиболее частый
     QVector<QPair<float, int>> bpmCounts;
     for (const auto& candidate : candidates) {
@@ -146,6 +161,13 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
         
         float mostFrequentBPM = bpmCounts.first().first;
         qDebug() << "Most frequent BPM:" << mostFrequentBPM << "count:" << bpmCounts.first().second;
+        
+        // Корректируем BPM к стандартным значениям
+        float correctedBPM = correctToStandardBPM(mostFrequentBPM);
+        if (std::abs(correctedBPM - mostFrequentBPM) < 10.0f) {
+            qDebug() << "Corrected BPM from" << mostFrequentBPM << "to" << correctedBPM;
+            mostFrequentBPM = correctedBPM;
+        }
         
         // Если наиболее частый BPM отличается от лучшего по уверенности, используем его
         if (std::abs(mostFrequentBPM - result.bpm) > 10.0f && bpmCounts.first().second > 1) {
@@ -243,6 +265,7 @@ QVector<QPair<int, float>> BPMAnalyzer::detectPeaks(const QVector<float>& sample
                                                    float minEnergy) {
     QVector<QPair<int, float>> peaks;
     const int windowSize = 1024; // Размер окна анализа
+    const int minPeakDistance = 4410; // Минимальное расстояние между пиками (~0.1 сек при 44.1 кГц)
     
     if (samples.size() < windowSize * 3) {
         return peaks;
@@ -254,14 +277,15 @@ QVector<QPair<int, float>> BPMAnalyzer::detectPeaks(const QVector<float>& sample
         energy[i] = calculateBeatEnergy(samples, i, windowSize);
     }
 
-    // Поиск локальных максимумов
+    // Поиск локальных максимумов с улучшенной логикой
     for (int i = windowSize; i < static_cast<int>(samples.size()) - windowSize; ++i) {
         if (energy[i] < minEnergy) {
             continue;
         }
 
         bool isPeak = true;
-        for (int j = -windowSize/2; j <= windowSize/2; ++j) {
+        // Проверяем окрестность для поиска локального максимума
+        for (int j = -windowSize/4; j <= windowSize/4; ++j) {
             if (j != 0 && energy[i + j] >= energy[i]) {
                 isPeak = false;
                 break;
@@ -269,10 +293,34 @@ QVector<QPair<int, float>> BPMAnalyzer::detectPeaks(const QVector<float>& sample
         }
 
         if (isPeak) {
-            peaks.append({i, energy[i]});
+            // Проверяем минимальное расстояние от предыдущих пиков
+            bool tooClose = false;
+            for (const auto& peak : peaks) {
+                if (std::abs(i - peak.first) < minPeakDistance) {
+                    // Если новый пик сильнее, заменяем старый
+                    if (energy[i] > peak.second) {
+                        peaks.removeAll(peak);
+                        break;
+                    } else {
+                        tooClose = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!tooClose) {
+                peaks.append({i, energy[i]});
+            }
         }
     }
 
+    // Сортируем пики по времени
+    std::sort(peaks.begin(), peaks.end(),
+              [](const QPair<int, float>& a, const QPair<int, float>& b) {
+                  return a.first < b.first;
+              });
+
+    qDebug() << "Detected" << peaks.size() << "peaks with minEnergy=" << minEnergy;
     return peaks;
 }
 
@@ -337,6 +385,7 @@ float BPMAnalyzer::estimateBPM(float averageInterval,
         return 0.0f;
     }
 
+    // Правильная формула: BPM = 60 * sampleRate / interval_in_samples
     float bpm = 60.0f * sampleRate / averageInterval;
 
     // Нормализация BPM в допустимый диапазон
@@ -347,6 +396,7 @@ float BPMAnalyzer::estimateBPM(float averageInterval,
         bpm *= 0.5f;
     }
 
+    qDebug() << "BPM calculation: interval=" << averageInterval << "samples, sampleRate=" << sampleRate << ", BPM=" << bpm;
     return bpm;
 }
 
@@ -422,15 +472,42 @@ float BPMAnalyzer::calculateBeatEnergy(const QVector<float>& samples,
     int start = std::max(0, position - windowSize/2);
     int end = std::min<int>(samples.size(), position + windowSize/2);
     
+    // Используем RMS (Root Mean Square) для более точного расчета энергии
     for (int i = start; i < end; ++i) {
         energy += samples[i] * samples[i];
     }
     
-    return energy / windowSize;
+    // Возвращаем RMS энергию
+    return std::sqrt(energy / (end - start));
 }
 
 bool BPMAnalyzer::isValidBPM(float bpm, const AnalysisOptions& options) {
     return bpm >= options.minBPM && bpm <= options.maxBPM;
+}
+
+float BPMAnalyzer::correctToStandardBPM(float bpm) {
+    // Стандартные BPM для электронной музыки
+    QVector<float> standardBPMs = {
+        60.0f, 70.0f, 80.0f, 90.0f, 100.0f, 110.0f, 120.0f, 128.0f, 130.0f, 140.0f, 150.0f, 160.0f, 170.0f, 180.0f
+    };
+    
+    float closestBPM = bpm;
+    float minDifference = 1000.0f;
+    
+    for (float standardBPM : standardBPMs) {
+        float difference = std::abs(bpm - standardBPM);
+        if (difference < minDifference) {
+            minDifference = difference;
+            closestBPM = standardBPM;
+        }
+    }
+    
+    // Корректируем только если разница не слишком большая (в пределах 10 BPM)
+    if (minDifference <= 10.0f) {
+        return closestBPM;
+    }
+    
+    return bpm;
 }
 
 float BPMAnalyzer::normalizeConfidence(float rawConfidence) {

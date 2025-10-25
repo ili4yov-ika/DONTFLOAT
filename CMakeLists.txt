@@ -13,9 +13,21 @@ set(CMAKE_AUTORCC ON)
 # Указываем путь для поиска UI файлов
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 
-# Устанавливаем путь к Qt6
-set(QT_ROOT_DIR "F:/Qt/6.8.3/msvc2022_64")
+# Устанавливаем путь к Qt6 (автоматическое определение)
+if(EXISTS "C:/Qt/6.9.3/msvc2022_64")
+    set(QT_ROOT_DIR "C:/Qt/6.9.3/msvc2022_64")
+elseif(EXISTS "C:/Qt/6.8.3/msvc2022_64")
+    set(QT_ROOT_DIR "C:/Qt/6.8.3/msvc2022_64")
+else()
+    message(FATAL_ERROR "Qt не найден! Установите Qt 6.8.3 или 6.9.3 с поддержкой MSVC 2022 64-bit")
+endif()
+
 set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR})
+set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR} CACHE PATH "Qt6 installation path" FORCE)
+message(STATUS "Используется Qt: ${QT_ROOT_DIR}")
+
+# Генерируем compile_commands.json для IntelliSense
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Ensure Qt6 is available
 set(QT_MIN_VERSION "6.8.0")
@@ -41,6 +53,8 @@ set(SOURCES
     src/loadfiledialog.cpp
     src/metronomesettingsdialog.cpp
     src/beatfixcommand.cpp
+    src/beatvisualizer.cpp
+    src/beatvisualizationsettingsdialog.cpp
 )
 
 # Add header files
@@ -56,12 +70,16 @@ set(HEADERS
     include/loadfiledialog.h
     include/metronomesettingsdialog.h
     include/beatfixcommand.h
+    include/beatvisualizer.h
+    include/beatvisualizationsettingsdialog.h
 )
 
 # Add UI files
 set(UI_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/mainwindow.ui
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/loadfiledialog.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/metronomesettingsdialog.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/ui/beatvisualizationsettingsdialog.ui
 )
 
 # Add resource files
@@ -102,24 +120,24 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 # Translation files are handled manually
 
-# Third-party: Mixxx qm-dsp (for Mixxx-style BPM analysis)
-set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
-if(EXISTS ${QM_DSP_ROOT})
-    file(GLOB_RECURSE QM_DSP_SOURCES
-        ${QM_DSP_ROOT}/*.cpp
-        ${QM_DSP_ROOT}/*.c
-    )
-    add_library(qm_dsp STATIC ${QM_DSP_SOURCES})
-    target_include_directories(qm_dsp PUBLIC ${QM_DSP_ROOT})
-
-    # Enable Mixxx algorithm in our analyzer
-    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MIXXX_QM_DSP)
-    target_link_libraries(${PROJECT_NAME} PRIVATE qm_dsp)
-
-    message(STATUS "Mixxx qm-dsp enabled: ${QM_DSP_ROOT}")
-else()
-    message(WARNING "Mixxx qm-dsp not found at ${QM_DSP_ROOT}. Building with simplified BPM analyzer.")
-endif()
+# Third-party: Mixxx qm-dsp (disabled due to MSVC compatibility issues)
+# set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
+# if(EXISTS ${QM_DSP_ROOT})
+#     file(GLOB_RECURSE QM_DSP_SOURCES
+#         ${QM_DSP_ROOT}/*.cpp
+#         ${QM_DSP_ROOT}/*.c
+#     )
+#     add_library(qm_dsp STATIC ${QM_DSP_SOURCES})
+#     target_include_directories(qm_dsp PUBLIC ${QM_DSP_ROOT})
+# 
+#     # Enable Mixxx algorithm in our analyzer
+#     target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MIXXX_QM_DSP)
+#     target_link_libraries(${PROJECT_NAME} PRIVATE qm_dsp)
+# 
+#     message(STATUS "Mixxx qm-dsp enabled: ${QM_DSP_ROOT}")
+# else()
+    message(STATUS "Building with simplified BPM analyzer (qm-dsp disabled for MSVC compatibility)")
+# endif()
 
 # Set Windows executable properties
 if(WIN32)
@@ -136,3 +154,9 @@ install(TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+# Enable testing
+enable_testing()
+
+# Add tests subdirectory
+add_subdirectory(tests)

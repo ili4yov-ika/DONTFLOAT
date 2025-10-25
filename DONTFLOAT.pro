@@ -22,6 +22,8 @@ SOURCES += \
         src/loadfiledialog.cpp \
         src/metronomesettingsdialog.cpp \
         src/beatfixcommand.cpp
+        # src/beatvisualizer.cpp
+        # src/beatvisualizationsettingsdialog.cpp
 
 HEADERS += \
         include/mainwindow.h \
@@ -35,11 +37,14 @@ HEADERS += \
         include/loadfiledialog.h \
         include/metronomesettingsdialog.h \
         include/beatfixcommand.h
+        # include/beatvisualizer.h
+        # include/beatvisualizationsettingsdialog.h
 
 FORMS += \
         ui/mainwindow.ui \
         ui/loadfiledialog.ui \
         ui/metronomesettingsdialog.ui
+        # ui/beatvisualizationsettingsdialog.ui
 
 TRANSLATIONS += \
         translations/DONTFLOAT_ru_RU.ts

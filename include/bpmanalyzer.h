@@ -41,6 +41,8 @@ public:
         bool useMixxxAlgorithm;   // Использовать ли алгоритм от Mixxx
         float initialBPM;        // Предварительно определенный BPM (0 = автоопределение)
         bool useInitialBPM;      // Использовать ли предварительно определенный BPM
+        float fileBPM;           // BPM из метаданных файла
+        bool trustFileBPM;       // Доверять ли BPM из метаданных файла
 
         AnalysisOptions() 
             : assumeFixedTempo(true)
@@ -51,6 +53,8 @@ public:
             , useMixxxAlgorithm(true)  // По умолчанию используем Mixxx
             , initialBPM(0.0f)
             , useInitialBPM(false)
+            , fileBPM(0.0f)
+            , trustFileBPM(false)
         {}
     };
 
@@ -60,6 +64,9 @@ public:
     
     static QVector<float> fixBeats(const QVector<float>& samples, 
                                  const AnalysisResult& analysis);
+    
+    // Вспомогательные функции
+    static float correctToStandardBPM(float bpm);
     
     // Методы для работы с предварительно определенным BPM
     static AnalysisResult createBeatGridFromBPM(const QVector<float>& samples,

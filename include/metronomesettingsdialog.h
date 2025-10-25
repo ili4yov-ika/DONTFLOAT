@@ -9,6 +9,7 @@ QT_BEGIN_NAMESPACE
 class QSpinBox;
 class QComboBox;
 class QPushButton;
+class QSlider;
 QT_END_NAMESPACE
 
 namespace Ui {
@@ -28,6 +29,8 @@ private slots:
     void loadSettings();
     void onTestButtonClicked();
     void onSelectSoundButtonClicked();
+    void onStrongBeatVolumeChanged(int value);
+    void onWeakBeatVolumeChanged(int value);
 
 private:
     Ui::MetronomeSettingsDialog *ui;

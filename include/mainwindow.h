@@ -24,6 +24,7 @@
 #include <QUndoStack>
 #include "waveformview.h"
 #include "pitchgridwidget.h"
+// #include "beatvisualizationsettingsdialog.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -76,6 +77,10 @@ private slots:
     void setRussianLanguage();
     void setEnglishLanguage();
     void toggleBeatDeviations();
+    void showBeatVisualizationSettings();
+    void toggleBeatMarkers();
+    void toggleSpectrogram();
+    void toggleBeatEnergy();
 
 private:
     void createMenus();
@@ -131,6 +136,10 @@ private:
     QAction *loopEndAct;
     QAction *togglePitchGridAct;
     QAction *toggleBeatDeviationsAct;
+    QAction *beatVisualizationSettingsAct;
+    QAction *toggleBeatMarkersAct;
+    QAction *toggleSpectrogramAct;
+    QAction *toggleBeatEnergyAct;
     QAction *russianAction;
     QAction *englishAction;
 
@@ -151,8 +160,12 @@ private:
     // Metronome components
     QTimer *metronomeTimer;
     QMediaPlayer *metronomeSound;
+    QSoundEffect *metronomeSoundEffect;
     bool isMetronomeEnabled;
     qint64 lastBeatTime;
+    int strongBeatVolume;
+    int weakBeatVolume;
+    int currentBeatNumber;
     
     // Loop components
     bool isLoopEnabled;

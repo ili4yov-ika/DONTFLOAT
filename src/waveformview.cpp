@@ -14,22 +14,25 @@ const int WaveformView::markerSpacing = 60;  // Минимальное расс�
 WaveformView::WaveformView(QWidget *parent)
     : QWidget(parent)
     , bpm(120.0f)
-    , zoomLevel(1.0f)
-    , horizontalOffset(0.0f)
-    , verticalOffset(0.0f)
-    , isDragging(false)
-    , isRightMousePanning(false)
     , sampleRate(44100)
     , playbackPosition(0)
     , gridStartSample(0)
-    , beatsPerBar(4)
+    , horizontalOffset(0.0f)
+    , verticalOffset(0.0f)
+    , zoomLevel(1.0f)
+    , isDragging(false)
+    , isRightMousePanning(false)
+    , loopStartPosition(0)
+    , loopEndPosition(0)
     , scrollStep(0.1f)    // 10% от ширины окна
     , zoomStep(1.2f)      // 20% изменение масштаба
     , showTimeDisplay(true)
     , showBarsDisplay(false)
     , showBeatDeviations(true)
-    , loopStartPosition(0)
-    , loopEndPosition(0)
+    , showBeatMarkers(true) // Новые флаги визуализации
+    , showSpectrogram(false)
+    , showBeatEnergy(true)
+    , beatsPerBar(4)
 {
     setMinimumHeight(100);
     setMouseTracking(true);
@@ -80,6 +83,9 @@ void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
     gridStartSample = 0;
     emit zoomChanged(zoomLevel);
 
+    // Запускаем анализ ударных (временно отключено)
+    // analyzeBeats();
+
     update();
 }
 
@@ -128,6 +134,15 @@ void WaveformView::paintEvent(QPaintEvent*)
     // Рисуем отклонения битов
     drawBeatDeviations(painter, rect());
     
+    // Рисуем спектрограмму (если включена) - временно отключено
+    /*
+    if (showSpectrogram) {
+        QRectF spectrogramRect(0, height() - beatVisualizationSettings.spectrogramHeight,
+                              width(), beatVisualizationSettings.spectrogramHeight);
+        drawSpectrogram(painter, spectrogramRect);
+    }
+    */
+    
     // Рисуем волну
     if (!audioData.isEmpty()) {
         float channelHeight = height() / float(audioData.size());
@@ -136,6 +151,22 @@ void WaveformView::paintEvent(QPaintEvent*)
             drawWaveform(painter, audioData[i], channelRect);
         }
     }
+    
+    // Рисуем маркеры ударных (если включены) - временно отключено
+    /*
+    if (showBeatMarkers) {
+        QRectF beatRect(0, 0, width(), height());
+        drawBeatMarkers(painter, beatRect);
+    }
+    */
+    
+    // Рисуем энергетическую кривую ударных (если включена) - временно отключено
+    /*
+    if (showBeatEnergy) {
+        QRectF energyRect(0, 0, width(), height());
+        drawBeatEnergy(painter, energyRect);
+    }
+    */
     
     // Рисуем линии тактов
     drawBeatLines(painter, rect());
@@ -880,4 +911,92 @@ void WaveformView::drawLoopMarkers(QPainter& painter, const QRect& rect)
             }
         }
     }
-} 
+}
+
+// Новые методы для улучшенной визуализации ударных (временно отключены)
+/*
+void WaveformView::setBeatVisualizationSettings(const BeatVisualizer::VisualizationSettings& settings)
+{
+    beatVisualizationSettings = settings;
+    update();
+}
+
+void WaveformView::setShowBeatMarkers(bool show)
+{
+    showBeatMarkers = show;
+    update();
+}
+
+void WaveformView::setShowSpectrogram(bool show)
+{
+    showSpectrogram = show;
+    update();
+}
+
+void WaveformView::setShowBeatEnergy(bool show)
+{
+    showBeatEnergy = show;
+    update();
+}
+
+void WaveformView::analyzeBeats()
+{
+    // Временно отключено для исправления сборки
+    if (audioData.isEmpty()) {
+        return;
+    }
+    
+    // Запускаем анализ ударных с текущими настройками
+    beatAnalysis = BeatVisualizer::analyzeBeats(audioData, sampleRate, beatVisualizationSettings);
+    
+    // Обновляем отображение
+    update();
+}
+
+void WaveformView::drawBeatMarkers(QPainter& painter, const QRectF& rect)
+{
+    // Временно отключено для исправления сборки
+    if (beatAnalysis.beats.isEmpty() || audioData.isEmpty()) {
+        return;
+    }
+    
+    // Используем ту же логику, что и в других методах рисования
+    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
+    int visibleSamples = int(rect.width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    
+    // Используем метод из BeatVisualizer
+    BeatVisualizer::drawBeatMarkers(painter, beatAnalysis.beats, rect, 
+                                   samplesPerPixel, startSample, beatVisualizationSettings);
+}
+
+void WaveformView::drawSpectrogram(QPainter& painter, const QRectF& rect)
+{
+    // Временно отключено для исправления сборки
+    if (beatAnalysis.spectrogram.isEmpty()) {
+        return;
+    }
+    
+    // Используем метод из BeatVisualizer
+    BeatVisualizer::drawSpectrogram(painter, beatAnalysis.spectrogram, rect, beatVisualizationSettings);
+}
+
+void WaveformView::drawBeatEnergy(QPainter& painter, const QRectF& rect)
+{
+    // Временно отключено для исправления сборки
+    if (beatAnalysis.beats.isEmpty() || audioData.isEmpty()) {
+        return;
+    }
+    
+    // Используем ту же логику, что и в других методах рисования
+    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
+    int visibleSamples = int(rect.width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    
+    // Используем метод из BeatVisualizer
+    BeatVisualizer::drawBeatEnergy(painter, beatAnalysis.beats, rect, 
+                                  samplesPerPixel, startSample, beatVisualizationSettings);
+}
+*/ 
