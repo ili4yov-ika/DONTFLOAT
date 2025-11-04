@@ -193,6 +193,198 @@
         <source>English</source>
         <translation>English</translation>
     </message>
+    <message>
+        <source>Убрать метки неровных долей</source>
+        <translation>Убрать метки неровных долей</translation>
+    </message>
+    <message>
+        <source>Пометить неровные доли</source>
+        <translation>Пометить неровные доли</translation>
+    </message>
+    <message>
+        <source>Метки неровных долей включены</source>
+        <translation>Метки неровных долей включены</translation>
+    </message>
+    <message>
+        <source>Метки неровных долей отключены</source>
+        <translation>Метки неровных долей отключены</translation>
+    </message>
+    <message>
+        <source>Силуэт ударных включен</source>
+        <translation>Силуэт ударных включен</translation>
+    </message>
+    <message>
+        <source>Силуэт ударных отключен</source>
+        <translation>Силуэт ударных отключен</translation>
+    </message>
+    <message>
+        <source>Убрать питч-сетку</source>
+        <translation>Убрать питч-сетку</translation>
+    </message>
+    <message>
+        <source>Показать питч-сетку</source>
+        <translation>Показать питч-сетку</translation>
+    </message>
+    <message>
+        <source>Силуэт ударных</source>
+        <translation>Силуэт ударных</translation>
+    </message>
+    <message>
+        <source>Некорректный размер такта. Используйте формат X/Y (например, 4/4, 3/4, 2/4, 6/8)</source>
+        <translation>Некорректный размер такта. Используйте формат X/Y (например, 4/4, 3/4, 2/4, 6/8)</translation>
+    </message>
+    <message>
+        <source>Размер такта изменен на %1/%2</source>
+        <translation>Размер такта изменен на %1/%2</translation>
+    </message>
+    <message>
+        <source>Воспроизведение завершено</source>
+        <translation>Воспроизведение завершено</translation>
+    </message>
+    <message>
+        <source>ЛКМ: Установить точку A (начало цикла)
+ПКМ: Удалить точку A
+A: Установить точку A
+Shift+A: Удалить точку A</source>
+        <translation>ЛКМ: Установить точку A (начало цикла)
+ПКМ: Удалить точку A
+A: Установить точку A
+Shift+A: Удалить точку A</translation>
+    </message>
+    <message>
+        <source>ЛКМ: Установить точку B (конец цикла)
+ПКМ: Удалить точку B
+B: Установить точку B
+Shift+B: Удалить точку B</source>
+        <translation>ЛКМ: Установить точку B (конец цикла)
+ПКМ: Удалить точку B
+B: Установить точку B
+Shift+B: Удалить точку B</translation>
+    </message>
+    <message>
+        <source>Точка A: %1</source>
+        <translation>Точка A: %1</translation>
+    </message>
+    <message>
+        <source>Точка B: %1</source>
+        <translation>Точка B: %1</translation>
+    </message>
+    <message>
+        <source>Воспроизведение...</source>
+        <translation>Воспроизведение...</translation>
+    </message>
+    <message>
+        <source>Пауза</source>
+        <translation>Пауза</translation>
+    </message>
+    <message>
+        <source>Остановлено</source>
+        <translation>Остановлено</translation>
+    </message>
+    <message>
+        <source>BPM установлен: %1</source>
+        <translation>BPM установлен: %1</translation>
+    </message>
+    <message>
+        <source>Неверное значение BPM (допустимый диапазон: 0.01 - 9999.99)</source>
+        <translation>Неверное значение BPM (допустимый диапазон: 0.01 - 9999.99)</translation>
+    </message>
+    <message>
+        <source>Цикл: %1 - %2</source>
+        <translation>Цикл: %1 - %2</translation>
+    </message>
+    <message>
+        <source>Установлена точка A (начало цикла): %1</source>
+        <translation>Установлена точка A (начало цикла): %1</translation>
+    </message>
+    <message>
+        <source>Цикл готов! Нажмите кнопку Цикл для включения.</source>
+        <translation>Цикл готов! Нажмите кнопку Цикл для включения.</translation>
+    </message>
+    <message>
+        <source>Ошибка: Точка B должна быть больше точки A!</source>
+        <translation>Ошибка: Точка B должна быть больше точки A!</translation>
+    </message>
+    <message>
+        <source>Установлена точка B (конец цикла): %1</source>
+        <translation>Установлена точка B (конец цикла): %1</translation>
+    </message>
+    <message>
+        <source>Точка A (начало цикла) удалена</source>
+        <translation>Точка A (начало цикла) удалена</translation>
+    </message>
+    <message>
+        <source>Точка B (конец цикла) удалена</source>
+        <translation>Точка B (конец цикла) удалена</translation>
+    </message>
+    <message>
+        <source>Использовать тему по умолчанию</source>
+        <translation>Использовать тему по умолчанию</translation>
+    </message>
+    <message>
+        <source>Использовать тёмную тему</source>
+        <translation>Использовать тёмную тему</translation>
+    </message>
+    <message>
+        <source>Использовать светлую тему</source>
+        <translation>Использовать светлую тему</translation>
+    </message>
+    <message>
+        <source>Настройки метронома</source>
+        <translation>Настройки метронома</translation>
+    </message>
+    <message>
+        <source>Просмотр горячих клавиш</source>
+        <translation>Просмотр горячих клавиш</translation>
+    </message>
+    <message>
+        <source>Переключить видимость питч-сетки</source>
+        <translation>Переключить видимость питч-сетки</translation>
+    </message>
+    <message>
+        <source>Переключить отображение меток неровных долей</source>
+        <translation>Переключить отображение меток неровных долей</translation>
+    </message>
+    <message>
+        <source>Переключить отображение силуэта ударных поверх волны</source>
+        <translation>Переключить отображение силуэта ударных поверх волны</translation>
+    </message>
+    <message>
+        <source>По умолчанию</source>
+        <translation>По умолчанию</translation>
+    </message>
+    <message>
+        <source>Тёмная</source>
+        <translation>Тёмная</translation>
+    </message>
+    <message>
+        <source>Светлая</source>
+        <translation>Светлая</translation>
+    </message>
+    <message>
+        <source>Воспроизведение/Пауза</source>
+        <translation>Воспроизведение/Пауза</translation>
+    </message>
+    <message>
+        <source>Стоп</source>
+        <translation>Стоп</translation>
+    </message>
+    <message>
+        <source>Установить начало цикла</source>
+        <translation>Установить начало цикла</translation>
+    </message>
+    <message>
+        <source>Установить конец цикла</source>
+        <translation>Установить конец цикла</translation>
+    </message>
+    <message>
+        <source>&amp;Метроном...</source>
+        <translation>&amp;Метроном...</translation>
+    </message>
+    <message>
+        <source>Темы</source>
+        <translation>Темы</translation>
+    </message>
 </context>
 <context>
     <name>LoadFileDialog</name>
@@ -298,6 +490,22 @@
     <message>
         <source>Аудиофайлы (*.wav *.mp3);;Все файлы (*)</source>
         <translation>Аудиофайлы (*.wav *.mp3);;Все файлы (*)</translation>
+    </message>
+    <message>
+        <source>Выберите звук метронома</source>
+        <translation>Выберите звук метронома</translation>
+    </message>
+    <message>
+        <source>Пользовательский</source>
+        <translation>Пользовательский</translation>
+    </message>
+    <message>
+        <source>Большие доли:</source>
+        <translation>Большие доли:</translation>
+    </message>
+    <message>
+        <source>Малые доли:</source>
+        <translation>Малые доли:</translation>
     </message>
 </context>
 </TS>

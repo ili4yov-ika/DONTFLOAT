@@ -193,6 +193,198 @@
         <source>English</source>
         <translation>English</translation>
     </message>
+    <message>
+        <source>Убрать метки неровных долей</source>
+        <translation>Hide Beat Deviation Markers</translation>
+    </message>
+    <message>
+        <source>Пометить неровные доли</source>
+        <translation>Mark Irregular Beats</translation>
+    </message>
+    <message>
+        <source>Метки неровных долей включены</source>
+        <translation>Beat deviation markers enabled</translation>
+    </message>
+    <message>
+        <source>Метки неровных долей отключены</source>
+        <translation>Beat deviation markers disabled</translation>
+    </message>
+    <message>
+        <source>Силуэт ударных включен</source>
+        <translation>Beat waveform enabled</translation>
+    </message>
+    <message>
+        <source>Силуэт ударных отключен</source>
+        <translation>Beat waveform disabled</translation>
+    </message>
+    <message>
+        <source>Убрать питч-сетку</source>
+        <translation>Hide Pitch Grid</translation>
+    </message>
+    <message>
+        <source>Показать питч-сетку</source>
+        <translation>Show Pitch Grid</translation>
+    </message>
+    <message>
+        <source>Силуэт ударных</source>
+        <translation>Beat Waveform</translation>
+    </message>
+    <message>
+        <source>Некорректный размер такта. Используйте формат X/Y (например, 4/4, 3/4, 2/4, 6/8)</source>
+        <translation>Invalid time signature. Use format X/Y (e.g., 4/4, 3/4, 2/4, 6/8)</translation>
+    </message>
+    <message>
+        <source>Размер такта изменен на %1/%2</source>
+        <translation>Time signature changed to %1/%2</translation>
+    </message>
+    <message>
+        <source>Воспроизведение завершено</source>
+        <translation>Playback completed</translation>
+    </message>
+    <message>
+        <source>ЛКМ: Установить точку A (начало цикла)
+ПКМ: Удалить точку A
+A: Установить точку A
+Shift+A: Удалить точку A</source>
+        <translation>LMB: Set point A (loop start)
+RMB: Remove point A
+A: Set point A
+Shift+A: Remove point A</translation>
+    </message>
+    <message>
+        <source>ЛКМ: Установить точку B (конец цикла)
+ПКМ: Удалить точку B
+B: Установить точку B
+Shift+B: Удалить точку B</source>
+        <translation>LMB: Set point B (loop end)
+RMB: Remove point B
+B: Set point B
+Shift+B: Remove point B</translation>
+    </message>
+    <message>
+        <source>Точка A: %1</source>
+        <translation>Point A: %1</translation>
+    </message>
+    <message>
+        <source>Точка B: %1</source>
+        <translation>Point B: %1</translation>
+    </message>
+    <message>
+        <source>Воспроизведение...</source>
+        <translation>Playing...</translation>
+    </message>
+    <message>
+        <source>Пауза</source>
+        <translation>Paused</translation>
+    </message>
+    <message>
+        <source>Остановлено</source>
+        <translation>Stopped</translation>
+    </message>
+    <message>
+        <source>BPM установлен: %1</source>
+        <translation>BPM set to: %1</translation>
+    </message>
+    <message>
+        <source>Неверное значение BPM (допустимый диапазон: 0.01 - 9999.99)</source>
+        <translation>Invalid BPM value (valid range: 0.01 - 9999.99)</translation>
+    </message>
+    <message>
+        <source>Цикл: %1 - %2</source>
+        <translation>Loop: %1 - %2</translation>
+    </message>
+    <message>
+        <source>Установлена точка A (начало цикла): %1</source>
+        <translation>Point A (loop start) set: %1</translation>
+    </message>
+    <message>
+        <source>Цикл готов! Нажмите кнопку Цикл для включения.</source>
+        <translation>Loop ready! Press Loop button to enable.</translation>
+    </message>
+    <message>
+        <source>Ошибка: Точка B должна быть больше точки A!</source>
+        <translation>Error: Point B must be greater than point A!</translation>
+    </message>
+    <message>
+        <source>Установлена точка B (конец цикла): %1</source>
+        <translation>Point B (loop end) set: %1</translation>
+    </message>
+    <message>
+        <source>Точка A (начало цикла) удалена</source>
+        <translation>Point A (loop start) removed</translation>
+    </message>
+    <message>
+        <source>Точка B (конец цикла) удалена</source>
+        <translation>Point B (loop end) removed</translation>
+    </message>
+    <message>
+        <source>Использовать тему по умолчанию</source>
+        <translation>Use default theme</translation>
+    </message>
+    <message>
+        <source>Использовать тёмную тему</source>
+        <translation>Use dark theme</translation>
+    </message>
+    <message>
+        <source>Использовать светлую тему</source>
+        <translation>Use light theme</translation>
+    </message>
+    <message>
+        <source>Настройки метронома</source>
+        <translation>Metronome settings</translation>
+    </message>
+    <message>
+        <source>Просмотр горячих клавиш</source>
+        <translation>View hotkeys</translation>
+    </message>
+    <message>
+        <source>Переключить видимость питч-сетки</source>
+        <translation>Toggle pitch grid visibility</translation>
+    </message>
+    <message>
+        <source>Переключить отображение меток неровных долей</source>
+        <translation>Toggle beat deviation markers</translation>
+    </message>
+    <message>
+        <source>Переключить отображение силуэта ударных поверх волны</source>
+        <translation>Toggle beat waveform overlay</translation>
+    </message>
+    <message>
+        <source>По умолчанию</source>
+        <translation>Default</translation>
+    </message>
+    <message>
+        <source>Тёмная</source>
+        <translation>Dark</translation>
+    </message>
+    <message>
+        <source>Светлая</source>
+        <translation>Light</translation>
+    </message>
+    <message>
+        <source>Воспроизведение/Пауза</source>
+        <translation>Play/Pause</translation>
+    </message>
+    <message>
+        <source>Стоп</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
+        <source>Установить начало цикла</source>
+        <translation>Set loop start</translation>
+    </message>
+    <message>
+        <source>Установить конец цикла</source>
+        <translation>Set loop end</translation>
+    </message>
+    <message>
+        <source>&amp;Метроном...</source>
+        <translation>&amp;Metronome...</translation>
+    </message>
+    <message>
+        <source>Темы</source>
+        <translation>Themes</translation>
+    </message>
 </context>
 <context>
     <name>LoadFileDialog</name>
@@ -298,6 +490,22 @@
     <message>
         <source>Аудиофайлы (*.wav *.mp3);;Все файлы (*)</source>
         <translation>Audio Files (*.wav *.mp3);;All Files (*)</translation>
+    </message>
+    <message>
+        <source>Выберите звук метронома</source>
+        <translation>Select Metronome Sound</translation>
+    </message>
+    <message>
+        <source>Пользовательский</source>
+        <translation>Custom</translation>
+    </message>
+    <message>
+        <source>Большие доли:</source>
+        <translation>Strong beats:</translation>
+    </message>
+    <message>
+        <source>Малые доли:</source>
+        <translation>Weak beats:</translation>
     </message>
 </context>
 </TS>
