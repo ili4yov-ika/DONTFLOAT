@@ -2,8 +2,13 @@
 #include <QtCore/QtMath>
 #include <QtCore/QPoint>
 #include <QtCore/QRect>
+#include <QtCore/QtGlobal>
 #include <QtGui/QPainter>
+#include <QtGui/QPolygon>
+#include <QtGui/QBrush>
 #include <QtCore/QTime>
+#include <cmath>
+#include <algorithm>
 
 // Определение статических констант
 const int WaveformView::minZoom = 1;
@@ -29,9 +34,7 @@ WaveformView::WaveformView(QWidget *parent)
     , showTimeDisplay(true)
     , showBarsDisplay(false)
     , showBeatDeviations(true)
-    , showBeatMarkers(true) // Новые флаги визуализации
-    , showSpectrogram(false)
-    , showBeatEnergy(true)
+    , showBeatWaveform(true) // Показывать силуэт ударных по умолчанию
     , beatsPerBar(4)
 {
     setMinimumHeight(100);
@@ -134,39 +137,19 @@ void WaveformView::paintEvent(QPaintEvent*)
     // Рисуем отклонения битов
     drawBeatDeviations(painter, rect());
     
-    // Рисуем спектрограмму (если включена) - временно отключено
-    /*
-    if (showSpectrogram) {
-        QRectF spectrogramRect(0, height() - beatVisualizationSettings.spectrogramHeight,
-                              width(), beatVisualizationSettings.spectrogramHeight);
-        drawSpectrogram(painter, spectrogramRect);
-    }
-    */
-    
     // Рисуем волну
     if (!audioData.isEmpty()) {
         float channelHeight = height() / float(audioData.size());
         for (int i = 0; i < audioData.size(); ++i) {
             QRectF channelRect(0, i * channelHeight, width(), channelHeight);
             drawWaveform(painter, audioData[i], channelRect);
+            
+            // Рисуем силуэт ударных поверх основной волны (в стиле VirtualDJ)
+            if (showBeatWaveform && !beats.isEmpty()) {
+                drawBeatWaveform(painter, audioData[i], channelRect);
+            }
         }
     }
-    
-    // Рисуем маркеры ударных (если включены) - временно отключено
-    /*
-    if (showBeatMarkers) {
-        QRectF beatRect(0, 0, width(), height());
-        drawBeatMarkers(painter, beatRect);
-    }
-    */
-    
-    // Рисуем энергетическую кривую ударных (если включена) - временно отключено
-    /*
-    if (showBeatEnergy) {
-        QRectF energyRect(0, 0, width(), height());
-        drawBeatEnergy(painter, energyRect);
-    }
-    */
     
     // Рисуем линии тактов
     drawBeatLines(painter, rect());
@@ -228,6 +211,166 @@ void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples
         QPointF top = sampleToPoint(x, maxValue, adjustedRect);
         QPointF bottom = sampleToPoint(x, minValue, adjustedRect);
         painter.drawLine(top, bottom);
+    }
+}
+
+void WaveformView::drawBeatWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect)
+{
+    if (samples.isEmpty() || beats.isEmpty()) return;
+    
+    // Количество сэмплов на пиксель с учетом масштаба (та же логика что и в drawWaveform)
+    float samplesPerPixel = float(samples.size()) / (rect.width() * zoomLevel);
+    
+    // Вычисляем начальный сэмпл
+    int visibleSamples = int(rect.width() * samplesPerPixel);
+    int maxStartSample = qMax(0, samples.size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    int endSample = qMin(samples.size(), startSample + visibleSamples);
+    
+    // Применяем вертикальное смещение
+    QRectF adjustedRect = rect;
+    adjustedRect.translate(0, -verticalOffset * rect.height());
+    
+    // Оптимизация: предвычисляем энергетическую огибающую один раз для видимой области
+    // Используем упрощенный алгоритм для лучшей производительности
+    const int energyWindowSize = qRound(0.02f * sampleRate); // Окно 20ms для вычисления энергии (уменьшено с 10ms)
+    QVector<float> energyEnvelope;
+    energyEnvelope.reserve(endSample - startSample);
+    
+    // Вычисляем энергетическую огибающую для видимой области
+    for (int s = startSample; s < endSample; ++s) {
+        int localStart = qMax(startSample, s - energyWindowSize / 2);
+        int localEnd = qMin(endSample, s + energyWindowSize / 2);
+        
+        // Быстрое вычисление энергии без полного RMS
+        float energy = 0.0f;
+        int count = 0;
+        for (int i = localStart; i < localEnd; i += 4) { // Пропускаем каждый 4-й сэмпл для скорости
+            energy += samples[i] * samples[i];
+            count++;
+        }
+        if (count > 0) {
+            energy = std::sqrt(energy / count);
+        }
+        energyEnvelope.append(energy);
+    }
+    
+    // Создаем вектор для хранения энергии ударных для каждого пикселя
+    QVector<float> beatEnvelope(rect.width(), 0.0f);
+    
+    // Для каждого видимого бита применяем усиление энергии
+    const int beatWindowSize = qRound(0.03f * sampleRate); // Уменьшено с 50ms до 30ms
+    float maxEnergy = 0.0f;
+    
+    // Находим максимальную энергию для нормализации
+    for (float e : energyEnvelope) {
+        maxEnergy = qMax(maxEnergy, e);
+    }
+    
+    if (maxEnergy <= 0.0f) return; // Нет энергии - нечего рисовать
+    
+    // Оптимизация: обрабатываем только биты в видимой области
+    for (const auto& beat : beats) {
+        qint64 beatPos = beat.position;
+        
+        // Пропускаем биты далеко вне видимой области
+        if (beatPos < startSample - beatWindowSize || beatPos > endSample + beatWindowSize) {
+            continue;
+        }
+        
+        // Вычисляем область влияния бита в пикселях
+        float beatX = (beatPos - startSample) / samplesPerPixel;
+        
+        if (beatX < -beatWindowSize / samplesPerPixel || beatX > rect.width() + beatWindowSize / samplesPerPixel) {
+            continue;
+        }
+        
+        // Вычисляем диапазон влияния в пикселях
+        int pixelStart = qMax(0, int(beatX - beatWindowSize / samplesPerPixel));
+        int pixelEnd = qMin(int(rect.width()), int(beatX + beatWindowSize / samplesPerPixel));
+        
+        // Применяем усиление энергии в области бита
+        for (int x = pixelStart; x < pixelEnd; ++x) {
+            int envelopeIndex = int(x * samplesPerPixel);
+            if (envelopeIndex >= 0 && envelopeIndex < energyEnvelope.size()) {
+                float energy = energyEnvelope[envelopeIndex];
+                
+                // Вычисляем реальный индекс сэмпла для вычисления расстояния
+                int actualSampleIndex = startSample + envelopeIndex;
+                
+                // Усиливаем энергию в зависимости от близости к биту и его параметров
+                float distance = qAbs((beatPos - actualSampleIndex) / float(sampleRate)); // расстояние в секундах
+                float falloff = qMax(0.0f, 1.0f - distance * 20.0f); // затухание на расстоянии
+                float enhancedEnergy = energy * (1.0f + beat.energy * beat.confidence * falloff);
+                
+                beatEnvelope[x] = qMax(beatEnvelope[x], enhancedEnergy);
+            }
+        }
+    }
+    
+    // Нормализуем энергию относительно максимальной
+    if (maxEnergy > 0.0f) {
+        float normalizationFactor = 1.0f / maxEnergy;
+        for (int x = 0; x < beatEnvelope.size(); ++x) {
+            beatEnvelope[x] *= normalizationFactor;
+        }
+    }
+    
+    // Оптимизация: рисуем одним полигоном вместо множества линий
+    painter.setRenderHint(QPainter::Antialiasing, false); // Отключаем сглаживание для скорости
+    
+    // Используем один полигон для верхней и нижней части
+    QPolygonF beatPolygon;
+    beatPolygon.reserve(rect.width() * 2 + 2);
+    
+    float centerY = adjustedRect.center().y();
+    float halfHeight = adjustedRect.height() * 0.5f;
+    
+    // Верхняя часть силуэта
+    bool hasPoints = false;
+    for (int x = 0; x < rect.width(); ++x) {
+        if (beatEnvelope[x] > 0.001f) { // Порог для отсечения очень малых значений
+            float normalizedEnergy = qBound(0.0f, beatEnvelope[x], 1.0f);
+            float y = centerY - (normalizedEnergy * halfHeight);
+            beatPolygon.append(QPointF(adjustedRect.x() + x, y));
+            hasPoints = true;
+        } else if (hasPoints && x < rect.width() - 1 && beatEnvelope[x + 1] <= 0.001f) {
+            // Добавляем точку для плавного перехода к нулю
+            beatPolygon.append(QPointF(adjustedRect.x() + x, centerY));
+            hasPoints = false;
+        }
+    }
+    
+    // Переход к нижней части через центр
+    if (!beatPolygon.isEmpty()) {
+        beatPolygon.append(QPointF(adjustedRect.right(), centerY));
+    }
+    
+    // Нижняя часть силуэта (в обратном порядке)
+    hasPoints = false;
+    for (int x = rect.width() - 1; x >= 0; --x) {
+        if (beatEnvelope[x] > 0.001f) {
+            float normalizedEnergy = qBound(0.0f, beatEnvelope[x], 1.0f);
+            float y = centerY + (normalizedEnergy * halfHeight);
+            beatPolygon.append(QPointF(adjustedRect.x() + x, y));
+            hasPoints = true;
+        } else if (hasPoints && x > 0 && beatEnvelope[x - 1] <= 0.001f) {
+            // Добавляем точку для плавного перехода к нулю
+            beatPolygon.append(QPointF(adjustedRect.x() + x, centerY));
+            hasPoints = false;
+        }
+    }
+    
+    // Закрываем полигон
+    if (!beatPolygon.isEmpty()) {
+        beatPolygon.append(beatPolygon.first());
+    }
+    
+    // Рисуем полигон одним вызовом
+    if (beatPolygon.size() >= 3) {
+        painter.setBrush(QBrush(QColor(255, 165, 0, 120))); // Полупрозрачная заливка
+        painter.setPen(QPen(QColor(255, 165, 0, 200), 1)); // Тонкая обводка
+        painter.drawPolygon(beatPolygon);
     }
 }
 
@@ -386,7 +529,7 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
 
 void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
 {
-    if (beats.isEmpty() || audioData.isEmpty() || !showBeatDeviations) {
+    if (beats.isEmpty() || audioData.isEmpty() || !showBeatDeviations || bpm <= 0.0f) {
         return;
     }
 
@@ -396,27 +539,73 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     
-    for (int i = 1; i < beats.size(); ++i) {
-        const auto& prevBeat = beats[i - 1];
-        const auto& currentBeat = beats[i];
+    // Вычисляем ожидаемый интервал между битами на основе BPM
+    float expectedBeatInterval = (60.0f * sampleRate) / bpm;
+    
+    // Рисуем метки отклонений для каждого бита
+    for (int i = 0; i < beats.size(); ++i) {
+        const auto& beat = beats[i];
         
-        if (qAbs(currentBeat.deviation) > 0.1f) {
-            // Определяем координаты для отрисовки
-            float x1 = float(prevBeat.position - startSample) / samplesPerPixel;
-            float x2 = float(currentBeat.position - startSample) / samplesPerPixel;
+        // Пропускаем первый бит, так как у него нет отклонения
+        if (i == 0) {
+            continue;
+        }
+        
+        // Проверяем, есть ли значимое отклонение (больше 2% от интервала)
+        if (qAbs(beat.deviation) < 0.02f) {
+            continue;
+        }
+        
+        // Определяем ожидаемую позицию бита на основе предыдущего
+        float expectedPosition = float(beats[i-1].position) + expectedBeatInterval;
+        float actualPosition = float(beat.position);
+        
+        // Вычисляем координаты для отрисовки
+        float expectedX = float(expectedPosition - startSample) / samplesPerPixel;
+        float actualX = float(actualPosition - startSample) / samplesPerPixel;
+        
+        // Проверяем видимость
+        if (actualX < 0 || expectedX > rect.width()) {
+            continue;
+        }
+        
+        // Выбираем цвет в зависимости от типа отклонения
+        // Положительное отклонение = бит позже ожидаемого (красный)
+        // Отрицательное отклонение = бит раньше ожидаемого (зеленый)
+        QColor color;
+        float deviationAbs = qAbs(beat.deviation);
+        float alpha = qMin(200.0f, 50.0f + deviationAbs * 500.0f); // Прозрачность зависит от величины отклонения
+        
+        if (beat.deviation > 0) {
+            // Бит опоздал - красный цвет
+            color = QColor(255, 100, 100, int(alpha));
+        } else {
+            // Бит пришел раньше - зеленый цвет
+            color = QColor(100, 255, 100, int(alpha));
+        }
+        
+        // Рисуем вертикальную линию на фактической позиции бита
+        float lineX = actualX;
+        if (lineX >= 0 && lineX <= rect.width()) {
+            painter.setPen(QPen(color, 2.0f));
+            painter.drawLine(QPointF(lineX, 0), QPointF(lineX, rect.height()));
+        }
+        
+        // Также рисуем прямоугольник между ожидаемой и фактической позицией
+        float x1 = qMin(expectedX, actualX);
+        float x2 = qMax(expectedX, actualX);
+        float width = x2 - x1;
+        
+        if (width > 0.5f && x2 >= 0 && x1 <= rect.width()) {
+            // Ограничиваем координаты видимой областью
+            x1 = qMax(0.0f, x1);
+            x2 = qMin(rect.width(), x2);
+            width = x2 - x1;
             
-            if (x2 < 0 || x1 > rect.width()) {
-                continue;
+            if (width > 0.5f) {
+                QRectF deviationRect(x1, 0, width, rect.height());
+                painter.fillRect(deviationRect, QColor(color.red(), color.green(), color.blue(), 30)); // Более прозрачный фон
             }
-            
-            // Выбираем цвет в зависимости от типа отклонения
-            QColor color = currentBeat.deviation > 0 ? 
-                QColor(255, 100, 100, 50) :  // Полупрозрачный красный
-                QColor(100, 255, 100, 50);   // Полупрозрачный зеленый
-            
-            // Рисуем прямоугольник отклонения
-            QRectF deviationRect(x1, 0, x2 - x1, rect.height());
-            painter.fillRect(deviationRect, color);
         }
     }
 }
@@ -780,6 +969,12 @@ void WaveformView::setShowBeatDeviations(bool show)
     update();
 }
 
+void WaveformView::setShowBeatWaveform(bool show)
+{
+    showBeatWaveform = show;
+    update();
+}
+
 QString WaveformView::getBarText(float beatPosition) const
 {
     const int bpb = qMax(1, beatsPerBar);
@@ -913,29 +1108,13 @@ void WaveformView::drawLoopMarkers(QPainter& painter, const QRect& rect)
     }
 }
 
+// Методы для визуализации ударных
+
 // Новые методы для улучшенной визуализации ударных (временно отключены)
 /*
 void WaveformView::setBeatVisualizationSettings(const BeatVisualizer::VisualizationSettings& settings)
 {
     beatVisualizationSettings = settings;
-    update();
-}
-
-void WaveformView::setShowBeatMarkers(bool show)
-{
-    showBeatMarkers = show;
-    update();
-}
-
-void WaveformView::setShowSpectrogram(bool show)
-{
-    showSpectrogram = show;
-    update();
-}
-
-void WaveformView::setShowBeatEnergy(bool show)
-{
-    showBeatEnergy = show;
     update();
 }
 
@@ -951,52 +1130,5 @@ void WaveformView::analyzeBeats()
     
     // Обновляем отображение
     update();
-}
-
-void WaveformView::drawBeatMarkers(QPainter& painter, const QRectF& rect)
-{
-    // Временно отключено для исправления сборки
-    if (beatAnalysis.beats.isEmpty() || audioData.isEmpty()) {
-        return;
-    }
-    
-    // Используем ту же логику, что и в других методах рисования
-    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-    int visibleSamples = int(rect.width() * samplesPerPixel);
-    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-    int startSample = int(horizontalOffset * maxStartSample);
-    
-    // Используем метод из BeatVisualizer
-    BeatVisualizer::drawBeatMarkers(painter, beatAnalysis.beats, rect, 
-                                   samplesPerPixel, startSample, beatVisualizationSettings);
-}
-
-void WaveformView::drawSpectrogram(QPainter& painter, const QRectF& rect)
-{
-    // Временно отключено для исправления сборки
-    if (beatAnalysis.spectrogram.isEmpty()) {
-        return;
-    }
-    
-    // Используем метод из BeatVisualizer
-    BeatVisualizer::drawSpectrogram(painter, beatAnalysis.spectrogram, rect, beatVisualizationSettings);
-}
-
-void WaveformView::drawBeatEnergy(QPainter& painter, const QRectF& rect)
-{
-    // Временно отключено для исправления сборки
-    if (beatAnalysis.beats.isEmpty() || audioData.isEmpty()) {
-        return;
-    }
-    
-    // Используем ту же логику, что и в других методах рисования
-    float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-    int visibleSamples = int(rect.width() * samplesPerPixel);
-    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-    int startSample = int(horizontalOffset * maxStartSample);
-    
-    // Используем метод из BeatVisualizer
-    BeatVisualizer::drawBeatEnergy(painter, beatAnalysis.beats, rect, 
-                                  samplesPerPixel, startSample, beatVisualizationSettings);
 }
 */ 

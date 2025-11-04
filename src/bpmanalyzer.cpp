@@ -747,8 +747,16 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
             (beatPositions[i] * stepSize) + stepSize / 2
         );
         beat.confidence = 0.9f; // Mixxx обычно даёт хорошие результаты
-        beat.deviation = 0.0f;
-        beat.energy = df[std::min(i, static_cast<int>(df.size()-1))];
+        beat.deviation = 0.0f; // Будет вычислено позже
+        // Исправляем проблему с типами: приводим оба аргумента к одному типу
+        // Используем индекс из df, ограничивая его размером массива
+        if (!df.empty() && i < df.size()) {
+            beat.energy = df[i];
+        } else if (!df.empty()) {
+            beat.energy = df[df.size() - 1]; // Используем последний элемент
+        } else {
+            beat.energy = 0.0;
+        }
         beats.append(beat);
     }
 #else
@@ -809,9 +817,11 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
         
         qint64 avgInterval = std::accumulate(intervals.begin(), intervals.end(), qint64(0)) / intervals.size();
         
-        for (int i = 1; i < static_cast<int>(beats.size()); ++i) {
-            qint64 actualInterval = beats[i].position - beats[i-1].position;
-            beats[i].deviation = float(actualInterval - avgInterval) / float(avgInterval);
+        if (avgInterval > 0) {
+            for (int i = 1; i < static_cast<int>(beats.size()); ++i) {
+                qint64 actualInterval = beats[i].position - beats[i-1].position;
+                beats[i].deviation = float(actualInterval - avgInterval) / float(avgInterval);
+            }
         }
     }
 

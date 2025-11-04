@@ -69,14 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
     , mediaPlayer(nullptr)
     , audioOutput(nullptr)
     , settings("DONTFLOAT", "DONTFLOAT")
-    , metronomeTimer(nullptr)
-    , metronomeSound(nullptr)
-    , metronomeSoundEffect(nullptr)
-    , isMetronomeEnabled(false)
-    , lastBeatTime(0)
-    , strongBeatVolume(100)
-    , weakBeatVolume(90)
-    , currentBeatNumber(0)
+    , metronomeController(nullptr)
     , isLoopEnabled(false)
     , loopStartPosition(0)
     , loopEndPosition(0)
@@ -498,9 +491,8 @@ MainWindow::~MainWindow()
         playbackTimer->stop();
         delete playbackTimer;
     }
-    if (metronomeTimer) {
-        metronomeTimer->stop();
-        delete metronomeTimer;
+    if (metronomeController) {
+        delete metronomeController;
     }
 
     // Освобождаем аудио компоненты
@@ -510,10 +502,6 @@ MainWindow::~MainWindow()
     }
     if (audioOutput) {
         delete audioOutput;
-    }
-    if (metronomeSound) {
-        delete metronomeSound;
-        delete metronomeSoundEffect;
     }
 
     // Освобождаем визуальные компоненты
@@ -782,6 +770,22 @@ void MainWindow::setupConnections()
     // connect(ui->bpmIncreaseButton, &QPushButton::clicked, this, &MainWindow::increaseBPM);
     // connect(ui->bpmDecreaseButton, &QPushButton::clicked, this, &MainWindow::decreaseBPM);
     connect(mediaPlayer, &QMediaPlayer::positionChanged, this, &MainWindow::updatePlaybackPosition);
+    connect(mediaPlayer, &QMediaPlayer::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState state) {
+        if (state == QMediaPlayer::StoppedState && isPlaying) {
+            // Воспроизведение завершилось
+            isPlaying = false;
+            ui->playButton->setIcon(QIcon(":/icons/resources/icons/play.svg"));
+            playbackTimer->stop();
+            
+            // Останавливаем метроном
+            if (metronomeController) {
+                metronomeController->setPlaying(false);
+                metronomeController->reset();
+            }
+            
+            statusBar()->showMessage(tr("Воспроизведение завершено"), 2000);
+        }
+    });
     
     // Подключаем комбобокс выбора режима отображения
     connect(ui->displayModeCombo, &QComboBox::currentIndexChanged, this,
@@ -957,76 +961,20 @@ void MainWindow::setupConnections()
     });
     
     // Инициализация метронома
-    metronomeTimer = new QTimer(this);
-    metronomeTimer->setInterval(10); // Проверяем каждые 10мс
-    metronomeSound = new QMediaPlayer(this);
-    metronomeSound->setAudioOutput(new QAudioOutput(this));
-    metronomeSound->audioOutput()->setVolume(0.5f);
-    
-    // Альтернативный подход - создаем QSoundEffect для метронома
-    metronomeSoundEffect = new QSoundEffect(this);
-    metronomeSoundEffect->setVolume(0.5f);
-    
-    // Создаем простой звук метронома программно
-    createSimpleMetronomeSound();
+    metronomeController = new MetronomeController(this);
     
     // Загружаем настройки громкости метронома
-    strongBeatVolume = settings.value("Metronome/StrongBeatVolume", 100).toInt();
-    weakBeatVolume = settings.value("Metronome/WeakBeatVolume", 90).toInt();
+    metronomeController->setStrongBeatVolume(settings.value("Metronome/StrongBeatVolume", 100).toInt());
+    metronomeController->setWeakBeatVolume(settings.value("Metronome/WeakBeatVolume", 90).toInt());
     
-    // Дополнительная проверка через небольшую задержку
-    QTimer::singleShot(100, this, [this]() {
-        if (metronomeSound->mediaStatus() != QMediaPlayer::LoadedMedia) {
-            qWarning() << "Failed to load metronome sound:" << metronomeSound->mediaStatus();
-            qDebug() << "Metronome will work without sound";
-        } else {
-            qDebug() << "Metronome sound loaded successfully";
-        }
-    });
-    
-    isMetronomeEnabled = false;
-    lastBeatTime = 0;
+    // Устанавливаем начальный BPM
+    float defaultBPM = 120.0f;
+    metronomeController->setBPM(defaultBPM);
     
     // Инициализация циклов
     isLoopEnabled = false;
     loopStartPosition = 0;
     loopEndPosition = 0;
-    
-    connect(metronomeTimer, &QTimer::timeout, this, [this]() {
-        if (isMetronomeEnabled) {
-            // Метроном работает независимо от воспроизведения
-            float bpm = ui->bpmEdit->text().toFloat();
-            qint64 beatInterval = qint64(60000.0f / bpm); // интервал между ударами в мс
-            
-            // Используем системное время вместо позиции воспроизведения
-            qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
-            
-            if (currentTime - lastBeatTime >= beatInterval) {
-                // Определяем, какая это доля (большая или малая)
-                bool isStrongBeat = (currentBeatNumber % 4 == 0); // Каждая 4-я доля - большая
-                int volume = isStrongBeat ? strongBeatVolume : weakBeatVolume;
-                
-                // Пробуем воспроизвести звук через QSoundEffect (более надежно для коротких звуков)
-                if (metronomeSoundEffect && metronomeSoundEffect->status() == QSoundEffect::Ready) {
-                    metronomeSoundEffect->setVolume(volume / 100.0f);
-                    metronomeSoundEffect->play();
-                    qDebug() << "Metronome beat" << (isStrongBeat ? "(strong)" : "(weak)") << "volume:" << volume << "% (QSoundEffect)";
-                } else if (metronomeSound && metronomeSound->mediaStatus() == QMediaPlayer::LoadedMedia) {
-                    // Fallback на QMediaPlayer
-                    metronomeSound->audioOutput()->setVolume(volume / 100.0f);
-                    metronomeSound->setPosition(0); // Сбрасываем позицию
-                    metronomeSound->play();
-                    qDebug() << "Metronome beat" << (isStrongBeat ? "(strong)" : "(weak)") << "volume:" << volume << "% (QMediaPlayer)";
-                } else {
-                    // Fallback - используем системный звук или просто визуальную индикацию
-                    qDebug() << "Metronome beat" << (isStrongBeat ? "(strong)" : "(weak)") << "volume:" << volume << "% (no sound)";
-                }
-                
-                lastBeatTime = currentTime;
-                currentBeatNumber++;
-            }
-        }
-    });
 
     // Подключаем сигналы стека отмены
     connect(undoStack, &QUndoStack::canUndoChanged, undoAct, &QAction::setEnabled);
@@ -1063,18 +1011,33 @@ void MainWindow::playAudio()
         mediaPlayer->play();
         playbackTimer->start();
         statusBar()->showMessage(tr("Воспроизведение..."));
+        
+        // Обновляем состояние метронома
+        if (metronomeController) {
+            metronomeController->setPlaying(true);
+        }
     } else {
         isPlaying = false;
         ui->playButton->setIcon(QIcon(":/icons/resources/icons/play.svg"));
         mediaPlayer->pause();
         playbackTimer->stop();
         statusBar()->showMessage(tr("Пауза"));
+        
+        // Обновляем состояние метронома
+        if (metronomeController) {
+            metronomeController->setPlaying(false);
+        }
     }
 }
 
 void MainWindow::stopAudio()
 {
     isPlaying = false;
+    // Останавливаем метроном при остановке воспроизведения
+    if (metronomeController) {
+        metronomeController->setPlaying(false);
+        metronomeController->reset();
+    }
     currentPosition = 0;
     ui->playButton->setIcon(QIcon(":/icons/resources/icons/play.svg"));
     mediaPlayer->stop();
@@ -1106,6 +1069,10 @@ void MainWindow::updateBPM()
         // Синхронизируем BPM с PitchGridWidget
         if (pitchGridWidget) {
             pitchGridWidget->setBPM(bpm);
+        }
+        // Обновляем BPM в метрономе
+        if (metronomeController) {
+            metronomeController->setBPM(bpm);
         }
         // Принудительно обновляем отображение тактов
         waveformView->update();
@@ -1278,30 +1245,12 @@ void MainWindow::createActions()
     connect(toggleBeatDeviationsAct, &QAction::triggered, this, &MainWindow::toggleBeatDeviations);
 
     // Новые действия для визуализации ударных
-    beatVisualizationSettingsAct = new QAction(QString::fromUtf8("Настройки визуализации ударных..."), this);
-    beatVisualizationSettingsAct->setStatusTip(QString::fromUtf8("Открыть настройки визуализации ударных"));
-    connect(beatVisualizationSettingsAct, &QAction::triggered, this, &MainWindow::showBeatVisualizationSettings);
 
-    toggleBeatMarkersAct = new QAction(QString::fromUtf8("Маркеры ударных"), this);
-    toggleBeatMarkersAct->setCheckable(true);
-    toggleBeatMarkersAct->setChecked(true);
-    toggleBeatMarkersAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
-    toggleBeatMarkersAct->setStatusTip(QString::fromUtf8("Переключить отображение маркеров ударных"));
-    connect(toggleBeatMarkersAct, &QAction::triggered, this, &MainWindow::toggleBeatMarkers);
-
-    toggleSpectrogramAct = new QAction(QString::fromUtf8("Спектрограмма"), this);
-    toggleSpectrogramAct->setCheckable(true);
-    toggleSpectrogramAct->setChecked(false);
-    toggleSpectrogramAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
-    toggleSpectrogramAct->setStatusTip(QString::fromUtf8("Переключить отображение спектрограммы"));
-    connect(toggleSpectrogramAct, &QAction::triggered, this, &MainWindow::toggleSpectrogram);
-
-    toggleBeatEnergyAct = new QAction(QString::fromUtf8("Энергия ударных"), this);
-    toggleBeatEnergyAct->setCheckable(true);
-    toggleBeatEnergyAct->setChecked(true);
-    toggleBeatEnergyAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
-    toggleBeatEnergyAct->setStatusTip(QString::fromUtf8("Переключить отображение энергии ударных"));
-    connect(toggleBeatEnergyAct, &QAction::triggered, this, &MainWindow::toggleBeatEnergy);
+    toggleBeatWaveformAct = new QAction(QString::fromUtf8("Силуэт ударных"), this);
+    toggleBeatWaveformAct->setCheckable(true);
+    toggleBeatWaveformAct->setChecked(true); // Включено по умолчанию
+    toggleBeatWaveformAct->setStatusTip(QString::fromUtf8("Переключить отображение силуэта ударных поверх волны"));
+    connect(toggleBeatWaveformAct, &QAction::triggered, this, &MainWindow::toggleBeatWaveform);
 
     // Edit actions - use QUndoStack's built-in actions
     undoAct = undoStack->createUndoAction(this);
@@ -1355,14 +1304,11 @@ void MainWindow::createMenus()
     viewMenu->addAction(togglePitchGridAct);
     viewMenu->addAction(toggleBeatDeviationsAct);
     viewMenu->addSeparator();
-    viewMenu->addAction(toggleBeatMarkersAct);
-    viewMenu->addAction(toggleSpectrogramAct);
-    viewMenu->addAction(toggleBeatEnergyAct);
+    viewMenu->addAction(toggleBeatWaveformAct);
 
     // Settings menu (last)
     settingsMenu = menuBar()->addMenu(QString::fromUtf8("&Настройки"));
     settingsMenu->addAction(metronomeSettingsAct);
-    settingsMenu->addAction(beatVisualizationSettingsAct);
     settingsMenu->addAction(keyboardShortcutsAct);
     
     // Language submenu in Settings menu
@@ -1549,8 +1495,9 @@ void MainWindow::resetAudioState()
     stopAudio();
     
     // Сбрасываем состояние метронома
-    if (isMetronomeEnabled) {
-        toggleMetronome();
+    if (metronomeController && metronomeController->isEnabled()) {
+        metronomeController->setEnabled(false);
+        ui->metronomeButton->setChecked(false);
     }
     
     // Сбрасываем состояние цикла
@@ -1608,16 +1555,23 @@ void MainWindow::openAudioFile()
 
 void MainWindow::processAudioFile(const QString& filePath)
 {
+    // Блокируем главное окно ДО загрузки файла
+    setEnabled(false);
+    QApplication::processEvents(); // Обрабатываем события для обновления UI
+    
+    // Создаем диалог сразу, до загрузки файла
+    LoadFileDialog dialog(this, BPMAnalyzer::AnalysisResult());
+    dialog.setWindowTitle(QString::fromUtf8("Анализ и выравнивание долей"));
+    dialog.setWindowModality(Qt::ApplicationModal);
+    dialog.updateProgress(QString::fromUtf8("Загрузка аудиофайла..."), 10);
+    dialog.show();
+    dialog.raise();
+    dialog.activateWindow();
+    QApplication::processEvents(); // Принудительно обрабатываем события для показа диалога
+    
+    // Загружаем файл
     QVector<QVector<float>> audioData = loadAudioFile(filePath);
     if (!audioData.isEmpty()) {
-        // Блокируем главное окно
-        setEnabled(false);
-        
-        // Создаем диалог до начала анализа с корректной кодировкой текста
-        LoadFileDialog dialog(this, BPMAnalyzer::AnalysisResult());
-        dialog.setWindowTitle(QString::fromUtf8("Анализ и выравнивание долей"));
-        dialog.setWindowModality(Qt::ApplicationModal);
-        dialog.show();
         
         // Настраиваем опции анализа
         BPMAnalyzer::AnalysisOptions options;
@@ -1687,6 +1641,11 @@ void MainWindow::processAudioFile(const QString& filePath)
                 ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
                 waveformView->setBPM(analysis.bpm);
                 
+                // Обновляем метроном
+                if (metronomeController) {
+                    metronomeController->setBPM(analysis.bpm);
+                }
+                
                 // Обновляем PitchGridWidget
                 if (pitchGridWidget) {
                     pitchGridWidget->setAudioData(audioData);
@@ -1719,6 +1678,11 @@ void MainWindow::processAudioFile(const QString& filePath)
             waveformView->setBeatInfo(analysis.beats);
             ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
             waveformView->setBPM(analysis.bpm);
+            
+            // Обновляем метроном
+            if (metronomeController) {
+                metronomeController->setBPM(analysis.bpm);
+            }
             
             // Обновляем PitchGridWidget
             if (pitchGridWidget) {
@@ -1769,6 +1733,11 @@ void MainWindow::processAudioFile(const QString& filePath)
 
         // Разблокируем главное окно
         setEnabled(true);
+    } else {
+        // Если файл не загружен, разблокируем окно
+        dialog.close();
+        setEnabled(true);
+        statusBar()->showMessage(tr("Ошибка загрузки файла"), 3000);
     }
 }
 
@@ -1988,16 +1957,20 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
 
 void MainWindow::toggleMetronome()
 {
-    isMetronomeEnabled = !isMetronomeEnabled;
-    ui->metronomeButton->setChecked(isMetronomeEnabled);
+    if (!metronomeController) {
+        return;
+    }
     
-    if (isMetronomeEnabled) {
+    bool wasEnabled = metronomeController->isEnabled();
+    metronomeController->setEnabled(!wasEnabled);
+    
+    ui->metronomeButton->setChecked(metronomeController->isEnabled());
+    
+    if (metronomeController->isEnabled()) {
         float bpm = ui->bpmEdit->text().toFloat();
-        metronomeTimer->start(qint64(60000.0f / bpm / 4)); // Проверяем 4 раза за удар для точности
-        currentBeatNumber = 0; // Сбрасываем счетчик долей
+        metronomeController->setBPM(bpm);
         statusBar()->showMessage(tr("Метроном включен"), 2000);
     } else {
-        metronomeTimer->stop();
         statusBar()->showMessage(tr("Метроном выключен"), 2000);
     }
 }
@@ -2051,18 +2024,10 @@ void MainWindow::updateLoopPoints()
 
 void MainWindow::showMetronomeSettings()
 {
-    MetronomeSettingsDialog dialog(this);
+    // Передаем контроллер в диалог для прямой синхронизации
+    MetronomeSettingsDialog dialog(this, metronomeController);
     if (dialog.exec() == QDialog::Accepted) {
-        // Загружаем новые настройки громкости
-        strongBeatVolume = settings.value("Metronome/StrongBeatVolume", 100).toInt();
-        weakBeatVolume = settings.value("Metronome/WeakBeatVolume", 90).toInt();
-        
-        // Применяем новые настройки метронома
-        if (metronomeSound) {
-            QString soundType = settings.value("Metronome/Sound", "click").toString();
-            // TODO: Обновить звук метронома в зависимости от выбранного типа
-        }
-        
+        // Настройки уже применены к контроллеру в saveSettings() диалога
         statusBar()->showMessage(tr("Настройки метронома обновлены"), 2000);
     }
 }
@@ -2368,98 +2333,6 @@ void MainWindow::setColorScheme(const QString& scheme)
     
     settings.setValue("colorScheme", scheme);
     statusBar()->showMessage(tr("Цветовая схема изменена: %1").arg(scheme == "dark" ? "Тёмная" : "Светлая"), 2000);
-}
-
-void MainWindow::createSimpleMetronomeSound()
-{
-    // Упрощенный подход - используем системный звук или создаем простой звук
-    // Попробуем использовать ресурс из qrc, если он есть
-    QString soundPath = "qrc:/sounds/metronome.wav";
-    
-    // Если ресурс не найден, создаем простой звук программно
-    QByteArray audioData;
-    const int sampleRate = 44100;
-    const float duration = 0.1f; // 100ms
-    const int sampleCount = static_cast<int>(sampleRate * duration);
-    
-    audioData.resize(sampleCount * 2); // 16-bit samples
-    qint16* samples = reinterpret_cast<qint16*>(audioData.data());
-    
-    for (int i = 0; i < sampleCount; ++i) {
-        // Простой щелчок - быстрое затухание с синусоидой
-        float t = static_cast<float>(i) / sampleCount;
-        float amplitude = (1.0f - t) * 0.3f; // Затухание
-        float frequency = 800.0f; // Частота щелчка
-        float sample = amplitude * std::sin(2.0f * M_PI * frequency * t);
-        samples[i] = static_cast<qint16>(sample * 32767.0f);
-    }
-    
-    // Сохраняем во временный файл
-    QString tempFile = QDir::tempPath() + "/metronome_temp.wav";
-    QFile file(tempFile);
-    if (file.open(QIODevice::WriteOnly)) {
-        // Простая WAV заголовок
-        QDataStream stream(&file);
-        stream.setByteOrder(QDataStream::LittleEndian);
-        
-        // RIFF заголовок
-        stream.writeRawData("RIFF", 4);
-        stream << static_cast<quint32>(36 + audioData.size());
-        stream.writeRawData("WAVE", 4);
-        
-        // fmt chunk
-        stream.writeRawData("fmt ", 4);
-        stream << static_cast<quint32>(16);
-        stream << static_cast<quint16>(1); // PCM
-        stream << static_cast<quint16>(1); // моно
-        stream << static_cast<quint32>(sampleRate);
-        stream << static_cast<quint32>(sampleRate * 2); // байт в секунду
-        stream << static_cast<quint16>(2); // байт на сэмпл
-        stream << static_cast<quint16>(16); // бит на сэмпл
-        
-        // data chunk
-        stream.writeRawData("data", 4);
-        stream << static_cast<quint32>(audioData.size());
-        stream.writeRawData(audioData.data(), audioData.size());
-        
-        file.close();
-        
-        // Обновляем источник звука
-        metronomeSound->setSource(QUrl::fromLocalFile(tempFile));
-        
-        // Ждем загрузки звука с таймаутом
-        QTimer loadTimer;
-        loadTimer.setSingleShot(true);
-        loadTimer.setInterval(1000); // 1 секунда таймаут
-        
-        QEventLoop loop;
-        connect(metronomeSound, &QMediaPlayer::mediaStatusChanged, &loop, [&](QMediaPlayer::MediaStatus status) {
-            if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::InvalidMedia) {
-                loop.quit();
-            }
-        });
-        connect(&loadTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
-        
-        loadTimer.start();
-        loop.exec();
-        
-        if (metronomeSound->mediaStatus() == QMediaPlayer::LoadedMedia) {
-            qDebug() << "Metronome sound loaded successfully:" << tempFile;
-            // Также настраиваем QSoundEffect
-            metronomeSoundEffect->setSource(QUrl::fromLocalFile(tempFile));
-        } else {
-            qWarning() << "Failed to load metronome sound, trying fallback";
-            // Fallback - попробуем использовать системный звук
-            metronomeSound->setSource(QUrl("qrc:/sounds/metronome.wav"));
-            metronomeSoundEffect->setSource(QUrl("qrc:/sounds/metronome.wav"));
-        }
-        
-        qDebug() << "Created metronome sound file:" << tempFile;
-    } else {
-        qWarning() << "Failed to create metronome sound file";
-        // Fallback - попробуем использовать системный звук
-        metronomeSound->setSource(QUrl("qrc:/sounds/metronome.wav"));
-    }
 }
 
 void MainWindow::updateHorizontalScrollBar(float zoom)
@@ -2912,85 +2785,18 @@ void MainWindow::toggleBeatDeviations()
     }
 }
 
-void MainWindow::showBeatVisualizationSettings()
-{
-    // Временно отключено для исправления сборки
-    statusBar()->showMessage(QString::fromUtf8("Функция временно недоступна"), 2000);
-    
-    /*
-    BeatVisualizationSettingsDialog dialog(this);
-    
-    // Получаем текущие настройки из WaveformView
-    if (waveformView) {
-        dialog.setSettings(waveformView->getBeatVisualizationSettings());
-    }
-    
-    if (dialog.exec() == QDialog::Accepted) {
-        // Применяем новые настройки
-        if (waveformView) {
-            waveformView->setBeatVisualizationSettings(dialog.getSettings());
-            statusBar()->showMessage(QString::fromUtf8("Настройки визуализации ударных обновлены"), 2000);
-        }
-    }
-    */
-}
 
-void MainWindow::toggleBeatMarkers()
+void MainWindow::toggleBeatWaveform()
 {
-    // Временно отключено для исправления сборки
-    statusBar()->showMessage(QString::fromUtf8("Функция временно недоступна"), 2000);
-    
-    /*
     if (waveformView) {
-        bool currentState = waveformView->getShowBeatMarkers();
-        waveformView->setShowBeatMarkers(!currentState);
-        toggleBeatMarkersAct->setChecked(!currentState);
+        bool currentState = waveformView->getShowBeatWaveform();
+        waveformView->setShowBeatWaveform(!currentState);
+        toggleBeatWaveformAct->setChecked(!currentState);
         
         if (!currentState) {
-            statusBar()->showMessage(QString::fromUtf8("Маркеры ударных включены"), 2000);
+            statusBar()->showMessage(QString::fromUtf8("Силуэт ударных включен"), 2000);
         } else {
-            statusBar()->showMessage(QString::fromUtf8("Маркеры ударных отключены"), 2000);
+            statusBar()->showMessage(QString::fromUtf8("Силуэт ударных отключен"), 2000);
         }
     }
-    */
-}
-
-void MainWindow::toggleSpectrogram()
-{
-    // Временно отключено для исправления сборки
-    statusBar()->showMessage(QString::fromUtf8("Функция временно недоступна"), 2000);
-    
-    /*
-    if (waveformView) {
-        bool currentState = waveformView->getShowSpectrogram();
-        waveformView->setShowSpectrogram(!currentState);
-        toggleSpectrogramAct->setChecked(!currentState);
-        
-        if (!currentState) {
-            statusBar()->showMessage(QString::fromUtf8("Спектрограмма включена"), 2000);
-        } else {
-            statusBar()->showMessage(QString::fromUtf8("Спектрограмма отключена"), 2000);
-        }
-    }
-    */
-}
-
-void MainWindow::toggleBeatEnergy()
-{
-    // Временно отключено для исправления сборки
-    statusBar()->showMessage(QString::fromUtf8("Функция временно недоступна"), 2000);
-    
-    /*
-    if (waveformView) {
-        bool currentState = waveformView->getShowBeatEnergy();
-        waveformView->setShowBeatEnergy(!currentState);
-        toggleBeatEnergyAct->setChecked(!currentState);
-        
-        if (!currentState) {
-            statusBar()->showMessage(QString::fromUtf8("Энергия ударных включена"), 2000);
-        } else {
-            statusBar()->showMessage(QString::fromUtf8("Энергия ударных отключена"), 2000);
-        }
-    }
-    */
 }

@@ -124,10 +124,17 @@ KeyAnalyzer::AnalysisResult KeyAnalyzer::analyzeKeyUsingQM(const QVector<float>&
             QVector<double> frame(doubleSamples.begin() + i, 
                                  doubleSamples.begin() + i + frameSize);
             
-            // Получаем хроматический вектор для кадра
-            double* chromaData = keyDetector.process(frame.data());
-            if (chromaData) {
-                QVector<double> chromaVector(chromaData, 12); // 12 полутонов
+            // Обрабатываем кадр (возвращает индекс тональности)
+            int keyIndex = keyDetector.process(frame.data());
+            
+            // Получаем хроматический вектор для кадра (24 элемента: 12 мажор + 12 минор)
+            double* keyStrengths = keyDetector.getKeyStrengths();
+            if (keyStrengths) {
+                // Создаём вектор из массива (12 элементов для мажорных тональностей)
+                QVector<double> chromaVector(12);
+                for (int j = 0; j < 12; ++j) {
+                    chromaVector[j] = keyStrengths[j]; // Мажорные тональности
+                }
                 chromaFrames.append(chromaVector);
             }
         }
