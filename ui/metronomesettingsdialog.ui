@@ -96,6 +96,22 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QPushButton" name="testButton">
+         <property name="text">
+          <string>►</string>
+         </property>
+         <property name="toolTip">
+          <string>Воспроизвести звук большой доли с текущей громкостью для настройки метронома</string>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>30</width>
+           <height>30</height>
+          </size>
+         </property>
+        </widget>
+       </item>
       </layout>
      </item>
      <item>
@@ -154,6 +170,22 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QPushButton" name="testWeakButton">
+         <property name="text">
+          <string>►</string>
+         </property>
+         <property name="toolTip">
+          <string>Воспроизвести звук малой доли с текущей громкостью для настройки метронома</string>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>30</width>
+           <height>30</height>
+          </size>
+         </property>
+        </widget>
+       </item>
       </layout>
      </item>
     </layout>
@@ -206,16 +238,6 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="testButton">
-       <property name="text">
-        <string>Тест</string>
-       </property>
-       <property name="toolTip">
-        <string>Воспроизвести выбранный звук</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <spacer name="buttonSpacer">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
@@ -231,6 +253,19 @@
     </layout>
    </item>
    <item>
+    <widget class="QLabel" name="statusLabel">
+     <property name="text">
+      <string>Статус: загрузка...</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="styleSheet">
+      <string>color: #888888;</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -238,7 +273,7 @@
      <property name="sizeHint" stdset="0">
       <size>
        <width>20</width>
-       <height>40</height>
+       <height>20</height>
       </size>
      </property>
     </spacer>
