@@ -52,6 +52,7 @@ set(SOURCES
     src/audiocommand.cpp
     src/loadfiledialog.cpp
     src/metronomesettingsdialog.cpp
+    src/metronomecontroller.cpp
     src/beatfixcommand.cpp
     src/beatvisualizer.cpp
     src/beatvisualizationsettingsdialog.cpp
@@ -69,6 +70,7 @@ set(HEADERS
     include/audiocommand.h
     include/loadfiledialog.h
     include/metronomesettingsdialog.h
+    include/metronomecontroller.h
     include/beatfixcommand.h
     include/beatvisualizer.h
     include/beatvisualizationsettingsdialog.h
@@ -120,24 +122,63 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 # Translation files are handled manually
 
-# Third-party: Mixxx qm-dsp (disabled due to MSVC compatibility issues)
-# set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
-# if(EXISTS ${QM_DSP_ROOT})
-#     file(GLOB_RECURSE QM_DSP_SOURCES
-#         ${QM_DSP_ROOT}/*.cpp
-#         ${QM_DSP_ROOT}/*.c
-#     )
-#     add_library(qm_dsp STATIC ${QM_DSP_SOURCES})
-#     target_include_directories(qm_dsp PUBLIC ${QM_DSP_ROOT})
-# 
-#     # Enable Mixxx algorithm in our analyzer
-#     target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MIXXX_QM_DSP)
-#     target_link_libraries(${PROJECT_NAME} PRIVATE qm_dsp)
-# 
-#     message(STATUS "Mixxx qm-dsp enabled: ${QM_DSP_ROOT}")
-# else()
-    message(STATUS "Building with simplified BPM analyzer (qm-dsp disabled for MSVC compatibility)")
-# endif()
+# Third-party: Mixxx qm-dsp
+set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
+if(EXISTS ${QM_DSP_ROOT})
+    # Используем те же файлы, что и Mixxx (из их CMakeLists.txt)
+    set(QM_DSP_SOURCES
+        ${QM_DSP_ROOT}/base/Pitch.cpp
+        ${QM_DSP_ROOT}/dsp/chromagram/Chromagram.cpp
+        ${QM_DSP_ROOT}/dsp/chromagram/ConstantQ.cpp
+        ${QM_DSP_ROOT}/dsp/keydetection/GetKeyMode.cpp
+        ${QM_DSP_ROOT}/dsp/onsets/DetectionFunction.cpp
+        ${QM_DSP_ROOT}/dsp/onsets/PeakPicking.cpp
+        ${QM_DSP_ROOT}/dsp/phasevocoder/PhaseVocoder.cpp
+        ${QM_DSP_ROOT}/dsp/rateconversion/Decimator.cpp
+        ${QM_DSP_ROOT}/dsp/signalconditioning/DFProcess.cpp
+        ${QM_DSP_ROOT}/dsp/signalconditioning/FiltFilt.cpp
+        ${QM_DSP_ROOT}/dsp/signalconditioning/Filter.cpp
+        ${QM_DSP_ROOT}/dsp/signalconditioning/Framer.cpp
+        ${QM_DSP_ROOT}/dsp/tempotracking/DownBeat.cpp
+        ${QM_DSP_ROOT}/dsp/tempotracking/TempoTrack.cpp
+        ${QM_DSP_ROOT}/dsp/tempotracking/TempoTrackV2.cpp
+        ${QM_DSP_ROOT}/dsp/tonal/ChangeDetectionFunction.cpp
+        ${QM_DSP_ROOT}/dsp/tonal/TCSgram.cpp
+        ${QM_DSP_ROOT}/dsp/tonal/TonalEstimator.cpp
+        ${QM_DSP_ROOT}/dsp/transforms/FFT.cpp
+        ${QM_DSP_ROOT}/ext/kissfft/kiss_fft.c
+        ${QM_DSP_ROOT}/ext/kissfft/tools/kiss_fftr.c
+        ${QM_DSP_ROOT}/maths/Correlation.cpp
+        ${QM_DSP_ROOT}/maths/KLDivergence.cpp
+        ${QM_DSP_ROOT}/maths/MathUtilities.cpp
+    )
+    
+    add_library(qm_dsp STATIC ${QM_DSP_SOURCES})
+    
+    # Определения компилятора (как в Mixxx)
+    target_compile_definitions(qm_dsp PRIVATE kiss_fft_scalar=double)
+    if(MSVC)
+        # MSVC требует это для M_PI и других математических констант
+        target_compile_definitions(qm_dsp PRIVATE _USE_MATH_DEFINES)
+    elseif(UNIX)
+        target_compile_definitions(qm_dsp PRIVATE USE_PTHREADS)
+    endif()
+    
+    # Директории включений (как в Mixxx)
+    target_include_directories(qm_dsp SYSTEM PUBLIC 
+        ${QM_DSP_ROOT} 
+        ${QM_DSP_ROOT}/include
+    )
+    
+    # Enable Mixxx algorithm in our analyzer
+    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MIXXX_QM_DSP)
+    target_link_libraries(${PROJECT_NAME} PRIVATE qm_dsp)
+    
+    message(STATUS "Mixxx qm-dsp enabled: ${QM_DSP_ROOT}")
+else()
+    message(WARNING "qm-dsp not found at ${QM_DSP_ROOT}, using simplified BPM analyzer")
+    message(STATUS "Building with simplified BPM analyzer (qm-dsp not found)")
+endif()
 
 # Set Windows executable properties
 if(WIN32)
@@ -158,5 +199,59 @@ install(TARGETS ${PROJECT_NAME}
 # Enable testing
 enable_testing()
 
-# Add tests subdirectory
-add_subdirectory(tests)
+# Add test executable (unit tests)
+add_executable(donfloat_test
+    tests/bpm_test.cpp
+    src/bpmanalyzer.cpp
+)
+
+# Add file-based BPM test executable
+add_executable(donfloat_file_test
+    tests/bpm_file_test.cpp
+    src/bpmanalyzer.cpp
+)
+
+# Link test with Qt and project libraries
+target_link_libraries(donfloat_test PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Multimedia
+    Qt6::MultimediaWidgets
+)
+
+# Link file test with Qt and project libraries
+target_link_libraries(donfloat_file_test PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Multimedia
+    Qt6::MultimediaWidgets
+)
+
+# Include directories for tests
+target_include_directories(donfloat_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_include_directories(donfloat_file_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+# Add tests to CTest
+add_test(NAME donfloat_bpm_test COMMAND donfloat_test)
+add_test(NAME donfloat_file_test COMMAND donfloat_file_test)
+
+# Set test properties
+set_tests_properties(donfloat_bpm_test PROPERTIES
+    LABELS "bpm;audio;unit"
+    DESCRIPTION "BPM analysis and audio processing unit tests"
+)
+
+set_tests_properties(donfloat_file_test PROPERTIES
+    LABELS "bpm;audio;integration;files"
+    DESCRIPTION "BPM analysis tests on real audio files from tests/source4test"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
