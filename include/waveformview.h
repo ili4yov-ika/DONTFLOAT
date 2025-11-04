@@ -46,17 +46,13 @@ public:
     int getBeatsPerBar() const { return beatsPerBar; }
     void setShowBeatDeviations(bool show);
     bool getShowBeatDeviations() const { return showBeatDeviations; }
+    void setShowBeatWaveform(bool show);
+    bool getShowBeatWaveform() const { return showBeatWaveform; }
     
     // Новые методы для улучшенной визуализации ударных (временно отключены)
     /*
     void setBeatVisualizationSettings(const BeatVisualizer::VisualizationSettings& settings);
     BeatVisualizer::VisualizationSettings getBeatVisualizationSettings() const { return beatVisualizationSettings; }
-    void setShowBeatMarkers(bool show);
-    bool getShowBeatMarkers() const { return showBeatMarkers; }
-    void setShowSpectrogram(bool show);
-    bool getShowSpectrogram() const { return showSpectrogram; }
-    void setShowBeatEnergy(bool show);
-    bool getShowBeatEnergy() const { return showBeatEnergy; }
     void analyzeBeats(); // Запуск анализа ударных
     */
 
@@ -77,6 +73,7 @@ protected:
 
 private:
     void drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
+    void drawBeatWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
     void drawWaveformChannel(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
     void drawGrid(QPainter& painter, const QRect& rect);
     void drawBeatLines(QPainter& painter, const QRect& rect);
@@ -84,12 +81,6 @@ private:
     void drawBarMarkers(QPainter& painter, const QRectF& rect);
     void drawBeatDeviations(QPainter& painter, const QRectF& rect);
     void drawLoopMarkers(QPainter& painter, const QRect& rect);
-    // Новые методы рисования (временно отключены)
-    /*
-    void drawBeatMarkers(QPainter& painter, const QRectF& rect); // Новый метод
-    void drawSpectrogram(QPainter& painter, const QRectF& rect); // Новый метод
-    void drawBeatEnergy(QPainter& painter, const QRectF& rect); // Новый метод
-    */
     QPointF sampleToPoint(int sampleIndex, float value, const QRectF& rect) const;
     void adjustHorizontalOffset(float delta);
     void adjustZoomLevel(float delta);
@@ -117,9 +108,7 @@ private:
     bool showTimeDisplay;
     bool showBarsDisplay;
     bool showBeatDeviations;
-    bool showBeatMarkers; // Новые флаги визуализации
-    bool showSpectrogram;
-    bool showBeatEnergy;
+    bool showBeatWaveform; // Показывать силуэт ударных поверх волны (в стиле VirtualDJ)
     int beatsPerBar;
     
     WaveformColors colors; // Объект для управления цветами

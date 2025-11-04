@@ -24,6 +24,7 @@
 #include <QUndoStack>
 #include "waveformview.h"
 #include "pitchgridwidget.h"
+#include "metronomecontroller.h"
 // #include "beatvisualizationsettingsdialog.h"
 
 QT_BEGIN_NAMESPACE
@@ -77,10 +78,7 @@ private slots:
     void setRussianLanguage();
     void setEnglishLanguage();
     void toggleBeatDeviations();
-    void showBeatVisualizationSettings();
-    void toggleBeatMarkers();
-    void toggleSpectrogram();
-    void toggleBeatEnergy();
+    void toggleBeatWaveform();
 
 private:
     void createMenus();
@@ -97,7 +95,6 @@ private:
     void resetAudioState();
     void processAudioFile(const QString& filePath);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
-    void createSimpleMetronomeSound();
     QString formatTime(qint64 msPosition);
     void updateHorizontalScrollBar(float zoom);
     void updateHorizontalScrollBarFromOffset(float offset);
@@ -136,10 +133,7 @@ private:
     QAction *loopEndAct;
     QAction *togglePitchGridAct;
     QAction *toggleBeatDeviationsAct;
-    QAction *beatVisualizationSettingsAct;
-    QAction *toggleBeatMarkersAct;
-    QAction *toggleSpectrogramAct;
-    QAction *toggleBeatEnergyAct;
+    QAction *toggleBeatWaveformAct;
     QAction *russianAction;
     QAction *englishAction;
 
@@ -158,14 +152,7 @@ private:
     QSettings settings;
 
     // Metronome components
-    QTimer *metronomeTimer;
-    QMediaPlayer *metronomeSound;
-    QSoundEffect *metronomeSoundEffect;
-    bool isMetronomeEnabled;
-    qint64 lastBeatTime;
-    int strongBeatVolume;
-    int weakBeatVolume;
-    int currentBeatNumber;
+    MetronomeController *metronomeController;
     
     // Loop components
     bool isLoopEnabled;

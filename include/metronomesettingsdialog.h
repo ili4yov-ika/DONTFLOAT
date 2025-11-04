@@ -4,6 +4,10 @@
 #include <QDialog>
 #include <QSettings>
 #include <QSoundEffect>
+#include <QMediaPlayer>
+#include <QAudioOutput>
+
+class MetronomeController; // Forward declaration
 
 QT_BEGIN_NAMESPACE
 class QSpinBox;
@@ -21,21 +25,29 @@ class MetronomeSettingsDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit MetronomeSettingsDialog(QWidget *parent = nullptr);
+    explicit MetronomeSettingsDialog(QWidget *parent = nullptr, MetronomeController *controller = nullptr);
     ~MetronomeSettingsDialog();
 
 private slots:
     void saveSettings();
     void loadSettings();
     void onTestButtonClicked();
+    void onTestWeakButtonClicked();
     void onSelectSoundButtonClicked();
     void onStrongBeatVolumeChanged(int value);
     void onWeakBeatVolumeChanged(int value);
 
 private:
+    void createMetronomeSound();
+    void playTestSound(int volume, bool isStrong);
+    void updateSoundStatus();
+
     Ui::MetronomeSettingsDialog *ui;
     QSettings settings;
-    QSoundEffect *metronomeSound; // Объект для тестового воспроизведения
+    MetronomeController *metronomeController; // Ссылка на контроллер метронома
+    QSoundEffect *metronomeSoundEffect; // Объект для тестового воспроизведения
+    QMediaPlayer *metronomePlayer; // Альтернативный способ воспроизведения
+    QString metronomeSoundFile; // Путь к временному файлу звука
 };
 
 #endif // METRONOMESETTINGSDIALOG_H
