@@ -18,5 +18,39 @@
             "console": "externalTerminal",
             "preLaunchTask": "CMake: Build Debug (if CMake installed)"
         },
+        {
+            "name": "Run BPM File Test",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/donfloat_file_test.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;${env:PATH}"
+                }
+            ],
+            "console": "externalTerminal",
+            "preLaunchTask": "CMake: Build Tests (if CMake installed)"
+        },
+        {
+            "name": "Run Unit Tests",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/donfloat_test.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;${env:PATH}"
+                }
+            ],
+            "console": "externalTerminal",
+            "preLaunchTask": "CMake: Build Tests (if CMake installed)"
+        }
     ]
 }
