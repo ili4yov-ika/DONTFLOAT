@@ -24,6 +24,7 @@ void BeatFixCommand::undo()
         waveformView->setAudioData(originalAudioData);
         waveformView->setBeatInfo(beatInfo);
         waveformView->setBPM(bpmValue);
+        waveformView->setBeatsAligned(false); // Отменяем выравнивание
     }
 }
 
@@ -49,5 +50,6 @@ void BeatFixCommand::redo()
             }
         }
         waveformView->setBPM(bpmValue);
+        waveformView->setBeatsAligned(true); // Применяем выравнивание
     }
 } 

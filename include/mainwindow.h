@@ -79,6 +79,7 @@ private slots:
     void setEnglishLanguage();
     void toggleBeatDeviations();
     void toggleBeatWaveform();
+    void applyTimeStretch();
 
 private:
     void createMenus();
@@ -136,6 +137,7 @@ private:
     QAction *toggleBeatWaveformAct;
     QAction *russianAction;
     QAction *englishAction;
+    QAction *applyTimeStretchAct;
 
     // File management
     QString currentFileName;

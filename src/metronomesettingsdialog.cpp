@@ -155,6 +155,7 @@ void MetronomeSettingsDialog::onTestWeakButtonClicked()
 
 void MetronomeSettingsDialog::playTestSound(int volume, bool isStrong)
 {
+    Q_UNUSED(isStrong); // Параметр пока не используется
     if (metronomeSoundFile.isEmpty()) {
         qWarning() << "Metronome sound file not created";
         return;

@@ -61,6 +61,45 @@ DONTFLOAT/
 - **DONTFLOAT.pro**: Файл qmake
 - **resources.qrc**: Ресурсы Qt
 
+### Сборка проекта
+
+#### CMake (рекомендуется)
+```bash
+# Создание директории сборки
+mkdir build
+cd build
+
+# Конфигурация проекта
+cmake ..
+
+# Сборка
+cmake --build . --config Debug
+# или для Release
+cmake --build . --config Release
+```
+
+**Особенности сборки**:
+- Проект поддерживает языки C и C++ (`LANGUAGES C CXX`)
+- C файлы kiss_fft компилируются отдельно с установкой `LANGUAGE C`
+- Автоматическая обработка MOC/QT для Qt классов
+- Поддержка MSVC 2022 и MinGW
+
+#### qmake (альтернатива)
+```bash
+# Генерация Makefile
+qmake DONTFLOAT.pro
+
+# Сборка
+mingw32-make  # для MinGW
+# или
+nmake         # для MSVC
+```
+
+**Требования**:
+- Qt 6.8.3 или 6.9.3
+- MSVC 2022 64-bit или MinGW 64-bit
+- CMake 3.16 или выше
+
 ## Система команд (Command Pattern)
 
 ### Базовый класс Command

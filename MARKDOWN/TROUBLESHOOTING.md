@@ -6,7 +6,25 @@
 
 ## Проблемы компиляции
 
-### 1. Ошибка: 'class WaveformAnalyzer' has no member named 'loadAudioFile'
+### 1. Ошибки линковки с kiss_fft (LNK2019)
+
+**Проблема**: Ошибки типа `undefined reference to kiss_fft_alloc`, `kiss_fft`, `kiss_fftr_alloc` и т.д.
+
+**Причина**: C файлы kiss_fft компилировались как C++, что приводило к проблемам с линковкой.
+
+**Решение** (исправлено 2025-01-27):
+1. Добавлен язык C в `project()`: `LANGUAGES C CXX`
+2. Разделены C++ и C файлы в `CMakeLists.txt`
+3. Установлен `LANGUAGE C` для C файлов:
+```cmake
+set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
+    LANGUAGE C
+)
+```
+
+**Статус**: ✅ Исправлено в CMakeLists.txt
+
+### 2. Ошибка: 'class WaveformAnalyzer' has no member named 'loadAudioFile'
 
 **Проблема**: Функция `loadAudioFile` не существовала в классе `WaveformAnalyzer`.
 
@@ -23,7 +41,7 @@ bool loadAudioFile(const QString& /*filePath*/, QVector<float>& samples, int& sa
 }
 ```
 
-### 2. Предупреждение: unused parameter 'error' [-Wunused-parameter]
+### 3. Предупреждение: unused parameter 'error' [-Wunused-parameter]
 
 **Проблема**: Неиспользуемый параметр в lambda функции.
 
@@ -36,7 +54,7 @@ bool loadAudioFile(const QString& /*filePath*/, QVector<float>& samples, int& sa
 });
 ```
 
-### 3. Ошибка: 'connect' was not declared in this scope
+### 4. Ошибка: 'connect' was not declared in this scope
 
 **Проблема**: Отсутствовал заголовок `<QObject>` для макроса `connect`.
 
@@ -251,10 +269,31 @@ for (int i = 0; i < totalSamples; ++i) {
 
 **Самый эффективный способ решения большинства проблем:**
 
+#### CMake:
 ```cmd
-# В Qt Creator:
+# Очистка и пересборка
+cd build
+cmake --build . --target clean
+cmake ..
+cmake --build . --config Debug
+```
+
+#### Qt Creator:
+```cmd
 Build → Clean All
 Build → Rebuild All
+```
+
+#### qmake:
+```cmd
+# Очистка
+mingw32-make clean
+# или
+nmake clean
+
+# Пересборка
+qmake DONTFLOAT.pro
+mingw32-make
 ```
 
 ### 2. Проверка Qt библиотек

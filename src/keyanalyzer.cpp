@@ -125,7 +125,7 @@ KeyAnalyzer::AnalysisResult KeyAnalyzer::analyzeKeyUsingQM(const QVector<float>&
                                  doubleSamples.begin() + i + frameSize);
             
             // Обрабатываем кадр (возвращает индекс тональности)
-            int keyIndex = keyDetector.process(frame.data());
+            Q_UNUSED(keyDetector.process(frame.data())); // Результат пока не используется
             
             // Получаем хроматический вектор для кадра (24 элемента: 12 мажор + 12 минор)
             double* keyStrengths = keyDetector.getKeyStrengths();

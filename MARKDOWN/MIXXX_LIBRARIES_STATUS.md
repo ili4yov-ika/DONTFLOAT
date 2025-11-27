@@ -1,7 +1,8 @@
 # Статус подключения библиотек Mixxx
 
 **Дата проверки**: 2025-01-27  
-**Дата подключения**: 2025-01-27
+**Дата подключения**: 2025-01-27  
+**Дата исправления сборки**: 2025-01-27
 
 ## Обзор
 
@@ -22,26 +23,70 @@
 
 ### ✅ Подключение включено (2025-01-27)
 
-#### CMakeLists.txt (строки 123-179)
+#### CMakeLists.txt (строки 127-205)
 
 ```cmake
 # Third-party: Mixxx qm-dsp
 set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
 if(EXISTS ${QM_DSP_ROOT})
-    # Используем те же файлы, что и Mixxx
-    set(QM_DSP_SOURCES
+    # Разделяем C++ и C файлы
+    set(QM_DSP_CPP_SOURCES
         ${QM_DSP_ROOT}/base/Pitch.cpp
+        ${QM_DSP_ROOT}/dsp/chromagram/Chromagram.cpp
+        ${QM_DSP_ROOT}/dsp/chromagram/ConstantQ.cpp
+        ${QM_DSP_ROOT}/dsp/keydetection/GetKeyMode.cpp
         ${QM_DSP_ROOT}/dsp/onsets/DetectionFunction.cpp
+        ${QM_DSP_ROOT}/dsp/onsets/PeakPicking.cpp
+        ${QM_DSP_ROOT}/dsp/phasevocoder/PhaseVocoder.cpp
+        ${QM_DSP_ROOT}/dsp/rateconversion/Decimator.cpp
+        ${QM_DSP_ROOT}/dsp/signalconditioning/DFProcess.cpp
+        ${QM_DSP_ROOT}/dsp/signalconditioning/FiltFilt.cpp
+        ${QM_DSP_ROOT}/dsp/signalconditioning/Filter.cpp
+        ${QM_DSP_ROOT}/dsp/signalconditioning/Framer.cpp
+        ${QM_DSP_ROOT}/dsp/tempotracking/DownBeat.cpp
+        ${QM_DSP_ROOT}/dsp/tempotracking/TempoTrack.cpp
         ${QM_DSP_ROOT}/dsp/tempotracking/TempoTrackV2.cpp
-        # ... и другие файлы
+        ${QM_DSP_ROOT}/dsp/tonal/ChangeDetectionFunction.cpp
+        ${QM_DSP_ROOT}/dsp/tonal/TCSgram.cpp
+        ${QM_DSP_ROOT}/dsp/tonal/TonalEstimator.cpp
+        ${QM_DSP_ROOT}/dsp/transforms/FFT.cpp
+        ${QM_DSP_ROOT}/maths/Correlation.cpp
+        ${QM_DSP_ROOT}/maths/KLDivergence.cpp
+        ${QM_DSP_ROOT}/maths/MathUtilities.cpp
     )
     
-    add_library(qm_dsp STATIC ${QM_DSP_SOURCES})
+    # C файлы для kiss_fft (нужно компилировать как C)
+    set(QM_DSP_C_SOURCES
+        ${QM_DSP_ROOT}/ext/kissfft/kiss_fft.c
+        ${QM_DSP_ROOT}/ext/kissfft/tools/kiss_fftr.c
+    )
+    
+    # Создаем библиотеку с C++ и C файлами
+    add_library(qm_dsp STATIC 
+        ${QM_DSP_CPP_SOURCES}
+        ${QM_DSP_C_SOURCES}
+    )
+    
+    # Устанавливаем язык для C файлов
+    set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
+        LANGUAGE C
+    )
     
     # Определения компилятора (как в Mixxx)
     target_compile_definitions(qm_dsp PRIVATE kiss_fft_scalar=double)
     if(MSVC)
         target_compile_definitions(qm_dsp PRIVATE _USE_MATH_DEFINES)
+        target_compile_options(qm_dsp PRIVATE
+            /wd4244  # Преобразование типов
+            /wd4267  # Преобразование size_t
+            /wd4828  # Проблемы с кодировкой
+        )
+        # Для C файлов тоже подавляем предупреждения
+        set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
+            COMPILE_FLAGS "/wd4244 /wd4267 /wd4828"
+        )
+    elseif(UNIX)
+        target_compile_definitions(qm_dsp PRIVATE USE_PTHREADS)
     endif()
     
     target_include_directories(qm_dsp SYSTEM PUBLIC 
@@ -54,10 +99,14 @@ if(EXISTS ${QM_DSP_ROOT})
 endif()
 ```
 
-**Исправления MSVC**:
+**Исправления сборки (2025-01-27)**:
+- ✅ Добавлен язык C в `project()`: `LANGUAGES C CXX`
+- ✅ Разделены C++ и C файлы для правильной компиляции
+- ✅ Установлен `LANGUAGE C` для C файлов kiss_fft
 - ✅ Добавлено `_USE_MATH_DEFINES` для MSVC (для M_PI и других математических констант)
 - ✅ Используются только необходимые файлы (как в Mixxx)
 - ✅ Правильные пути включений
+- ✅ Исправлена обработка MOC для тестов (AUTOMOC ON, добавлены заголовочные файлы)
 
 #### DONTFLOAT.pro
 
@@ -114,6 +163,9 @@ endif()
 2. ✅ Добавлены правильные определения компилятора
 3. ✅ Настроены правильные пути включений
 4. ✅ Добавлена поддержка как CMake, так и qmake
+5. ✅ Исправлена компиляция C файлов kiss_fft (разделение C/C++ файлов)
+6. ✅ Исправлена обработка MOC для тестов
+7. ✅ Проект успешно собирается через CMake (MSVC 2022)
 
 ## Статус
 
@@ -122,7 +174,9 @@ endif()
 1. ✅ Код раскомментирован в `CMakeLists.txt`
 2. ✅ Исправлены проблемы совместимости MSVC
 3. ✅ Добавлена поддержка в `DONTFLOAT.pro` для qmake
-4. ⏳ **Требуется**: Проверка компиляции проекта
+4. ✅ Исправлена компиляция C файлов kiss_fft
+5. ✅ Исправлена обработка MOC для тестов
+6. ✅ **Проверено**: Проект успешно собирается через CMake (MSVC 2022)
 
 ### Текущая реализация
 

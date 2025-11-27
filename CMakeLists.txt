@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(DONTFLOAT VERSION 1.0 LANGUAGES CXX)
+project(DONTFLOAT VERSION 1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Widgets
     Multimedia
     MultimediaWidgets
+    Test
 )
 
 # Add source files
@@ -55,7 +56,8 @@ set(SOURCES
     src/metronomecontroller.cpp
     src/beatfixcommand.cpp
     src/beatvisualizer.cpp
-    src/beatvisualizationsettingsdialog.cpp
+    src/timestretchcommand.cpp
+    src/timestretchprocessor.cpp
 )
 
 # Add header files
@@ -73,7 +75,8 @@ set(HEADERS
     include/metronomecontroller.h
     include/beatfixcommand.h
     include/beatvisualizer.h
-    include/beatvisualizationsettingsdialog.h
+    include/timestretchcommand.h
+    include/timestretchprocessor.h
 )
 
 # Add UI files
@@ -81,7 +84,6 @@ set(UI_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/mainwindow.ui
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/loadfiledialog.ui
     ${CMAKE_CURRENT_SOURCE_DIR}/ui/metronomesettingsdialog.ui
-    ${CMAKE_CURRENT_SOURCE_DIR}/ui/beatvisualizationsettingsdialog.ui
 )
 
 # Add resource files
@@ -126,7 +128,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
 if(EXISTS ${QM_DSP_ROOT})
     # Используем те же файлы, что и Mixxx (из их CMakeLists.txt)
-    set(QM_DSP_SOURCES
+    set(QM_DSP_CPP_SOURCES
         ${QM_DSP_ROOT}/base/Pitch.cpp
         ${QM_DSP_ROOT}/dsp/chromagram/Chromagram.cpp
         ${QM_DSP_ROOT}/dsp/chromagram/ConstantQ.cpp
@@ -146,20 +148,46 @@ if(EXISTS ${QM_DSP_ROOT})
         ${QM_DSP_ROOT}/dsp/tonal/TCSgram.cpp
         ${QM_DSP_ROOT}/dsp/tonal/TonalEstimator.cpp
         ${QM_DSP_ROOT}/dsp/transforms/FFT.cpp
-        ${QM_DSP_ROOT}/ext/kissfft/kiss_fft.c
-        ${QM_DSP_ROOT}/ext/kissfft/tools/kiss_fftr.c
         ${QM_DSP_ROOT}/maths/Correlation.cpp
         ${QM_DSP_ROOT}/maths/KLDivergence.cpp
         ${QM_DSP_ROOT}/maths/MathUtilities.cpp
     )
     
-    add_library(qm_dsp STATIC ${QM_DSP_SOURCES})
+    # C файлы для kiss_fft (нужно компилировать как C)
+    set(QM_DSP_C_SOURCES
+        ${QM_DSP_ROOT}/ext/kissfft/kiss_fft.c
+        ${QM_DSP_ROOT}/ext/kissfft/tools/kiss_fftr.c
+    )
+    
+    # Создаем библиотеку с C++ и C файлами
+    add_library(qm_dsp STATIC 
+        ${QM_DSP_CPP_SOURCES}
+        ${QM_DSP_C_SOURCES}
+    )
+    
+    # Устанавливаем язык для C файлов
+    set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
+        LANGUAGE C
+    )
     
     # Определения компилятора (как в Mixxx)
     target_compile_definitions(qm_dsp PRIVATE kiss_fft_scalar=double)
     if(MSVC)
         # MSVC требует это для M_PI и других математических констант
         target_compile_definitions(qm_dsp PRIVATE _USE_MATH_DEFINES)
+        # Подавляем предупреждения компилятора для внешней библиотеки Mixxx
+        # C4244: преобразование типов (double->float, int64_t->int, size_t->int) - нормально для библиотеки
+        # C4267: преобразование size_t в меньший тип - нормально для библиотеки
+        # C4828: проблемы с кодировкой файла - не критично
+        target_compile_options(qm_dsp PRIVATE
+            /wd4244  # Преобразование типов с возможной потерей данных
+            /wd4267  # Преобразование size_t в меньший тип
+            /wd4828  # Проблемы с кодировкой файла
+        )
+        # Для C файлов тоже подавляем предупреждения
+        set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
+            COMPILE_FLAGS "/wd4244 /wd4267 /wd4828"
+        )
     elseif(UNIX)
         target_compile_definitions(qm_dsp PRIVATE USE_PTHREADS)
     endif()
@@ -199,59 +227,60 @@ install(TARGETS ${PROJECT_NAME}
 # Enable testing
 enable_testing()
 
-# Add test executable (unit tests)
-add_executable(donfloat_test
-    tests/bpm_test.cpp
+# Функция для создания тестового исполняемого файла
+function(add_qt_test test_name)
+    # Все остальные аргументы - исходные файлы
+    set(test_sources ${ARGN})
+    
+    add_executable(${test_name} ${test_sources})
+
+    # Автоматическая обработка MOC для Qt Test и всех исходных файлов
+    set_target_properties(${test_name} PROPERTIES
+        AUTOMOC ON
+        AUTOUIC ON
+    )
+
+    # Подключаем зависимости
+    target_link_libraries(${test_name} PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Multimedia
+        Qt6::MultimediaWidgets
+        Qt6::Test
+    )
+
+    # Директории включений
+    target_include_directories(${test_name} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    # Подключаем библиотеку qm_dsp если доступна
+    if(TARGET qm_dsp)
+        target_link_libraries(${test_name} PRIVATE qm_dsp)
+        target_compile_definitions(${test_name} PRIVATE USE_MIXXX_QM_DSP)
+    endif()
+
+    # Добавляем тест в CTest
+    add_test(NAME ${test_name} COMMAND ${test_name})
+    
+    # Устанавливаем рабочую директорию для тестов с файлами
+    if(${test_name} MATCHES ".*file.*")
+        set_tests_properties(${test_name} PROPERTIES
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+    endif()
+endfunction()
+
+# BPM Analyzer тест (работа с реальными файлами из source4test)
+add_qt_test(bpm_analyzer_test
+    tests/bpm_analyzer_test.cpp
     src/bpmanalyzer.cpp
 )
 
-# Add file-based BPM test executable
-add_executable(donfloat_file_test
-    tests/bpm_file_test.cpp
-    src/bpmanalyzer.cpp
-)
-
-# Link test with Qt and project libraries
-target_link_libraries(donfloat_test PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Multimedia
-    Qt6::MultimediaWidgets
-)
-
-# Link file test with Qt and project libraries
-target_link_libraries(donfloat_file_test PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Multimedia
-    Qt6::MultimediaWidgets
-)
-
-# Include directories for tests
-target_include_directories(donfloat_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-target_include_directories(donfloat_file_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-# Add tests to CTest
-add_test(NAME donfloat_bpm_test COMMAND donfloat_test)
-add_test(NAME donfloat_file_test COMMAND donfloat_file_test)
-
-# Set test properties
-set_tests_properties(donfloat_bpm_test PROPERTIES
-    LABELS "bpm;audio;unit"
-    DESCRIPTION "BPM analysis and audio processing unit tests"
-)
-
-set_tests_properties(donfloat_file_test PROPERTIES
+set_tests_properties(bpm_analyzer_test PROPERTIES
     LABELS "bpm;audio;integration;files"
-    DESCRIPTION "BPM analysis tests on real audio files from tests/source4test"
+    DESCRIPTION "BPM analyzer tests on real audio files from tests/source4test"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )

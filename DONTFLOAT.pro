@@ -68,7 +68,9 @@ SOURCES += \
         src/loadfiledialog.cpp \
         src/metronomesettingsdialog.cpp \
         src/metronomecontroller.cpp \
-        src/beatfixcommand.cpp
+        src/beatfixcommand.cpp \
+        src/timestretchcommand.cpp \
+        src/timestretchprocessor.cpp
         # src/beatvisualizer.cpp
         # src/beatvisualizationsettingsdialog.cpp
 
@@ -84,7 +86,9 @@ HEADERS += \
         include/loadfiledialog.h \
         include/metronomesettingsdialog.h \
         include/metronomecontroller.h \
-        include/beatfixcommand.h
+        include/beatfixcommand.h \
+        include/timestretchcommand.h \
+        include/timestretchprocessor.h
         # include/beatvisualizer.h
         # include/beatvisualizationsettingsdialog.h
 

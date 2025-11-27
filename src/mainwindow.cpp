@@ -1,5 +1,6 @@
 #include "../include/mainwindow.h"
 #include "../include/beatfixcommand.h"
+#include "../include/timestretchcommand.h"
 #include "ui_mainwindow.h"
 #include <QtWidgets/QApplication>
 #include <QtCore/QFileInfo>
@@ -1219,7 +1220,7 @@ void MainWindow::createActions()
 
     // Metronome action
     metronomeAct = new QAction(QString::fromUtf8("Метроном"), this);
-    metronomeAct->setShortcut(QKeySequence(Qt::Key_M));
+    metronomeAct->setShortcut(QKeySequence(Qt::Key_T));
     metronomeAct->setCheckable(true);
     connect(metronomeAct, &QAction::triggered, this, &MainWindow::toggleMetronome);
 
@@ -1270,6 +1271,12 @@ void MainWindow::createActions()
     englishAction = new QAction(QString::fromUtf8("English"), this);
     englishAction->setCheckable(true);
     connect(englishAction, &QAction::triggered, this, &MainWindow::setEnglishLanguage);
+    
+    // Time stretch action
+    applyTimeStretchAct = new QAction(QString::fromUtf8("Применить сжатие-растяжение"), this);
+    applyTimeStretchAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
+    applyTimeStretchAct->setStatusTip(QString::fromUtf8("Применить сжатие-растяжение аудио по меткам с тонкомпенсацией"));
+    connect(applyTimeStretchAct, &QAction::triggered, this, &MainWindow::applyTimeStretch);
 }
 
 void MainWindow::createMenus()
@@ -1285,6 +1292,8 @@ void MainWindow::createMenus()
     editMenu = menuBar()->addMenu(QString::fromUtf8("&Правка"));
     editMenu->addAction(undoAct);
     editMenu->addAction(redoAct);
+    editMenu->addSeparator();
+    editMenu->addAction(applyTimeStretchAct);
     editMenu->addSeparator();
 
     // View menu
@@ -1337,6 +1346,23 @@ void MainWindow::setupShortcuts()
         qDebug() << "QShortcut Shift+B activated";
         clearLoopEnd();
     });
+    
+    // Добавляем QShortcut для клавиши M (метки)
+    QShortcut* markerShortcut = new QShortcut(QKeySequence(Qt::Key_M), this);
+    markerShortcut->setContext(Qt::ApplicationShortcut);
+    connect(markerShortcut, &QShortcut::activated, this, [this]() {
+        qDebug() << "QShortcut M activated - adding marker";
+        if (waveformView) {
+            qint64 playbackPos = waveformView->getPlaybackPosition();
+            qint64 samplePos = (playbackPos * waveformView->getSampleRate()) / 1000;
+            qDebug() << "Adding marker at playbackPos:" << playbackPos << "ms, samplePos:" << samplePos;
+            waveformView->addMarker(samplePos);
+            qDebug() << "Marker added, total markers:" << waveformView->getMarkers().size();
+            statusBar()->showMessage(tr("Метка добавлена"), 2000);
+        } else {
+            qDebug() << "waveformView is null!";
+        }
+    });
 
     // Добавляем действия в окно для обработки клавиш
     addAction(playPauseAct);
@@ -1360,7 +1386,7 @@ void MainWindow::showKeyboardShortcuts()
         "<h3>Горячие клавиши</h3>"
         "<p><b>Пробел или P</b> - Воспроизведение/Пауза</p>"
         "<p><b>S</b> - Стоп</p>"
-        "<p><b>M</b> - Включить/выключить метроном</p>"
+        "<p><b>T</b> - Включить/выключить метроном</p>"
         "<p><b>A</b> - Установить точку A (начало цикла)</p>"
         "<p><b>B</b> - Установить точку B (конец цикла)</p>"
         "<p><b>Shift+A</b> - Удалить точку A</p>"
@@ -1370,6 +1396,7 @@ void MainWindow::showKeyboardShortcuts()
         "<p><b>Ctrl+O</b> - Открыть файл</p>"
         "<p><b>Ctrl+S</b> - Сохранить файл</p>"
         "<p><b>Ctrl+G</b> - Переключить питч-сетку</p>"
+        "<p><b>M</b> - Добавить метку в текущей позиции</p>"
     ));
 
     auto buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok);
@@ -1624,6 +1651,11 @@ void MainWindow::processAudioFile(const QString& filePath)
                 BeatFixCommand* command = new BeatFixCommand(waveformView, originalData, fixedData, analysis.bpm, analysis.beats);
                 undoStack->push(command);
                 
+                // Устанавливаем флаг выравнивания
+                if (waveformView) {
+                    waveformView->setBeatsAligned(true);
+                }
+                
                 dialog.updateProgress(QString::fromUtf8("Выравнивание завершено"), 100);
                 statusBar()->showMessage(QString::fromUtf8("Доли выровнены по BPM: %1").arg(analysis.bpm, 0, 'f', 1), 2000);
                 hasUnsavedChanges = true;
@@ -1638,6 +1670,7 @@ void MainWindow::processAudioFile(const QString& filePath)
                 
                 waveformView->setAudioData(audioData);
                 waveformView->setBeatInfo(analysis.beats);
+                waveformView->setBeatsAligned(false); // Доли не выровнены, если пропустили выравнивание
                 ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
                 waveformView->setBPM(analysis.bpm);
                 
@@ -1676,6 +1709,7 @@ void MainWindow::processAudioFile(const QString& filePath)
             
             waveformView->setAudioData(audioData);
             waveformView->setBeatInfo(analysis.beats);
+            waveformView->setBeatsAligned(false); // Новый анализ - доли не выровнены
             ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
             waveformView->setBPM(analysis.bpm);
             
@@ -1950,6 +1984,16 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         increaseBPM();
     } else if (event->key() == Qt::Key_Down && event->modifiers() == Qt::ControlModifier) {
         decreaseBPM();
+    } else if (event->key() == Qt::Key_M) {
+        // Добавляем метку в текущей позиции воспроизведения
+        if (waveformView) {
+            qint64 playbackPos = waveformView->getPlaybackPosition();
+            qint64 samplePos = (playbackPos * waveformView->getSampleRate()) / 1000;
+            qDebug() << "Adding marker at playbackPos:" << playbackPos << "ms, samplePos:" << samplePos;
+            waveformView->addMarker(samplePos);
+            qDebug() << "Marker added, total markers:" << waveformView->getMarkers().size();
+            statusBar()->showMessage(tr("Метка добавлена"), 2000);
+        }
     } else {
         QMainWindow::keyPressEvent(event);
     }
@@ -2766,6 +2810,92 @@ void MainWindow::setEnglishLanguage()
     englishAction->setChecked(true);
     russianAction->setChecked(false);
     qDebug() << "English language selected";
+}
+
+void MainWindow::applyTimeStretch()
+{
+    if (!waveformView) {
+        statusBar()->showMessage(QString::fromUtf8("Ошибка: WaveformView не инициализирован"), 3000);
+        return;
+    }
+    
+    // Получаем текущие метки
+    QVector<Marker> currentMarkers = waveformView->getMarkers();
+    
+    if (currentMarkers.size() < 2) {
+        QMessageBox::warning(this, 
+                            QString::fromUtf8("Недостаточно меток"),
+                            QString::fromUtf8("Для применения сжатия-растяжения необходимо минимум 2 метки.\n"
+                                            "Используйте клавишу M для добавления меток."));
+        return;
+    }
+    
+    // Получаем исходные данные
+    const QVector<QVector<float>>& oldData = waveformView->getAudioData();
+    
+    if (oldData.isEmpty()) {
+        statusBar()->showMessage(QString::fromUtf8("Ошибка: нет загруженного аудио"), 3000);
+        return;
+    }
+    
+    // Применяем сжатие-растяжение
+    QVector<QVector<float>> newData = waveformView->applyTimeStretch(currentMarkers);
+    
+    if (newData.isEmpty() || newData[0].isEmpty()) {
+        statusBar()->showMessage(QString::fromUtf8("Ошибка при обработке аудио"), 3000);
+        return;
+    }
+    
+    // Обновляем метки: пересчитываем позиции на основе обработанных сегментов
+    QVector<Marker> newMarkers = currentMarkers;
+    qint64 currentOutputPos = 0;
+    
+    // Пересчитываем позиции меток на основе обработанных сегментов
+    for (int i = 0; i < newMarkers.size(); ++i) {
+        if (i == 0) {
+            // Первая метка всегда в позиции 0
+            newMarkers[i].position = 0;
+            newMarkers[i].originalPosition = 0;
+            currentOutputPos = 0;
+        } else {
+            // Вычисляем новую позицию на основе предыдущего сегмента
+            const Marker& prevMarker = currentMarkers[i - 1];
+            const Marker& currMarker = currentMarkers[i];
+            
+            qint64 originalDistance = currMarker.originalPosition - prevMarker.originalPosition;
+            qint64 targetDistance = currMarker.position - prevMarker.position;
+            
+            if (originalDistance > 0) {
+                float stretchFactor = static_cast<float>(targetDistance) / static_cast<float>(originalDistance);
+                qint64 processedLength = static_cast<qint64>(originalDistance * stretchFactor);
+                currentOutputPos += processedLength;
+            }
+            
+            newMarkers[i].position = currentOutputPos;
+            newMarkers[i].originalPosition = currentOutputPos;
+        }
+    }
+    
+    // Если последняя метка - конечная, её позиция должна быть в конце нового аудио
+    if (!newMarkers.isEmpty() && newMarkers.last().isEndMarker) {
+        qint64 newSize = newData[0].size();
+        newMarkers.last().position = newSize - 1;
+        newMarkers.last().originalPosition = newSize - 1;
+    }
+    
+    // Создаем команду для undo/redo
+    TimeStretchCommand* command = new TimeStretchCommand(
+        waveformView,
+        oldData,
+        newData,
+        currentMarkers,
+        newMarkers,
+        QString::fromUtf8("Применить сжатие-растяжение")
+    );
+    
+    undoStack->push(command);
+    
+    statusBar()->showMessage(QString::fromUtf8("Сжатие-растяжение применено успешно"), 3000);
 }
 
 void MainWindow::toggleBeatDeviations()
