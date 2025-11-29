@@ -2883,6 +2883,29 @@ void MainWindow::applyTimeStretch()
         newMarkers.last().originalPosition = newSize - 1;
     }
     
+    // Синхронизируем дополнительные представления после применения изменений
+    auto syncAfterApply = [this](const QVector<QVector<float>>& processedData, const QVector<Marker>&) {
+        if (pitchGridWidget) {
+            pitchGridWidget->setAudioData(processedData);
+            pitchGridWidget->setSampleRate(waveformView->getSampleRate());
+            pitchGridWidget->update();
+        }
+
+        // Останавливаем воспроизведение, чтобы не было расхождения между новой волной и старым медиафайлом
+        if (mediaPlayer) {
+            mediaPlayer->stop();
+        }
+
+        // Сбрасываем визуальные индикаторы позиции
+        currentPosition = 0;
+        waveformView->setPlaybackPosition(0);
+        if (pitchGridWidget) {
+            pitchGridWidget->setPlaybackPosition(0);
+        }
+
+        updateHorizontalScrollBar(waveformView->getZoomLevel());
+    };
+    
     // Создаем команду для undo/redo
     TimeStretchCommand* command = new TimeStretchCommand(
         waveformView,
@@ -2890,10 +2913,12 @@ void MainWindow::applyTimeStretch()
         newData,
         currentMarkers,
         newMarkers,
-        QString::fromUtf8("Применить сжатие-растяжение")
+        QString::fromUtf8("Применить сжатие-растяжение"),
+        syncAfterApply
     );
     
     undoStack->push(command);
+    hasUnsavedChanges = true;
     
     statusBar()->showMessage(QString::fromUtf8("Сжатие-растяжение применено успешно"), 3000);
 }
