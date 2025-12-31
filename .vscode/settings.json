@@ -1,7 +1,5 @@
 {
     "cmake.buildDirectory": "${workspaceFolder}/build",
-    "cmake.generator": "Visual Studio 17 2022",
-    "cmake.platform": "x64",
     "cmake.configureOnOpen": true,
     "cmake.buildBeforeRun": true,
     "cmake.autoSelectActiveFolder": true,
@@ -11,46 +9,30 @@
         "*.ts": "xml"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "cmake.cmakePath": "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe",
-    "C_Cpp.default.intelliSenseMode": "windows-msvc-x64",
-    "C_Cpp.default.compilerPath": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.40.33807/bin/Hostx64/x64/cl.exe",
     "C_Cpp.default.cppStandard": "c++17",
     "C_Cpp.default.includePath": [
         "${workspaceFolder}/include",
         "${workspaceFolder}/ui",
         "${workspaceFolder}/build",
-        "C:/Qt/6.9.3/msvc2022_64/include",
-        "C:/Qt/6.9.3/msvc2022_64/include/QtCore",
-        "C:/Qt/6.9.3/msvc2022_64/include/QtGui",
-        "C:/Qt/6.9.3/msvc2022_64/include/QtWidgets",
-        "C:/Qt/6.9.3/msvc2022_64/include/QtMultimedia",
-        "C:/Qt/6.9.3/msvc2022_64/include/QtMultimediaWidgets",
-        "C:/Qt/6.8.3/msvc2022_64/include",
-        "C:/Qt/6.8.3/msvc2022_64/include/QtCore",
-        "C:/Qt/6.8.3/msvc2022_64/include/QtGui",
-        "C:/Qt/6.8.3/msvc2022_64/include/QtWidgets",
-        "C:/Qt/6.8.3/msvc2022_64/include/QtMultimedia",
-        "C:/Qt/6.8.3/msvc2022_64/include/QtMultimediaWidgets"
+        "${workspaceFolder}/build/ui",
+        "${workspaceFolder}/build/moc"
     ],
     "C_Cpp.default.defines": [
         "QT_CORE_LIB",
-        "QT_GUI_LIB", 
+        "QT_GUI_LIB",
         "QT_WIDGETS_LIB",
         "QT_MULTIMEDIA_LIB",
         "QT_MULTIMEDIAWIDGETS_LIB",
-        "WIN32",
-        "_WIN32",
-        "_WINDOWS"
+        "USE_MIXXX_QM_DSP"
     ],
-    "terminal.integrated.defaultProfile.windows": "Command Prompt",
-    "terminal.integrated.profiles.windows": {
-        "Command Prompt": {
-            "path": "C:\\Windows\\System32\\cmd.exe",
-            "args": ["/k", "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat"]
-        },
-        "PowerShell": {
-            "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-            "args": ["-NoExit", "-Command", "& {C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat}"]
+    "cmake.generator": "Unix Makefiles",
+    "cmake.platform": "x64",
+    "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.profiles.linux": {
+        "bash": {
+            "path": "/bin/bash"
         }
     }
 }

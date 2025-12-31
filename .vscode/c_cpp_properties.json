@@ -49,6 +49,43 @@
             "intelliSenseMode": "windows-msvc-x64",
             "configurationProvider": "ms-vscode.cmake-tools",
             "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/ui",
+                "${workspaceFolder}/build",
+                "${workspaceFolder}/build/ui",
+                "${workspaceFolder}/build/moc",
+                "/usr/include/x86_64-linux-gnu/qt6",
+                "/usr/include/x86_64-linux-gnu/qt6/QtCore",
+                "/usr/include/x86_64-linux-gnu/qt6/QtGui",
+                "/usr/include/x86_64-linux-gnu/qt6/QtWidgets",
+                "/usr/include/x86_64-linux-gnu/qt6/QtMultimedia",
+                "/usr/include/x86_64-linux-gnu/qt6/QtMultimediaWidgets",
+                "/usr/include/x86_64-linux-gnu/qt6/QtNetwork",
+                "/usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++",
+                "/usr/include/c++/13",
+                "/usr/include/x86_64-linux-gnu/c++/13",
+                "/usr/include"
+            ],
+            "defines": [
+                "QT_CORE_LIB",
+                "QT_GUI_LIB",
+                "QT_WIDGETS_LIB",
+                "QT_MULTIMEDIA_LIB",
+                "QT_MULTIMEDIAWIDGETS_LIB",
+                "QT_NETWORK_LIB",
+                "USE_MIXXX_QM_DSP"
+            ],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "configurationProvider": "ms-vscode.cmake-tools",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
         }
     ]
 }

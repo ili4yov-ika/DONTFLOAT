@@ -51,6 +51,76 @@
             ],
             "console": "externalTerminal",
             "preLaunchTask": "CMake: Build Tests (if CMake installed)"
+        },
+        {
+            "name": "Debug DONTFLOAT (Linux - qmake)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/DONTFLOAT",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Qt: Build with make (Linux)"
+        },
+        {
+            "name": "Debug DONTFLOAT (Linux - CMake)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/DONTFLOAT",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "CMake: Build Debug (Linux)"
+        },
+        {
+            "name": "Run BPM Analyzer Test (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/bpm_analyzer_test",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "CMake: Build Debug (Linux)"
         }
     ]
 }

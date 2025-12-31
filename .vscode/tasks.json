@@ -53,6 +53,103 @@
             }
         },
         {
+            "label": "Qt: qmake6 (Linux Debug)",
+            "type": "shell",
+            "command": "qmake6",
+            "args": [
+                "DONTFLOAT.pro",
+                "CONFIG+=debug"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Run qmake6 for Qt project (Linux Debug)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "Qt: qmake6 (Linux Release)",
+            "type": "shell",
+            "command": "qmake6",
+            "args": [
+                "DONTFLOAT.pro",
+                "CONFIG+=release"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Run qmake6 for Qt project (Linux Release)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "Qt: Build with make (Linux)",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "-j$(nproc)"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Build project with make (Linux)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "Qt: qmake6 (Linux Debug)"
+        },
+        {
+            "label": "Qt: Clean (Linux)",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Clean Qt build (Linux)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
             "label": "Qt: Build with nmake",
             "type": "shell",
             "command": "build_qt.bat",
@@ -214,6 +311,108 @@
                 "cwd": "${workspaceFolder}"
             },
             "dependsOn": "CMake: Build Tests (if CMake installed)"
+        }
+        ,
+        {
+            "label": "CMake: Configure (Linux Debug)",
+            "type": "shell",
+            "command": "cmake --preset linux-debug",
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Configure project using CMake preset linux-debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Build Debug (Linux)",
+            "type": "shell",
+            "command": "cmake --build build --config Debug",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Build project in Debug mode (Linux)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Configure (Linux Debug)"
+        },
+        {
+            "label": "CMake: Configure (Linux Release)",
+            "type": "shell",
+            "command": "cmake --preset linux-release",
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Configure project using CMake preset linux-release",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Build Release (Linux)",
+            "type": "shell",
+            "command": "cmake --build build --config Release",
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Build project in Release mode (Linux)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Configure (Linux Release)"
+        },
+        {
+            "label": "CMake: Run Tests (Linux)",
+            "type": "shell",
+            "command": "ctest --test-dir build --output-on-failure",
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Run CTest in build directory",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Build Debug (Linux)"
         }
     ]
 }
