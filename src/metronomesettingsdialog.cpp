@@ -9,6 +9,9 @@
 #include <QDebug>
 #include <QEventLoop>
 #include <QTimer>
+#include <QPushButton>
+#include <QSlider>
+#include <QDialogButtonBox>
 #include <QtMultimedia/QAudioOutput>
 #include <QtMultimedia/QMediaPlayer>
 #include <cmath>

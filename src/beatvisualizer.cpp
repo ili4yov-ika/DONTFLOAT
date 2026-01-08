@@ -2,9 +2,6 @@
 #include <QDebug>
 #include <QtMath>
 #include <QPainter>
-#include <algorithm>
-#include <numeric>
-#include <cmath>
 
 // Минимальная реализация для тестирования компиляции
 BeatVisualizer::AnalysisResult BeatVisualizer::analyzeBeats(const QVector<QVector<float>>& audioData,

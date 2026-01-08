@@ -1,8 +1,10 @@
 #include "../include/waveformview.h"
-#include "../include/timestretchprocessor.h"
+#include "../include/markerstretchengine.h"
+#include "../include/timeutils.h"
 #include <QtCore/QtMath>
 #include <QtCore/QPoint>
 #include <QtCore/QRect>
+#include <QtCore/QTimer>
 #include <QtCore/QtGlobal>
 #include <QtGui/QPainter>
 #include <QtGui/QPolygon>
@@ -40,10 +42,30 @@ WaveformView::WaveformView(QWidget *parent)
     , beatsAligned(false) // По умолчанию доли не выровнены
     , beatsPerBar(4)
     , draggingMarkerIndex(-1)
+    , updateTimer(nullptr)
+    , pendingUpdate(false)
+    , realtimeProcessPending(false)
+    , lastTooltipMarkerIndex(-1)
 {
     setMinimumHeight(100);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus); // Разрешаем получение фокуса для обработки клавиш
+
+    // Инициализируем таймер для throttling обновлений (16ms ≈ 60 FPS)
+    updateTimer = new QTimer(this);
+    updateTimer->setSingleShot(true);
+    updateTimer->setInterval(16); // ~60 FPS
+    connect(updateTimer, &QTimer::timeout, this, [this]() {
+        if (pendingUpdate) {
+            if (pendingUpdateRect.isValid()) {
+                QWidget::update(pendingUpdateRect);
+            } else {
+                QWidget::update();
+            }
+            pendingUpdate = false;
+            pendingUpdateRect = QRect();
+        }
+    });
 }
 
 void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
@@ -65,13 +87,13 @@ void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
     for (const auto& channel : channels) {
         QVector<float> normalizedChannel;
         normalizedChannel.reserve(channel.size());
-        
+
         // Находим максимальное значение для нормализации
         float maxValue = 0.0f;
         for (float sample : channel) {
             maxValue = qMax(maxValue, qAbs(sample));
         }
-        
+
         // Нормализуем значения
         if (maxValue > 0.0f) {
             for (float sample : channel) {
@@ -80,15 +102,23 @@ void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
         } else {
             normalizedChannel = channel;
         }
-        
+
         audioData.append(normalizedChannel);
     }
+
+    // Сохраняем исходные данные для пересчета в реальном времени
+    originalAudioData = audioData;
 
     // Сбрасываем масштаб и смещение
     zoomLevel = 1.0f;
     horizontalOffset = 0.0f;
     gridStartSample = 0;
     emit zoomChanged(zoomLevel);
+
+    // Обновляем время всех меток при загрузке нового аудио
+    for (Marker& marker : markers) {
+        marker.updateTimeFromSamples(sampleRate);
+    }
 
     // Запускаем анализ ударных (временно отключено)
     // analyzeBeats();
@@ -115,6 +145,12 @@ void WaveformView::setZoomLevel(float zoom)
 void WaveformView::setSampleRate(int rate)
 {
     sampleRate = rate;
+
+    // Обновляем время всех меток при изменении sampleRate
+    for (Marker& marker : markers) {
+        marker.updateTimeFromSamples(sampleRate);
+    }
+
     update();
 }
 
@@ -127,47 +163,49 @@ void WaveformView::setBeatInfo(const QVector<BPMAnalyzer::BeatInfo>& newBeats)
     update();
 }
 
-void WaveformView::paintEvent(QPaintEvent*)
+void WaveformView::paintEvent(QPaintEvent* event)
 {
+    Q_UNUSED(event)
     QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-    
+    // Отключаем антиалиасинг для лучшей производительности (включаем только для меток)
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
     // Фон
     painter.fillRect(rect(), colors.getBackgroundColor());
-    
+
     // Рисуем сетку
     drawGrid(painter, rect());
-    
+
     // Рисуем волну ПЕРЕД отклонениями, чтобы отклонения были поверх
     if (!audioData.isEmpty()) {
         float channelHeight = height() / float(audioData.size());
         for (int i = 0; i < audioData.size(); ++i) {
             QRectF channelRect(0, i * channelHeight, width(), channelHeight);
             drawWaveform(painter, audioData[i], channelRect);
-            
+
             // Рисуем силуэт ударных поверх основной волны (в стиле VirtualDJ)
             if (showBeatWaveform && !beats.isEmpty()) {
                 drawBeatWaveform(painter, audioData[i], channelRect);
             }
         }
     }
-    
+
     // Рисуем отклонения битов ПОСЛЕ волны, чтобы они были поверх с прозрачностью
     drawBeatDeviations(painter, rect());
-    
+
     // Рисуем линии тактов
     drawBeatLines(painter, rect());
-    
+
     // Рисуем маркеры тактов
     QRectF markerRect(0, 0, width(), markerHeight);
     drawBarMarkers(painter, markerRect);
-    
+
     // Рисуем курсор воспроизведения
     drawPlaybackCursor(painter, rect());
 
     // Рисуем маркеры цикла
     drawLoopMarkers(painter, rect());
-    
+
     // Рисуем метки ПОСЛЕ всех остальных элементов, чтобы они были поверх
     drawMarkers(painter, rect());
 }
@@ -178,25 +216,32 @@ void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples
 
     // Количество сэмплов на пиксель с учетом масштаба
     float samplesPerPixel = float(samples.size()) / (rect.width() * zoomLevel);
-    
+
     // Вычисляем начальный сэмпл с учетом смещения и масштаба
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, samples.size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
-    
+
     // Применяем вертикальное смещение
     QRectF adjustedRect = rect;
     adjustedRect.translate(0, -verticalOffset * rect.height());
-    
+
+    const float centerY = adjustedRect.center().y();
+    const float halfHeight = adjustedRect.height() * 0.5f;
+
     for (int x = 0; x < rect.width(); ++x) {
         int currentSample = startSample + int(x * samplesPerPixel);
         int nextSample = startSample + int((x + 1) * samplesPerPixel);
-        
+
         if (currentSample >= samples.size()) break;
-        
-        // Находим минимальное и максимальное значение для текущего пикселя
+
+        // Оптимизация: используем шаг для уменьшения количества итераций
+        // при большом количестве сэмплов на пиксель (максимум 200 проверок на пиксель)
         float minValue = 0, maxValue = 0;
-        for (int s = currentSample; s < qMin(nextSample, samples.size()); ++s) {
+        int sampleCount = qMin(nextSample, samples.size()) - currentSample;
+        int step = qMax(1, sampleCount / 200);
+
+        for (int s = currentSample; s < qMin(nextSample, samples.size()); s += step) {
             minValue = qMin(minValue, samples[s]);
             maxValue = qMax(maxValue, samples[s]);
         }
@@ -211,44 +256,45 @@ void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples
         } else {
             waveColor = colors.getHighColor();
         }
-        
+
         painter.setPen(waveColor);
-        
-        // Рисуем вертикальную линию от минимума до максимума с учетом вертикального смещения
-        QPointF top = sampleToPoint(x, maxValue, adjustedRect);
-        QPointF bottom = sampleToPoint(x, minValue, adjustedRect);
-        painter.drawLine(top, bottom);
+
+        // Рисуем вертикальную линию от минимума до максимума
+        float topY = centerY - (maxValue * halfHeight);
+        float bottomY = centerY - (minValue * halfHeight);
+        painter.drawLine(QPointF(adjustedRect.x() + x, topY),
+                        QPointF(adjustedRect.x() + x, bottomY));
     }
 }
 
 void WaveformView::drawBeatWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect)
 {
     if (samples.isEmpty() || beats.isEmpty()) return;
-    
+
     // Количество сэмплов на пиксель с учетом масштаба (та же логика что и в drawWaveform)
     float samplesPerPixel = float(samples.size()) / (rect.width() * zoomLevel);
-    
+
     // Вычисляем начальный сэмпл
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, samples.size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     int endSample = qMin(samples.size(), startSample + visibleSamples);
-    
+
     // Применяем вертикальное смещение
     QRectF adjustedRect = rect;
     adjustedRect.translate(0, -verticalOffset * rect.height());
-    
+
     // Оптимизация: предвычисляем энергетическую огибающую один раз для видимой области
     // Используем упрощенный алгоритм для лучшей производительности
     const int energyWindowSize = qRound(0.02f * sampleRate); // Окно 20ms для вычисления энергии (уменьшено с 10ms)
     QVector<float> energyEnvelope;
     energyEnvelope.reserve(endSample - startSample);
-    
+
     // Вычисляем энергетическую огибающую для видимой области
     for (int s = startSample; s < endSample; ++s) {
         int localStart = qMax(startSample, s - energyWindowSize / 2);
         int localEnd = qMin(endSample, s + energyWindowSize / 2);
-        
+
         // Быстрое вычисление энергии без полного RMS
         float energy = 0.0f;
         int count = 0;
@@ -261,61 +307,61 @@ void WaveformView::drawBeatWaveform(QPainter& painter, const QVector<float>& sam
         }
         energyEnvelope.append(energy);
     }
-    
+
     // Создаем вектор для хранения энергии ударных для каждого пикселя
     QVector<float> beatEnvelope(rect.width(), 0.0f);
-    
+
     // Для каждого видимого бита применяем усиление энергии
     const int beatWindowSize = qRound(0.03f * sampleRate); // Уменьшено с 50ms до 30ms
     float maxEnergy = 0.0f;
-    
+
     // Находим максимальную энергию для нормализации
     for (float e : energyEnvelope) {
         maxEnergy = qMax(maxEnergy, e);
     }
-    
+
     if (maxEnergy <= 0.0f) return; // Нет энергии - нечего рисовать
-    
+
     // Оптимизация: обрабатываем только биты в видимой области
     for (int i = 0; i < beats.size(); ++i) {
         const auto& beat = beats[i];
         qint64 beatPos = beat.position;
-        
+
         // Пропускаем биты далеко вне видимой области
         if (beatPos < startSample - beatWindowSize || beatPos > endSample + beatWindowSize) {
             continue;
         }
-        
+
         // Вычисляем область влияния бита в пикселях
         float beatX = (beatPos - startSample) / samplesPerPixel;
-        
+
         if (beatX < -beatWindowSize / samplesPerPixel || beatX > rect.width() + beatWindowSize / samplesPerPixel) {
             continue;
         }
-        
+
         // Вычисляем диапазон влияния в пикселях
         int pixelStart = qMax(0, int(beatX - beatWindowSize / samplesPerPixel));
         int pixelEnd = qMin(int(rect.width()), int(beatX + beatWindowSize / samplesPerPixel));
-        
+
         // Применяем усиление энергии в области бита
         for (int x = pixelStart; x < pixelEnd; ++x) {
             int envelopeIndex = int(x * samplesPerPixel);
             if (envelopeIndex >= 0 && envelopeIndex < energyEnvelope.size()) {
                 float energy = energyEnvelope[envelopeIndex];
-                
+
                 // Вычисляем реальный индекс сэмпла для вычисления расстояния
                 int actualSampleIndex = startSample + envelopeIndex;
-                
+
                 // Усиливаем энергию в зависимости от близости к биту и его параметров
                 float distance = qAbs((beatPos - actualSampleIndex) / float(sampleRate)); // расстояние в секундах
                 float falloff = qMax(0.0f, 1.0f - distance * 20.0f); // затухание на расстоянии
                 float enhancedEnergy = energy * (1.0f + beat.energy * beat.confidence * falloff);
-                
+
                 beatEnvelope[x] = qMax(beatEnvelope[x], enhancedEnergy);
             }
         }
     }
-    
+
     // Нормализуем энергию относительно максимальной
     if (maxEnergy > 0.0f) {
         float normalizationFactor = 1.0f / maxEnergy;
@@ -323,17 +369,17 @@ void WaveformView::drawBeatWaveform(QPainter& painter, const QVector<float>& sam
             beatEnvelope[x] *= normalizationFactor;
         }
     }
-    
+
     // Оптимизация: рисуем одним полигоном вместо множества линий
     painter.setRenderHint(QPainter::Antialiasing, false); // Отключаем сглаживание для скорости
-    
+
     // Используем один полигон для верхней и нижней части
     QPolygonF beatPolygon;
     beatPolygon.reserve(rect.width() * 2 + 2);
-    
+
     float centerY = adjustedRect.center().y();
     float halfHeight = adjustedRect.height() * 0.5f;
-    
+
     // Верхняя часть силуэта
     bool hasPoints = false;
     for (int x = 0; x < rect.width(); ++x) {
@@ -348,12 +394,12 @@ void WaveformView::drawBeatWaveform(QPainter& painter, const QVector<float>& sam
             hasPoints = false;
         }
     }
-    
+
     // Переход к нижней части через центр
     if (!beatPolygon.isEmpty()) {
         beatPolygon.append(QPointF(adjustedRect.right(), centerY));
     }
-    
+
     // Нижняя часть силуэта (в обратном порядке)
     hasPoints = false;
     for (int x = rect.width() - 1; x >= 0; --x) {
@@ -368,12 +414,12 @@ void WaveformView::drawBeatWaveform(QPainter& painter, const QVector<float>& sam
             hasPoints = false;
         }
     }
-    
+
     // Закрываем полигон
     if (!beatPolygon.isEmpty()) {
         beatPolygon.append(beatPolygon.first());
     }
-    
+
     // Рисуем полигон одним вызовом
     if (beatPolygon.size() >= 3) {
         painter.setBrush(QBrush(QColor(255, 165, 0, 120))); // Полупрозрачная заливка
@@ -396,18 +442,18 @@ void WaveformView::drawGrid(QPainter& painter, const QRect& rect)
 void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
 {
     if (audioData.isEmpty()) return;
-    
+
     // Вычисляем длительность одного такта в сэмплах
     float samplesPerBeat = (60.0f * sampleRate) / bpm;
-    
+
     // Количество сэмплов на пиксель с учетом масштаба
     float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-    
+
     // Вычисляем начальный сэмпл с учетом смещения и масштаба
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
-    
+
     // Находим первый такт, выровненный по первой обнаруженной доле
     int firstBeat = 0;
     if (gridStartSample > 0) {
@@ -417,20 +463,20 @@ void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
     } else {
         firstBeat = int(startSample / samplesPerBeat);
     }
-    
+
     // Рисуем линии тактов с разной толщиной для сильных и слабых долей
     for (int beat = firstBeat; ; ++beat) {
         int samplePos = gridStartSample > 0
             ? int(gridStartSample + beat * samplesPerBeat)
             : int(beat * samplesPerBeat);
         if (samplePos < startSample) continue;
-        
+
         float x = (samplePos - startSample) / samplesPerPixel;
         if (x >= rect.width()) break;
-        
+
         // Определяем, является ли это сильной долей (первая доля такта)
         bool isStrongBeat = (beat % beatsPerBar) == 0;
-        
+
         // Устанавливаем толщину и цвет пера в зависимости от типа доли
         if (isStrongBeat) {
             // Сильная доля - более жирная линия
@@ -439,7 +485,7 @@ void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
             // Слабая доля - обычная линия
             painter.setPen(QPen(colors.getBeatColor(), 1.0));
         }
-        
+
         painter.drawLine(QPointF(rect.x() + x, rect.top()), QPointF(rect.x() + x, rect.bottom()));
     }
 }
@@ -450,25 +496,25 @@ void WaveformView::drawPlaybackCursor(QPainter& painter, const QRect& rect)
 
     // playbackPosition уже в миллисекундах, конвертируем в сэмплы
     qint64 cursorSample = (playbackPosition * sampleRate) / 1000;
-    
+
     // Ограничиваем позицию каретки границами аудио
     cursorSample = qBound(qint64(0), cursorSample, qint64(audioData[0].size() - 1));
-    
+
     // Используем ту же логику, что и в других методах рисования
     float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
-    
+
     // Вычисляем позицию каретки в пикселях
     float cursorX = (cursorSample - startSample) / samplesPerPixel;
-    
 
-    
+
+
     if (cursorX >= 0 && cursorX < rect.width()) {
         painter.setPen(QPen(colors.getPlayPositionColor(), 2));
         painter.drawLine(QPointF(rect.x() + cursorX, rect.top()), QPointF(rect.x() + cursorX, rect.bottom()));
-        
+
         // Рисуем треугольник на курсоре
         QPolygonF triangle;
         triangle << QPointF(cursorX - 5, rect.top() + 5)
@@ -482,22 +528,22 @@ void WaveformView::drawPlaybackCursor(QPainter& painter, const QRect& rect)
 void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
 {
     if (audioData.isEmpty()) return;
-    
+
     painter.setPen(colors.getMarkerTextColor());
     painter.setFont(QFont("Arial", 8));
-    
+
     // Вычисляем длительность одного такта в сэмплах
     float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
     float samplesPerBar = samplesPerBeat * qMax(1, beatsPerBar);
-    
+
     // Количество сэмплов на пиксель с учетом масштаба
     float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-    
+
     // Вычисляем начальный сэмпл с учетом смещения и масштаба
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
-    
+
     // Находим первый такт перед видимой областью, выровненный по опорной доле
     float firstBar = 0.0f;
     if (gridStartSample > 0) {
@@ -506,7 +552,7 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
     } else {
         firstBar = floor(startSample / samplesPerBar);
     }
-    
+
     // Рисуем маркеры тактов
     for (float bar = firstBar; ; bar++) {
         float barSample = gridStartSample > 0
@@ -516,9 +562,9 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
         if (x >= rect.width()) break;
         if (x >= 0) {
             // Рисуем фон маркера
-            QRectF markerRect(x - markerSpacing/2, rect.top(), markerSpacing, rect.height());
+            QRectF markerRect(x - markerSpacing / 2.0f, rect.top(), markerSpacing, rect.height());
             painter.fillRect(markerRect, colors.getMarkerBackgroundColor());
-            
+
             // Рисуем текст маркера
             QString barText = QString::number(int(bar) + 1);
             QRectF textRect = painter.fontMetrics().boundingRect(barText);
@@ -526,7 +572,7 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
                 x - textRect.width()/2,
                 rect.top() + rect.height() - 4
             ), barText);
-            
+
             // Рисуем вертикальную линию с разной толщиной для сильных долей
             // Линии тактов всегда сильные (начало нового такта)
             painter.setPen(QPen(colors.getBarLineColor(), 2.0));
@@ -546,44 +592,44 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
-    
+
     // Вычисляем ожидаемый интервал между битами на основе BPM
     float expectedBeatInterval = (60.0f * sampleRate) / bpm;
-    
+
     // Параметры для рисования полосок
     const float stripeHeight = 4.0f; // Ширина диагональной полоски (уменьшено для более тонких полосок)
     const float stripeSpacing = 3.0f; // Расстояние между полосками (уменьшено для большего количества)
-    
+
     // Рисуем метки отклонений для каждого бита
     for (int i = 0; i < beats.size(); ++i) {
         const auto& beat = beats[i];
-        
+
         // Пропускаем первый бит, так как у него нет отклонения
         if (i == 0) {
             continue;
         }
-        
+
         // Проверяем, есть ли значимое отклонение (больше 2% от интервала)
         if (qAbs(beat.deviation) < 0.02f) {
             continue;
         }
-        
+
         // Определяем ожидаемую позицию бита на основе предыдущего
         float expectedPosition = float(beats[i-1].position) + expectedBeatInterval;
         float actualPosition = float(beat.position);
-        
+
         // Вычисляем координаты для отрисовки
         float expectedX = float(expectedPosition - startSample) / samplesPerPixel;
         float actualX = float(actualPosition - startSample) / samplesPerPixel;
-        
+
         // Проверяем видимость
         if (actualX < 0 || expectedX > rect.width()) {
             continue;
         }
-        
+
         // Определяем, растянута ли доля (положительное отклонение) или сжата (отрицательное)
         bool isStretched = beat.deviation > 0;
-        
+
         // Выбираем цвет в зависимости от типа отклонения и состояния выравнивания
         // Добавляем прозрачность, чтобы волна была отчетливо видна
         QColor baseColor;
@@ -603,18 +649,18 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                 baseColor = QColor(180, 180, 255, alpha); // Бледно-синий для невыровненных с прозрачностью
             }
         }
-        
+
         // Вычисляем область между ожидаемой и фактической позицией
         float x1 = qMin(expectedX, actualX);
         float x2 = qMax(expectedX, actualX);
         float width = x2 - x1;
-        
+
         if (width > 0.5f && x2 >= 0 && x1 <= rect.width()) {
             // Ограничиваем координаты видимой областью
             x1 = qMax(0.0f, x1);
             x2 = qMin(rect.width(), x2);
             width = x2 - x1;
-            
+
             if (width > 0.5f) {
                 // Рисуем вертикальную линию на фактической позиции бита (более прозрачная)
                 if (actualX >= 0 && actualX <= rect.width()) {
@@ -623,11 +669,11 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                     painter.setPen(QPen(lineColor, 1.5f));
                     painter.drawLine(QPointF(actualX, 0), QPointF(actualX, rect.height()));
                 }
-                
+
                 // Рисуем полигон из диагональных полосок
                 float stripeWidth = stripeHeight; // Ширина диагональной полоски
                 float stripeGap = stripeSpacing; // Расстояние между полосками
-                
+
                 // Используем фиксированный угол наклона для диагоналей (45 градусов)
                 #ifndef M_PI
                 #define M_PI 3.14159265358979323846
@@ -635,7 +681,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                 const float diagonalAngle = 45.0f * float(M_PI) / 180.0f; // 45 градусов в радианах
                 float cosAngle = qCos(diagonalAngle);
                 float sinAngle = qSin(diagonalAngle);
-                
+
                 // Направляющий вектор диагонали
                 float dirX, dirY;
                 if (isStretched) {
@@ -647,42 +693,42 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                     dirX = -cosAngle;
                     dirY = -sinAngle;
                 }
-                
+
                 // Перпендикулярный вектор для создания ширины полоски
                 float perpX = -dirY * stripeWidth * 0.5f;
                 float perpY = dirX * stripeWidth * 0.5f;
-                
+
                 // Вычисляем, сколько полосок нужно нарисовать
                 // Полоски должны пересекать всю область, поэтому используем проекцию на перпендикуляр
                 float perpLength = qAbs(perpX * width + perpY * rect.height());
                 float totalStripeWidth = stripeWidth + stripeGap;
                 int numStripes = static_cast<int>(perpLength / totalStripeWidth) + 3;
-                
+
                 painter.setPen(Qt::NoPen);
                 painter.setBrush(QBrush(baseColor));
-                
+
                 // Область для обрезания
                 QRectF clipRect(x1, 0, width, rect.height());
                 painter.save();
                 painter.setClipRect(clipRect);
-                
+
                 for (int stripe = 0; stripe < numStripes; ++stripe) {
                     // Смещение полоски вдоль перпендикуляра
                     float offset = stripe * totalStripeWidth - perpLength * 0.5f;
-                    
+
                     // Находим две точки пересечения диагональной линии с границами прямоугольника
                     // Используем параметрическое представление линии
                     QPointF p1, p2;
-                    
+
                     if (isStretched) {
                         // Для растянутых: диагональ от левого нижнего к правому верхнему
                         // Базовая точка на левой нижней границе с учетом смещения
                         QPointF basePoint(x1 + offset * perpX, rect.height() + offset * perpY);
-                        
+
                         // Находим пересечения с границами прямоугольника
                         // Параметрическое уравнение: point = basePoint + t * dir
                         QVector<QPointF> intersections;
-                        
+
                         // С верхней границей (y = 0)
                         if (dirY != 0) {
                             float t = (0 - basePoint.y()) / dirY;
@@ -691,7 +737,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                                 intersections << QPointF(x, 0);
                             }
                         }
-                        
+
                         // С правой границей (x = x2)
                         if (dirX != 0) {
                             float t = (x2 - basePoint.x()) / dirX;
@@ -700,7 +746,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                                 intersections << QPointF(x2, y);
                             }
                         }
-                        
+
                         // С левой границей (x = x1)
                         if (dirX != 0) {
                             float t = (x1 - basePoint.x()) / dirX;
@@ -709,7 +755,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                                 intersections << QPointF(x1, y);
                             }
                         }
-                        
+
                         // С нижней границей (y = rect.height())
                         if (dirY != 0) {
                             float t = (rect.height() - basePoint.y()) / dirY;
@@ -718,7 +764,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                                 intersections << QPointF(x, rect.height());
                             }
                         }
-                        
+
                         // Выбираем две точки (должно быть ровно 2 для линии, пересекающей прямоугольник)
                         if (intersections.size() >= 2) {
                             p1 = intersections[0];
@@ -733,9 +779,9 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                     } else {
                         // Для сжатых: диагональ от правого нижнего к левому верхнему
                         QPointF basePoint(x2 + offset * perpX, rect.height() + offset * perpY);
-                        
+
                         QVector<QPointF> intersections;
-                        
+
                         // С верхней границей (y = 0)
                         if (dirY != 0) {
                             float t = (0 - basePoint.y()) / dirY;
@@ -744,7 +790,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                                 intersections << QPointF(x, 0);
                             }
                         }
-                        
+
                         // С левой границей (x = x1)
                         if (dirX != 0) {
                             float t = (x1 - basePoint.x()) / dirX;
@@ -753,7 +799,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                                 intersections << QPointF(x1, y);
                             }
                         }
-                        
+
                         // С правой границей (x = x2)
                         if (dirX != 0) {
                             float t = (x2 - basePoint.x()) / dirX;
@@ -762,7 +808,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                                 intersections << QPointF(x2, y);
                             }
                         }
-                        
+
                         // С нижней границей (y = rect.height())
                         if (dirY != 0) {
                             float t = (rect.height() - basePoint.y()) / dirY;
@@ -771,7 +817,7 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                                 intersections << QPointF(x, rect.height());
                             }
                         }
-                        
+
                         if (intersections.size() >= 2) {
                             p1 = intersections[0];
                             p2 = intersections[1];
@@ -783,19 +829,19 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
                             p2 = QPointF(x1, 0);
                         }
                     }
-                    
+
                     // Создаём полигон полоски (параллелограмм, пересекающий всю область)
                     QPolygonF polygon;
                     polygon << QPointF(p1.x() + perpX, p1.y() + perpY)
                             << QPointF(p2.x() + perpX, p2.y() + perpY)
                             << QPointF(p2.x() - perpX, p2.y() - perpY)
                             << QPointF(p1.x() - perpX, p1.y() - perpY);
-                    
+
                     painter.drawPolygon(polygon);
                 }
-                
+
                 painter.restore();
-                
+
                 // Добавляем бледный фильтр поверх полигонов для лучшей видимости волны
                 // Рисуем полупрозрачный слой цвета фона поверх всей области отклонений
                 QColor filterColor = colors.getBackgroundColor();
@@ -809,19 +855,13 @@ void WaveformView::drawBeatDeviations(QPainter& painter, const QRectF& rect)
 QString WaveformView::getPositionText(qint64 position) const
 {
     QString positionText;
-    
+
     if (showTimeDisplay) {
-        // Конвертируем позицию в миллисекунды
-        qint64 msPosition = (position * 1000) / sampleRate;
-        int minutes = (msPosition / 60000);
-        int seconds = (msPosition / 1000) % 60;
-        int milliseconds = msPosition % 1000;
-        positionText = QString("%1:%2.%3")
-            .arg(minutes, 2, 10, QChar('0'))
-            .arg(seconds, 2, 10, QChar('0'))
-            .arg(milliseconds / 100);
+        // Конвертируем позицию в миллисекунды используя TimeUtils
+        qint64 msPosition = TimeUtils::samplesToMs(position, sampleRate);
+        positionText = TimeUtils::formatTime(msPosition);
     }
-    
+
     if (showBarsDisplay) {
         // Вычисляем такты и доли
         float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
@@ -830,18 +870,18 @@ QString WaveformView::getPositionText(qint64 position) const
         int bar = int(beatsFromStart / bpb) + 1;  // Такты начинаются с 1
         int beat = int(beatsFromStart) % bpb + 1;  // Доли начинаются с 1
         float subBeat = (beatsFromStart - float(int(beatsFromStart))) * float(bpb); // Доли такта в beat units
-        
+
         QString barText = QString("%1.%2.%3")
             .arg(bar)
             .arg(beat)
             .arg(int(subBeat + 1));
-            
+
         if (!positionText.isEmpty()) {
             positionText += " | ";
         }
         positionText += barText;
     }
-    
+
     return positionText;
 }
 
@@ -858,16 +898,16 @@ float WaveformView::getCursorXPosition() const
 
     // playbackPosition уже в миллисекундах, конвертируем в сэмплы
     qint64 cursorSample = (playbackPosition * sampleRate) / 1000;
-    
+
     // Ограничиваем позицию каретки границами аудио
     cursorSample = qBound(qint64(0), cursorSample, qint64(audioData[0].size() - 1));
-    
+
     // Используем ту же логику, что и в drawPlaybackCursor
     float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
     int visibleSamples = int(width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
-    
+
     // Вычисляем позицию каретки в пикселях
     return (cursorSample - startSample) / samplesPerPixel;
 }
@@ -887,57 +927,57 @@ void WaveformView::wheelEvent(QWheelEvent* event)
         event->ignore();
         return;
     }
-    
+
     float delta = event->angleDelta().y() / 120.f;
     float oldZoom = zoomLevel;
     float newZoom = oldZoom;
-    
+
     if (delta > 0) {
         newZoom *= zoomStep;
     } else {
         newZoom /= zoomStep;
     }
-    
+
     // Ограничиваем масштаб
     newZoom = qBound(float(minZoom), newZoom, float(maxZoom));
-    
+
     if (qFuzzyCompare(newZoom, oldZoom)) {
         event->accept();
         return;
     }
-    
+
     // Получаем позицию мыши относительно виджета
     QPoint mousePos = event->position().toPoint();
-    
+
     // Вычисляем текущую позицию в сэмплах под курсором мыши
     float samplesPerPixel = float(audioData[0].size()) / (width() * oldZoom);
     int visibleSamples = int(width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     qint64 mouseSample = startSample + qint64(mousePos.x() * samplesPerPixel);
-    
+
     // Обновляем масштаб
     zoomLevel = newZoom;
-    
+
     // Вычисляем новую позицию, чтобы курсор мыши остался над тем же сэмплом
     float newSamplesPerPixel = float(audioData[0].size()) / (width() * newZoom);
     int newVisibleSamples = int(width() * newSamplesPerPixel);
     int newMaxStartSample = qMax(0, audioData[0].size() - newVisibleSamples);
-    
+
     // Вычисляем новое смещение
     float newOffset = 0.0f;
     if (newMaxStartSample > 0) {
         newOffset = float(mouseSample - mousePos.x() * newSamplesPerPixel) / newMaxStartSample;
         newOffset = qBound(0.0f, newOffset, 1.0f);
     }
-    
+
     horizontalOffset = newOffset;
-    
+
     // Эмитируем сигналы для обновления скроллбара
     emit zoomChanged(zoomLevel);
     emit horizontalOffsetChanged(horizontalOffset);
     update();
-    
+
     event->accept();
 }
 
@@ -954,7 +994,7 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
                 // Неподвижная метка - не начинаем перетаскивание
                 return;
             }
-            
+
             // Начинаем перетаскивание метки
             draggingMarkerIndex = markerIndex;
             markers[markerIndex].isDragging = true;
@@ -964,7 +1004,7 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
             setCursor(Qt::SizeHorCursor);
             return;
         }
-        
+
         isDragging = false; // Начинаем как не перетаскивание
         lastMousePos = event->pos();
 
@@ -975,21 +1015,21 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
             int visibleSamples = int(width() * samplesPerPixel);
             int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
             int startSample = int(horizontalOffset * maxStartSample);
-            
+
             // Вычисляем позицию клика в сэмплах
             qint64 clickSample = startSample + qint64(event->pos().x() * samplesPerPixel);
             clickSample = qBound(qint64(0), clickSample, qint64(audioData[0].size() - 1));
-            
+
             // Конвертируем сэмплы в миллисекунды для внутреннего использования
             qint64 newPosition = (clickSample * 1000) / sampleRate;
             playbackPosition = newPosition;
-            
+
             // Показываем всплывающую подсказку
             QString positionText = getPositionText(clickSample);
             if (!positionText.isEmpty()) {
                 QToolTip::showText(event->globalPosition().toPoint(), positionText, this);
             }
-            
+
             // Отправляем позицию в миллисекундах для QMediaPlayer
             emit positionChanged(newPosition);
             update();
@@ -1004,6 +1044,97 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
 
 void WaveformView::mouseMoveEvent(QMouseEvent* event)
 {
+    // Показываем tooltip с временем при наведении на метку (если не перетаскиваем)
+    if (draggingMarkerIndex < 0 && !audioData.isEmpty()) {
+        QPoint currentPos = event->position().toPoint();
+
+        // Оптимизация: проверяем tooltip только если мышь переместилась достаточно далеко
+        // (экономия вычислений при частых событиях мыши)
+        if ((currentPos - lastTooltipPos).manhattanLength() < 3) {
+            // Мышь почти не двигалась - пропускаем обновление tooltip
+        } else {
+            lastTooltipPos = currentPos;
+
+            float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
+            int visibleSamples = int(width() * samplesPerPixel);
+            int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+            int startSample = int(horizontalOffset * maxStartSample);
+
+            float mouseX = event->position().x();
+            qint64 mouseSample = startSample + qint64(mouseX * samplesPerPixel);
+
+            // Проверяем, находится ли курсор рядом с меткой
+            const float markerTolerance = 10.0f; // Пиксели
+            int foundMarkerIndex = -1;
+            for (int i = 0; i < markers.size(); ++i) {
+                const Marker& marker = markers[i];
+                float markerX = (marker.position - startSample) / samplesPerPixel;
+                float distance = qAbs(mouseX - markerX);
+
+                if (distance < markerTolerance) {
+                    foundMarkerIndex = i;
+                    break; // Нашли метку - выходим
+                }
+            }
+
+            // Если нашли метку и она отличается от предыдущей, показываем tooltip
+            if (foundMarkerIndex >= 0 && foundMarkerIndex != lastTooltipMarkerIndex) {
+                lastTooltipMarkerIndex = foundMarkerIndex;
+                const Marker& marker = markers[foundMarkerIndex];
+
+                // Формируем tooltip с информацией о метке
+                QString tooltipText;
+                if (marker.isEndMarker) {
+                    tooltipText = QString("Конец таймлайна\nВремя: %1\nПозиция: %2 сэмплов")
+                        .arg(TimeUtils::formatTime(marker.timeMs))
+                        .arg(marker.position);
+                } else if (marker.isFixed) {
+                    tooltipText = QString("Начало таймлайна\nВремя: %1\nПозиция: %2 сэмплов")
+                        .arg(TimeUtils::formatTime(marker.timeMs))
+                        .arg(marker.position);
+                } else {
+                    // Вычисляем коэффициент для этого сегмента
+                    QString coeffInfo = "";
+                    const Marker* nextMarker = nullptr;
+                    for (int j = 0; j < markers.size(); ++j) {
+                        if (j != foundMarkerIndex && markers[j].position > marker.position) {
+                            if (nextMarker == nullptr || markers[j].position < nextMarker->position) {
+                                nextMarker = &markers[j];
+                            }
+                        }
+                    }
+
+                    if (nextMarker != nullptr) {
+                        qint64 originalDistance = nextMarker->originalPosition - marker.originalPosition;
+                        qint64 currentDistance = nextMarker->position - marker.position;
+                        if (originalDistance > 0) {
+                            float coefficient = float(currentDistance) / float(originalDistance);
+                            coeffInfo = QString("\nКоэффициент: %1").arg(coefficient, 0, 'f', 3);
+                        }
+                    }
+
+                    tooltipText = QString("Метка\nВремя: %1\nПозиция: %2 сэмплов%3")
+                        .arg(TimeUtils::formatTime(marker.timeMs))
+                        .arg(marker.position)
+                        .arg(coeffInfo);
+                }
+
+                QToolTip::showText(event->globalPosition().toPoint(), tooltipText, this);
+            } else if (foundMarkerIndex < 0 && lastTooltipMarkerIndex >= 0) {
+                // Ушли с метки - сбрасываем кеш
+                lastTooltipMarkerIndex = -1;
+
+                // Показываем обычный tooltip с позицией
+                qint64 samplePos = qBound(qint64(0), mouseSample, qint64(audioData[0].size() - 1));
+                qint64 timeMs = TimeUtils::samplesToMs(samplePos, sampleRate);
+                QString positionText = QString("Позиция: %1\nВремя: %2")
+                    .arg(samplePos)
+                    .arg(TimeUtils::formatTime(timeMs));
+                QToolTip::showText(event->globalPosition().toPoint(), positionText, this);
+            }
+        }
+    }
+
     // Обработка перетаскивания метки
     if (draggingMarkerIndex >= 0 && (event->buttons() & Qt::LeftButton)) {
         if (!audioData.isEmpty()) {
@@ -1012,17 +1143,17 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
             int visibleSamples = int(width() * samplesPerPixel);
             int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
             int startSample = int(horizontalOffset * maxStartSample);
-            
+
             qint64 newSample = startSample + qint64(event->pos().x() * samplesPerPixel);
-            
+
             // Ограничиваем позицию границами аудио
             newSample = qBound(qint64(0), newSample, qint64(audioData[0].size() - 1));
-            
+
             // Ограничиваем позицию соседними метками, чтобы метки не перелезали друг через друга
             if (markers.size() > 1) {
                 // Сохраняем текущую позицию перетаскиваемой метки
                 qint64 currentMarkerPos = markers[draggingMarkerIndex].position;
-                
+
                 // Улучшенный поиск соседних меток
                 // Используем текущую позицию для определения направления движения
                 // (переменные могут использоваться в будущем для оптимизации)
@@ -1030,7 +1161,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 bool movingLeft = (newSample < currentMarkerPos);
                 Q_UNUSED(movingRight);
                 Q_UNUSED(movingLeft);
-                
+
                 // Ищем предыдущую метку (строго меньше текущей позиции)
                 qint64 prevMarkerPos = -1;
                 int prevMarkerIndex = -1;
@@ -1047,7 +1178,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                         }
                     }
                 }
-                
+
                 // Ищем следующую метку (строго больше текущей позиции)
                 qint64 nextMarkerPos = -1;
                 int nextMarkerIndex = -1;
@@ -1064,12 +1195,12 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                         }
                     }
                 }
-                
+
                 // Строго ограничиваем позицию соседними метками
                 // Минимальный отступ - 1 сэмпл, чтобы метки не совпадали
                 qint64 minAllowedPos = (prevMarkerPos >= 0) ? (prevMarkerPos + 1) : qint64(0);
                 qint64 maxAllowedPos = (nextMarkerPos >= 0) ? (nextMarkerPos - 1) : qint64(audioData[0].size() - 1);
-                
+
                 // Дополнительная проверка: если метки слишком близко, не позволяем перемещение
                 if (prevMarkerPos >= 0 && nextMarkerPos >= 0) {
                     qint64 gapSize = nextMarkerPos - prevMarkerPos;
@@ -1084,7 +1215,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                     // Ограничиваем границами аудио или соседними метками
                     newSample = qBound(minAllowedPos, newSample, maxAllowedPos);
                 }
-                
+
                 // Финальная проверка: убеждаемся, что новая позиция не совпадает с другими метками
                 // Проверяем все метки, включая те, что могут быть созданы позже
                 for (int j = 0; j < markers.size(); ++j) {
@@ -1098,13 +1229,13 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                         }
                     }
                 }
-                
+
                 // Финальная проверка валидности границ аудио
                 newSample = qBound(qint64(0), newSample, qint64(audioData[0].size() - 1));
             }
-            
+
             qDebug() << "Dragging marker" << draggingMarkerIndex << "to sample:" << newSample;
-            
+
             // Сохраняем уникальные характеристики метки перед возможным созданием новых меток
             // Это необходимо для корректного обновления индекса после вставки новых меток
             qint64 savedMarkerOriginalPos = -1;
@@ -1117,13 +1248,13 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 savedIsFixed = markers[draggingMarkerIndex].isFixed;
                 savedDragStartSample = markers[draggingMarkerIndex].dragStartSample;
             }
-            
+
             // Сохраняем оригинальную позицию до изменения
             qint64 originalPos = (savedMarkerOriginalPos >= 0) ? savedMarkerOriginalPos : markers[draggingMarkerIndex].originalPosition;
-            
+
             // Проверяем, смещена ли метка от исходной позиции
             bool isMoved = (newSample != originalPos);
-            
+
             // Проверяем, есть ли метки слева от НОВОЙ позиции (с меньшей позицией), исключая неподвижные
             bool hasLeftMarker = false;
             for (int j = 0; j < markers.size(); ++j) {
@@ -1132,7 +1263,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                     break;
                 }
             }
-            
+
             // Если нет метки слева и текущая метка смещена, создаем метку в начале
             if (!hasLeftMarker && isMoved) {
                 // Проверяем, что действительно нет метки в начале (позиция 0)
@@ -1145,10 +1276,10 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 }
                 if (!foundStart) {
                     // Создаем неподвижную метку в начале
-                    markers.insert(0, Marker(0, true)); // true = неподвижная
+                    markers.insert(0, Marker(0, true, sampleRate)); // true = неподвижная
                     draggingMarkerIndex++; // Обновляем индекс перетаскиваемой метки (вставка в начало)
                     qDebug() << "Created fixed start marker at position 0, draggingMarkerIndex now:" << draggingMarkerIndex;
-                    
+
                     // После создания новой метки обновляем индекс перетаскиваемой метки
                     // Ищем метку по сохраненным характеристикам
                     if (draggingMarkerIndex >= 0 && draggingMarkerIndex < markers.size()) {
@@ -1171,11 +1302,11 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                     }
                 }
             }
-            
+
             // Проверяем, является ли перетаскиваемая метка конечной меткой
             bool isEndMarker = markers[draggingMarkerIndex].isEndMarker;
             qint64 endPosition = audioData[0].size() - 1;
-            
+
             // Если это конечная метка, НЕ создаем новые метки справа от неё
             // Конечная метка - это особая метка, которая обозначает конец таймлайна
             // Она может перемещаться, но всегда остается конечной меткой и не позволяет создавать метки справа
@@ -1187,7 +1318,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 // Проверяем, есть ли справа обычные метки (не конечная) или конечная метка
                 bool hasRightRegularMarker = false;
                 bool hasAnyEndMarker = false;
-                
+
                 for (int j = 0; j < markers.size(); ++j) {
                     if (j != draggingMarkerIndex) {
                         if (markers[j].isEndMarker) {
@@ -1201,10 +1332,10 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                         }
                     }
                 }
-                
+
                 // Проверяем, сдвинута ли метка влево от исходной позиции
                 bool isMovedLeft = (newSample < originalPos);
-                
+
                 // Создаем конечную метку только если:
                 // 1. Нет обычных меток справа от новой позиции
                 // 2. Нет конечной метки справа от новой позиции
@@ -1221,19 +1352,19 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                     }
                     if (!foundEnd) {
                         // Создаем конечную метку с флагом isEndMarker = true (можно двигать, но это особая метка)
-                        markers.append(Marker(endPosition, false, true));
+                        markers.append(Marker(endPosition, false, true, sampleRate));
                         qDebug() << "Created end marker at position" << endPosition;
                         // Индекс draggingMarkerIndex не меняется при добавлении в конец
                     }
                 }
             }
-            
+
             // Финальная проверка перед обновлением позиции
             // Убеждаемся, что новая позиция не нарушает ограничения
             bool canMove = true;
-            qint64 currentMarkerPos = (draggingMarkerIndex >= 0 && draggingMarkerIndex < markers.size()) 
+            qint64 currentMarkerPos = (draggingMarkerIndex >= 0 && draggingMarkerIndex < markers.size())
                 ? markers[draggingMarkerIndex].position : newSample;
-            
+
             // Проверяем, что новая позиция не совпадает с другими метками
             for (int j = 0; j < markers.size(); ++j) {
                 if (j != draggingMarkerIndex) {
@@ -1244,12 +1375,12 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                     }
                 }
             }
-            
+
             // Если перемещение невозможно, оставляем на текущей позиции
             if (!canMove) {
                 newSample = currentMarkerPos;
             }
-            
+
             // Теперь обновляем позицию метки после всех проверок и возможных вставок
             // Убеждаемся, что индекс все еще валиден
             if (draggingMarkerIndex >= 0 && draggingMarkerIndex < markers.size()) {
@@ -1258,18 +1389,24 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 qint64 finalPosition = newSample;
                 if (savedIsEndMarker && newSample >= endPosition) {
                     finalPosition = endPosition;
+                    // Для конечной метки меняем только текущую позицию,
+                    // originalPosition не трогаем (она отражает оригинальную шкалу)
                     markers[draggingMarkerIndex].position = endPosition;
-                    markers[draggingMarkerIndex].originalPosition = endPosition; // Обновляем исходную позицию
+                    // Обновляем время на основе новой позиции
+                    markers[draggingMarkerIndex].updateTimeFromSamples(sampleRate);
                     qDebug() << "End marker moved to end position:" << endPosition;
                 } else {
+                    // Для обычных меток двигаем только текущую позицию
                     markers[draggingMarkerIndex].position = newSample;
+                    // Обновляем время на основе новой позиции
+                    markers[draggingMarkerIndex].updateTimeFromSamples(sampleRate);
                 }
-                
+
                 // Сортируем метки по позиции, чтобы они всегда были в порядке
                 std::sort(markers.begin(), markers.end(), [](const Marker& a, const Marker& b) {
                     return a.position < b.position;
                 });
-                
+
                 // Находим индекс перемещенной метки после сортировки
                 // Используем комбинацию характеристик для точного совпадения
                 draggingMarkerIndex = -1;
@@ -1283,7 +1420,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                         break;
                     }
                 }
-                
+
                 // Если не нашли по всем признакам, ищем по позиции и dragStartSample
                 if (draggingMarkerIndex < 0) {
                     for (int j = 0; j < markers.size(); ++j) {
@@ -1294,24 +1431,27 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                         }
                     }
                 }
-                
+
                 // Финальная проверка валидности
                 if (draggingMarkerIndex < 0 || draggingMarkerIndex >= markers.size()) {
                     qDebug() << "ERROR: Could not find dragged marker after sort, resetting drag";
                     draggingMarkerIndex = -1;
                 }
-                
+
                 // Конечная метка сохраняет свой флаг isEndMarker при любом перемещении
             } else {
                 qDebug() << "ERROR: draggingMarkerIndex" << draggingMarkerIndex << "is invalid, markers.size():" << markers.size();
                 draggingMarkerIndex = -1; // Сбрасываем, если индекс невалиден
             }
-            
-            update();
+
+            // Планируем обработку в реальном времени с throttling
+            scheduleRealtimeProcess();
+            // Используем throttled update для плавности
+            scheduleUpdate();
         }
         return;
     }
-    
+
     // Проверяем, наведена ли мышь на метку
     if (!(event->buttons() & Qt::LeftButton) && !(event->buttons() & Qt::RightButton)) {
         int markerIndex = getMarkerIndexAt(event->pos());
@@ -1320,15 +1460,15 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
             return;
         }
     }
-    
+
     if (event->buttons() & Qt::LeftButton) {
         QPoint delta = event->pos() - lastMousePos;
-        
+
         // Определяем, перетаскиваем ли мы (движение больше определенного порога)
         if (!isDragging && delta.manhattanLength() > 5) {
             isDragging = true;
         }
-        
+
         if (isDragging) {
             // Если перетаскиваем с зажатой кнопкой мыши, обновляем позицию воспроизведения
             if (!audioData.isEmpty()) {
@@ -1337,22 +1477,23 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 int visibleSamples = int(width() * samplesPerPixel);
                 int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
                 int startSample = int(horizontalOffset * maxStartSample);
-                
+
                 // Вычисляем позицию клика в сэмплах
                 qint64 clickSample = startSample + qint64(event->pos().x() * samplesPerPixel);
                 clickSample = qBound(qint64(0), clickSample, qint64(audioData[0].size() - 1));
-                
+
                 qint64 newPosition = (clickSample * 1000) / sampleRate;
                 playbackPosition = newPosition;
-                
+
                 emit positionChanged(newPosition);
-                update();
+                // Используем throttled update для плавности
+                scheduleUpdate();
             }
         } else {
             // Обычное перетаскивание для прокрутки
             adjustHorizontalOffset(-float(delta.x()) / (width() * zoomLevel));
         }
-        
+
         lastMousePos = event->pos();
     } else if (event->buttons() & Qt::RightButton && isRightMousePanning) {
         // Панорамирование правой кнопкой мыши
@@ -1375,10 +1516,24 @@ void WaveformView::mouseReleaseEvent(QMouseEvent* event)
             markers[draggingMarkerIndex].isDragging = false;
             draggingMarkerIndex = -1;
             setCursor(Qt::ArrowCursor);
-            update();
+
+            // Если были изменения в реальном времени, отправляем сигнал для обновления воспроизведения
+            if (!originalAudioData.isEmpty() && markers.size() >= 2) {
+                // Убеждаемся, что обработка завершена
+                if (realtimeProcessPending) {
+                    // Если обработка еще идет, ждем её завершения
+                    QTimer::singleShot(100, this, [this]() {
+                        emit markerDragFinished();
+                    });
+                } else {
+                    emit markerDragFinished();
+                }
+            }
+
+            scheduleUpdate();
             return;
         }
-        
+
         isDragging = false;
     } else if (event->button() == Qt::RightButton) {
         isRightMousePanning = false;
@@ -1422,7 +1577,7 @@ void WaveformView::adjustHorizontalOffset(float delta)
     // Применяем смещение с ограничением от 0 до 1
     horizontalOffset = qBound(0.0f, horizontalOffset + delta, 1.0f);
     emit horizontalOffsetChanged(horizontalOffset);
-    update();
+    scheduleUpdate(); // Используем throttled update для плавности
 }
 
 void WaveformView::adjustZoomLevel(float delta)
@@ -1430,61 +1585,61 @@ void WaveformView::adjustZoomLevel(float delta)
     if (audioData.isEmpty()) {
         return;
     }
-    
+
     float oldZoom = zoomLevel;
     float newZoom = oldZoom;
-    
+
     if (delta > 0) {
         newZoom *= zoomStep;
     } else {
         newZoom /= zoomStep;
     }
-    
+
     // Ограничиваем масштаб
     newZoom = qBound(float(minZoom), newZoom, float(maxZoom));
-    
+
     if (qFuzzyCompare(newZoom, oldZoom)) {
         return;
     }
-    
+
     // Масштабируем относительно центра экрана
     QPoint centerPos = QPoint(width() / 2, height() / 2);
-    
+
     // Вычисляем текущую позицию в сэмплах под центром экрана
     float samplesPerPixel = float(audioData[0].size()) / (width() * oldZoom);
     int visibleSamples = int(width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     qint64 centerSample = startSample + qint64(centerPos.x() * samplesPerPixel);
-    
+
     // Обновляем масштаб
     zoomLevel = newZoom;
-    
+
     // Вычисляем новую позицию, чтобы центр экрана остался над тем же сэмплом
     float newSamplesPerPixel = float(audioData[0].size()) / (width() * newZoom);
     int newVisibleSamples = int(width() * newSamplesPerPixel);
     int newMaxStartSample = qMax(0, audioData[0].size() - newVisibleSamples);
-    
+
     // Вычисляем новое смещение
     float newOffset = 0.0f;
     if (newMaxStartSample > 0) {
         newOffset = float(centerSample - centerPos.x() * newSamplesPerPixel) / newMaxStartSample;
         newOffset = qBound(0.0f, newOffset, 1.0f);
     }
-    
+
     horizontalOffset = newOffset;
-    
+
     // Эмитируем сигналы для обновления скроллбара
     emit zoomChanged(zoomLevel);
     emit horizontalOffsetChanged(horizontalOffset);
-    update();
+    scheduleUpdate(); // Используем throttled update для плавности
 }
 
 void WaveformView::setHorizontalOffset(float offset)
 {
     // Ограничиваем смещение в пределах от 0 до 1
     horizontalOffset = qBound(0.0f, offset, 1.0f);
-    
+
     // При изменении смещения обновляем отображение
     emit horizontalOffsetChanged(horizontalOffset);
     update();
@@ -1494,7 +1649,7 @@ void WaveformView::setVerticalOffset(float offset)
 {
     // Ограничиваем смещение в пределах от 0 до 1
     verticalOffset = qBound(0.0f, offset, 1.0f);
-    
+
     // При изменении смещения обновляем отображение
     update();
 }
@@ -1533,7 +1688,7 @@ QString WaveformView::getBarText(float beatPosition) const
     int bar = int(beatPosition / bpb) + 1;
     int beat = int(beatPosition) % bpb + 1;
     float subBeat = (beatPosition - float(int(beatPosition))) * float(bpb);
-    
+
     return QString("%1.%2.%3")
         .arg(bar)
         .arg(beat)
@@ -1581,13 +1736,13 @@ void WaveformView::drawLoopMarkers(QPainter& painter, const QRect& rect)
     if (audioData.isEmpty() || (loopStartPosition <= 0 && loopEndPosition <= 0)) {
         return;
     }
-    
+
     // Используем ту же логику, что и в drawWaveform
     float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
-    
+
     // Настраиваем перо для маркеров цикла
     QPen loopPen;
     loopPen.setWidth(2);
@@ -1596,18 +1751,18 @@ void WaveformView::drawLoopMarkers(QPainter& painter, const QRect& rect)
     // Рисуем маркер начала цикла
     if (loopStartPosition > 0) {
         qint64 startSamplePos = (loopStartPosition * sampleRate) / 1000;
-        
+
         // Проверяем, попадает ли маркер в видимую область
         if (startSamplePos >= startSample && startSamplePos < startSample + visibleSamples) {
             loopPen.setColor(QColor(0, 255, 0, 180)); // Зелёный для начала
             painter.setPen(loopPen);
-            
+
             // Вычисляем позицию маркера в пикселях
             float x = (startSamplePos - startSample) / samplesPerPixel;
-            
+
             if (x >= 0 && x < rect.width()) {
                 painter.drawLine(QPointF(rect.x() + x, rect.top()), QPointF(rect.x() + x, rect.bottom()));
-                
+
                 // Рисуем метку "A"
                 QFont font = painter.font();
                 font.setBold(true);
@@ -1620,18 +1775,18 @@ void WaveformView::drawLoopMarkers(QPainter& painter, const QRect& rect)
     // Рисуем маркер конца цикла
     if (loopEndPosition > 0) {
         qint64 endSamplePos = (loopEndPosition * sampleRate) / 1000;
-        
+
         // Проверяем, попадает ли маркер в видимую область
         if (endSamplePos >= startSample && endSamplePos < startSample + visibleSamples) {
             loopPen.setColor(QColor(255, 0, 0, 180)); // Красный для конца
             painter.setPen(loopPen);
-            
+
             // Вычисляем позицию маркера в пикселях
             float x = (endSamplePos - startSample) / samplesPerPixel;
-            
+
             if (x >= 0 && x < rect.width()) {
                 painter.drawLine(QPointF(rect.x() + x, rect.top()), QPointF(rect.x() + x, rect.bottom()));
-                
+
                 // Рисуем метку "B"
                 QFont font = painter.font();
                 font.setBold(true);
@@ -1645,13 +1800,13 @@ void WaveformView::drawLoopMarkers(QPainter& painter, const QRect& rect)
     if (loopStartPosition > 0 && loopEndPosition > 0) {
         qint64 startSamplePos = (loopStartPosition * sampleRate) / 1000;
         qint64 endSamplePos = (loopEndPosition * sampleRate) / 1000;
-        
+
         // Проверяем, попадает ли хотя бы часть области цикла в видимую область
         if (endSamplePos >= startSample && startSamplePos < startSample + visibleSamples) {
             // Вычисляем позиции в пикселях
             float x1 = qMax(0.0f, (startSamplePos - startSample) / samplesPerPixel);
             float x2 = qMin(float(rect.width()), (endSamplePos - startSample) / samplesPerPixel);
-            
+
             if (x2 > x1) {
                 QColor fillColor(128, 128, 255, 40); // Полупрозрачный синий
                 painter.fillRect(QRectF(rect.x() + x1, rect.top(), x2 - x1, rect.height()), fillColor);
@@ -1676,10 +1831,10 @@ void WaveformView::analyzeBeats()
     if (audioData.isEmpty()) {
         return;
     }
-    
+
     // Запускаем анализ ударных с текущими настройками
     beatAnalysis = BeatVisualizer::analyzeBeats(audioData, sampleRate, beatVisualizationSettings);
-    
+
     // Обновляем отображение
     update();
 }
@@ -1692,10 +1847,10 @@ void WaveformView::addMarker(qint64 position)
         qDebug() << "addMarker: audioData is empty";
         return;
     }
-    
+
     // Ограничиваем позицию границами аудио
     position = qBound(qint64(0), position, qint64(audioData[0].size() - 1));
-    
+
     // Проверяем, нет ли уже метки в этой позиции
     for (int i = 0; i < markers.size(); ++i) {
         if (markers[i].position == position) {
@@ -1703,7 +1858,7 @@ void WaveformView::addMarker(qint64 position)
             return; // Метка уже существует, не создаём дубликат
         }
     }
-    
+
     // Проверяем, не пытаемся ли создать метку справа от конечной метки
     for (int i = 0; i < markers.size(); ++i) {
         if (markers[i].isEndMarker && position > markers[i].position) {
@@ -1711,25 +1866,25 @@ void WaveformView::addMarker(qint64 position)
             return; // Нельзя создавать метки справа от конечной метки
         }
     }
-    
+
     qDebug() << "addMarker: adding marker at position:" << position << "audioData size:" << audioData[0].size();
-    
+
     // Если это первая метка, автоматически создаем начальную и конечную метки
     bool isFirstMarker = markers.isEmpty();
-    
+
     if (isFirstMarker) {
         qint64 endPosition = audioData[0].size() - 1;
-        
+
         // Создаем начальную метку (неподвижную, в позиции 0)
-        markers.append(Marker(0, true)); // true = неподвижная
-        
+        markers.append(Marker(0, true, sampleRate)); // true = неподвижная
+
         // Создаем новую метку в указанной позиции
-        Marker newMarker(position);
+        Marker newMarker(position, sampleRate);
         markers.append(newMarker);
-        
+
         // Создаем конечную метку (можно двигать, но это особая метка)
-        markers.append(Marker(endPosition, false, true)); // false = можно двигать, true = isEndMarker
-        
+        markers.append(Marker(endPosition, false, true, sampleRate)); // false = можно двигать, true = isEndMarker
+
         qDebug() << "addMarker: created start marker at 0, user marker at" << position << "and end marker at" << endPosition;
     } else {
         // Находим соседние метки для пересчета коэффициентов
@@ -1737,7 +1892,7 @@ void WaveformView::addMarker(qint64 position)
         const Marker* nextMarker = nullptr;
         qint64 maxPrevPos = -1;
         qint64 minNextPos = -1;
-        
+
         for (int j = 0; j < markers.size(); ++j) {
             qint64 markerPos = markers[j].position;
             if (markerPos < position) {
@@ -1752,47 +1907,56 @@ void WaveformView::addMarker(qint64 position)
                 }
             }
         }
-        
-        // Создаем новую метку
-        Marker newMarker(position);
-        
-        // Если есть соседние метки, которые уже были сдвинуты, пересчитываем originalPosition
-        // чтобы новая метка корректно отображала коэффициенты сжатия/растяжения
+
+        // Вычисляем originalPosition новой метки на основе соседних меток
+        qint64 originalPosition = position; // По умолчанию равен position
+
         if (prevMarker != nullptr && nextMarker != nullptr) {
-            // Вычисляем пропорциональное положение новой метки между соседними метками
-            // на основе их текущих позиций (с учетом сжатия/растяжения)
-            qint64 currentLeftDistance = position - prevMarker->position;
-            qint64 totalCurrentDistance = nextMarker->position - prevMarker->position;
-            
-            if (totalCurrentDistance > 0) {
-                // Вычисляем пропорцию, которую занимает новая метка в текущем диапазоне
-                float proportion = float(currentLeftDistance) / float(totalCurrentDistance);
-                
-                // Вычисляем originalPosition на основе пропорции в исходном диапазоне
-                qint64 originalLeftDistance = nextMarker->originalPosition - prevMarker->originalPosition;
-                if (originalLeftDistance > 0) {
-                    qint64 calculatedOriginalPos = prevMarker->originalPosition + qint64(originalLeftDistance * proportion);
-                    newMarker.originalPosition = calculatedOriginalPos;
-                    qDebug() << "addMarker: calculated originalPosition" << calculatedOriginalPos << "for new marker at" << position 
-                             << "between markers at" << prevMarker->position << "and" << nextMarker->position;
-                }
+            // Есть обе соседние метки - интерполируем originalPosition
+            qint64 currentDistance = nextMarker->position - prevMarker->position;
+            qint64 originalDistance = nextMarker->originalPosition - prevMarker->originalPosition;
+
+            if (currentDistance > 0 && originalDistance > 0) {
+                // Линейная интерполяция: вычисляем долю новой метки в текущем сегменте
+                // и применяем ту же долю к исходному сегменту
+                float ratio = float(position - prevMarker->position) / float(currentDistance);
+                originalPosition = prevMarker->originalPosition + qint64(ratio * originalDistance);
+            } else if (currentDistance > 0) {
+                // Если originalDistance == 0, используем простую интерполяцию по position
+                float ratio = float(position - prevMarker->position) / float(currentDistance);
+                originalPosition = prevMarker->originalPosition + qint64(ratio * (nextMarker->originalPosition - prevMarker->originalPosition));
             }
         } else if (prevMarker != nullptr) {
-            // Только предыдущая метка - используем её originalPosition как базу
-            newMarker.originalPosition = prevMarker->originalPosition + (position - prevMarker->position);
+            // Есть только предыдущая метка - используем её коэффициент для экстраполяции
+            if (prevMarker->position != prevMarker->originalPosition && prevMarker->position > 0) {
+                float stretchRatio = float(prevMarker->position) / float(prevMarker->originalPosition);
+                originalPosition = qint64(position / stretchRatio);
+            } else {
+                originalPosition = position;
+            }
         } else if (nextMarker != nullptr) {
-            // Только следующая метка - используем её originalPosition как базу
-            newMarker.originalPosition = nextMarker->originalPosition - (nextMarker->position - position);
+            // Есть только следующая метка - используем её коэффициент для экстраполяции
+            if (nextMarker->position != nextMarker->originalPosition && nextMarker->originalPosition > 0) {
+                float stretchRatio = float(nextMarker->position) / float(nextMarker->originalPosition);
+                originalPosition = qint64(position / stretchRatio);
+            } else {
+                originalPosition = position;
+            }
         }
-        
+
+        // Создаем новую метку с правильно вычисленным originalPosition
+        // originalPosition отражает исходную геометрию сегментов до применения эффекта
+        Marker newMarker(position, sampleRate);
+        newMarker.originalPosition = originalPosition;
+        newMarker.updateTimeFromSamples(sampleRate);
         markers.append(newMarker);
     }
-    
+
     // Сортируем метки по позиции, чтобы они всегда были в порядке
     std::sort(markers.begin(), markers.end(), [](const Marker& a, const Marker& b) {
         return a.position < b.position;
     });
-    
+
     qDebug() << "addMarker: total markers now:" << markers.size();
     update();
 }
@@ -1813,7 +1977,7 @@ void WaveformView::removeMarker(int index)
 int WaveformView::getMarkerIndexAt(const QPoint& pos) const
 {
     if (audioData.isEmpty()) return -1;
-    
+
     // Проверяем каждую метку
     // getMarkerDiamondRect сама вычисляет позицию метки на основе samplePos и rect()
     for (int i = 0; i < markers.size(); ++i) {
@@ -1825,26 +1989,26 @@ int WaveformView::getMarkerIndexAt(const QPoint& pos) const
             return i;
         }
     }
-    
+
     return -1;
 }
 
 QRectF WaveformView::getMarkerDiamondRect(qint64 samplePos, const QRect& rect) const
 {
     if (audioData.isEmpty()) return QRectF();
-    
+
     // Вычисляем X позицию метки
     float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
-    
+
     float x = (samplePos - startSample) / samplesPerPixel;
-    
+
     // Размер ромбика (обновлено для нового ромбика в центре)
     const float diamondSize = 10.0f;
     float centerY = rect.height() / 2.0f;
-    
+
     return QRectF(x - diamondSize / 2, centerY - diamondSize / 2, diamondSize, diamondSize);
 }
 
@@ -1853,46 +2017,97 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
     if (audioData.isEmpty() || markers.isEmpty()) {
         return;
     }
-    
+
     // Отладочный вывод (можно закомментировать после проверки)
     // qDebug() << "drawMarkers: drawing" << markers.size() << "markers, rect:" << rect.width() << "x" << rect.height();
-    
+
     // Вычисляем позицию в сэмплах для видимой области
     float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
     Q_UNUSED(visibleSamples); // Используется неявно через samplesPerPixel
-    
+
+    // Определяем активный сегмент (сегмент, в котором находится позиция воспроизведения)
+    qint64 playbackSample = TimeUtils::msToSamples(playbackPosition, sampleRate);
+    const Marker* activeStartMarker = nullptr;
+    const Marker* activeEndMarker = nullptr;
+
+    // Сортируем метки по позиции для поиска активного сегмента
+    QVector<Marker> sortedMarkers = markers;
+    std::sort(sortedMarkers.begin(), sortedMarkers.end(), [](const Marker& a, const Marker& b) {
+        return a.position < b.position;
+    });
+
+    // Находим сегмент, в котором находится позиция воспроизведения
+    for (int i = 0; i < sortedMarkers.size() - 1; ++i) {
+        if (playbackSample >= sortedMarkers[i].position && playbackSample <= sortedMarkers[i + 1].position) {
+            activeStartMarker = &sortedMarkers[i];
+            activeEndMarker = &sortedMarkers[i + 1];
+            break;
+        }
+    }
+
+    // Если позиция до первой метки
+    if (!sortedMarkers.isEmpty() && playbackSample < sortedMarkers.first().position) {
+        activeStartMarker = nullptr;
+        activeEndMarker = &sortedMarkers.first();
+    }
+
+    // Если позиция после последней метки
+    if (!sortedMarkers.isEmpty() && playbackSample > sortedMarkers.last().position) {
+        activeStartMarker = &sortedMarkers.last();
+        activeEndMarker = nullptr;
+    }
+
+    // Визуально выделяем активный сегмент (полупрозрачный фон)
+    if (activeStartMarker != nullptr || activeEndMarker != nullptr) {
+        float startX = activeStartMarker ?
+            ((activeStartMarker->position - startSample) / samplesPerPixel) : 0.0f;
+        float endX = activeEndMarker ?
+            ((activeEndMarker->position - startSample) / samplesPerPixel) : rect.width();
+
+        // Ограничиваем границы видимой областью
+        startX = qBound(0.0f, startX, static_cast<float>(rect.width()));
+        endX = qBound(0.0f, endX, static_cast<float>(rect.width()));
+
+        if (endX > startX) {
+            // Рисуем полупрозрачный фон для активного сегмента
+            QColor activeSegmentColor(255, 255, 0, 30); // Желтый с прозрачностью
+            painter.fillRect(QRectF(startX, 0, endX - startX, rect.height()), activeSegmentColor);
+        }
+    }
+
+    // Включаем антиалиасинг только для меток (для плавности)
     painter.setRenderHint(QPainter::Antialiasing, true);
-    
+
     for (int i = 0; i < markers.size(); ++i) {
         const Marker& marker = markers[i];
-        
+
         // Вычисляем X позицию метки
         float x = (marker.position - startSample) / samplesPerPixel;
-        
+
         // Проверяем, видна ли метка в видимой области
         if (x < -10 || x > rect.width() + 10) {
             // Метка вне видимой области, пропускаем
             continue;
         }
-        
+
         // Отладочный вывод (можно закомментировать после проверки)
         // qDebug() << "Drawing marker" << i << "at x:" << x << "position:" << marker.position << "startSample:" << startSample;
-        
+
         // Рисуем белую вертикальную линию (более толстую для видимости)
         painter.setPen(QPen(Qt::white, 2.0f));
         painter.drawLine(QPointF(x, 0), QPointF(x, rect.height()));
-        
+
         // Рисуем ромбик в центре высоты виджета
         const float diamondSize = 10.0f; // Размер ромбика
         float centerY = rect.height() / 2.0f; // Центр по вертикали
-        
+
         // Определяем цвета углов в зависимости от сжатия/растяжения участков между метками
         QColor leftColor = Qt::white;  // Левый уголок указывает на участок слева
         QColor rightColor = Qt::white; // Правый уголок указывает на участок справа
-        
+
         // Находим предыдущую метку по позиции (не по индексу, на случай если метки не отсортированы)
         const Marker* prevMarker = nullptr;
         qint64 maxPrevPos = -1;
@@ -1904,12 +2119,12 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
                 }
             }
         }
-        
+
         // Проверяем участок слева (между предыдущей и текущей меткой)
         if (prevMarker != nullptr) {
             qint64 originalLeftDistance = marker.originalPosition - prevMarker->originalPosition;
             qint64 currentLeftDistance = marker.position - prevMarker->position;
-            
+
             if (originalLeftDistance > 0) {
                 if (currentLeftDistance < originalLeftDistance) {
                     // Участок слева сжат - левый уголок синий
@@ -1920,7 +2135,7 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
                 }
             }
         }
-        
+
         // Находим следующую метку по позиции (не по индексу, на случай если метки не отсортированы)
         const Marker* nextMarker = nullptr;
         qint64 minNextPos = -1;
@@ -1932,12 +2147,12 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
                 }
             }
         }
-        
+
         // Проверяем участок справа (между текущей и следующей меткой)
         if (nextMarker != nullptr) {
             qint64 originalRightDistance = nextMarker->originalPosition - marker.originalPosition;
             qint64 currentRightDistance = nextMarker->position - marker.position;
-            
+
             if (originalRightDistance > 0) {
                 if (currentRightDistance < originalRightDistance) {
                     // Участок справа сжат - правый уголок синий
@@ -1948,225 +2163,233 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
                 }
             }
         }
-        
+
         // Рисуем ромбик: четыре точки (верх, право, низ, лево)
         // Отраженный по горизонтали: левая часть - левый цвет, правая часть - правый цвет
         QPointF top(x, centerY - diamondSize / 2);      // Верх
         QPointF right(x + diamondSize / 2, centerY);   // Право
         QPointF bottom(x, centerY + diamondSize / 2);  // Низ
         QPointF left(x - diamondSize / 2, centerY);    // Лево
-        
+
         // Рисуем левую половину ромбика (верх-лево-низ)
         painter.setPen(QPen(leftColor, 2.0f));
         painter.drawLine(top, left);
         painter.drawLine(left, bottom);
-        
+
         // Рисуем правую половину ромбика (верх-право-низ)
         painter.setPen(QPen(rightColor, 2.0f));
         painter.drawLine(top, right);
         painter.drawLine(right, bottom);
-        
+
         // Если это конечная метка (isEndMarker), показываем "Конец таймлайна" справа
         // Конечная метка может быть перемещена, но она всегда обозначает конец таймлайна
         if (marker.isEndMarker) {
             const float lineY = centerY; // По центру высоты
             const float textOffset = 15.0f; // Отступ текста от линии
-            
+
             // Горизонтальная линия справа от метки
             const float lineLength = 30.0f;
             painter.setPen(QPen(Qt::white, 1.0f));
             painter.drawLine(QPointF(x + 5, lineY), QPointF(x + lineLength, lineY));
-            
+
             // Текст "Конец таймлайна" справа от метки
             QString timelineEndText = "Конец таймлайна";
             QFontMetrics fm(painter.font());
             QRect textRect = fm.boundingRect(timelineEndText);
             painter.setPen(Qt::white);
-            painter.drawText(QRectF(x + textOffset, lineY - textRect.height() - 5, 
-                                   textRect.width(), textRect.height()), 
+            painter.drawText(QRectF(x + textOffset, lineY - textRect.height() - 5,
+                                   textRect.width(), textRect.height()),
                             Qt::AlignLeft | Qt::AlignTop, timelineEndText);
         } else if (nextMarker != nullptr) {
             // Обычная логика для меток с следующей меткой справа
             // Используем найденную ранее nextMarker (по позиции, а не по индексу)
-            
+
             // Вычисляем позицию следующей метки
             float nextX = (nextMarker->position - startSample) / samplesPerPixel;
-            
+
             // Вычисляем коэффициент сжатия-растяжения между метками
             qint64 originalDistance = nextMarker->originalPosition - marker.originalPosition;
             qint64 currentDistance = nextMarker->position - marker.position;
-            
-            // Показываем линии только если есть изменение
-            if (originalDistance > 0 && currentDistance != originalDistance) {
+
+            // Показываем коэффициенты всегда, когда есть две метки (даже если они еще не были перемещены)
+            if (originalDistance > 0) {
                 float coefficient = float(currentDistance) / float(originalDistance);
-                
+
                 // Горизонтальные линии между метками
                 const float lineY = centerY; // По центру высоты
                 const float midX = (x + nextX) / 2.0f; // Середина между метками
-                
+
                 // Линия слева (от текущей метки до середины)
                 painter.setPen(QPen(Qt::white, 1.0f));
                 painter.drawLine(QPointF(x + 5, lineY), QPointF(midX - 20, lineY));
-                
+
                 // Линия справа (от середины до следующей метки)
                 painter.drawLine(QPointF(midX + 20, lineY), QPointF(nextX - 5, lineY));
-                
+
                 // Коэффициент сверху посередине между метками
                 QString coeffText = QString::number(coefficient, 'f', 3);
                 QFontMetrics fm(painter.font());
                 QRect textRect = fm.boundingRect(coeffText);
                 painter.setPen(Qt::white);
-                painter.drawText(QRectF(midX - textRect.width() / 2, lineY - textRect.height() - 5, 
-                                       textRect.width(), textRect.height()), 
+                painter.drawText(QRectF(midX - textRect.width() / 2.0f, lineY - textRect.height() - 5,
+                                       textRect.width(), textRect.height()),
                                 Qt::AlignCenter, coeffText);
             }
         }
     }
-    
+
     painter.setRenderHint(QPainter::Antialiasing, false);
 }
 
-QVector<QVector<float>> WaveformView::applyTimeStretch(const QVector<Marker>& markers) const
+WaveformView::TimeStretchResult WaveformView::applyTimeStretch(const QVector<Marker>& markers) const
 {
+    TimeStretchResult result;
+
+    // Делегируем всю логику в MarkerStretchEngine
+    MarkerStretchResult engineResult = applyTimeStretchToMarkers(audioData, markers, sampleRate);
+
+    result.audioData = engineResult.audioData;
+    result.newMarkers = engineResult.newMarkers;
+
+    return result;
+}
+
+WaveformView::ActiveSegmentInfo WaveformView::getActiveSegmentInfo() const
+{
+    ActiveSegmentInfo info;
+    info.isValid = false;
+
     if (audioData.isEmpty() || markers.isEmpty()) {
-        return audioData;
+        return info;
     }
-    
-    // Создаем копию меток и сортируем по originalPosition для корректной обработки
+
+    // Конвертируем позицию воспроизведения в сэмплы
+    qint64 playbackSample = TimeUtils::msToSamples(playbackPosition, sampleRate);
+
+    // Сортируем метки по позиции
     QVector<Marker> sortedMarkers = markers;
     std::sort(sortedMarkers.begin(), sortedMarkers.end(), [](const Marker& a, const Marker& b) {
-        return a.originalPosition < b.originalPosition;
+        return a.position < b.position;
     });
-    
-    QVector<QVector<float>> result;
-    result.reserve(audioData.size());
-    
-    // Инициализируем результат пустыми каналами
-    for (int ch = 0; ch < audioData.size(); ++ch) {
-        result.append(QVector<float>());
-    }
-    
-    qint64 audioSize = audioData[0].size();
-    
-    // Обрабатываем участок от начала аудио до первой метки (если первая метка не в позиции 0)
-    if (!sortedMarkers.isEmpty() && sortedMarkers.first().originalPosition > 0) {
-        qint64 segmentStart = 0;
-        qint64 segmentEnd = sortedMarkers.first().originalPosition;
-        
-        // Вычисляем коэффициент для начального участка
-        // Если первая метка перемещена, растягиваем/сжимаем начальный участок пропорционально
-        qint64 originalLength = segmentEnd - segmentStart;
-        qint64 targetLength = sortedMarkers.first().position - 0;
-        float stretchFactor = (originalLength > 0) ? 
-            static_cast<float>(targetLength) / static_cast<float>(originalLength) : 1.0f;
-        
-        if (originalLength > 0 && segmentStart < segmentEnd) {
-            for (int ch = 0; ch < audioData.size(); ++ch) {
-                QVector<float> segment;
-                segment.reserve(segmentEnd - segmentStart);
-                for (qint64 j = segmentStart; j < segmentEnd; ++j) {
-                    segment.append(audioData[ch][j]);
-                }
-                
-                QVector<float> processedSegment = TimeStretchProcessor::processSegment(segment, stretchFactor);
-                result[ch].append(processedSegment);
-            }
-        }
-    }
-    
-    // Обрабатываем каждый сегмент между метками
+
+    // Находим сегмент, в котором находится позиция воспроизведения
+    const Marker* startMarker = nullptr;
+    const Marker* endMarker = nullptr;
+
     for (int i = 0; i < sortedMarkers.size() - 1; ++i) {
-        const Marker& startMarker = sortedMarkers[i];
-        const Marker& endMarker = sortedMarkers[i + 1];
-        
-        // Вычисляем коэффициенты сжатия-растяжения
-        qint64 originalDistance = endMarker.originalPosition - startMarker.originalPosition;
-        qint64 currentDistance = endMarker.position - startMarker.position;
-        
-        if (originalDistance <= 0) {
-            // Пропускаем некорректные сегменты
-            continue;
-        }
-        
-        float stretchFactor = static_cast<float>(currentDistance) / static_cast<float>(originalDistance);
-        
-        // Извлекаем сегмент из исходных данных (по originalPosition)
-        qint64 segmentStart = startMarker.originalPosition;
-        qint64 segmentEnd = endMarker.originalPosition;
-        
-        // Ограничиваем границами аудио
-        segmentStart = qBound(qint64(0), segmentStart, qint64(audioSize - 1));
-        segmentEnd = qBound(qint64(0), segmentEnd, qint64(audioSize - 1));
-        
-        if (segmentStart >= segmentEnd) {
-            continue;
-        }
-        
-        // Обрабатываем каждый канал
-        for (int ch = 0; ch < audioData.size(); ++ch) {
-            // Извлекаем сегмент
-            QVector<float> segment;
-            segment.reserve(segmentEnd - segmentStart);
-            for (qint64 j = segmentStart; j < segmentEnd; ++j) {
-                segment.append(audioData[ch][j]);
-            }
-            
-            // Применяем сжатие-растяжение
-            QVector<float> processedSegment = TimeStretchProcessor::processSegment(segment, stretchFactor);
-            
-            // Добавляем к результату
-            result[ch].append(processedSegment);
+        if (playbackSample >= sortedMarkers[i].position && playbackSample <= sortedMarkers[i + 1].position) {
+            startMarker = &sortedMarkers[i];
+            endMarker = &sortedMarkers[i + 1];
+            break;
         }
     }
-    
-    // Обрабатываем участок от последней метки до конца аудио
-    if (!sortedMarkers.isEmpty()) {
-        const Marker& lastMarker = sortedMarkers.last();
-        qint64 segmentStart = lastMarker.originalPosition;
-        qint64 segmentEnd = audioSize;
-        
-        if (segmentStart < segmentEnd) {
-            // Вычисляем коэффициент для конечного участка
-            qint64 originalLength = segmentEnd - segmentStart;
-            qint64 targetLength = originalLength;
-            
-            if (lastMarker.isEndMarker) {
-                // Конечная метка - вычисляем целевую длину на основе позиции метки
-                // Вычисляем текущую длину выходного аудио (после обработки всех предыдущих сегментов)
-                qint64 currentOutputSize = result.isEmpty() ? 0 : result[0].size();
-                // Позиция конечной метки должна быть в конце выходного аудио
-                qint64 targetOutputSize = lastMarker.position + 1; // +1 потому что position это индекс
-                
-                if (targetOutputSize > currentOutputSize) {
-                    // Вычисляем, сколько нужно добавить
-                    targetLength = targetOutputSize - currentOutputSize;
-                } else {
-                    // Если целевой размер меньше текущего, это некорректная ситуация
-                    // Используем исходную длину
-                    targetLength = originalLength;
-                }
+
+    // Если позиция до первой метки
+    if (!sortedMarkers.isEmpty() && playbackSample < sortedMarkers.first().position) {
+        startMarker = nullptr;
+        endMarker = &sortedMarkers.first();
+    }
+
+    // Если позиция после последней метки
+    if (!sortedMarkers.isEmpty() && playbackSample > sortedMarkers.last().position) {
+        startMarker = &sortedMarkers.last();
+        endMarker = nullptr;
+    }
+
+    if (startMarker != nullptr || endMarker != nullptr) {
+        info.isValid = true;
+
+        if (startMarker != nullptr) {
+            info.startTimeMs = startMarker->timeMs;
+            info.startMarkerTime = TimeUtils::formatTime(startMarker->timeMs);
+        } else {
+            info.startTimeMs = 0;
+            info.startMarkerTime = "00:00.0";
+        }
+
+        if (endMarker != nullptr) {
+            info.endTimeMs = endMarker->timeMs;
+            info.endMarkerTime = TimeUtils::formatTime(endMarker->timeMs);
+        } else {
+            qint64 audioSize = audioData[0].size();
+            info.endTimeMs = TimeUtils::samplesToMs(audioSize, sampleRate);
+            info.endMarkerTime = TimeUtils::formatTime(info.endTimeMs);
+        }
+
+        // Вычисляем коэффициент сжатия-растяжения
+        if (startMarker != nullptr && endMarker != nullptr) {
+            qint64 originalDistance = endMarker->originalPosition - startMarker->originalPosition;
+            qint64 currentDistance = endMarker->position - startMarker->position;
+            if (originalDistance > 0) {
+                info.stretchFactor = static_cast<float>(currentDistance) / static_cast<float>(originalDistance);
             } else {
-                // Обычная метка - конечный участок обрабатывается без изменений (коэффициент 1.0)
-                // или можно использовать коэффициент на основе перемещения метки
-                // Для простоты используем коэффициент 1.0
-                targetLength = originalLength;
+                info.stretchFactor = 1.0f;
             }
-            
-            float stretchFactor = (originalLength > 0) ? 
-                static_cast<float>(targetLength) / static_cast<float>(originalLength) : 1.0f;
-            
-            for (int ch = 0; ch < audioData.size(); ++ch) {
-                QVector<float> segment;
-                segment.reserve(segmentEnd - segmentStart);
-                for (qint64 j = segmentStart; j < segmentEnd; ++j) {
-                    segment.append(audioData[ch][j]);
-                }
-                
-                QVector<float> processedSegment = TimeStretchProcessor::processSegment(segment, stretchFactor);
-                result[ch].append(processedSegment);
-            }
+        } else {
+            info.stretchFactor = 1.0f;
         }
     }
-    
-    return result;
-} 
+
+    return info;
+}
+
+void WaveformView::scheduleUpdate(const QRect& rect)
+{
+    pendingUpdate = true;
+    if (rect.isValid()) {
+        // Объединяем области обновления
+        if (pendingUpdateRect.isValid()) {
+            pendingUpdateRect = pendingUpdateRect.united(rect);
+        } else {
+            pendingUpdateRect = rect;
+        }
+    } else {
+        // Полное обновление - сбрасываем область
+        pendingUpdateRect = QRect();
+    }
+
+    // Запускаем таймер, если он еще не запущен
+    if (!updateTimer->isActive()) {
+        updateTimer->start();
+    }
+}
+
+void WaveformView::scheduleRealtimeProcess()
+{
+    if (!realtimeProcessPending) {
+        realtimeProcessPending = true;
+        // Используем QTimer::singleShot для throttling (50ms)
+        QTimer::singleShot(50, this, [this]() {
+            if (realtimeProcessPending) {
+                realtimeProcessPending = false;
+                processRealtimeStretch();
+                scheduleUpdate(); // Используем существующий throttled update
+            }
+        });
+    }
+}
+
+void WaveformView::processRealtimeStretch()
+{
+    if (originalAudioData.isEmpty() || markers.size() < 2) {
+        return;
+    }
+
+    // Применяем обработку к исходным данным
+    MarkerStretchResult result = applyTimeStretchToMarkers(
+        originalAudioData,  // Всегда используем исходные данные
+        markers,            // Текущие метки с их position и originalPosition
+        sampleRate
+    );
+
+    // Обновляем только audioData для визуализации
+    audioData = result.audioData;
+
+    // НЕ обновляем метки - сохраняем текущие position и originalPosition
+    // Они управляются пользователем и отражают исходную геометрию
+}
+
+void WaveformView::updateOriginalData(const QVector<QVector<float>>& newData)
+{
+    originalAudioData = newData;
+}

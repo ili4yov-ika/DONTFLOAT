@@ -1,6 +1,6 @@
 #include "../include/mainwindow.h"
 #include "../include/beatfixcommand.h"
-#include "../include/timestretchcommand.h"
+#include "../include/markerstretchengine.h"
 #include "ui_mainwindow.h"
 #include <QtWidgets/QApplication>
 #include <QtCore/QFileInfo>
@@ -23,6 +23,7 @@
 #include <QtWidgets/QComboBox>
 #include <QtCore/QDataStream>
 #include <QtCore/QFile>
+#include <QtCore/QStandardPaths>
 
 #include <QtWidgets/QMessageBox>
 #include <QtCore/QDir>
@@ -43,6 +44,8 @@
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QVBoxLayout>
 #include <QtCore/QRegularExpression>
+#include <QtCore/QUrl>
+#include <QtCore/QtAlgorithms>
 #include <cmath>
 
 #ifndef M_PI
@@ -74,7 +77,7 @@ MainWindow::MainWindow(QWidget *parent)
     , isLoopEnabled(false)
     , loopStartPosition(0)
     , loopEndPosition(0)
-    , isPitchGridVisible(true)
+    , isPitchGridVisible(false) // По умолчанию питч-сетка скрыта
     , currentKey("")
     , currentKey2("")
     , keyContextMenu(nullptr)
@@ -167,6 +170,18 @@ MainWindow::MainWindow(QWidget *parent)
         }
         if (pitchGridContainer) {
             pitchGridContainer->setMinimumHeight(80);
+            // По умолчанию скрываем питч-сетку
+            pitchGridContainer->setVisible(false);
+            mainSplitter->setChildrenCollapsible(true);
+            // Устанавливаем размеры так, чтобы волна заняла всё пространство
+            QList<int> sizes;
+            int totalHeight = mainSplitter->height();
+            if (totalHeight > 0) {
+                sizes << totalHeight << 0;
+            } else {
+                sizes << 450 << 0; // Временные размеры, если высота еще не установлена
+            }
+            mainSplitter->setSizes(sizes);
         }
         
         // Connect splitter signals if needed
@@ -626,8 +641,8 @@ void MainWindow::readSettings()
     QString colorScheme = settings.value("colorScheme", "dark").toString();
     setColorScheme(colorScheme);
     
-    // Восстанавливаем видимость питч-сетки
-    isPitchGridVisible = settings.value("pitchGridVisible", true).toBool();
+    // Восстанавливаем видимость питч-сетки (по умолчанию скрыта)
+    isPitchGridVisible = settings.value("pitchGridVisible", false).toBool();
     
     // Восстанавливаем текущие тональности
     currentKey = settings.value("currentKey", "").toString();
@@ -659,12 +674,14 @@ void MainWindow::readSettings()
         }
     }
     
-    // Обновляем текст действия
+    // Обновляем текст действия и состояние (заблокирован/разблокирован)
     if (togglePitchGridAct) {
         if (isPitchGridVisible) {
             togglePitchGridAct->setText(QString::fromUtf8("Убрать питч-сетку"));
+            togglePitchGridAct->setEnabled(true); // Разблокируем, если видима
         } else {
             togglePitchGridAct->setText(QString::fromUtf8("Показать питч-сетку"));
+            togglePitchGridAct->setEnabled(false); // Блокируем, если скрыта
         }
     }
     
@@ -904,6 +921,12 @@ void MainWindow::setupConnections()
                 }
             });
 
+        // Обновление воспроизведения при завершении перетаскивания метки
+        connect(waveformView, &WaveformView::markerDragFinished, this,
+            [this]() {
+                updatePlaybackAfterMarkerDrag();
+            });
+        
         // Синхронизация горизонтального смещения
         connect(horizontalScrollBar, &QScrollBar::valueChanged, this,
             [this](int value) {
@@ -1158,6 +1181,18 @@ void MainWindow::updatePlaybackPosition(qint64 position)
         waveformView->setPlaybackPosition(position);
         updateTimeLabel(position);
         updateLoopPoints();
+        
+        // Показываем информацию об активном сегменте в статусной строке (если есть метки)
+        if (!waveformView->getMarkers().isEmpty()) {
+            WaveformView::ActiveSegmentInfo segmentInfo = waveformView->getActiveSegmentInfo();
+            if (segmentInfo.isValid) {
+                QString segmentText = QString::fromUtf8("Сегмент: %1 - %2 | Коэффициент: %3")
+                    .arg(segmentInfo.startMarkerTime)
+                    .arg(segmentInfo.endMarkerTime)
+                    .arg(segmentInfo.stretchFactor, 0, 'f', 3);
+                statusBar()->showMessage(segmentText, 100);
+            }
+        }
     }
     
     // Обновляем позицию в PitchGridWidget
@@ -1233,10 +1268,11 @@ void MainWindow::createActions()
     loopEndAct->setShortcut(QKeySequence(Qt::Key_B));
     connect(loopEndAct, &QAction::triggered, this, &MainWindow::setLoopEnd);
 
-    // Pitch grid toggle action
-    togglePitchGridAct = new QAction(QString::fromUtf8("Убрать питч-сетку"), this);
+    // Pitch grid toggle action (по умолчанию заблокирован и показывает "Показать питч-сетку")
+    togglePitchGridAct = new QAction(QString::fromUtf8("Показать питч-сетку"), this);
     togglePitchGridAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
     togglePitchGridAct->setStatusTip(QString::fromUtf8("Переключить видимость питч-сетки"));
+    togglePitchGridAct->setEnabled(false); // Заблокирован по умолчанию
     connect(togglePitchGridAct, &QAction::triggered, this, &MainWindow::togglePitchGrid);
 
     // Beat deviations toggle action
@@ -2481,11 +2517,13 @@ void MainWindow::togglePitchGrid()
         }
     }
     
-    // Обновляем текст действия
+    // Обновляем текст действия и состояние (заблокирован/разблокирован)
     if (isPitchGridVisible) {
         togglePitchGridAct->setText(QString::fromUtf8("Убрать питч-сетку"));
+        togglePitchGridAct->setEnabled(true); // Разблокируем, если видима
     } else {
         togglePitchGridAct->setText(QString::fromUtf8("Показать питч-сетку"));
+        togglePitchGridAct->setEnabled(false); // Блокируем, если скрыта
     }
     
     // Сохраняем настройку
@@ -2838,49 +2876,37 @@ void MainWindow::applyTimeStretch()
         return;
     }
     
-    // Применяем сжатие-растяжение
-    QVector<QVector<float>> newData = waveformView->applyTimeStretch(currentMarkers);
+    // Применяем сжатие-растяжение (теперь возвращает структуру с данными и метками)
+    WaveformView::TimeStretchResult stretchResult = waveformView->applyTimeStretch(currentMarkers);
+    QVector<QVector<float>> newData = stretchResult.audioData;
+    QVector<Marker> newMarkers = stretchResult.newMarkers;
     
     if (newData.isEmpty() || newData[0].isEmpty()) {
         statusBar()->showMessage(QString::fromUtf8("Ошибка при обработке аудио"), 3000);
         return;
     }
     
-    // Обновляем метки: пересчитываем позиции на основе обработанных сегментов
-    QVector<Marker> newMarkers = currentMarkers;
-    qint64 currentOutputPos = 0;
+    // Метки уже обновлены в applyTimeStretch на основе реальной длины обработанных сегментов
+    // Проверяем, что все метки правильно обновлены
+    int sampleRate = waveformView->getSampleRate();
+    for (Marker& marker : newMarkers) {
+        marker.updateTimeFromSamples(sampleRate);
+    }
     
-    // Пересчитываем позиции меток на основе обработанных сегментов
-    for (int i = 0; i < newMarkers.size(); ++i) {
-        if (i == 0) {
-            // Первая метка всегда в позиции 0
-            newMarkers[i].position = 0;
-            newMarkers[i].originalPosition = 0;
-            currentOutputPos = 0;
-        } else {
-            // Вычисляем новую позицию на основе предыдущего сегмента
-            const Marker& prevMarker = currentMarkers[i - 1];
-            const Marker& currMarker = currentMarkers[i];
-            
-            qint64 originalDistance = currMarker.originalPosition - prevMarker.originalPosition;
-            qint64 targetDistance = currMarker.position - prevMarker.position;
-            
-            if (originalDistance > 0) {
-                float stretchFactor = static_cast<float>(targetDistance) / static_cast<float>(originalDistance);
-                qint64 processedLength = static_cast<qint64>(originalDistance * stretchFactor);
-                currentOutputPos += processedLength;
-            }
-            
-            newMarkers[i].position = currentOutputPos;
-            newMarkers[i].originalPosition = currentOutputPos;
+    // Убеждаемся, что есть конечная метка
+    bool hasEndMarker = false;
+    for (const Marker& m : newMarkers) {
+        if (m.isEndMarker) {
+            hasEndMarker = true;
+            break;
         }
     }
     
-    // Если последняя метка - конечная, её позиция должна быть в конце нового аудио
-    if (!newMarkers.isEmpty() && newMarkers.last().isEndMarker) {
+    if (!hasEndMarker && !newMarkers.isEmpty()) {
         qint64 newSize = newData[0].size();
-        newMarkers.last().position = newSize - 1;
-        newMarkers.last().originalPosition = newSize - 1;
+        Marker endMarker(newSize - 1, false, true, sampleRate);
+        endMarker.originalPosition = newSize - 1;
+        newMarkers.append(endMarker);
     }
     
     // Создаем команду для undo/redo
@@ -2893,9 +2919,97 @@ void MainWindow::applyTimeStretch()
         QString::fromUtf8("Применить сжатие-растяжение")
     );
     
+    // Применяем команду (push автоматически вызывает redo())
+    // redo() уже обновит originalAudioData через updateOriginalData()
     undoStack->push(command);
     
-    statusBar()->showMessage(QString::fromUtf8("Сжатие-растяжение применено успешно"), 3000);
+    // Явно обновляем визуализацию после применения эффекта
+    if (waveformView) {
+        waveformView->update();
+    }
+
+    // Переключаем QMediaPlayer на обработанное аудио:
+    // сохраняем newData во временный WAV-файл и загружаем его.
+    QString tempWavPath = saveProcessedAudioToTempWav(newData, sampleRate);
+    if (!tempWavPath.isEmpty() && mediaPlayer) {
+        mediaPlayer->setSource(QUrl::fromLocalFile(tempWavPath));
+        mediaPlayer->setPosition(0);
+        
+        // Если было воспроизведение, останавливаем и сбрасываем позицию
+        if (isPlaying) {
+            mediaPlayer->stop();
+            isPlaying = false;
+            if (playbackTimer) {
+                playbackTimer->stop();
+            }
+        }
+    }
+    
+    statusBar()->showMessage(QString::fromUtf8("Сжатие-растяжение применено успешно. Размер: %1 → %2 сэмплов")
+                             .arg(oldData.isEmpty() ? 0 : oldData[0].size())
+                             .arg(newData.isEmpty() ? 0 : newData[0].size()), 5000);
+}
+
+void MainWindow::updatePlaybackAfterMarkerDrag()
+{
+    if (!waveformView || !mediaPlayer) {
+        return;
+    }
+    
+    // Получаем текущие обработанные данные из WaveformView
+    const QVector<QVector<float>>& processedData = waveformView->getAudioData();
+    
+    if (processedData.isEmpty() || processedData[0].isEmpty()) {
+        return;
+    }
+    
+    int sampleRate = waveformView->getSampleRate();
+    
+    // Сохраняем текущую позицию воспроизведения ДО обновления источника
+    qint64 currentPosition = mediaPlayer->position();
+    qint64 oldDuration = mediaPlayer->duration(); // Старая длительность
+    bool wasPlaying = (mediaPlayer->playbackState() == QMediaPlayer::PlayingState);
+    
+    // Сохраняем обработанные данные во временный WAV файл
+    QString tempWavPath = saveProcessedAudioToTempWav(processedData, sampleRate);
+    if (tempWavPath.isEmpty()) {
+        qWarning() << "updatePlaybackAfterMarkerDrag: failed to save processed audio";
+        return;
+    }
+    
+    // Обновляем источник воспроизведения
+    mediaPlayer->setSource(QUrl::fromLocalFile(tempWavPath));
+    
+    // Ждем загрузки нового файла перед восстановлением позиции
+    // Используем одноразовый таймер для ожидания готовности медиаплеера
+    QTimer::singleShot(100, this, [this, currentPosition, oldDuration, wasPlaying]() {
+        if (!mediaPlayer) return;
+        
+        qint64 newDuration = mediaPlayer->duration();
+        
+        // Восстанавливаем позицию воспроизведения (с учетом новой длины файла)
+        if (newDuration > 0 && oldDuration > 0 && currentPosition > 0) {
+            // Масштабируем позицию пропорционально новой длине
+            // Это приблизительное решение, более точное потребует пересчета позиции по меткам
+            float ratio = float(newDuration) / float(oldDuration);
+            qint64 newPosition = qint64(currentPosition * ratio);
+            newPosition = qBound(qint64(0), newPosition, newDuration);
+            mediaPlayer->setPosition(newPosition);
+        } else if (newDuration > 0 && currentPosition > 0) {
+            // Если старой длительности нет, просто ограничиваем текущую позицию
+            mediaPlayer->setPosition(qBound(qint64(0), currentPosition, newDuration));
+        } else {
+            mediaPlayer->setPosition(0);
+        }
+        
+        // Если было воспроизведение, продолжаем его
+        if (wasPlaying) {
+            mediaPlayer->play();
+        }
+    });
+    
+    qDebug() << "updatePlaybackAfterMarkerDrag: updated playback to processed audio, size:"
+             << processedData[0].size() << "samples";
 }
 
 void MainWindow::toggleBeatDeviations()
@@ -2929,4 +3043,99 @@ void MainWindow::toggleBeatWaveform()
             statusBar()->showMessage(QString::fromUtf8("Силуэт ударных отключен"), 2000);
         }
     }
+}
+
+QString MainWindow::saveProcessedAudioToTempWav(const QVector<QVector<float>> &data, int sampleRate) const
+{
+    if (data.isEmpty() || data[0].isEmpty() || sampleRate <= 0) {
+        qWarning() << "saveProcessedAudioToTempWav: invalid data or sampleRate";
+        return QString();
+    }
+
+    int channels = data.size();
+    qint64 frames = data[0].size();
+
+    // Проверяем, что все каналы одинаковой длины
+    for (int ch = 1; ch < channels; ++ch) {
+        if (data[ch].size() != frames) {
+            qWarning() << "saveProcessedAudioToTempWav: channel size mismatch";
+            return QString();
+        }
+    }
+
+    QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    if (tempDir.isEmpty()) {
+        tempDir = QDir::currentPath();
+    }
+
+    QDir dir(tempDir);
+    if (!dir.exists()) {
+        dir.mkpath(tempDir);
+    }
+
+    QString filePath = dir.filePath("dontfloat_processed.wav");
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qWarning() << "saveProcessedAudioToTempWav: cannot open file for writing:" << filePath;
+        return QString();
+    }
+
+    // Параметры WAV
+    const int bitsPerSample = 16;
+    const int bytesPerSample = bitsPerSample / 8;
+    const int byteRate = sampleRate * channels * bytesPerSample;
+    const int blockAlign = channels * bytesPerSample;
+    const qint64 dataChunkSize = frames * channels * bytesPerSample;
+    const qint64 riffChunkSize = 36 + dataChunkSize;
+
+    // Пишем заголовок WAV (RIFF little-endian)
+    auto writeLE32 = [&](quint32 value) {
+        char b[4];
+        b[0] = static_cast<char>(value & 0xFF);
+        b[1] = static_cast<char>((value >> 8) & 0xFF);
+        b[2] = static_cast<char>((value >> 16) & 0xFF);
+        b[3] = static_cast<char>((value >> 24) & 0xFF);
+        file.write(b, 4);
+    };
+    auto writeLE16 = [&](quint16 value) {
+        char b[2];
+        b[0] = static_cast<char>(value & 0xFF);
+        b[1] = static_cast<char>((value >> 8) & 0xFF);
+        file.write(b, 2);
+    };
+
+    // RIFF header
+    file.write("RIFF", 4);
+    writeLE32(static_cast<quint32>(riffChunkSize));
+    file.write("WAVE", 4);
+
+    // fmt chunk
+    file.write("fmt ", 4);
+    writeLE32(16);                    // Subchunk1Size for PCM
+    writeLE16(1);                     // AudioFormat PCM
+    writeLE16(static_cast<quint16>(channels));
+    writeLE32(static_cast<quint32>(sampleRate));
+    writeLE32(static_cast<quint32>(byteRate));
+    writeLE16(static_cast<quint16>(blockAlign));
+    writeLE16(static_cast<quint16>(bitsPerSample));
+
+    // data chunk
+    file.write("data", 4);
+    writeLE32(static_cast<quint32>(dataChunkSize));
+
+    // Пишем interleaved PCM16 данные
+    for (qint64 i = 0; i < frames; ++i) {
+        for (int ch = 0; ch < channels; ++ch) {
+            float sample = data[ch][static_cast<int>(i)];
+            // Клэмпим в [-1.0, 1.0] и конвертируем в int16
+            if (sample > 1.0f) sample = 1.0f;
+            if (sample < -1.0f) sample = -1.0f;
+            qint16 s = static_cast<qint16>(sample * 32767.0f);
+            writeLE16(static_cast<quint16>(s));
+        }
+    }
+
+    file.close();
+    qDebug() << "saveProcessedAudioToTempWav: written" << frames << "frames to" << filePath;
+    return filePath;
 }

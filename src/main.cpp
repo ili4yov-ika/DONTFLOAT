@@ -21,7 +21,6 @@
 #include <cstdlib>
 #include "../include/mainwindow.h"
 #include "../include/bpmanalyzer.h"
-#include "../include/waveformanalyzer.h"
 #include <QStyleFactory>
 
 #ifndef M_PI
@@ -158,6 +157,10 @@ int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& 
 
 int main(int argc, char *argv[])
 {
+    // Вывод в консоль ДО создания Qt приложения
+    std::cout << "=== DONTFLOAT: Начало выполнения ===" << std::endl;
+    std::cout.flush();
+    
     // Сначала парсим командную строку без создания приложения
     QCommandLineParser parser;
     parser.setApplicationDescription("DONTFLOAT - Анализатор и корректор BPM аудиофайлов");
@@ -240,6 +243,16 @@ int main(int argc, char *argv[])
     // GUI режим - создаем QApplication
     QApplication guiApp(argc, argv);
     
+    // Настраиваем вывод qDebug() в консоль
+    qSetMessagePattern("[%{type}] %{appname} (%{file}:%{line}) - %{message}");
+    
+    // Диагностика: проверяем, что Qt инициализирован
+    std::cout << "=== Запуск DONTFLOAT ===" << std::endl;
+    std::cout << "Qt Application создан успешно" << std::endl;
+    std::cout << "Qt версия: " << QT_VERSION_STR << std::endl;
+    qDebug() << "Qt Application создан успешно";
+    qDebug() << "Qt версия:" << QT_VERSION_STR;
+    
     // Установка информации о приложении для QSettings
     QCoreApplication::setOrganizationName("DONTFLOAT");
     QCoreApplication::setApplicationName("DONTFLOAT");
@@ -248,6 +261,11 @@ int main(int argc, char *argv[])
     // Установка иконки приложения
     QIcon::setThemeName("DONTFLOAT");
     QIcon appIcon(":/icons/resources/icons/logo.svg");
+    if (appIcon.isNull()) {
+        qWarning() << "Не удалось загрузить иконку приложения";
+    } else {
+        qDebug() << "Иконка приложения загружена";
+    }
     guiApp.setWindowIcon(appIcon);
 
     // Устанавливаем единообразную темную тему по умолчанию
@@ -281,7 +299,38 @@ int main(int argc, char *argv[])
         }
     }
     
-    MainWindow w;
-    w.show();
-    return guiApp.exec();
+    std::cout << "Создание главного окна..." << std::endl;
+    qDebug() << "Создание главного окна...";
+    
+    try {
+        MainWindow w;
+        std::cout << "Главное окно создано успешно" << std::endl;
+        qDebug() << "Главное окно создано";
+        
+        std::cout << "Показ главного окна..." << std::endl;
+        qDebug() << "Показ главного окна...";
+        w.show();
+        w.raise();  // Поднимаем окно наверх
+        w.activateWindow();  // Активируем окно (дает фокус)
+        
+        // Проверяем, что окно действительно видимо
+        if (w.isVisible()) {
+            std::cout << "Главное окно видимо, размер: " << w.width() << "x" << w.height() << std::endl;
+            qDebug() << "Главное окно видимо, размер:" << w.size();
+        } else {
+            std::cout << "ПРЕДУПРЕЖДЕНИЕ: Главное окно не видимо!" << std::endl;
+            qDebug() << "ПРЕДУПРЕЖДЕНИЕ: Главное окно не видимо!";
+        }
+        
+        std::cout << "Запуск event loop..." << std::endl;
+        qDebug() << "Главное окно показано, запуск event loop...";
+        
+        return guiApp.exec();
+    } catch (const std::exception& e) {
+        std::cerr << "ОШИБКА при создании главного окна: " << e.what() << std::endl;
+        return 1;
+    } catch (...) {
+        std::cerr << "НЕИЗВЕСТНАЯ ОШИБКА при создании главного окна" << std::endl;
+        return 1;
+    }
 }
