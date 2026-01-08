@@ -192,10 +192,10 @@
          <property name="toolTip">
           <string>Размер такта в формате X/Y (например, 4/4, 3/4, 2/4, 6/8, 12/8)</string>
          </property>
-         <property name="placeholderText">
+         <property name="text">
           <string>4/4</string>
          </property>
-         <property name="text">
+         <property name="placeholderText">
           <string>4/4</string>
          </property>
         </widget>
@@ -402,14 +402,14 @@
        </property>
        <item>
         <widget class="QSplitter" name="mainSplitter">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
            <horstretch>0</horstretch>
            <verstretch>1</verstretch>
           </sizepolicy>
+         </property>
+         <property name="orientation">
+          <enum>Qt::Orientation::Vertical</enum>
          </property>
          <property name="childrenCollapsible">
           <bool>false</bool>
@@ -474,7 +474,7 @@
               </size>
              </property>
              <property name="styleSheet">
-             <string>QWidget { padding: 0px; }</string>
+              <string>QWidget { padding: 0px; }</string>
              </property>
             </widget>
            </item>
@@ -577,19 +577,16 @@
                  </property>
                  <item>
                   <widget class="QLabel" name="keyLabel">
-                   <property name="text">
-                    <string>Тональность:</string>
-                   </property>
                    <property name="styleSheet">
                     <string>color: #ccc; font-size: 11px; font-weight: bold;</string>
+                   </property>
+                   <property name="text">
+                    <string>Тональность:</string>
                    </property>
                   </widget>
                  </item>
                  <item>
                   <widget class="QLineEdit" name="keyInput">
-                   <property name="placeholderText">
-                    <string>Не определена</string>
-                   </property>
                    <property name="styleSheet">
                     <string>QLineEdit {
     background-color: #2b2b2b;
@@ -610,14 +607,14 @@ QLineEdit:disabled {
                    </property>
                    <property name="readOnly">
                     <bool>true</bool>
+                   </property>
+                   <property name="placeholderText">
+                    <string>Не определена</string>
                    </property>
                   </widget>
                  </item>
                  <item>
                   <widget class="QLineEdit" name="keyInput2">
-                   <property name="placeholderText">
-                    <string>Модуляция</string>
-                   </property>
                    <property name="styleSheet">
                     <string>QLineEdit {
     background-color: #2b2b2b;
@@ -638,13 +635,16 @@ QLineEdit:disabled {
                    </property>
                    <property name="readOnly">
                     <bool>true</bool>
+                   </property>
+                   <property name="placeholderText">
+                    <string>Модуляция</string>
                    </property>
                   </widget>
                  </item>
                  <item>
                   <spacer name="keyInputSpacer">
                    <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
+                    <enum>Qt::Orientation::Horizontal</enum>
                    </property>
                    <property name="sizeHint" stdset="0">
                     <size>
