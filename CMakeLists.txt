@@ -45,6 +45,7 @@ set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
     src/waveformview.cpp
+    src/markerstretchengine.cpp
     src/pitchgridwidget.cpp
     src/waveformcolors.cpp
     src/bpmanalyzer.cpp
@@ -56,8 +57,8 @@ set(SOURCES
     src/metronomecontroller.cpp
     src/beatfixcommand.cpp
     src/beatvisualizer.cpp
-    src/timestretchcommand.cpp
     src/timestretchprocessor.cpp
+    src/timeutils.cpp
 )
 
 # Add header files
@@ -75,8 +76,9 @@ set(HEADERS
     include/metronomecontroller.h
     include/beatfixcommand.h
     include/beatvisualizer.h
-    include/timestretchcommand.h
     include/timestretchprocessor.h
+    include/markerstretchengine.h
+    include/timeutils.h
 )
 
 # Add UI files
@@ -111,6 +113,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}/Desktop_Qt_6_8_3_MSVC2022_64bit-Debug
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_autogen/include_Debug
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_autogen/include_Release
+    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_autogen
 )
 
 # Link Qt libraries
@@ -179,14 +184,20 @@ if(EXISTS ${QM_DSP_ROOT})
         # C4244: преобразование типов (double->float, int64_t->int, size_t->int) - нормально для библиотеки
         # C4267: преобразование size_t в меньший тип - нормально для библиотеки
         # C4828: проблемы с кодировкой файла - не критично
+        # Используем несколько методов для надежного подавления предупреждений
+        set_target_properties(qm_dsp PROPERTIES
+            VS_WARNINGS_DISABLE "4244;4267;4828"
+            VS_GLOBAL_DisableSpecificWarnings "4244;4267;4828"
+        )
+        # Подавляем предупреждения через опции компилятора
         target_compile_options(qm_dsp PRIVATE
             /wd4244  # Преобразование типов с возможной потерей данных
             /wd4267  # Преобразование size_t в меньший тип
             /wd4828  # Проблемы с кодировкой файла
         )
-        # Для C файлов тоже подавляем предупреждения
+        # Также подавляем для C файлов (kiss_fft) - используем COMPILE_OPTIONS
         set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
-            COMPILE_FLAGS "/wd4244 /wd4267 /wd4828"
+            COMPILE_OPTIONS "/wd4244;/wd4267;/wd4828"
         )
     elseif(UNIX)
         target_compile_definitions(qm_dsp PRIVATE USE_PTHREADS)
@@ -265,12 +276,10 @@ function(add_qt_test test_name)
     # Добавляем тест в CTest
     add_test(NAME ${test_name} COMMAND ${test_name})
     
-    # Устанавливаем рабочую директорию для тестов с файлами
-    if(${test_name} MATCHES ".*file.*")
-        set_tests_properties(${test_name} PROPERTIES
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        )
-    endif()
+    # Устанавливаем рабочую директорию для тестов (чтобы они могли найти файлы из source4test)
+    set_tests_properties(${test_name} PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
 endfunction()
 
 # BPM Analyzer тест (работа с реальными файлами из source4test)

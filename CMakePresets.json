@@ -1,78 +1,45 @@
 {
-  "version": 3,
-  "configurePresets": [
-    {
-      "name": "windows-debug",
-      "displayName": "Windows Debug",
-      "description": "Debug build for Windows with MSVC",
-      "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/build",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_PREFIX_PATH": "C:/Qt/6.9.3/msvc2022_64",
-        "QT_ROOT_DIR": "C:/Qt/6.9.3/msvc2022_64"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
-      "name": "windows-release",
-      "displayName": "Windows Release",
-      "description": "Release build for Windows with MSVC",
-      "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/build",
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_PREFIX_PATH": "C:/Qt/6.9.3/msvc2022_64",
-        "QT_ROOT_DIR": "C:/Qt/6.9.3/msvc2022_64"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
-      "hidden": true,
-      "name": "Qt",
-      "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "$env{QTDIR}"
-      },
-      "vendor": {
-        "qt-project.org/Qt": {
-          "checksum": "wVa86FgEkvdCTVp1/nxvrkaemJc="
+    "version": 3,
+    "configurePresets": [
+        {
+            "hidden": true,
+            "name": "Qt",
+            "cacheVariables": {
+                "CMAKE_PREFIX_PATH": "$env{QTDIR}"
+            },
+            "vendor": {
+                "qt-project.org/Qt": {
+                    "checksum": "wVa86FgEkvdCTVp1/nxvrkaemJc="
+                }
+            }
+        },
+        {
+            "name": "Visual Studio Community 2022 Release - x86_amd64",
+            "displayName": "Visual Studio Community 2022 Release - x86_amd64",
+            "description": "Using compilers for Visual Studio 17 2022 (x86_x64 architecture)",
+            "generator": "Visual Studio 17 2022",
+            "toolset": "host=x86",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/build/install",
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe",
+                "CMAKE_PREFIX_PATH": "C:/Qt/6.9.3/msvc2022_64"
+            }
         }
-      }
-    }
-  ],
-  "buildPresets": [
-    {
-      "name": "windows-debug",
-      "displayName": "Windows Debug Build",
-      "configurePreset": "windows-debug",
-      "configuration": "Debug"
+    ],
+    "vendor": {
+        "qt-project.org/Presets": {
+            "checksum": "67SmY24ZeVbebyKD0fGfIzb/bGI="
+        }
     },
-    {
-      "name": "windows-release",
-      "displayName": "Windows Release Build",
-      "configurePreset": "windows-release",
-      "configuration": "Release"
-    }
-  ],
-  "vendor": {
-    "qt-project.org/Presets": {
-      "checksum": "2JO768/FGMza19eaHf8hqTAMC8c="
-    }
-  }
+    "buildPresets": [
+        {
+            "name": "Visual Studio Community 2022 Release - x86_amd64-debug",
+            "displayName": "Visual Studio Community 2022 Release - x86_amd64 - Debug",
+            "configurePreset": "Visual Studio Community 2022 Release - x86_amd64",
+            "configuration": "Debug"
+        }
+    ]
 }
