@@ -2,13 +2,45 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Qt: Build with qmake (Debug)",
+            "label": "CMake: Configure (Windows)",
             "type": "shell",
-            "command": "qmake",
+            "command": "cmake",
             "args": [
-                "DONTFLOAT.pro",
-                "-spec", "win32-msvc",
-                "CONFIG+=debug"
+                "-S",
+                ".",
+                "-B",
+                "build",
+                "-G",
+                "Visual Studio 17 2022",
+                "-A",
+                "x64",
+                "-DCMAKE_PREFIX_PATH=C:/Qt/6.9.3/msvc2022_64"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Настройка CMake проекта для Visual Studio 2022",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Build (Windows)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--config",
+                "Debug",
+                "-j"
             ],
             "group": {
                 "kind": "build",
@@ -22,20 +54,52 @@
                 "showReuseMessage": true,
                 "clear": false
             },
-            "problemMatcher": [],
-            "detail": "Run qmake for Qt project (Debug)",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Сборка проекта через CMake (Debug)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": []
+        },
+        {
+            "label": "CMake: Build Release (Windows)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--config",
+                "Release",
+                "-j"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Сборка проекта через CMake (Release)",
             "options": {
                 "cwd": "${workspaceFolder}"
             }
         },
         {
-            "label": "Qt: Build with qmake (Release)",
+            "label": "CMake: Clean (Windows)",
             "type": "shell",
-            "command": "qmake",
+            "command": "cmake",
             "args": [
-                "DONTFLOAT.pro",
-                "-spec", "win32-msvc",
-                "CONFIG+=release"
+                "--build",
+                "build",
+                "--target",
+                "clean"
             ],
             "group": "build",
             "presentation": {
@@ -47,7 +111,88 @@
                 "clear": false
             },
             "problemMatcher": [],
-            "detail": "Run qmake for Qt project (Release)",
+            "detail": "Очистка сборки CMake",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Build Tests (Windows)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--config",
+                "Debug",
+                "--target",
+                "bpm_analyzer_test"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Сборка тестов",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Run Tests (Windows)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--test-dir",
+                "build",
+                "-C",
+                "Debug",
+                "--output-on-failure"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Запуск всех тестов через CTest",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Build Tests (Windows)"
+        },
+        {
+            "label": "CMake: Full Rebuild (Windows)",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "-Command",
+                "Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue; cmake -S . -B build -G 'Visual Studio 17 2022' -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.9.3/msvc2022_64; cmake --build build --config Debug -j"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Полная пересборка (удаление build и конфигурация заново)",
             "options": {
                 "cwd": "${workspaceFolder}"
             }
@@ -150,170 +295,6 @@
             }
         },
         {
-            "label": "Qt: Build with nmake",
-            "type": "shell",
-            "command": "build_qt.bat",
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            },
-            "problemMatcher": [
-                "$msCompile"
-            ],
-            "detail": "Build with qmake and nmake using build_qt.bat",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            }
-        },
-        {
-            "label": "Qt: Clean",
-            "type": "shell",
-            "command": "nmake",
-            "args": ["clean"],
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            },
-            "problemMatcher": [],
-            "detail": "Clean Qt build",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            }
-        },
-        {
-            "label": "CMake: Configure (if CMake installed)",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "-S", ".",
-                "-B", "build",
-                "-G", "Visual Studio 17 2022",
-                "-A", "x64"
-            ],
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            },
-            "problemMatcher": [],
-            "detail": "Configure CMake project (requires CMake installation)",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            }
-        },
-        {
-            "label": "CMake: Build Debug (if CMake installed)",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "--build", "build",
-                "--config", "Debug",
-                "--target", "DONTFLOAT"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            },
-            "problemMatcher": "$msCompile",
-            "detail": "Build DONTFLOAT in Debug mode using CMake",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "dependsOn": "CMake: Configure (if CMake installed)"
-        },
-        {
-            "label": "CMake: Build Tests (if CMake installed)",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "--build", "build",
-                "--config", "Debug",
-                "--target", "donfloat_test", "donfloat_file_test"
-            ],
-            "group": "build",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            },
-            "problemMatcher": "$msCompile",
-            "detail": "Build test executables using CMake",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "dependsOn": "CMake: Configure (if CMake installed)"
-        },
-        {
-            "label": "CMake: Run BPM File Test",
-            "type": "shell",
-            "command": "${workspaceFolder}/build/Debug/donfloat_file_test.exe",
-            "group": "test",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": true
-            },
-            "problemMatcher": [],
-            "detail": "Run BPM file test on real audio files",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "dependsOn": "CMake: Build Tests (if CMake installed)"
-        },
-        {
-            "label": "CMake: Run All Tests",
-            "type": "shell",
-            "command": "ctest",
-            "args": [
-                "--test-dir", "build",
-                "--output-on-failure"
-            ],
-            "group": "test",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": true,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": true
-            },
-            "problemMatcher": [],
-            "detail": "Run all CTest tests",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "dependsOn": "CMake: Build Tests (if CMake installed)"
-        }
-        ,
-        {
             "label": "CMake: Configure (Linux Debug)",
             "type": "shell",
             "command": "cmake --preset linux-debug",
@@ -335,7 +316,7 @@
         {
             "label": "CMake: Build Debug (Linux)",
             "type": "shell",
-            "command": "cmake --build build --config Debug",
+            "command": "cmake --build build/build_cmake --config Debug",
             "group": {
                 "kind": "build",
                 "isDefault": false
@@ -377,7 +358,7 @@
         {
             "label": "CMake: Build Release (Linux)",
             "type": "shell",
-            "command": "cmake --build build --config Release",
+            "command": "cmake --build build/build_cmake --config Release",
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -413,6 +394,558 @@
                 "cwd": "${workspaceFolder}"
             },
             "dependsOn": "CMake: Build Debug (Linux)"
+        },
+        {
+            "label": "Qt: Create Build Directory (MSVC2022 Debug)",
+            "type": "shell",
+            "command": "New-Item",
+            "args": [
+                "-ItemType",
+                "Directory",
+                "-Force",
+                "-Path",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Create build directory for MSVC2022 Debug"
+        },
+        {
+            "label": "Qt: qmake6 (Windows MSVC2022 Debug)",
+            "type": "shell",
+            "command": "cmd.exe",
+            "args": [
+                "/c",
+                "call \"C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat\" && C:/Qt/6.9.3/msvc2022_64/bin/qmake.exe \"${workspaceFolder}/DONTFLOAT.pro\" CONFIG+=debug -spec win32-msvc -o Makefile"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Run qmake6 for Qt project (Windows MSVC2022 Debug)",
+            "options": {
+                "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/d", "/c"]
+                }
+            },
+            "dependsOn": "Qt: Create Build Directory (MSVC2022 Debug)"
+        },
+        {
+            "label": "Qt: Create Build Directory (MSVC2022 Release)",
+            "type": "shell",
+            "command": "New-Item",
+            "args": [
+                "-ItemType",
+                "Directory",
+                "-Force",
+                "-Path",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Create build directory for MSVC2022 Release"
+        },
+        {
+            "label": "Qt: qmake6 (Windows MSVC2022 Release)",
+            "type": "shell",
+            "command": "cmd.exe",
+            "args": [
+                "/c",
+                "call \"C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat\" && C:/Qt/6.9.3/msvc2022_64/bin/qmake.exe \"${workspaceFolder}/DONTFLOAT.pro\" CONFIG+=release -spec win32-msvc -o Makefile"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Run qmake6 for Qt project (Windows MSVC2022 Release)",
+            "options": {
+                "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release",
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/d", "/c"]
+                }
+            },
+            "dependsOn": "Qt: Create Build Directory (MSVC2022 Release)"
+        },
+        {
+            "label": "Qt: Build with nmake (Windows MSVC2022 Debug)",
+            "type": "shell",
+            "command": "cmd.exe",
+            "args": [
+                "/c",
+                "call \"C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat\" && nmake"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Build project with nmake (Windows MSVC2022 Debug)",
+            "options": {
+                "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/d", "/c"]
+                }
+            },
+            "dependsOn": "Qt: qmake6 (Windows MSVC2022 Debug)"
+        },
+        {
+            "label": "Qt: Build with nmake (Windows MSVC2022 Release)",
+            "type": "shell",
+            "command": "cmd.exe",
+            "args": [
+                "/c",
+                "call \"C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat\" && nmake"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Build project with nmake (Windows MSVC2022 Release)",
+            "options": {
+                "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release",
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": ["/d", "/c"]
+                }
+            },
+            "dependsOn": "Qt: qmake6 (Windows MSVC2022 Release)"
+        },
+        {
+            "label": "Qt: Create Build Directory (MinGW Debug)",
+            "type": "shell",
+            "command": "New-Item",
+            "args": [
+                "-ItemType",
+                "Directory",
+                "-Force",
+                "-Path",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Create build directory for MinGW Debug"
+        },
+        {
+            "label": "Qt: qmake6 (Windows MinGW Debug)",
+            "type": "shell",
+            "command": "C:/Qt/6.9.3/mingw_64/bin/qmake.exe",
+            "args": [
+                "${workspaceFolder}/DONTFLOAT.pro",
+                "CONFIG+=debug",
+                "-spec",
+                "win32-g++",
+                "-o",
+                "Makefile"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Run qmake6 for Qt project (Windows MinGW Debug)",
+            "options": {
+                "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug"
+            },
+            "dependsOn": "Qt: Create Build Directory (MinGW Debug)"
+        },
+        {
+            "label": "Qt: Create Build Directory (MinGW Release)",
+            "type": "shell",
+            "command": "New-Item",
+            "args": [
+                "-ItemType",
+                "Directory",
+                "-Force",
+                "-Path",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Release"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Create build directory for MinGW Release"
+        },
+        {
+            "label": "Qt: qmake6 (Windows MinGW Release)",
+            "type": "shell",
+            "command": "C:/Qt/6.9.3/mingw_64/bin/qmake.exe",
+            "args": [
+                "${workspaceFolder}/DONTFLOAT.pro",
+                "CONFIG+=release",
+                "-spec",
+                "win32-g++",
+                "-o",
+                "Makefile"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [],
+            "detail": "Run qmake6 for Qt project (Windows MinGW Release)",
+            "options": {
+                "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Release"
+            },
+            "dependsOn": "Qt: Create Build Directory (MinGW Release)"
+        },
+        {
+            "label": "Qt: Build with mingw32-make (Windows MinGW Debug)",
+            "type": "shell",
+            "command": "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe",
+            "args": [
+                "-j${env:NUMBER_OF_PROCESSORS}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Build project with mingw32-make (Windows MinGW Debug)",
+            "options": {
+                "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug"
+            },
+            "dependsOn": "Qt: qmake6 (Windows MinGW Debug)"
+        },
+        {
+            "label": "Qt: Build with mingw32-make (Windows MinGW Release)",
+            "type": "shell",
+            "command": "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe",
+            "args": [
+                "-j${env:NUMBER_OF_PROCESSORS}"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Build project with mingw32-make (Windows MinGW Release)",
+            "options": {
+                "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Release"
+            },
+            "dependsOn": "Qt: qmake6 (Windows MinGW Release)"
+        },
+        {
+            "label": "CMake: Build Tests (Windows MSVC2022 Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+                "--config",
+                "Debug",
+                "--target",
+                "bpm_analyzer_test"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Build tests for Windows MSVC2022 Debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Build Tests (Windows MSVC2022 Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release",
+                "--config",
+                "Release",
+                "--target",
+                "bpm_analyzer_test"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Build tests for Windows MSVC2022 Release",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Build Tests (Windows MinGW Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug",
+                "--config",
+                "Debug",
+                "--target",
+                "bpm_analyzer_test"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Build tests for Windows MinGW Debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Build Tests (Windows MinGW Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Release",
+                "--config",
+                "Release",
+                "--target",
+                "bpm_analyzer_test"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Build tests for Windows MinGW Release",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Run Tests (Windows MSVC2022 Debug)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--test-dir",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+                "--config",
+                "Debug",
+                "--output-on-failure"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Run CTest for Windows MSVC2022 Debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Build Tests (Windows MSVC2022 Debug)"
+        },
+        {
+            "label": "CMake: Run Tests (Windows MSVC2022 Release)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--test-dir",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release",
+                "--config",
+                "Release",
+                "--output-on-failure"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Run CTest for Windows MSVC2022 Release",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Build Tests (Windows MSVC2022 Release)"
+        },
+        {
+            "label": "CMake: Run Tests (Windows MinGW Debug)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--test-dir",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug",
+                "--output-on-failure"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Run CTest for Windows MinGW Debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Build Tests (Windows MinGW Debug)"
+        },
+        {
+            "label": "CMake: Run Tests (Windows MinGW Release)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--test-dir",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Release",
+                "--output-on-failure"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [],
+            "detail": "Run CTest for Windows MinGW Release",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Build Tests (Windows MinGW Release)"
         }
     ]
 }

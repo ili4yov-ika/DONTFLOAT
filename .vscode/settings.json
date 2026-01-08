@@ -1,8 +1,18 @@
 {
-    "cmake.buildDirectory": "${workspaceFolder}/build",
-    "cmake.configureOnOpen": true,
+    "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}",
+    "cmake.configureOnOpen": false,
     "cmake.buildBeforeRun": true,
     "cmake.autoSelectActiveFolder": true,
+    "cmake.preferredGenerators": [
+        "Visual Studio 17 2022",
+        "MinGW Makefiles",
+        "Ninja"
+    ],
+    "task.quickOpen.history": 10,
+    "task.quickOpen.detail": true,
+    "task.quickOpen.skip": false,
+    "debug.onTaskErrors": "showErrors",
+    "debug.allowBreakpointsEverywhere": true,
     "files.associations": {
         "*.ui": "xml",
         "*.qrc": "xml",
@@ -14,8 +24,10 @@
         "${workspaceFolder}/include",
         "${workspaceFolder}/ui",
         "${workspaceFolder}/build",
-        "${workspaceFolder}/build/ui",
-        "${workspaceFolder}/build/moc"
+        "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+        "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug",
+        "${workspaceFolder}/thirdparty/mixxx/lib/qm-dsp",
+        "${workspaceFolder}/thirdparty/mixxx/lib/qm-dsp/include"
     ],
     "C_Cpp.default.defines": [
         "QT_CORE_LIB",
@@ -23,16 +35,75 @@
         "QT_WIDGETS_LIB",
         "QT_MULTIMEDIA_LIB",
         "QT_MULTIMEDIAWIDGETS_LIB",
-        "USE_MIXXX_QM_DSP"
+        "USE_MIXXX_QM_DSP",
+        "kiss_fft_scalar=double",
+        "_USE_MATH_DEFINES"
     ],
-    "cmake.generator": "Unix Makefiles",
+    "cmake.generator": "Visual Studio 17 2022",
     "cmake.platform": "x64",
-    "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
-    "C_Cpp.default.compilerPath": "/usr/bin/g++",
+    "cmake.configureSettings": {
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.9.3/msvc2022_64"
+    },
+    "cmake.additionalKits": [],
+    "cmake.environment": {
+        "PATH": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins/platforms;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}",
+        "QT_PLUGIN_PATH": "C:/Qt/6.9.3/msvc2022_64/plugins"
+    },
+    "cmake.debugConfig": {
+        "environment": [
+            {
+                "name": "PATH",
+                "value": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins/platforms;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}"
+            },
+            {
+                "name": "QT_PLUGIN_PATH",
+                "value": "C:/Qt/6.9.3/msvc2022_64/plugins"
+            }
+        ],
+        "externalConsole": true,
+        "MIMode": "gdb",
+        "stopAtEntry": false
+    },
+    "C_Cpp.default.intelliSenseMode": "windows-msvc-x64",
+    "C_Cpp.default.compilerPath": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe",
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
     "terminal.integrated.defaultProfile.linux": "bash",
     "terminal.integrated.profiles.linux": {
         "bash": {
             "path": "/bin/bash"
         }
-    }
+    },
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": true,
+    "editor.trimAutoWhitespace": true,
+    "files.encoding": "utf8",
+    "files.eol": "\n",
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.DS_Store": true,
+        "**/build": false
+    },
+    "files.watcherExclude": {
+        "**/build/**": true,
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true
+    },
+    "clangd.arguments": [
+        "--background-index",
+        "--completion-style=detailed",
+        "--header-insertion=never",
+        "--pch-storage=memory",
+        "--compile-commands-dir=${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+        "--query-driver=C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/**/cl.exe",
+        "--clang-tidy=false"
+    ],
+    "clangd.fallbackFlags": [
+        "-std=c++17"
+    ],
+    "clangd.path": "clangd",
+    "clangd.checkUpdates": false
 }

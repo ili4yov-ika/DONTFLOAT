@@ -2,58 +2,133 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug DONTFLOAT (CMake build)",
+            "name": "▶️ (CMake) Запуск DONTFLOAT - MSVC Debug",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/DONTFLOAT.exe",
+            "program": "${command:cmake.launchTargetPath}",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins/platforms;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}"
+                },
+                {
+                    "name": "QT_PLUGIN_PATH",
+                    "value": "C:/Qt/6.9.3/msvc2022_64/plugins"
                 }
             ],
             "console": "externalTerminal",
-            "preLaunchTask": "CMake: Build Debug (if CMake installed)"
+            "preLaunchTask": "CMake: Build (Windows)"
         },
         {
-            "name": "Run BPM File Test",
+            "name": "🐛 (CMake) Отладка DONTFLOAT - MSVC Debug",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/donfloat_file_test.exe",
+            "program": "${command:cmake.launchTargetPath}",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins/platforms;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}"
+                },
+                {
+                    "name": "QT_PLUGIN_PATH",
+                    "value": "C:/Qt/6.9.3/msvc2022_64/plugins"
+                },
+                {
+                    "name": "QT_DEBUG_PLUGINS",
+                    "value": "1"
                 }
             ],
-            "console": "externalTerminal",
-            "preLaunchTask": "CMake: Build Tests (if CMake installed)"
+            "console": "integratedTerminal"
         },
         {
-            "name": "Run Unit Tests",
-            "type": "cppvsdbg",
+            "name": "▶️ (qmake) Запуск DONTFLOAT - MinGW Debug",
+            "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/donfloat_test.exe",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug/debug/DONTFLOAT.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.9.3/mingw_64/bin;C:/Qt/6.9.3/mingw_64/plugins/platforms;C:/Qt/6.9.3/mingw_64/plugins;C:/Qt/Tools/mingw1310_64/bin;${env:PATH}"
+                },
+                {
+                    "name": "QT_PLUGIN_PATH",
+                    "value": "C:/Qt/6.9.3/mingw_64/plugins"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/Qt/Tools/mingw1310_64/bin/gdb.exe",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Qt: Build with mingw32-make (Windows MinGW Debug)"
+        },
+        {
+            "name": "▶️ (qmake) Запуск DONTFLOAT - MSVC Debug",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/debug/DONTFLOAT.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins/platforms;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}"
+                },
+                {
+                    "name": "QT_PLUGIN_PATH",
+                    "value": "C:/Qt/6.9.3/msvc2022_64/plugins"
+                },
+                {
+                    "name": "QT_DEBUG_PLUGINS",
+                    "value": "0"
                 }
             ],
             "console": "externalTerminal",
-            "preLaunchTask": "CMake: Build Tests (if CMake installed)"
+            "preLaunchTask": "Qt: Build with nmake (Windows MSVC2022 Debug)"
         },
         {
-            "name": "Debug DONTFLOAT (Linux - qmake)",
+            "name": "🧪 (CMake) Запуск тестов BPM",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/bpm_analyzer_test.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}"
+                },
+                {
+                    "name": "QT_PLUGIN_PATH",
+                    "value": "C:/Qt/6.9.3/msvc2022_64/plugins"
+                }
+            ],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Tests (Windows)"
+        },
+        {
+            "name": "🐧 (Linux) CMake Debug",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/DONTFLOAT",
@@ -72,51 +147,6 @@
                 {
                     "description": "Set Disassembly Flavor to Intel",
                     "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ],
-            "preLaunchTask": "Qt: Build with make (Linux)"
-        },
-        {
-            "name": "Debug DONTFLOAT (Linux - CMake)",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/DONTFLOAT",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-                {
-                    "description": "Set Disassembly Flavor to Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ],
-            "preLaunchTask": "CMake: Build Debug (Linux)"
-        },
-        {
-            "name": "Run BPM Analyzer Test (Linux)",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/bpm_analyzer_test",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
             ],
