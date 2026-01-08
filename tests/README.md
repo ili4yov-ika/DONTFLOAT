@@ -45,10 +45,15 @@ cmake --build build
 
 ### Способ 1: Через скрипт (самый простой)
 
-**Windows:**
-```cmd
+**Windows (PowerShell):**
+```powershell
 cd tests
-run_tests.bat
+.\run_tests.ps1
+```
+
+Или запуск конкретного теста:
+```powershell
+.\run_tests.ps1 bpm_analyzer_test
 ```
 
 **Linux/Mac:**
