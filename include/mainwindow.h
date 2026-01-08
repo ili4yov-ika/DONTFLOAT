@@ -22,6 +22,7 @@
 #include <QtMultimedia/QAudioDecoder>
 #include <QSoundEffect>
 #include <QUndoStack>
+#include <QUrl>
 #include "waveformview.h"
 #include "pitchgridwidget.h"
 #include "metronomecontroller.h"
@@ -80,6 +81,7 @@ private slots:
     void toggleBeatDeviations();
     void toggleBeatWaveform();
     void applyTimeStretch();
+    void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
 
 private:
     void createMenus();
@@ -100,6 +102,11 @@ private:
     void updateHorizontalScrollBar(float zoom);
     void updateHorizontalScrollBarFromOffset(float offset);
     void constrainWindowSize();
+
+    // Сохранение обработанного аудио во временный WAV-файл
+    // и возврат пути к нему. Используется для того, чтобы
+    // QMediaPlayer воспроизводил уже обработанное аудио.
+    QString saveProcessedAudioToTempWav(const QVector<QVector<float>> &data, int sampleRate) const;
 
     // UI components
     Ui::MainWindow *ui;
