@@ -45,7 +45,7 @@ set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
     src/waveformview.cpp
-    src/markerstretchengine.cpp
+    src/markerengine.cpp
     src/pitchgridwidget.cpp
     src/waveformcolors.cpp
     src/bpmanalyzer.cpp
@@ -56,6 +56,7 @@ set(SOURCES
     src/metronomesettingsdialog.cpp
     src/metronomecontroller.cpp
     src/beatfixcommand.cpp
+    src/timestretchcommand.cpp
     src/beatvisualizer.cpp
     src/timestretchprocessor.cpp
     src/timeutils.cpp
@@ -65,6 +66,7 @@ set(SOURCES
 set(HEADERS
     include/mainwindow.h
     include/waveformview.h
+    include/markerengine.h
     include/pitchgridwidget.h
     include/waveformcolors.h
     include/bpmanalyzer.h
@@ -75,9 +77,9 @@ set(HEADERS
     include/metronomesettingsdialog.h
     include/metronomecontroller.h
     include/beatfixcommand.h
+    include/timestretchcommand.h
     include/beatvisualizer.h
     include/timestretchprocessor.h
-    include/markerstretchengine.h
     include/timeutils.h
 )
 
@@ -157,24 +159,24 @@ if(EXISTS ${QM_DSP_ROOT})
         ${QM_DSP_ROOT}/maths/KLDivergence.cpp
         ${QM_DSP_ROOT}/maths/MathUtilities.cpp
     )
-    
+
     # C файлы для kiss_fft (нужно компилировать как C)
     set(QM_DSP_C_SOURCES
         ${QM_DSP_ROOT}/ext/kissfft/kiss_fft.c
         ${QM_DSP_ROOT}/ext/kissfft/tools/kiss_fftr.c
     )
-    
+
     # Создаем библиотеку с C++ и C файлами
-    add_library(qm_dsp STATIC 
+    add_library(qm_dsp STATIC
         ${QM_DSP_CPP_SOURCES}
         ${QM_DSP_C_SOURCES}
     )
-    
+
     # Устанавливаем язык для C файлов
     set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
         LANGUAGE C
     )
-    
+
     # Определения компилятора (как в Mixxx)
     target_compile_definitions(qm_dsp PRIVATE kiss_fft_scalar=double)
     if(MSVC)
@@ -202,17 +204,17 @@ if(EXISTS ${QM_DSP_ROOT})
     elseif(UNIX)
         target_compile_definitions(qm_dsp PRIVATE USE_PTHREADS)
     endif()
-    
+
     # Директории включений (как в Mixxx)
-    target_include_directories(qm_dsp SYSTEM PUBLIC 
-        ${QM_DSP_ROOT} 
+    target_include_directories(qm_dsp SYSTEM PUBLIC
+        ${QM_DSP_ROOT}
         ${QM_DSP_ROOT}/include
     )
-    
+
     # Enable Mixxx algorithm in our analyzer
     target_compile_definitions(${PROJECT_NAME} PRIVATE USE_MIXXX_QM_DSP)
     target_link_libraries(${PROJECT_NAME} PRIVATE qm_dsp)
-    
+
     message(STATUS "Mixxx qm-dsp enabled: ${QM_DSP_ROOT}")
 else()
     message(WARNING "qm-dsp not found at ${QM_DSP_ROOT}, using simplified BPM analyzer")
@@ -242,7 +244,7 @@ enable_testing()
 function(add_qt_test test_name)
     # Все остальные аргументы - исходные файлы
     set(test_sources ${ARGN})
-    
+
     add_executable(${test_name} ${test_sources})
 
     # Автоматическая обработка MOC для Qt Test и всех исходных файлов
@@ -275,7 +277,7 @@ function(add_qt_test test_name)
 
     # Добавляем тест в CTest
     add_test(NAME ${test_name} COMMAND ${test_name})
-    
+
     # Устанавливаем рабочую директорию для тестов (чтобы они могли найти файлы из source4test)
     set_tests_properties(${test_name} PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -291,5 +293,17 @@ add_qt_test(bpm_analyzer_test
 set_tests_properties(bpm_analyzer_test PROPERTIES
     LABELS "bpm;audio;integration;files"
     DESCRIPTION "BPM analyzer tests on real audio files from tests/source4test"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Тесты для новой функциональности вычисления отклонений долей
+add_qt_test(beat_deviation_test
+    tests/beat_deviation_test.cpp
+    src/bpmanalyzer.cpp
+)
+
+set_tests_properties(beat_deviation_test PROPERTIES
+    LABELS "bpm;deviation;unit"
+    DESCRIPTION "Unit tests for beat deviation calculation and unaligned beat detection"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )

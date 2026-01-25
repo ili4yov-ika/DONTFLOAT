@@ -19,7 +19,7 @@ exists($$QM_DSP_ROOT) {
     # Добавляем пути включений
     INCLUDEPATH += $$QM_DSP_ROOT
     INCLUDEPATH += $$QM_DSP_ROOT/include
-    
+
     # Добавляем файлы qm-dsp (те же, что использует Mixxx)
     SOURCES += \
         $$QM_DSP_ROOT/base/Pitch.cpp \
@@ -46,14 +46,14 @@ exists($$QM_DSP_ROOT) {
         $$QM_DSP_ROOT/maths/Correlation.cpp \
         $$QM_DSP_ROOT/maths/KLDivergence.cpp \
         $$QM_DSP_ROOT/maths/MathUtilities.cpp
-    
+
     # Определения компилятора (как в Mixxx)
     DEFINES += kiss_fft_scalar=double
     DEFINES += USE_MIXXX_QM_DSP
-    
+
     # MSVC требует _USE_MATH_DEFINES для M_PI
     win32-msvc*: DEFINES += _USE_MATH_DEFINES
-    
+
     # Подавляем предупреждения компилятора для внешней библиотеки Mixxx
     # C4244: преобразование типов (double->float, int64_t->int, size_t->int) - нормально для библиотеки
     # C4267: преобразование size_t в меньший тип - нормально для библиотеки
@@ -63,7 +63,7 @@ exists($$QM_DSP_ROOT) {
         QMAKE_CXXFLAGS += /wd4244 /wd4267 /wd4828
         QMAKE_CFLAGS += /wd4244 /wd4267 /wd4828
     }
-    
+
     message("Mixxx qm-dsp enabled: $$QM_DSP_ROOT")
 } else {
     message("Warning: qm-dsp not found at $$QM_DSP_ROOT, using simplified BPM analyzer")
@@ -73,7 +73,7 @@ SOURCES += \
         src/main.cpp\
         src/mainwindow.cpp \
         src/waveformview.cpp \
-        src/markerstretchengine.cpp \
+        src/markerengine.cpp \
         src/pitchgridwidget.cpp \
         src/waveformcolors.cpp \
         src/bpmanalyzer.cpp \
@@ -84,15 +84,16 @@ SOURCES += \
         src/metronomesettingsdialog.cpp \
         src/metronomecontroller.cpp \
         src/beatfixcommand.cpp \
+        src/timestretchcommand.cpp \
         src/timestretchprocessor.cpp \
-        src/timeutils.cpp
-        # src/beatvisualizer.cpp
+        src/timeutils.cpp \
+        src/beatvisualizer.cpp
         # src/beatvisualizationsettingsdialog.cpp
 
 HEADERS += \
         include/mainwindow.h \
         include/waveformview.h \
-        include/markerstretchengine.h \
+        include/markerengine.h \
         include/pitchgridwidget.h \
         include/waveformcolors.h \
         include/bpmanalyzer.h \
@@ -103,9 +104,10 @@ HEADERS += \
         include/metronomesettingsdialog.h \
         include/metronomecontroller.h \
         include/beatfixcommand.h \
+        include/timestretchcommand.h \
         include/timestretchprocessor.h \
-        include/timeutils.h
-        # include/beatvisualizer.h
+        include/timeutils.h \
+        include/beatvisualizer.h
         # include/beatvisualizationsettingsdialog.h
 
 FORMS += \
