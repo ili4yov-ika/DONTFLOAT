@@ -78,7 +78,6 @@ private slots:
     void updateScrollBarTransparency();
     void setRussianLanguage();
     void setEnglishLanguage();
-    void toggleBeatDeviations();
     void toggleBeatWaveform();
     void applyTimeStretch();
     void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
@@ -98,6 +97,7 @@ private:
     void resetAudioState();
     void processAudioFile(const QString& filePath);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
+    void createDeviationMarkers(float tolerancePercent);
     QString formatTime(qint64 msPosition);
     void updateHorizontalScrollBar(float zoom);
     void updateHorizontalScrollBarFromOffset(float offset);
@@ -115,14 +115,14 @@ private:
     QScrollBar *horizontalScrollBar;
     QScrollBar *pitchGridVerticalScrollBar;
     QSplitter *mainSplitter;
-    
+
     // Menu components
     QMenu *fileMenu;
     QMenu *editMenu;
     QMenu *viewMenu;
     QMenu *settingsMenu;
     QMenu *colorSchemeMenu;
-    
+
     // Action components
     QAction *openAct;
     QAction *saveAct;
@@ -140,7 +140,6 @@ private:
     QAction *loopStartAct;
     QAction *loopEndAct;
     QAction *togglePitchGridAct;
-    QAction *toggleBeatDeviationsAct;
     QAction *toggleBeatWaveformAct;
     QAction *russianAction;
     QAction *englishAction;
@@ -149,7 +148,7 @@ private:
     // File management
     QString currentFileName;
     bool hasUnsavedChanges;
-    
+
     // Playback components
     bool isPlaying;
     qint64 currentPosition;
@@ -162,7 +161,7 @@ private:
 
     // Metronome components
     MetronomeController *metronomeController;
-    
+
     // Loop components
     bool isLoopEnabled;
     qint64 loopStartPosition;

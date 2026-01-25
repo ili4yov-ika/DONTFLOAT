@@ -10,6 +10,7 @@
 #include <QString>
 #include <QSet>
 #include <memory>
+#include "bpmanalyzer.h"
 
 // Forward declaration для Essentia интеграции
 namespace essentia {
@@ -55,8 +56,18 @@ public:
         float markerOpacity;        // Прозрачность маркеров (0-1)
         float spectrogramOpacity;   // Прозрачность спектрограммы (0-1)
         int spectrogramHeight;     // Высота спектрограммы в пикселях
-        
-        VisualizationSettings() 
+
+        // Настройки для отклонений долей (beat deviations)
+        bool showBeatDeviations;        // Показывать треугольные области отклонений
+        bool showBeatWaveform;          // Показывать силуэт ударных поверх волны
+        bool beatsAligned;              // Были ли доли выровнены (яркие/бледные цвета)
+        float stripeWidth;              // Ширина диагональной полоски
+        float stripeSpacing;            // Расстояние между полосками
+        int deviationAlpha;             // Прозрачность областей отклонений (0-255)
+        float deviationThreshold;       // Порог значимости отклонения (0-1, например 0.02 = 2%)
+        float beatWaveformOpacity;      // Прозрачность силуэта ударных (0-1)
+
+        VisualizationSettings()
             : showBeatMarkers(true)
             , showBeatTypes(true)
             , showEnergyLevels(true)
@@ -67,6 +78,31 @@ public:
             , markerOpacity(0.8f)
             , spectrogramOpacity(0.6f)
             , spectrogramHeight(100)
+            , showBeatDeviations(true)      // Новые настройки
+            , showBeatWaveform(true)
+            , beatsAligned(false)
+            , stripeWidth(4.0f)
+            , stripeSpacing(3.0f)
+            , deviationAlpha(100)
+            , deviationThreshold(0.02f)
+            , beatWaveformOpacity(0.6f)
+        {}
+    };
+
+    // Цветовая схема для отклонений долей
+    struct BeatDeviationColors {
+        QColor stretchedAligned;        // Растянутые выровненные (яркий красный)
+        QColor stretchedUnaligned;      // Растянутые невыровненные (бледно-красный)
+        QColor compressedAligned;       // Сжатые выровненные (яркий синий)
+        QColor compressedUnaligned;     // Сжатые невыровненные (бледно-синий)
+        QColor beatLineColor;           // Цвет вертикальной линии на позиции бита
+
+        BeatDeviationColors()
+            : stretchedAligned(255, 80, 80, 100)
+            , stretchedUnaligned(255, 180, 180, 100)
+            , compressedAligned(80, 80, 255, 100)
+            , compressedUnaligned(180, 180, 255, 100)
+            , beatLineColor(255, 255, 255, 100)
         {}
     };
 
@@ -102,7 +138,7 @@ public:
     static QString getBeatTypeName(BeatType type);
 
     // Методы визуализации
-    static void drawBeatMarkers(QPainter& painter, 
+    static void drawBeatMarkers(QPainter& painter,
                                const QVector<BeatMarker>& beats,
                                const QRectF& rect,
                                float samplesPerPixel,
@@ -120,6 +156,26 @@ public:
                               float samplesPerPixel,
                               int startSample,
                               const VisualizationSettings& settings);
+
+    // Новые методы для отклонений долей
+    static void drawBeatDeviations(QPainter& painter,
+                                   const QVector<BPMAnalyzer::BeatInfo>& beats,
+                                   const QRectF& rect,
+                                   float bpm,
+                                   int sampleRate,
+                                   float samplesPerPixel,
+                                   int startSample,
+                                   const VisualizationSettings& settings,
+                                   const BeatDeviationColors& colors = BeatDeviationColors());
+
+    static void drawBeatWaveform(QPainter& painter,
+                                const QVector<float>& samples,
+                                const QVector<BPMAnalyzer::BeatInfo>& beats,
+                                const QRectF& rect,
+                                int sampleRate,
+                                float samplesPerPixel,
+                                int startSample,
+                                const VisualizationSettings& settings);
 
     // Вспомогательные методы
     static QVector<float> calculateFrequencySpectrum(const QVector<float>& samples,
@@ -159,6 +215,12 @@ private:
                                           int windowSize,
                                           float targetFrequency,
                                           int sampleRate);
+
+    // Вспомогательные методы для отклонений долей
+    static QPixmap createDiagonalPattern(float stripeWidth,
+                                        float stripeSpacing,
+                                        const QColor& color,
+                                        bool isStretched);
 
     // Настройки анализа
     static constexpr int DEFAULT_WINDOW_SIZE = 1024;

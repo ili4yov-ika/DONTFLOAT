@@ -15,49 +15,9 @@
 #include "bpmanalyzer.h"
 #include "waveformcolors.h"
 #include "timeutils.h"
-// #include "beatvisualizer.h"
-
-// Структура для меток
-struct Marker {
-    qint64 position; // Позиция метки в сэмплах
-    qint64 originalPosition; // Исходная позиция метки (для вычисления коэффициента)
-    qint64 timeMs; // Текущая позиция во времени (миллисекунды)
-    qint64 originalTimeMs; // Исходная позиция во времени (миллисекунды)
-    bool isDragging; // Флаг перетаскивания
-    QPoint dragStartPos; // Начальная позиция перетаскивания
-    qint64 dragStartSample; // Начальный сэмпл при перетаскивании
-    bool isFixed; // Флаг неподвижности метки (нельзя перетаскивать)
-    bool isEndMarker; // Флаг конечной метки (особая метка в конце таймлайна, можно двигать, но не создаются новые метки справа)
-    
-    // Конструкторы с автоматическим вычислением времени
-    Marker() : position(0), originalPosition(0), timeMs(0), originalTimeMs(0), isDragging(false), isFixed(false), isEndMarker(false) {}
-    Marker(qint64 pos, int sampleRate = 44100) 
-        : position(pos), originalPosition(pos), isDragging(false), isFixed(false), isEndMarker(false) {
-        timeMs = TimeUtils::samplesToMs(pos, sampleRate);
-        originalTimeMs = timeMs;
-    }
-    Marker(qint64 pos, bool fixed, int sampleRate = 44100) 
-        : position(pos), originalPosition(pos), isDragging(false), isFixed(fixed), isEndMarker(false) {
-        timeMs = TimeUtils::samplesToMs(pos, sampleRate);
-        originalTimeMs = timeMs;
-    }
-    Marker(qint64 pos, bool fixed, bool endMarker, int sampleRate = 44100) 
-        : position(pos), originalPosition(pos), isDragging(false), isFixed(fixed), isEndMarker(endMarker) {
-        timeMs = TimeUtils::samplesToMs(pos, sampleRate);
-        originalTimeMs = timeMs;
-    }
-    
-    // Методы конвертации для синхронизации времени и сэмплов
-    void updateTimeFromSamples(int sampleRate) {
-        timeMs = TimeUtils::samplesToMs(position, sampleRate);
-        originalTimeMs = TimeUtils::samplesToMs(originalPosition, sampleRate);
-    }
-    
-    void updateSamplesFromTime(int sampleRate) {
-        position = TimeUtils::msToSamples(timeMs, sampleRate);
-        originalPosition = TimeUtils::msToSamples(originalTimeMs, sampleRate);
-    }
-};
+#include "beatvisualizer.h"
+#include "markerengine.h"
+#include "timestretchprocessor.h"
 
 class WaveformView : public QWidget
 {
@@ -68,8 +28,10 @@ public:
 
     void setAudioData(const QVector<QVector<float>>& data);
     void setBeatInfo(const QVector<BPMAnalyzer::BeatInfo>& beats);
+    QVector<BPMAnalyzer::BeatInfo> getBeatInfo() const { return beats; }
     void setGridStartSample(qint64 sample) { gridStartSample = sample; update(); }
     void setBPM(float bpm);
+    float getBPM() const { return bpm; }
     void setSampleRate(int rate);
     int getSampleRate() const { return sampleRate; }
     void setPlaybackPosition(qint64 position); // position в миллисекундах
@@ -89,18 +51,18 @@ public:
     void setBarsDisplayMode(bool showBars);
     void setBeatsPerBar(int beats);
     int getBeatsPerBar() const { return beatsPerBar; }
-    void setShowBeatDeviations(bool show);
-    bool getShowBeatDeviations() const { return showBeatDeviations; }
     void setShowBeatWaveform(bool show);
-    bool getShowBeatWaveform() const { return showBeatWaveform; }
-    void setBeatsAligned(bool aligned) { beatsAligned = aligned; update(); }
-    bool getBeatsAligned() const { return beatsAligned; }
-    
+    bool getShowBeatWaveform() const;
+    void setBeatsAligned(bool aligned);
+    bool getBeatsAligned() const;
+
     // Методы для работы с метками
     void addMarker(qint64 position);
+    void addMarker(const Marker& marker);
     void removeMarker(int index);
+    void sortMarkers();
     QVector<Marker> getMarkers() const { return markers; }
-    
+
     // Метод для получения информации об активном сегменте
     struct ActiveSegmentInfo {
         bool isValid;
@@ -119,19 +81,16 @@ public:
         }
         update();
     }
-    void clearMarkers() { markers.clear(); update(); }
-    
+    void clearMarkers();
+
     // Метод для обновления исходных данных (используется TimeStretchCommand)
     void updateOriginalData(const QVector<QVector<float>>& newData);
-    
+
     // Методы для применения сжатия-растяжения
     // Возвращает структуру с обработанными данными и новыми позициями меток
-    struct TimeStretchResult {
-        QVector<QVector<float>> audioData;
-        QVector<Marker> newMarkers;
-    };
-    TimeStretchResult applyTimeStretch(const QVector<Marker>& markers) const;
-    
+    // Теперь использует TimeStretchProcessor::StretchResult
+    TimeStretchProcessor::StretchResult applyTimeStretch(const QVector<Marker>& markers) const;
+
     // Новые методы для улучшенной визуализации ударных (временно отключены)
     /*
     void setBeatVisualizationSettings(const BeatVisualizer::VisualizationSettings& settings);
@@ -144,6 +103,7 @@ signals:
     void zoomChanged(float zoom); // Сигнал для обновления скроллбара
     void horizontalOffsetChanged(float offset); // Сигнал для обновления горизонтального скроллбара
     void markerDragFinished(); // Сигнал о завершении перетаскивания метки (для обновления воспроизведения)
+    void markersChanged(); // Сигнал об изменении набора меток
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -157,24 +117,29 @@ protected:
 
 private:
     void drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
-    void drawBeatWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
     void drawWaveformChannel(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
     void drawGrid(QPainter& painter, const QRect& rect);
     void drawBeatLines(QPainter& painter, const QRect& rect);
     void drawPlaybackCursor(QPainter& painter, const QRect& rect);
     void drawBarMarkers(QPainter& painter, const QRectF& rect);
-    void drawBeatDeviations(QPainter& painter, const QRectF& rect);
     void drawLoopMarkers(QPainter& painter, const QRect& rect);
     void drawMarkers(QPainter& painter, const QRect& rect);
+
+    // Новые методы для визуализации области конца таймлайна и растяжения
+    void drawTailArea(QPainter& painter, const QRect& rect);
+    void drawTailWaveform(QPainter& painter, const QRect& rect, float startX, float width, float coefficient);
+    // void drawStretchIndicator(QPainter& painter, const QRect& rect, float tailCoefficient); // УДАЛЕНО (2026-01-12)
+    bool isLastSegment(int markerIndex) const;
+    float calculateTailAreaCoefficient() const;
+
     QPointF sampleToPoint(int sampleIndex, float value, const QRectF& rect) const;
     int getMarkerIndexAt(const QPoint& pos) const; // Получить индекс метки под курсором
-    QRectF getMarkerDiamondRect(qint64 samplePos, const QRect& rect) const; // Получить прямоугольник ромбика метки
     void adjustHorizontalOffset(float delta);
     void adjustZoomLevel(float delta);
     QString getPositionText(qint64 position) const;
     QString getBarText(float beatPosition) const;
     void scheduleUpdate(const QRect& rect = QRect()); // Throttled update для производительности
-    
+
     // Методы для обработки в реальном времени
     void processRealtimeStretch(); // Обработка аудио в реальном времени при перетаскивании меток
     void scheduleRealtimeProcess(); // Планирование обработки с throttling
@@ -200,28 +165,28 @@ private:
     float zoomStep;      // 20% изменение масштаба
     bool showTimeDisplay;
     bool showBarsDisplay;
-    bool showBeatDeviations;
-    bool showBeatWaveform; // Показывать силуэт ударных поверх волны (в стиле VirtualDJ)
-    bool beatsAligned; // Флаг, указывающий, были ли доли выровнены после анализа
     int beatsPerBar;
-    
+
     QVector<Marker> markers; // Список меток
     int draggingMarkerIndex; // Индекс перетаскиваемой метки (-1 если нет)
-    
+
     // Оптимизация производительности: throttling обновлений
     QTimer* updateTimer; // Таймер для отложенных обновлений
     bool pendingUpdate; // Флаг ожидающего обновления
     QRect pendingUpdateRect; // Область ожидающего обновления
-    
+
     // Throttling для обработки в реальном времени
     bool realtimeProcessPending; // Флаг ожидания обработки в реальном времени
-    
+
     // Кеширование для tooltip
     QPoint lastTooltipPos; // Последняя позиция мыши для tooltip
     int lastTooltipMarkerIndex; // Последний индекс метки для tooltip
-    
+
     WaveformColors colors; // Объект для управления цветами
-    // BeatVisualizer::VisualizationSettings beatVisualizationSettings; // Настройки визуализации ударных
+
+    // Настройки визуализации ударных (используются через BeatVisualizer)
+    BeatVisualizer::VisualizationSettings beatVisualizationSettings;
+    BeatVisualizer::BeatDeviationColors beatDeviationColors;
 
     static const int minZoom;
     static const int maxZoom;
@@ -229,4 +194,4 @@ private:
     static const int markerSpacing;
 };
 
-#endif // WAVEFORMVIEW_H 
+#endif // WAVEFORMVIEW_H

@@ -25,8 +25,8 @@ public:
     LoadFileDialog(QWidget *parent, const BPMAnalyzer::AnalysisResult&);
     ~LoadFileDialog();
     bool shouldFixBeats() const { return fix; }
-    bool markIrregularBeats() const;
-    void setMarkIrregularBeats(bool mark);
+    bool keepMarkersOnSkip() const;
+    void setKeepMarkersOnSkip(bool keep);
     void updateProgress(const QString& status, int progress);
     void showResult(const BPMAnalyzer::AnalysisResult& analysis);
 
@@ -35,8 +35,8 @@ private:
     bool fix;
 
 private slots:
-    void onFixClicked();
-    void onSkipClicked();
+    void on_fixButton_clicked();
+    void on_skipButton_clicked();
 };
 
-#endif // LOADFILEDIALOG_H 
+#endif // LOADFILEDIALOG_H
