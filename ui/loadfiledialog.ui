@@ -109,9 +109,9 @@ QProgressBar::chunk {
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="markIrregularCheckbox">
+    <widget class="QCheckBox" name="keepMarkersOnSkipCheckbox">
      <property name="text">
-      <string>Пометить неровные доли</string>
+      <string>Оставить метки даже в случае пропуска самовыровнения</string>
      </property>
      <property name="checked">
       <bool>true</bool>
