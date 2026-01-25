@@ -6,6 +6,12 @@
 #include <QEventLoop>
 #include <QTimer>
 #include <QtCore/qmath.h>
+
+#ifdef _MSC_VER
+#ifndef _USE_MATH_DEFINES
+#define _USE_MATH_DEFINES
+#endif
+#endif
 #include <cmath>
 
 MetronomeController::MetronomeController(QObject *parent)
@@ -22,17 +28,17 @@ MetronomeController::MetronomeController(QObject *parent)
     , m_currentBeatNumber(0)
 {
     m_timer->setInterval(10); // Проверяем каждые 10мс для точности
-    
+
     m_soundPlayer->setAudioOutput(new QAudioOutput(this));
     m_soundPlayer->audioOutput()->setVolume(0.5f);
     m_soundEffect->setVolume(0.5f);
-    
+
     // Создаем звук метронома
     createMetronomeSound();
-    
+
     // Подключаем сигнал таймера
     connect(m_timer, &QTimer::timeout, this, &MetronomeController::onTimerTimeout);
-    
+
     // Загружаем настройки
     QSettings settings("DONTFLOAT", "DONTFLOAT");
     m_strongBeatVolume = settings.value("Metronome/StrongBeatVolume", 100).toInt();
@@ -43,6 +49,11 @@ MetronomeController::~MetronomeController()
 {
     if (m_timer) {
         m_timer->stop();
+    }
+
+    // Очищаем временный файл звука
+    if (!m_soundFile.isEmpty() && QFile::exists(m_soundFile)) {
+        QFile::remove(m_soundFile);
     }
 }
 
@@ -55,7 +66,7 @@ void MetronomeController::setBPM(float bpm)
 void MetronomeController::setEnabled(bool enabled)
 {
     m_enabled = enabled;
-    
+
     if (m_enabled) {
         m_timer->start(10);
         m_currentBeatNumber = 0;
@@ -103,29 +114,28 @@ void MetronomeController::onTimerTimeout()
     if (!m_enabled || !m_playing) {
         return;
     }
-    
+
     if (m_bpm <= 0) {
-        qDebug() << "Metronome: Invalid BPM:" << m_bpm;
         return; // Защита от некорректного BPM
     }
-    
+
     qint64 beatInterval = qint64(60000.0f / m_bpm); // интервал между ударами в мс
-    
+
     // Используем системное время для синхронизации
     qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
-    
+
     // Если это первый запуск, инициализируем время
     if (m_lastBeatTime == 0) {
         m_lastBeatTime = currentTime;
     }
-    
+
     if (currentTime - m_lastBeatTime >= beatInterval) {
         // Определяем, какая это доля (большая или малая)
         bool isStrongBeat = (m_currentBeatNumber % 4 == 0); // Каждая 4-я доля - большая
-        
+
         playBeat(isStrongBeat);
         emit beatPlayed(isStrongBeat);
-        
+
         m_lastBeatTime = currentTime;
         m_currentBeatNumber++;
     }
@@ -134,22 +144,18 @@ void MetronomeController::onTimerTimeout()
 void MetronomeController::playBeat(bool isStrongBeat)
 {
     int volume = isStrongBeat ? m_strongBeatVolume : m_weakBeatVolume;
-    
+
     // Пробуем воспроизвести звук через QSoundEffect (более надежно для коротких звуков)
     if (m_soundEffect && m_soundEffect->status() == QSoundEffect::Ready) {
         m_soundEffect->setVolume(volume / 100.0f);
         m_soundEffect->play();
-        qDebug() << "Metronome beat" << (isStrongBeat ? "(strong)" : "(weak)") << "volume:" << volume << "% (QSoundEffect)";
     } else if (m_soundPlayer && m_soundPlayer->mediaStatus() == QMediaPlayer::LoadedMedia) {
         // Fallback на QMediaPlayer
         m_soundPlayer->audioOutput()->setVolume(volume / 100.0f);
         m_soundPlayer->setPosition(0); // Сбрасываем позицию
         m_soundPlayer->play();
-        qDebug() << "Metronome beat" << (isStrongBeat ? "(strong)" : "(weak)") << "volume:" << volume << "% (QMediaPlayer)";
-    } else {
-        // Fallback - используем системный звук или просто визуальную индикацию
-        qDebug() << "Metronome beat" << (isStrongBeat ? "(strong)" : "(weak)") << "volume:" << volume << "% (no sound)";
     }
+    // Если звук недоступен, просто пропускаем без вывода
 }
 
 void MetronomeController::createMetronomeSound()
@@ -157,16 +163,16 @@ void MetronomeController::createMetronomeSound()
     // Упрощенный подход - используем системный звук или создаем простой звук
     // Попробуем использовать ресурс из qrc, если он есть
     QString soundPath = "qrc:/sounds/metronome.wav";
-    
+
     // Если ресурс не найден, создаем простой звук программно
     QByteArray audioData;
     const int sampleRate = 44100;
     const float duration = 0.1f; // 100ms
     const int sampleCount = static_cast<int>(sampleRate * duration);
-    
+
     audioData.resize(sampleCount * 2); // 16-bit samples
     qint16* samples = reinterpret_cast<qint16*>(audioData.data());
-    
+
     for (int i = 0; i < sampleCount; ++i) {
         // Простой щелчок - быстрое затухание с синусоидой
         float t = static_cast<float>(i) / sampleCount;
@@ -175,7 +181,7 @@ void MetronomeController::createMetronomeSound()
         float sample = amplitude * std::sin(2.0f * M_PI * frequency * t);
         samples[i] = static_cast<qint16>(sample * 32767.0f);
     }
-    
+
     // Сохраняем во временный файл
     QString tempFile = QDir::tempPath() + "/metronome_temp.wav";
     QFile file(tempFile);
@@ -183,12 +189,12 @@ void MetronomeController::createMetronomeSound()
         // Простая WAV заголовок
         QDataStream stream(&file);
         stream.setByteOrder(QDataStream::LittleEndian);
-        
+
         // RIFF заголовок
         stream.writeRawData("RIFF", 4);
         stream << static_cast<quint32>(36 + audioData.size());
         stream.writeRawData("WAVE", 4);
-        
+
         // fmt chunk
         stream.writeRawData("fmt ", 4);
         stream << static_cast<quint32>(16);
@@ -198,22 +204,22 @@ void MetronomeController::createMetronomeSound()
         stream << static_cast<quint32>(sampleRate * 2); // байт в секунду
         stream << static_cast<quint16>(2); // байт на сэмпл
         stream << static_cast<quint16>(16); // бит на сэмпл
-        
+
         // data chunk
         stream.writeRawData("data", 4);
         stream << static_cast<quint32>(audioData.size());
         stream.writeRawData(audioData.data(), audioData.size());
-        
+
         file.close();
-        
+
         // Обновляем источник звука
         m_soundPlayer->setSource(QUrl::fromLocalFile(tempFile));
-        
+
         // Ждем загрузки звука с таймаутом
         QTimer loadTimer;
         loadTimer.setSingleShot(true);
         loadTimer.setInterval(1000); // 1 секунда таймаут
-        
+
         QEventLoop loop;
         connect(m_soundPlayer, &QMediaPlayer::mediaStatusChanged, &loop, [&](QMediaPlayer::MediaStatus status) {
             if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::InvalidMedia) {
@@ -221,23 +227,20 @@ void MetronomeController::createMetronomeSound()
             }
         });
         connect(&loadTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
-        
+
         loadTimer.start();
         loop.exec();
-        
+
         if (m_soundPlayer->mediaStatus() == QMediaPlayer::LoadedMedia) {
-            qDebug() << "Metronome sound loaded successfully:" << tempFile;
-            // Также настраиваем QSoundEffect
+            // Успешно загружен - также настраиваем QSoundEffect
             m_soundEffect->setSource(QUrl::fromLocalFile(tempFile));
             m_soundFile = tempFile;
         } else {
-            qWarning() << "Failed to load metronome sound, trying fallback";
             // Fallback - попробуем использовать системный звук
             m_soundPlayer->setSource(QUrl("qrc:/sounds/metronome.wav"));
             m_soundEffect->setSource(QUrl("qrc:/sounds/metronome.wav"));
         }
     } else {
-        qWarning() << "Failed to create metronome sound file";
         // Fallback на ресурс
         m_soundPlayer->setSource(QUrl("qrc:/sounds/metronome.wav"));
         m_soundEffect->setSource(QUrl("qrc:/sounds/metronome.wav"));

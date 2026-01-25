@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <numeric>
 
-// Заглушки для Mixxx библиотек 
+// Заглушки для Mixxx библиотек
 // В реальной интеграции нужно подключить qm-dsp
 #ifdef USE_MIXXX_QM_DSP
 #include <dsp/onsets/DetectionFunction.h>
@@ -15,7 +15,7 @@
 namespace {
     constexpr float kStepSecs = 0.01161f; // ~12ms разрешение для BeatMap
     constexpr int kMaximumBinSizeHz = 50; // Hz
-    
+
     // Вспомогательная функция для вычисления следующей степени двойки
     int nextPowerOfTwo(int value) {
         int result = 1;
@@ -26,27 +26,27 @@ namespace {
     }
 }
 
-BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& samples, 
+BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& samples,
                                                     int sampleRate,
                                                     const AnalysisOptions& options) {
     // Если включен режим Mixxx, используем их алгоритм
     if (options.useMixxxAlgorithm) {
         return analyzeBPMUsingMixxx(samples, sampleRate, options);
     }
-    
+
     // Если задан предварительно определенный BPM, используем его
     if (options.useInitialBPM && options.initialBPM > 0.0f) {
         qDebug() << "Using initial BPM:" << options.initialBPM;
         return createBeatGridFromBPM(samples, sampleRate, options.initialBPM, options);
     }
-    
+
     // Проверяем, есть ли метаданные BPM в файле (если доступны)
     // Это можно расширить для чтения тегов из аудиофайлов
     if (options.trustFileBPM && options.fileBPM > 0.0f) {
         qDebug() << "Using file BPM:" << options.fileBPM;
         return createBeatGridFromBPM(samples, sampleRate, options.fileBPM, options);
     }
-    
+
     // Улучшенный алгоритм анализа BPM
     AnalysisResult result;
     result.confidence = 0.0f;
@@ -66,16 +66,16 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
 
     // Множественный анализ с разными параметрами
     QVector<AnalysisResult> candidates;
-    
+
     // Анализ 1: Обнаружение пиков с разными порогами
     for (float threshold = 0.05f; threshold <= 0.3f; threshold += 0.05f) {
         auto peaks = detectPeaks(samples, threshold);
         if (peaks.size() < 10) continue; // Недостаточно пиков
-        
+
         float confidence;
         float avgInterval = calculateAverageInterval(peaks, options.assumeFixedTempo, &confidence);
         float bpm = estimateBPM(avgInterval, sampleRate, options);
-        
+
         if (isValidBPM(bpm, options)) {
             AnalysisResult candidate;
             candidate.bpm = bpm;
@@ -84,11 +84,11 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
             candidate.preliminaryBPM = 0.0f;
             candidate.hasPreliminaryBPM = false;
             candidates.append(candidate);
-            
+
             qDebug() << "BPM candidate:" << bpm << "confidence:" << confidence << "threshold:" << threshold;
         }
     }
-    
+
     // Анализ 2: Анализ по окнам (для треков с переменным темпом)
     if (!options.assumeFixedTempo) {
         int windowSize = sampleRate * 10; // 10 секунд
@@ -96,11 +96,11 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
             QVector<float> window(samples.begin() + start, samples.begin() + start + windowSize);
             auto peaks = detectPeaks(window, 0.1f);
             if (peaks.size() < 5) continue;
-            
+
             float confidence;
             float avgInterval = calculateAverageInterval(peaks, false, &confidence);
             float bpm = estimateBPM(avgInterval, sampleRate, options);
-            
+
             if (isValidBPM(bpm, options)) {
                 AnalysisResult candidate;
                 candidate.bpm = bpm;
@@ -110,24 +110,24 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
             }
         }
     }
-    
+
     // Выбираем лучший кандидат
     if (candidates.isEmpty()) {
         qDebug() << "No valid BPM candidates found";
         return result;
     }
-    
+
     // Сортируем по уверенности
-    std::sort(candidates.begin(), candidates.end(), 
+    std::sort(candidates.begin(), candidates.end(),
               [](const AnalysisResult& a, const AnalysisResult& b) {
                   return a.confidence > b.confidence;
               });
-    
+
     result = candidates.first();
     // В не-Mixxx пути предварительный BPM не рассчитываем отдельно
     result.preliminaryBPM = 0.0f;
     result.hasPreliminaryBPM = false;
-    
+
     // Корректируем основной результат к стандартным BPM
     float correctedMainBPM = correctToStandardBPM(result.bpm);
     if (std::abs(correctedMainBPM - result.bpm) < 10.0f) {
@@ -135,7 +135,7 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
         result.bpm = correctedMainBPM;
         result.beats = findBeats(samples, result.bpm, sampleRate, options);
     }
-    
+
     // Дополнительная проверка: ищем близкие BPM и выбираем наиболее частый
     QVector<QPair<float, int>> bpmCounts;
     for (const auto& candidate : candidates) {
@@ -152,23 +152,23 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
             bpmCounts.append({candidate.bpm, 1});
         }
     }
-    
+
     if (!bpmCounts.isEmpty()) {
         std::sort(bpmCounts.begin(), bpmCounts.end(),
                   [](const QPair<float, int>& a, const QPair<float, int>& b) {
                       return a.second > b.second;
                   });
-        
+
         float mostFrequentBPM = bpmCounts.first().first;
         qDebug() << "Most frequent BPM:" << mostFrequentBPM << "count:" << bpmCounts.first().second;
-        
+
         // Корректируем BPM к стандартным значениям
         float correctedBPM = correctToStandardBPM(mostFrequentBPM);
         if (std::abs(correctedBPM - mostFrequentBPM) < 10.0f) {
             qDebug() << "Corrected BPM from" << mostFrequentBPM << "to" << correctedBPM;
             mostFrequentBPM = correctedBPM;
         }
-        
+
         // Если наиболее частый BPM отличается от лучшего по уверенности, используем его
         if (std::abs(mostFrequentBPM - result.bpm) > 10.0f && bpmCounts.first().second > 1) {
             result.bpm = mostFrequentBPM;
@@ -180,10 +180,10 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
     // Анализ регулярности битов
     if (!result.beats.isEmpty()) {
         result.gridStartSample = result.beats.first().position;
-        
+
         float totalDeviation = 0.0f;
         float maxDeviation = 0.0f;
-        
+
         for (const auto& beat : result.beats) {
             totalDeviation += std::abs(beat.deviation);
             maxDeviation = std::max(maxDeviation, std::abs(beat.deviation));
@@ -191,17 +191,17 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
 
         result.averageDeviation = totalDeviation / result.beats.size();
         result.hasIrregularBeats = (maxDeviation > options.tolerancePercent / 100.0f);
-        result.isFixedTempo = !result.hasIrregularBeats && 
+        result.isFixedTempo = !result.hasIrregularBeats &&
                              (result.averageDeviation < options.tolerancePercent / 200.0f);
     }
 
-    qDebug() << "Final BPM result:" << result.bpm << "confidence:" << result.confidence 
+    qDebug() << "Final BPM result:" << result.bpm << "confidence:" << result.confidence
              << "irregular beats:" << result.hasIrregularBeats;
 
     return result;
 }
 
-QVector<float> BPMAnalyzer::fixBeats(const QVector<float>& samples, 
+QVector<float> BPMAnalyzer::fixBeats(const QVector<float>& samples,
                                     const AnalysisResult& analysis) {
     if (samples.isEmpty() || analysis.beats.isEmpty()) {
         return samples;
@@ -209,7 +209,7 @@ QVector<float> BPMAnalyzer::fixBeats(const QVector<float>& samples,
 
     QVector<float> result = samples;
     const int sampleCount = samples.size();
-    
+
     // Размер окна для коррекции (10мс)
     const int windowSize = 441; // при 44100 Hz
 
@@ -223,10 +223,10 @@ QVector<float> BPMAnalyzer::fixBeats(const QVector<float>& samples,
         // Находим локальный максимум в окне
         int maxPos = pos;
         float maxVal = std::abs(samples[pos]);
-        
+
         int start = std::max(0, pos - windowSize/2);
         int end = std::min<int>(sampleCount, pos + windowSize/2);
-        
+
         for (int i = start; i < end; ++i) {
             float val = std::abs(samples[i]);
             if (val > maxVal) {
@@ -241,7 +241,7 @@ QVector<float> BPMAnalyzer::fixBeats(const QVector<float>& samples,
             for (int i = -windowSize/4; i <= windowSize/4; ++i) {
                 int srcPos = maxPos + i;
                 int destPos = pos + i;
-                if (srcPos >= 0 && srcPos < sampleCount && 
+                if (srcPos >= 0 && srcPos < sampleCount &&
                     destPos >= 0 && destPos < sampleCount) {
                     result[destPos] = samples[srcPos];
                 }
@@ -266,7 +266,7 @@ QVector<QPair<int, float>> BPMAnalyzer::detectPeaks(const QVector<float>& sample
     QVector<QPair<int, float>> peaks;
     const int windowSize = 1024; // Размер окна анализа
     const int minPeakDistance = 4410; // Минимальное расстояние между пиками (~0.1 сек при 44.1 кГц)
-    
+
     if (samples.size() < windowSize * 3) {
         return peaks;
     }
@@ -307,7 +307,7 @@ QVector<QPair<int, float>> BPMAnalyzer::detectPeaks(const QVector<float>& sample
                     }
                 }
             }
-            
+
             if (!tooClose) {
                 peaks.append({i, energy[i]});
             }
@@ -365,7 +365,7 @@ float BPMAnalyzer::calculateAverageInterval(const QVector<QPair<int, float>>& pe
         // Используем медиану для нефиксированного темпа
         std::sort(intervals.begin(), intervals.end());
         float medianInterval = intervals[intervals.size() / 2];
-        
+
         if (confidence) {
             float variance = 0.0f;
             for (float interval : intervals) {
@@ -378,7 +378,7 @@ float BPMAnalyzer::calculateAverageInterval(const QVector<QPair<int, float>>& pe
     }
 }
 
-float BPMAnalyzer::estimateBPM(float averageInterval, 
+float BPMAnalyzer::estimateBPM(float averageInterval,
                               int sampleRate,
                               const AnalysisOptions& options) {
     if (averageInterval <= 0) {
@@ -411,7 +411,7 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::findBeats(const QVector<float>& samp
 
     // Интервал между битами в сэмплах
     float beatInterval = 60.0f * sampleRate / bpm;
-    
+
     // Размер окна поиска (+-5% от интервала)
     int searchWindow = qRound(beatInterval * options.tolerancePercent / 100.0f);
 
@@ -435,7 +435,7 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::findBeats(const QVector<float>& samp
     while (expectedPos < samples.size()) {
         int actualPos = expectedPos;
         float maxEnergy = calculateBeatEnergy(samples, actualPos, 1024);
-        
+
         // Ищем локальный максимум энергии
         for (int offset = -searchWindow; offset <= searchWindow; ++offset) {
             int pos = qRound(expectedPos + offset);
@@ -454,6 +454,7 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::findBeats(const QVector<float>& samp
 
         BeatInfo beat;
         beat.position = actualPos;
+        beat.expectedPosition = expectedPos;
         beat.confidence = confidence;
         beat.deviation = deviation;
         beat.energy = maxEnergy;
@@ -471,12 +472,12 @@ float BPMAnalyzer::calculateBeatEnergy(const QVector<float>& samples,
     float energy = 0.0f;
     int start = std::max(0, position - windowSize/2);
     int end = std::min<int>(samples.size(), position + windowSize/2);
-    
+
     // Используем RMS (Root Mean Square) для более точного расчета энергии
     for (int i = start; i < end; ++i) {
         energy += samples[i] * samples[i];
     }
-    
+
     // Возвращаем RMS энергию
     return std::sqrt(energy / (end - start));
 }
@@ -490,10 +491,10 @@ float BPMAnalyzer::correctToStandardBPM(float bpm) {
     QVector<float> standardBPMs = {
         60.0f, 70.0f, 80.0f, 90.0f, 100.0f, 110.0f, 120.0f, 128.0f, 130.0f, 140.0f, 150.0f, 160.0f, 170.0f, 180.0f
     };
-    
+
     float closestBPM = bpm;
     float minDifference = 1000.0f;
-    
+
     for (float standardBPM : standardBPMs) {
         float difference = std::abs(bpm - standardBPM);
         if (difference < minDifference) {
@@ -501,12 +502,12 @@ float BPMAnalyzer::correctToStandardBPM(float bpm) {
             closestBPM = standardBPM;
         }
     }
-    
+
     // Корректируем только если разница не слишком большая (в пределах 10 BPM)
     if (minDifference <= 10.0f) {
         return closestBPM;
     }
-    
+
     return bpm;
 }
 
@@ -516,7 +517,7 @@ float BPMAnalyzer::normalizeConfidence(float rawConfidence) {
 }
 
 // Реализация алгоритма Mixxx
-BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPMUsingMixxx(const QVector<float>& samples, 
+BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPMUsingMixxx(const QVector<float>& samples,
                                                             int sampleRate,
                                                             const AnalysisOptions& options) {
     AnalysisResult result;
@@ -536,7 +537,7 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPMUsingMixxx(const QVector<floa
     // Обнаружение onset'ов с использованием алгоритма из Mixxx
     int stepSize, windowSize;
     QVector<double> detectionFunction = detectOnsets(samples, sampleRate, stepSize, windowSize);
-    
+
     if (detectionFunction.isEmpty()) {
         qDebug() << "No onsets detected using Mixxx algorithm";
         return result;
@@ -544,7 +545,7 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPMUsingMixxx(const QVector<floa
 
     // Отслеживание битов через алгоритм TempoTrackV2 из Mixxx
     QVector<BeatInfo> beats = trackBeats(detectionFunction, sampleRate, stepSize);
-    
+
     if (beats.isEmpty()) {
         qDebug() << "No beats detected using Mixxx algorithm";
         return result;
@@ -647,24 +648,24 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPMUsingMixxx(const QVector<floa
         result.bpm *= 0.5f;
     }
 
-    qDebug() << "Mixxx algorithm detected BPM:" << result.bpm 
+    qDebug() << "Mixxx algorithm detected BPM:" << result.bpm
              << "with" << beats.size() << "beats";
 
     return result;
 }
 
-QVector<double> BPMAnalyzer::detectOnsets(const QVector<float>& samples, 
+QVector<double> BPMAnalyzer::detectOnsets(const QVector<float>& samples,
                                          int sampleRate,
                                          int& stepSize,
                                          int& windowSize) {
     QVector<double> detectionResults;
-    
+
     // Вычисляем параметры окна как в Mixxx
     stepSize = static_cast<int>(sampleRate * kStepSecs);
     windowSize = nextPowerOfTwo(sampleRate / kMaximumBinSizeHz);
-    
-    qDebug() << "Mixxx onset detection: sampleRate =" << sampleRate 
-             << ", stepSize =" << stepSize 
+
+    qDebug() << "Mixxx onset detection: sampleRate =" << sampleRate
+             << ", stepSize =" << stepSize
              << ", windowSize =" << windowSize;
 
 #ifdef USE_MIXXX_QM_DSP
@@ -677,9 +678,9 @@ QVector<double> BPMAnalyzer::detectOnsets(const QVector<float>& samples,
     config.adaptiveWhitening = false;
     config.whiteningRelaxCoeff = -1;
     config.whiteningFloor = -1;
-    
+
     DetectionFunction df(config);
-    
+
     // Обрабатываем сигнал окнами
     QVector<double> window(windowSize);
     for (int i = 0; i < static_cast<int>(samples.size()) - windowSize; i += stepSize) {
@@ -700,7 +701,7 @@ QVector<double> BPMAnalyzer::detectOnsets(const QVector<float>& samples,
         }
         detectionResults.append(std::sqrt(energy / windowSize));
     }
-    
+
     // Применяем spectral flux для улучшения обнаружения
     for (int i = 1; i < static_cast<int>(detectionResults.size()); ++i) {
         double flux = detectionResults[i] - detectionResults[i-1];
@@ -712,11 +713,11 @@ QVector<double> BPMAnalyzer::detectOnsets(const QVector<float>& samples,
     return detectionResults;
 }
 
-QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& detectionFunction, 
+QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& detectionFunction,
                                                       int sampleRate,
                                                       int stepSize) {
     QVector<BeatInfo> beats;
-    
+
     if (detectionFunction.size() < 3) {
         return beats;
     }
@@ -724,7 +725,7 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
 #ifdef USE_MIXXX_QM_DSP
     // Используем TempoTrackV2 из Mixxx
     TempoTrackV2 tt(sampleRate, stepSize);
-    
+
     // Подготавливаем данные (пропускаем первые 2 значения как в Mixxx)
     std::vector<double> df;
     std::vector<double> beatPeriod;
@@ -732,20 +733,21 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
         df.push_back(detectionFunction[i]);
         beatPeriod.push_back(0.0);
     }
-    
+
     // Вычисляем период битов
     tt.calculateBeatPeriod(df, beatPeriod);
-    
+
     // Вычисляем позиции битов
     std::vector<double> beatPositions;
     tt.calculateBeats(df, beatPeriod, beatPositions);
-    
+
     // Преобразуем в BeatInfo
     for (size_t i = 0; i < beatPositions.size(); ++i) {
         BeatInfo beat;
         beat.position = static_cast<qint64>(
             (beatPositions[i] * stepSize) + stepSize / 2
         );
+        beat.expectedPosition = beat.position; // Будет обновлено в calculateDeviations
         beat.confidence = 0.9f; // Mixxx обычно даёт хорошие результаты
         beat.deviation = 0.0f; // Будет вычислено позже
         // Исправляем проблему с типами: приводим оба аргумента к одному типу
@@ -761,17 +763,17 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
     }
 #else
     // Упрощённый алгоритм обнаружения битов
-    
+
     // Находим пики в detection function
     QVector<int> peaks;
     double threshold = 0.0;
-    
+
     // Вычисляем среднее значение для порога
     for (const auto& value : detectionFunction) {
         threshold += value;
     }
     threshold = threshold / detectionFunction.size() * 1.5; // Порог = 1.5 * среднее
-    
+
     // Находим локальные максимумы
     for (int i = 1; i < static_cast<int>(detectionFunction.size()) - 1; ++i) {
         if (detectionFunction[i] > threshold &&
@@ -780,11 +782,12 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
             peaks.append(i);
         }
     }
-    
+
     // Преобразуем пики в биты
     for (int peakIdx : peaks) {
         BeatInfo beat;
         beat.position = static_cast<qint64>(peakIdx * stepSize + stepSize / 2);
+        beat.expectedPosition = beat.position; // Будет обновлено в calculateDeviations
         beat.confidence = static_cast<float>(
             detectionFunction[peakIdx] / (*std::max_element(detectionFunction.begin(), detectionFunction.end()))
         );
@@ -792,19 +795,19 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
         beat.energy = static_cast<float>(detectionFunction[peakIdx]);
         beats.append(beat);
     }
-    
+
     // Фильтруем слишком близкие биты (минимальный интервал 100мс)
     const qint64 minInterval = (sampleRate * 100) / 1000; // 100ms в сэмплах
     QVector<BeatInfo> filteredBeats;
     qint64 lastBeatPos = -minInterval;
-    
+
     for (const auto& beat : beats) {
         if (beat.position - lastBeatPos >= minInterval) {
             filteredBeats.append(beat);
             lastBeatPos = beat.position;
         }
     }
-    
+
     beats = filteredBeats;
 #endif
 
@@ -814,9 +817,9 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
         for (int i = 1; i < static_cast<int>(beats.size()); ++i) {
             intervals.append(beats[i].position - beats[i-1].position);
         }
-        
+
         qint64 avgInterval = std::accumulate(intervals.begin(), intervals.end(), qint64(0)) / intervals.size();
-        
+
         if (avgInterval > 0) {
             for (int i = 1; i < static_cast<int>(beats.size()); ++i) {
                 qint64 actualInterval = beats[i].position - beats[i-1].position;
@@ -834,7 +837,7 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::createBeatGridFromBPM(const QVector<flo
                                                               float bpm,
                                                               const AnalysisOptions& options) {
     Q_UNUSED(options); // Параметр пока не используется, но может понадобиться в будущем
-    
+
     AnalysisResult result;
     result.bpm = bpm;
     result.confidence = 1.0f; // Высокая уверенность для предварительно определенного BPM
@@ -852,12 +855,12 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::createBeatGridFromBPM(const QVector<flo
 
     // Вычисляем интервал между битами в сэмплах
     float beatInterval = (60.0f * sampleRate) / bpm;
-    
+
     // Находим первый бит (ищем пик в начале трека)
     int searchWindow = static_cast<int>(beatInterval * 2);
     int firstBeat = 0;
     float maxEnergy = 0.0f;
-    
+
     for (int i = 0; i < std::min(searchWindow, static_cast<int>(samples.size())); ++i) {
         float energy = std::abs(samples[i]);
         if (energy > maxEnergy) {
@@ -865,18 +868,19 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::createBeatGridFromBPM(const QVector<flo
             firstBeat = i;
         }
     }
-    
+
     result.gridStartSample = firstBeat;
-    
+
     // Создаем сетку битов
     int currentBeat = firstBeat;
     while (currentBeat < samples.size()) {
         BeatInfo beat;
         beat.position = currentBeat;
+        beat.expectedPosition = currentBeat; // Совпадает для идеальной сетки
         beat.confidence = 1.0f; // Высокая уверенность для сетки
         beat.deviation = 0.0f;  // Нет отклонения для идеальной сетки
         beat.energy = std::abs(samples[currentBeat]);
-        
+
         result.beats.append(beat);
         currentBeat += static_cast<int>(beatInterval);
     }
@@ -895,24 +899,24 @@ QVector<float> BPMAnalyzer::alignToBeatGrid(const QVector<float>& samples,
     }
 
     QVector<float> result = samples;
-    
+
     // Вычисляем интервал между битами
     float beatInterval = (60.0f * sampleRate) / bpm;
-    
+
     // Создаем временную шкалу для выравнивания
     QVector<float> alignedSamples(samples.size(), 0.0f);
-    
+
     // Находим ближайшие биты для каждого сэмпла
     for (int i = 0; i < static_cast<int>(samples.size()); ++i) {
         // Вычисляем позицию в битах относительно начала сетки
         float beatPosition = (i - gridStartSample) / beatInterval;
-        
+
         // Округляем до ближайшего бита
         int nearestBeat = static_cast<int>(std::round(beatPosition));
-        
+
         // Вычисляем новую позицию
         int newPosition = gridStartSample + static_cast<int>(nearestBeat * beatInterval);
-        
+
         // Если новая позиция в пределах массива, копируем сэмпл
         if (newPosition >= 0 && newPosition < samples.size()) {
             alignedSamples[newPosition] += samples[i];
@@ -922,4 +926,50 @@ QVector<float> BPMAnalyzer::alignToBeatGrid(const QVector<float>& samples,
     qDebug() << "Aligned samples to beat grid with BPM:" << bpm << "starting at:" << gridStartSample;
 
     return alignedSamples;
-} 
+}
+
+// ============================================================================
+// НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С ОТКЛОНЕНИЯМИ (план замены визуализации)
+// ============================================================================
+
+void BPMAnalyzer::calculateDeviations(QVector<BeatInfo>& beats, float bpm, int sampleRate)
+{
+    if (beats.size() < 2 || bpm <= 0 || sampleRate <= 0) {
+        return;
+    }
+
+    // Ожидаемый интервал между долями в сэмплах
+    float expectedInterval = (60.0f * sampleRate) / bpm;
+
+    // Используем первый бит как опорную точку
+    qint64 firstBeatPos = beats[0].position;
+
+    // Вычисляем отклонение для каждого бита относительно первого
+    for (int i = 0; i < beats.size(); ++i) {
+        // Ожидаемая позиция относительно первого бита
+        qint64 expectedPos = firstBeatPos + qint64(i * expectedInterval);
+
+        // Фактическое отклонение в сэмплах
+        qint64 actualDeviation = beats[i].position - expectedPos;
+
+        // Нормализованное отклонение (0.0 = точно, ±1.0 = один такт)
+        beats[i].deviation = float(actualDeviation) / expectedInterval;
+
+        // Сохраняем ожидаемую позицию для создания меток
+        beats[i].expectedPosition = expectedPos;
+    }
+}
+
+QVector<int> BPMAnalyzer::findUnalignedBeats(const QVector<BeatInfo>& beats, float deviationThreshold)
+{
+    QVector<int> unalignedIndices;
+
+    for (int i = 0; i < beats.size(); ++i) {
+        // Проверяем абсолютное значение отклонения
+        if (std::abs(beats[i].deviation) > deviationThreshold) {
+            unalignedIndices.append(i);
+        }
+    }
+
+    return unalignedIndices;
+}

@@ -14,6 +14,12 @@
 #include <QDialogButtonBox>
 #include <QtMultimedia/QAudioOutput>
 #include <QtMultimedia/QMediaPlayer>
+
+#ifdef _MSC_VER
+#ifndef _USE_MATH_DEFINES
+#define _USE_MATH_DEFINES
+#endif
+#endif
 #include <cmath>
 
 MetronomeSettingsDialog::MetronomeSettingsDialog(QWidget *parent, MetronomeController *controller)
@@ -23,17 +29,17 @@ MetronomeSettingsDialog::MetronomeSettingsDialog(QWidget *parent, MetronomeContr
     , metronomeController(controller)
 {
     ui->setupUi(this);
-    
+
     // Инициализируем звуковые эффекты
     metronomeSoundEffect = new QSoundEffect(this);
     metronomeSoundEffect->setVolume(1.0f);
-    
+
     metronomePlayer = new QMediaPlayer(this);
     metronomePlayer->setAudioOutput(new QAudioOutput(this));
-    
+
     // Создаем звук метронома программно
     createMetronomeSound();
-    
+
     // Подключаем сигналы кнопок
     connect(ui->testButton, &QPushButton::clicked, this, &MetronomeSettingsDialog::onTestButtonClicked);
     connect(ui->testWeakButton, &QPushButton::clicked, this, &MetronomeSettingsDialog::onTestWeakButtonClicked);
@@ -41,20 +47,24 @@ MetronomeSettingsDialog::MetronomeSettingsDialog(QWidget *parent, MetronomeContr
     connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(this, &QDialog::accepted, this, &MetronomeSettingsDialog::saveSettings);
-    
+
     // Подключаем сигналы ползунков
     connect(ui->strongBeatSlider, &QSlider::valueChanged, this, &MetronomeSettingsDialog::onStrongBeatVolumeChanged);
     connect(ui->weakBeatSlider, &QSlider::valueChanged, this, &MetronomeSettingsDialog::onWeakBeatVolumeChanged);
 
     // Загружаем настройки: сначала из контроллера (если есть), иначе из QSettings
     loadSettings();
-    
+
     // Обновляем статус загрузки звука
     updateSoundStatus();
 }
 
 MetronomeSettingsDialog::~MetronomeSettingsDialog()
 {
+    // Очищаем временный файл звука
+    if (!metronomeSoundFile.isEmpty() && QFile::exists(metronomeSoundFile)) {
+        QFile::remove(metronomeSoundFile);
+    }
     delete ui;
 }
 
@@ -62,12 +72,12 @@ void MetronomeSettingsDialog::saveSettings()
 {
     int strongVolume = ui->strongBeatSlider->value();
     int weakVolume = ui->weakBeatSlider->value();
-    
+
     // Сохраняем в QSettings
     settings.setValue("Metronome/StrongBeatVolume", strongVolume);
     settings.setValue("Metronome/WeakBeatVolume", weakVolume);
     settings.setValue("Metronome/Sound", ui->soundComboBox->currentData());
-    
+
     // Применяем к контроллеру напрямую (если есть)
     if (metronomeController) {
         metronomeController->setStrongBeatVolume(strongVolume);
@@ -86,7 +96,7 @@ void MetronomeSettingsDialog::loadSettings()
         ui->strongBeatSlider->setValue(settings.value("Metronome/StrongBeatVolume", 100).toInt());
         ui->weakBeatSlider->setValue(settings.value("Metronome/WeakBeatVolume", 90).toInt());
     }
-    
+
     QString sound = settings.value("Metronome/Sound", "click").toString();
     int index = ui->soundComboBox->findData(sound);
     if (index != -1)
@@ -102,11 +112,11 @@ void MetronomeSettingsDialog::createMetronomeSound()
     const double duration = 0.05; // 50 мс
     const int frequency = 1000; // 1000 Гц
     const int numSamples = static_cast<int>(sampleRate * duration);
-    
+
     QByteArray wavData;
     QDataStream stream(&wavData, QIODevice::WriteOnly);
     stream.setByteOrder(QDataStream::LittleEndian);
-    
+
     // WAV заголовок
     stream.writeRawData("RIFF", 4);
     stream << quint32(36 + numSamples * 2); // Размер файла - 8
@@ -121,7 +131,7 @@ void MetronomeSettingsDialog::createMetronomeSound()
     stream << quint16(16); // Bits per sample
     stream.writeRawData("data", 4);
     stream << quint32(numSamples * 2); // Размер данных
-    
+
     // Генерируем синусоиду с затуханием
     for (int i = 0; i < numSamples; ++i) {
         double t = double(i) / sampleRate;
@@ -129,7 +139,7 @@ void MetronomeSettingsDialog::createMetronomeSound()
         qint16 sample = qint16(amplitude * 32767.0 * sin(2.0 * M_PI * frequency * t));
         stream << sample;
     }
-    
+
     // Сохраняем во временный файл
     QString tempFile = QDir::tempPath() + "/metronome_test.wav";
     QFile file(tempFile);
@@ -139,9 +149,8 @@ void MetronomeSettingsDialog::createMetronomeSound()
         metronomeSoundFile = tempFile;
         metronomeSoundEffect->setSource(QUrl::fromLocalFile(tempFile));
         metronomePlayer->setSource(QUrl::fromLocalFile(tempFile));
-    } else {
-        qWarning() << "Failed to create metronome test sound file";
     }
+    // Если не удалось создать, продолжаем без звука
 }
 
 void MetronomeSettingsDialog::onTestButtonClicked()
@@ -160,10 +169,9 @@ void MetronomeSettingsDialog::playTestSound(int volume, bool isStrong)
 {
     Q_UNUSED(isStrong); // Параметр пока не используется
     if (metronomeSoundFile.isEmpty()) {
-        qWarning() << "Metronome sound file not created";
-        return;
+        return; // Звук не создан
     }
-    
+
     // Пробуем воспроизвести через QSoundEffect (быстрее для коротких звуков)
     if (metronomeSoundEffect && metronomeSoundEffect->status() == QSoundEffect::Ready) {
         metronomeSoundEffect->setVolume(volume / 100.0f);
@@ -180,24 +188,23 @@ void MetronomeSettingsDialog::playTestSound(int volume, bool isStrong)
         QTimer timeoutTimer;
         timeoutTimer.setSingleShot(true);
         timeoutTimer.setInterval(500); // 500мс таймаут
-        
+
         connect(metronomeSoundEffect, &QSoundEffect::statusChanged, &loop, [&]() {
-            if (metronomeSoundEffect->status() == QSoundEffect::Ready || 
+            if (metronomeSoundEffect->status() == QSoundEffect::Ready ||
                 metronomeSoundEffect->status() == QSoundEffect::Error) {
                 loop.quit();
             }
         });
         connect(&timeoutTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
-        
+
         timeoutTimer.start();
         loop.exec();
-        
+
         if (metronomeSoundEffect->status() == QSoundEffect::Ready) {
             metronomeSoundEffect->setVolume(volume / 100.0f);
             metronomeSoundEffect->play();
-        } else {
-            qWarning() << "Failed to load metronome sound for testing";
         }
+        // Если не загрузился, просто пропускаем без вывода
     }
 }
 
@@ -211,7 +218,7 @@ void MetronomeSettingsDialog::updateSoundStatus()
     } else {
         status = "⚠ Звук не загружен";
     }
-    
+
     if (ui->statusLabel) {
         ui->statusLabel->setText(status);
     }
