@@ -97,6 +97,19 @@ setWindowFlags(Qt::Window);  // Стандартные флаги окна
 
 **Решение**: Использование стандартных флагов окна `Qt::Window`.
 
+## Проблемы аудио
+
+### 1. Изменение высоты тона при работе с метками
+
+**Проблема**: При сжатии/растяжении сегментов высота тона менялась (эффект простого изменения скорости).
+
+**Причина**: В `TimeStretchProcessor::processWithPitchPreservation()` использовался ресемплинг окон, который не сохранял pitch.
+
+**Решение** (исправлено 2026-01-25):
+- Реализован WSOLA (Waveform Similarity Overlap-Add) с корреляционным выравниванием окон
+- Добавлена нормализация overlap-add для стабильной амплитуды
+- Высота тона сохраняется при растяжении/сжатии
+
 ## Проблемы цветового оформления
 
 ### 1. Смешение темных и светлых элементов
@@ -180,24 +193,24 @@ currentScheme = settings.value("colorScheme", "dark").toString();
 ```cpp
 int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& options) {
     std::cout << "=== Консольный режим DONTFLOAT ===" << std::endl;
-    
+
     // Загрузка аудиофайла
     QVector<float> samples;
     int sampleRate = 0;
-    
+
     if (!loadAudioFile(filePath, samples, sampleRate)) {
         std::cout << "Ошибка: Не удалось загрузить аудиофайл" << std::endl;
         return 1;
     }
-    
+
     // Анализ BPM
     BPMAnalyzer::AnalysisResult result = BPMAnalyzer::analyzeBPM(samples, sampleRate, options);
-    
+
     // Вывод результатов
     std::cout << "=== РЕЗУЛЬТАТЫ АНАЛИЗА ===" << std::endl;
     std::cout << "Определенный BPM: " << result.bpm << std::endl;
     std::cout << "Уверенность: " << result.confidence << "%" << std::endl;
-    
+
     return 0;
 }
 ```
@@ -247,18 +260,18 @@ const int totalSamples = static_cast<int>(sampleRate * duration);
 
 for (int i = 0; i < totalSamples; ++i) {
     float sample = 0.0f;
-    
+
     // Основной тон (440 Hz)
     sample += 0.3f * std::sin(2.0f * M_PI * 440.0f * i / sampleRate);
-    
+
     // Биты (короткие импульсы)
     if (i % samplesPerBeat < samplesPerBeat / 10) {
         sample += 0.8f * std::sin(2.0f * M_PI * 880.0f * i / sampleRate);
     }
-    
+
     // Шум для реалистичности
     sample += 0.1f * ((float)rand() / RAND_MAX - 0.5f);
-    
+
     samples.append(sample);
 }
 ```
