@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(DONTFLOAT VERSION 1.0 LANGUAGES C CXX)
+project(DONTFLOAT VERSION 0.0.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -129,7 +129,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::MultimediaWidgets
 )
 
-# Translation files are handled manually
+# Translations: build .qm from .ts (output in build dir; app loads from applicationDirPath())
+find_package(Qt6 REQUIRED COMPONENTS LinguistTools)
+qt_add_lrelease(DONTFLOAT_lrelease
+    TS_FILES ${TRANSLATION_FILES}
+    QM_FILES_OUTPUT_VARIABLE DONTFLOAT_QM_FILES
+)
+add_dependencies(${PROJECT_NAME} DONTFLOAT_lrelease)
 
 # Third-party: Mixxx qm-dsp
 set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
@@ -237,6 +243,13 @@ install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+# Установка desktop файла (Linux)
+if(UNIX AND NOT APPLE)
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/tools/dontfloat.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+    )
+endif()
+
 # Enable testing
 enable_testing()
 
@@ -307,3 +320,69 @@ set_tests_properties(beat_deviation_test PROPERTIES
     DESCRIPTION "Unit tests for beat deviation calculation and unaligned beat detection"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+# ============================================================================
+# CPack конфигурация для создания установочных пакетов
+# ============================================================================
+include(CPack)
+
+# Установка переводов
+install(FILES ${DONTFLOAT_QM_FILES}
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/translations
+    OPTIONAL
+)
+
+# Установка документации
+install(FILES README.md
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
+    OPTIONAL
+)
+
+# CPack настройки
+set(CPACK_PACKAGE_NAME "DONTFLOAT")
+set(CPACK_PACKAGE_VENDOR "DONTFLOAT Project")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Аудиоредактор для выравнивания BPM")
+set(CPACK_PACKAGE_DESCRIPTION "DONTFLOAT - это аудиоредактор для анализа и выравнивания BPM аудиофайлов.")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+
+# Windows (NSIS)
+if(WIN32)
+    set(CPACK_GENERATOR "NSIS;ZIP")
+    set(CPACK_NSIS_PACKAGE_NAME "DONTFLOAT")
+    set(CPACK_NSIS_DISPLAY_NAME "DONTFLOAT")
+    set(CPACK_NSIS_HELP_LINK "https://github.com/yourusername/DONTFLOAT")
+    set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/yourusername/DONTFLOAT")
+    set(CPACK_NSIS_CONTACT "maintainer@example.com")
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+endif()
+
+# Linux DEB
+if(UNIX AND NOT APPLE)
+    set(CPACK_GENERATOR "DEB;RPM;TGZ")
+    
+    # DEB настройки
+    set(CPACK_DEBIAN_PACKAGE_NAME "dontfloat")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "DONTFLOAT Project <maintainer@example.com>")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+    set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6 (>= 6.8.0), libqt6gui6 (>= 6.8.0), libqt6widgets6 (>= 6.8.0), libqt6multimedia6 (>= 6.8.0), libqt6multimediawidgets6 (>= 6.8.0)")
+    set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+    
+    # RPM настройки
+    set(CPACK_RPM_PACKAGE_NAME "dontfloat")
+    set(CPACK_RPM_PACKAGE_GROUP "Applications/Multimedia")
+    set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0+")
+    set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.8.0, qt6-qtmultimedia >= 6.8.0")
+    set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+endif()
+
+# macOS (если нужно в будущем)
+if(APPLE)
+    set(CPACK_GENERATOR "DragNDrop;TGZ")
+    set(CPACK_DMG_VOLUME_NAME "DONTFLOAT")
+endif()
