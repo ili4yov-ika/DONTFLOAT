@@ -137,23 +137,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QComboBox" name="displayModeCombo">
-         <item>
-          <property name="text">
-           <string>Время</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Такты</string>
-          </property>
-         </item>
-        </widget>
-       </item>
-       <item>
         <widget class="QLabel" name="timeLabel">
          <property name="text">
-          <string>00:00:000</string>
+          <string>00:00:000 | 1.1.1</string>
          </property>
          <property name="alignment">
           <set>Qt::AlignmentFlag::AlignCenter</set>
@@ -169,8 +155,23 @@
        </item>
        <item alignment="Qt::AlignmentFlag::AlignLeft">
         <widget class="QLineEdit" name="bpmEdit">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>100000</width>
+           <height>16777215</height>
+          </size>
+         </property>
          <property name="text">
           <string>120.00</string>
+         </property>
+         <property name="maxLength">
+          <number>1001</number>
          </property>
         </widget>
        </item>
@@ -182,22 +183,46 @@
         </widget>
        </item>
        <item alignment="Qt::AlignmentFlag::AlignLeft">
-        <widget class="QLineEdit" name="barsEdit">
+        <widget class="QComboBox" name="barsCombo">
          <property name="maximumSize">
           <size>
-           <width>60</width>
+           <width>80</width>
            <height>16777215</height>
           </size>
          </property>
          <property name="toolTip">
-          <string>Размер такта в формате X/Y (например, 4/4, 3/4, 2/4, 6/8, 12/8)</string>
+          <string>Размер такта</string>
          </property>
-         <property name="text">
-          <string>4/4</string>
-         </property>
-         <property name="placeholderText">
-          <string>4/4</string>
-         </property>
+         <item>
+          <property name="text">
+           <string>4/4</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>3/4</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>1/4</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>2/4</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>6/8</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>12/8</string>
+          </property>
+         </item>
         </widget>
        </item>
        <item>
