@@ -107,7 +107,7 @@
     </message>
     <message>
         <source>Настройки &amp;метронома...</source>
-        <translation>&amp;Metronome Settings...</translation>
+        <translation>Metronome &amp;Settings...</translation>
     </message>
     <message>
         <source>&amp;Горячие клавиши...</source>
@@ -385,6 +385,130 @@ Shift+B: Remove point B</translation>
         <source>Темы</source>
         <translation>Themes</translation>
     </message>
+    <message>
+        <source>Метка добавлена</source>
+        <translation>Marker added</translation>
+    </message>
+    <message>
+        <source>В аудиофайле есть несохраненные изменения.
+Хотите сохранить изменения?</source>
+        <translation>The audio file has unsaved changes.
+Do you want to save changes?</translation>
+    </message>
+    <message>
+        <source>Файл загружен: %1</source>
+        <translation>File loaded: %1</translation>
+    </message>
+    <message>
+        <source>Ошибка загрузки файла</source>
+        <translation>File load error</translation>
+    </message>
+    <message>
+        <source>Ошибка: неподдерживаемый формат аудио</source>
+        <translation>Error: unsupported audio format</translation>
+    </message>
+    <message>
+        <source>Ошибка декодирования: </source>
+        <translation>Decoding error: </translation>
+    </message>
+    <message>
+        <source>файл не найден или недоступен</source>
+        <translation>file not found or inaccessible</translation>
+    </message>
+    <message>
+        <source>неподдерживаемый формат</source>
+        <translation>unsupported format</translation>
+    </message>
+    <message>
+        <source>нет доступа к файлу</source>
+        <translation>no access to file</translation>
+    </message>
+    <message>
+        <source>неизвестная ошибка</source>
+        <translation>unknown error</translation>
+    </message>
+    <message>
+        <source>Ошибка: некорректные данные в буфере</source>
+        <translation>Error: invalid data in buffer</translation>
+    </message>
+    <message>
+        <source>Ошибка: неподдерживаемый формат данных</source>
+        <translation>Error: unsupported data format</translation>
+    </message>
+    <message>
+        <source>WAV файлы (*.wav);;Все файлы (*)</source>
+        <translation>WAV Files (*.wav);;All Files (*)</translation>
+    </message>
+    <message>
+        <source>Файл сохранен: %1</source>
+        <translation>File saved: %1</translation>
+    </message>
+    <message>
+        <source>Ошибка: нет данных для сохранения</source>
+        <translation>Error: no data to save</translation>
+    </message>
+    <message>
+        <source>Не удалось сохранить файл %1:
+%2.</source>
+        <translation>Failed to save file %1:
+%2.</translation>
+    </message>
+    <message>
+        <source>Метроном включен</source>
+        <translation>Metronome enabled</translation>
+    </message>
+    <message>
+        <source>Метроном выключен</source>
+        <translation>Metronome disabled</translation>
+    </message>
+    <message>
+        <source>Ошибка: Сначала установите точки A и B для цикла!</source>
+        <translation>Error: Set points A and B for the loop first!</translation>
+    </message>
+    <message>
+        <source>Цикл включен: %1 - %2</source>
+        <translation>Loop enabled: %1 - %2</translation>
+    </message>
+    <message>
+        <source>Цикл выключен</source>
+        <translation>Loop disabled</translation>
+    </message>
+    <message>
+        <source>Настройки метронома обновлены</source>
+        <translation>Metronome settings updated</translation>
+    </message>
+    <message>
+        <source>Тема изменена: %1</source>
+        <translation>Theme changed: %1</translation>
+    </message>
+    <message>
+        <source>Цветовая схема изменена: %1</source>
+        <translation>Color scheme changed: %1</translation>
+    </message>
+    <message>
+        <source>Сначала загрузите аудиофайл</source>
+        <translation>Load an audio file first</translation>
+    </message>
+    <message>
+        <source>Нет аудиоданных для анализа</source>
+        <translation>No audio data to analyze</translation>
+    </message>
+    <message>
+        <source>Анализ тональности...</source>
+        <translation>Detecting key...</translation>
+    </message>
+    <message>
+        <source>Тональность определена: %1</source>
+        <translation>Key detected: %1</translation>
+    </message>
+    <message>
+        <source>Язык: Русский</source>
+        <translation>Language: Russian</translation>
+    </message>
+    <message>
+        <source>Language: English</source>
+        <translation>Language: English</translation>
+    </message>
 </context>
 <context>
     <name>LoadFileDialog</name>
@@ -506,6 +630,13 @@ Shift+B: Remove point B</translation>
     <message>
         <source>Малые доли:</source>
         <translation>Weak beats:</translation>
+    </message>
+</context>
+<context>
+    <name>BeatFixCommand</name>
+    <message>
+        <source>Выравнивание долей</source>
+        <translation>Beat alignment</translation>
     </message>
 </context>
 </TS>

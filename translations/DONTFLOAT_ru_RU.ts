@@ -385,6 +385,14 @@ Shift+B: Удалить точку B</translation>
         <source>Темы</source>
         <translation>Темы</translation>
     </message>
+    <message>
+        <source>Язык: Русский</source>
+        <translation>Язык: Русский</translation>
+    </message>
+    <message>
+        <source>Language: English</source>
+        <translation>Язык: Английский</translation>
+    </message>
 </context>
 <context>
     <name>LoadFileDialog</name>
