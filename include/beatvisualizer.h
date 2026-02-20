@@ -84,7 +84,7 @@ public:
             , stripeWidth(4.0f)
             , stripeSpacing(3.0f)
             , deviationAlpha(100)
-            , deviationThreshold(0.02f)
+            , deviationThreshold(0.005f)  // Уменьшен порог с 2% до 0.5% для тестирования
             , beatWaveformOpacity(0.6f)
         {}
     };
@@ -98,11 +98,11 @@ public:
         QColor beatLineColor;           // Цвет вертикальной линии на позиции бита
 
         BeatDeviationColors()
-            : stretchedAligned(255, 80, 80, 100)
-            , stretchedUnaligned(255, 180, 180, 100)
-            , compressedAligned(80, 80, 255, 100)
-            , compressedUnaligned(180, 180, 255, 100)
-            , beatLineColor(255, 255, 255, 100)
+            : stretchedAligned(220, 60, 60, 180)   // Красный (растянутые, выровненные)
+            , stretchedUnaligned(200, 100, 100, 180) // Красный, менее насыщенный (не выровненные)
+            , compressedAligned(60, 60, 220, 180)   // Синий (сжатые, выровненные)
+            , compressedUnaligned(100, 100, 200, 180) // Синий, менее насыщенный (не выровненные)
+            , beatLineColor(255, 255, 255, 120)
         {}
     };
 
@@ -221,6 +221,10 @@ private:
                                         float stripeSpacing,
                                         const QColor& color,
                                         bool isStretched);
+
+    // Настройки визуализации отклонений (ширина треугольников)
+    static constexpr float DEVIATION_TRIANGLE_MAX_WIDTH_PX = 36.0f;  // 100%
+    static constexpr float DEVIATION_TRIANGLE_MIN_WIDTH_RATIO = 0.85f; // мин = 85% от макс
 
     // Настройки анализа
     static constexpr int DEFAULT_WINDOW_SIZE = 1024;

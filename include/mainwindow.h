@@ -23,6 +23,7 @@
 #include <QSoundEffect>
 #include <QUndoStack>
 #include <QUrl>
+#include <QTranslator>
 #include "waveformview.h"
 #include "pitchgridwidget.h"
 #include "metronomecontroller.h"
@@ -46,6 +47,9 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
     void changeEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
     void openAudioFile();
@@ -98,10 +102,34 @@ private:
     void processAudioFile(const QString& filePath);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
     void createDeviationMarkers(float tolerancePercent);
+    void retranslateMenus();
     QString formatTime(qint64 msPosition);
+    QString formatTimeAndBars(qint64 msPosition);
     void updateHorizontalScrollBar(float zoom);
     void updateHorizontalScrollBarFromOffset(float offset);
     void constrainWindowSize();
+
+    // Вспомогательные методы для рефакторинга
+    void updateUIAfterAnalysis(const QVector<QVector<float>>& audioData, 
+                                const BPMAnalyzer::AnalysisResult& analysis, 
+                                int beatsPerBar);
+    void updateUIAfterBeatFix(const QVector<QVector<float>>& fixedData,
+                              const BPMAnalyzer::AnalysisResult& analysis,
+                              int beatsPerBar);
+    void setBPMAndBeatsPerBar(float bpm, int beatsPerBar);
+    QVector<Marker> createBeatGridMarkers(const BPMAnalyzer::AnalysisResult& analysis,
+                                          const QVector<QVector<float>>& audioData,
+                                          int beatsPerBar);
+    // Метки по каждой доле выровненной сетки (для «Выровнять» — как при «Пропустить» + оставить метки)
+    QVector<Marker> createAlignedBeatMarkers(const QVector<BPMAnalyzer::BeatInfo>& alignedBeats,
+                                              qint64 totalSamples, int sampleRate);
+    QVector<BPMAnalyzer::BeatInfo> createAlignedBeatGrid(float bpm, qint64 gridStartSample,
+                                                         qint64 totalSamples, int sampleRate,
+                                                         const QVector<QVector<float>>& audioData);
+    void applyBeatFixToWaveform(const QVector<QVector<float>>& originalData,
+                                const QVector<QVector<float>>& fixedData,
+                                const BPMAnalyzer::AnalysisResult& analysis,
+                                int beatsPerBar);
 
     // Сохранение обработанного аудио во временный WAV-файл
     // и возврат пути к нему. Используется для того, чтобы
@@ -122,6 +150,8 @@ private:
     QMenu *viewMenu;
     QMenu *settingsMenu;
     QMenu *colorSchemeMenu;
+    QMenu *themesMenu;
+    QMenu *languageMenu;
 
     // Action components
     QAction *openAct;
@@ -158,6 +188,7 @@ private:
 
     // Settings
     QSettings settings;
+    QTranslator* m_appTranslator;
 
     // Metronome components
     MetronomeController *metronomeController;

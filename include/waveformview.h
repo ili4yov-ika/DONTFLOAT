@@ -30,6 +30,7 @@ public:
     void setBeatInfo(const QVector<BPMAnalyzer::BeatInfo>& beats);
     QVector<BPMAnalyzer::BeatInfo> getBeatInfo() const { return beats; }
     void setGridStartSample(qint64 sample) { gridStartSample = sample; update(); }
+    qint64 getGridStartSample() const { return gridStartSample; }
     void setBPM(float bpm);
     float getBPM() const { return bpm; }
     void setSampleRate(int rate);
@@ -75,7 +76,10 @@ public:
     ActiveSegmentInfo getActiveSegmentInfo() const;
     void setMarkers(const QVector<Marker>& newMarkers) {
         markers = newMarkers;
-        // Обновляем время всех меток при установке
+        // Нулевая метка статична в 0:00
+        if (!markers.isEmpty() && markers[0].isFixed) {
+            markers[0].position = 0;
+        }
         for (Marker& marker : markers) {
             marker.updateTimeFromSamples(sampleRate);
         }
