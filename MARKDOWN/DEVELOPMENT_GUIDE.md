@@ -123,11 +123,11 @@ public:
 - Интеграция с QUndoStack
 - Поддержка отмены/повтора
 
-### TimeStretchCommand (планируется)
-- Сжатие/растяжение времени между метками
-- Сохранение исходных данных для отмены
-- Поддержка тонкомпенсации
-- Интеграция с MarkerStretchEngine и TimeStretchProcessor
+### TimeStretchCommand
+- Реализовано: сжатие/растяжение по меткам (Ctrl+T)
+- Сохранение исходных данных для отмены через QUndoStack
+- Поддержка тонкомпенсации (WSOLA в TimeStretchProcessor)
+- Интеграция с MarkerEngine (MarkerData) и TimeStretchProcessor
 
 ## Консольный режим
 
@@ -240,6 +240,57 @@ QString scheme = settings.value("colorScheme", "dark").toString();
 - Все пользовательские тексты через tr()
 - Использование осмысленных контекстов
 - Поддержка множественных форм
+
+## Визуализация отклонений битов
+
+### Общие принципы
+- **Не использовать qDebug()** в функциях отрисовки (вызываются каждый кадр)
+- **save()/restore() вне циклов** - включать один раз для всех элементов
+- **Вычисления вне циклов** - константы рассчитывать до цикла
+- **Рисовать один раз** - не дублировать для каждого канала
+
+### Пример оптимизированной отрисовки
+```cpp
+void drawElements(QPainter& painter, const QVector<Item>& items) {
+    // ПРАВИЛЬНО: Константы вне цикла
+    const qreal rectX = rect.x();
+    const qreal centerY = rect.center().y();
+    
+    // ПРАВИЛЬНО: save/restore вне цикла
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    
+    for (const auto& item : items) {
+        // НЕТ qDebug() здесь!
+        // НЕТ save/restore здесь!
+        drawSingleItem(painter, item, rectX, centerY);
+    }
+    
+    painter.restore();
+}
+```
+
+### Типичные ошибки
+❌ **Плохо:**
+```cpp
+for (int i = 0; i < items.size(); ++i) {
+    qDebug() << "Drawing item" << i;  // МЕДЛЕННО!
+    painter.save();  // МЕДЛЕННО!
+    painter.setRenderHint(...);  // МЕДЛЕННО!
+    painter.drawPolygon(triangle);
+    painter.restore();  // МЕДЛЕННО!
+}
+```
+
+✅ **Хорошо:**
+```cpp
+painter.save();
+painter.setRenderHint(...);
+for (const auto& item : items) {
+    painter.drawPolygon(triangle);  // Быстро
+}
+painter.restore();
+```
 
 ## Производительность
 

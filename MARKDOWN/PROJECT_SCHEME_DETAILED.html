@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DONTFLOAT — схема окон и элементов UI</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 24px;
+      line-height: 1.4;
+    }
+    h1 { text-align: center; color: #2a82da; margin-bottom: 8px; }
+    .subtitle { text-align: center; color: #888; margin-bottom: 32px; }
+    .window-scheme {
+      margin-bottom: 40px;
+      border: 1px solid #444;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #252525;
+    }
+    .window-title {
+      background: #2a2a3a;
+      color: #2a82da;
+      padding: 12px 16px;
+      font-weight: bold;
+      font-size: 1.1rem;
+      border-bottom: 1px solid #444;
+    }
+    .window-body { padding: 16px; }
+    .section { margin-bottom: 20px; }
+    .section-title {
+      color: #888;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px dashed #444;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+    .el { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; font-size: 0.9rem; }
+    .el-btn { background: #3d5a3d; border: 1px solid #5a7a5a; color: #c8e6c8; }
+    .el-btn-toggle { background: #3d4a5a; border: 1px solid #5a6a7a; color: #c8d8e6; }
+    .el-label { background: #333; border: 1px solid #555; color: #bbb; }
+    .el-edit { background: #2b2b3b; border: 1px solid #555; color: #fff; }
+    .el-combo { background: #2b3b2b; border: 1px solid #5a6a5a; color: #c8e6c8; }
+    .el-check { background: #3a3a4a; border: 1px solid #555; color: #ccc; }
+    .el-slider { background: #352a2a; border: 1px solid #6a4a4a; color: #e6c8c8; }
+    .el-progress { background: #2a2a3a; border: 1px solid #4a4a6a; color: #c8c8e6; }
+    .el-area { background: #2d2d2d; border: 1px solid #555; padding: 12px; min-height: 40px; }
+    .el-menu { background: #1a1a2a; border: 1px solid #4a4a6a; color: #a0b0e0; }
+    .tag { font-size: 0.7rem; opacity: 0.85; margin-left: 4px; }
+    .tree ul { margin: 4px 0 4px 16px; padding: 0; list-style: none; }
+    .tree li { margin: 2px 0; }
+    .tree .node { padding: 2px 6px; border-radius: 3px; }
+    .tree .node.widget { background: #2a3540; border-left: 3px solid #5f9ea0; }
+    .tree .node.ctrl { background: #35302a; border-left: 3px solid #b8860b; }
+    .tree .node.menu { background: #302a35; border-left: 3px solid #8b658b; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 24px; padding: 12px; background: #252525; border-radius: 8px; font-size: 0.8rem; }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .legend .el { padding: 2px 6px; }
+  </style>
+</head>
+<body>
+
+  <h1>DONTFLOAT</h1>
+  <p class="subtitle">Подробная схема окон: кнопки, виджеты, поля ввода, выпадающие списки</p>
+
+  <!-- ========== Главное окно (MainWindow) ========== -->
+  <div class="window-scheme">
+    <div class="window-title">Главное окно (MainWindow) — ui/mainwindow.ui</div>
+    <div class="window-body">
+
+      <div class="section">
+        <div class="section-title">Строка меню (QMenuBar)</div>
+        <div class="row">
+          <span class="el el-menu">Файл</span>
+          <span class="el el-menu">Правка</span>
+          <span class="el el-menu">Вид</span>
+          <span class="el el-menu">Настройки</span>
+        </div>
+        <div class="tree">
+          <ul>
+            <li><span class="node menu">Файл</span>
+              <ul>
+                <li><span class="node ctrl">Открыть... (QAction) — Ctrl+O</span></li>
+                <li><span class="node ctrl">Сохранить (QAction) — Ctrl+S</span></li>
+                <li>— разделитель —</li>
+                <li><span class="node ctrl">Выход (QAction)</span></li>
+              </ul>
+            </li>
+            <li><span class="node menu">Правка</span>
+              <ul>
+                <li><span class="node ctrl">Отменить (QAction) — Ctrl+Z</span></li>
+                <li><span class="node ctrl">Повторить (QAction) — Ctrl+Y</span></li>
+                <li>— разделитель —</li>
+                <li><span class="node ctrl">Применить сжатие-растяжение (QAction) — Ctrl+T</span></li>
+              </ul>
+            </li>
+            <li><span class="node menu">Вид</span>
+              <ul>
+                <li><span class="node menu">Темы</span> → По умолчанию</li>
+                <li><span class="node menu">Цветовая схема</span> → Тёмная, Светлая</li>
+                <li>— разделитель —</li>
+                <li><span class="node ctrl">Показать/Убрать питч-сетку (QAction) — Ctrl+G</span></li>
+                <li>— разделитель —</li>
+                <li><span class="node ctrl">Силуэт ударных (QAction, checkable)</span></li>
+              </ul>
+            </li>
+            <li><span class="node menu">Настройки</span>
+              <ul>
+                <li><span class="node ctrl">Настройки метронома... (QAction)</span></li>
+                <li><span class="node ctrl">Горячие клавиши... (QAction)</span></li>
+                <li><span class="node menu">Language</span> → Русский, English</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Панель транспорта (transportWidget) — кнопки и поля</div>
+        <div class="row">
+          <span class="el el-btn" title="QPushButton">loadButton <span class="tag">Открыть файл, иконка</span></span>
+          <span class="el el-btn">saveButton <span class="tag">Сохранить, иконка</span></span>
+          <span class="el el-label">timeLabel <span class="tag">00:00:000 | 1.1.1</span></span>
+          <span class="el el-label">bpmLabel <span class="tag">BPM:</span></span>
+          <span class="el el-edit">bpmEdit <span class="tag">QLineEdit, 120.00</span></span>
+          <span class="el el-label">barsLabel <span class="tag">Размер такта:</span></span>
+          <span class="el el-combo">barsCombo <span class="tag">QComboBox: 4/4, 3/4, 1/4, 2/4, 6/8, 12/8</span></span>
+          <span class="el el-btn">playButton <span class="tag">Воспроизведение, иконка</span></span>
+          <span class="el el-btn">stopButton <span class="tag">Стоп, иконка</span></span>
+          <span class="el el-btn el-btn-toggle">metronomeButton <span class="tag">checkable, иконка</span></span>
+          <span class="el el-btn">loopStartButton <span class="tag">A, начало цикла</span></span>
+          <span class="el el-btn">loopEndButton <span class="tag">B, конец цикла</span></span>
+          <span class="el el-btn el-btn-toggle">loopButton <span class="tag">Цикл вкл/выкл, checkable</span></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Область таймлайна (timelineContainer) — иерархия виджетов</div>
+        <div class="tree">
+          <ul>
+            <li><span class="node widget">QSplitter (mainSplitter), вертикальный</span>
+              <ul>
+                <li><span class="node widget">waveformContainer</span>
+                  <ul>
+                    <li><span class="node widget">waveformWidget</span> → <strong>WaveformView</strong> (волна, метки A/B, метки растяжения, курсор)</li>
+                    <li><span class="node widget">scrollBarWidget</span> → горизонтальный скроллбар</li>
+                  </ul>
+                </li>
+                <li><span class="node widget">pitchGridContainer</span>
+                  <ul>
+                    <li><span class="node widget">keyInputContainer</span>
+                      <ul>
+                        <li><span class="node ctrl">keyLabel <span class="tag">QLabel «Тональность:»</span></span></li>
+                        <li><span class="node ctrl">keyInput <span class="tag">QLineEdit, readOnly, placeholder «Не определена», контекстное меню</span></span></li>
+                        <li><span class="node ctrl">keyInput2 <span class="tag">QLineEdit, readOnly, placeholder «Модуляция», контекстное меню</span></span></li>
+                      </ul>
+                    </li>
+                    <li><span class="node widget">pitchGridTableContainer</span> → <strong>PitchGridWidget</strong> (питч-сетка)</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Строка состояния</div>
+        <div class="row">
+          <span class="el el-label">QStatusBar (statusbar)</span> — сообщения (воспроизведение, BPM, точки A/B и т.д.)
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========== Диалог загрузки (LoadFileDialog) ========== -->
+  <div class="window-scheme">
+    <div class="window-title">Диалог «Анализ и выравнивание долей» (LoadFileDialog) — ui/loadfiledialog.ui</div>
+    <div class="window-body">
+
+      <div class="section">
+        <div class="section-title">Информация и прогресс</div>
+        <div class="row">
+          <span class="el el-label">statusLabel <span class="tag">QLabel, «Анализ аудио...»</span></span>
+          <span class="el el-progress">progressBar <span class="tag">QProgressBar</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-label">infoLabel <span class="tag">QLabel, многострочный</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-label">preliminaryBPMLabel <span class="tag">Предварительный BPM (Mixxx)</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-label">computedBPMLabel <span class="tag">Вычисленный BPM, уверенность %</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-label">deviationLabel <span class="tag">Среднее отклонение %</span></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Настройки и действия</div>
+        <div class="row">
+          <span class="el el-label">timeSignatureLabel <span class="tag">Размер такта:</span></span>
+          <span class="el el-combo">timeSignatureCombo <span class="tag">QComboBox: 4/4, 3/4, 1/4, 2/4, 6/8, 12/8</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-check">keepMarkersOnSkipCheckbox <span class="tag">QCheckBox, «Оставить метки при пропуске»</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-btn">fixButton <span class="tag">QPushButton «Выровнять», изначально disabled</span></span>
+          <span class="el el-btn" style="background:#5a3d3d;border-color:#7a5a5a;">skipButton <span class="tag">QPushButton «Пропустить», изначально disabled</span></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========== Настройки метронома (MetronomeSettingsDialog) ========== -->
+  <div class="window-scheme">
+    <div class="window-title">Диалог «Настройки метронома» (MetronomeSettingsDialog) — ui/metronomesettingsdialog.ui</div>
+    <div class="window-body">
+
+      <div class="section">
+        <div class="section-title">Громкость долей</div>
+        <div class="row">
+          <span class="el el-label">strongBeatLabel <span class="tag">«Большие доли:»</span></span>
+          <span class="el el-slider">strongBeatSlider <span class="tag">QSlider 0–150%, по умолчанию 100</span></span>
+          <span class="el el-label">strongBeatValueLabel <span class="tag">«100%»</span></span>
+          <span class="el el-btn">testButton <span class="tag">► тест сильной доли</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-label">weakBeatLabel <span class="tag">«Малые доли:»</span></span>
+          <span class="el el-slider">weakBeatSlider <span class="tag">QSlider 0–150%, по умолчанию 90</span></span>
+          <span class="el el-label">weakBeatValueLabel <span class="tag">«90%»</span></span>
+          <span class="el el-btn">testWeakButton <span class="tag">► тест слабой доли</span></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Звук метронома</div>
+        <div class="row">
+          <span class="el el-label">soundLabel <span class="tag">«Звук:»</span></span>
+          <span class="el el-combo">soundComboBox <span class="tag">QComboBox, «Щелчок (стандартный)» / userData: click</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-btn">selectSoundButton <span class="tag">«Выбрать звук»</span></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Статус и закрытие</div>
+        <div class="row">
+          <span class="el el-label">statusLabel <span class="tag">«Статус: загрузка...»</span></span>
+        </div>
+        <div class="row">
+          <span class="el el-btn">buttonBox <span class="tag">QDialogButtonBox: OK, Cancel</span></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========== Сводная таблица типов элементов ========== -->
+  <div class="window-scheme">
+    <div class="window-title">Типы UI-элементов в проекте</div>
+    <div class="window-body">
+      <table style="width:100%; border-collapse: collapse; color: #ccc; font-size: 0.9rem;">
+        <thead>
+          <tr style="border-bottom: 1px solid #444;">
+            <th style="text-align:left; padding: 8px;">Тип</th>
+            <th style="text-align:left; padding: 8px;">Где используется</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QPushButton</td><td>Главное окно: загрузка, сохранение, воспроизведение, стоп, метроном, A, B, цикл; LoadFileDialog: Выровнять, Пропустить; MetronomeSettingsDialog: тест долей, Выбрать звук</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QLineEdit</td><td>Главное окно: bpmEdit, keyInput, keyInput2 (readOnly)</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QComboBox</td><td>Главное окно: barsCombo (размер такта); LoadFileDialog: timeSignatureCombo; MetronomeSettingsDialog: soundComboBox</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QLabel</td><td>Везде: время, BPM, подписи, статусы, результаты анализа</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QCheckBox</td><td>LoadFileDialog: keepMarkersOnSkipCheckbox</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QSlider</td><td>MetronomeSettingsDialog: strongBeatSlider, weakBeatSlider</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QProgressBar</td><td>LoadFileDialog: progressBar</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QMenuBar / QMenu / QAction</td><td>Главное окно: Файл, Правка, Вид, Настройки и подменю</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QStatusBar</td><td>Главное окно: statusbar</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QSplitter</td><td>Главное окно: mainSplitter (волна + питч-сетка)</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">QDialogButtonBox</td><td>MetronomeSettingsDialog: OK / Cancel</td></tr>
+          <tr style="border-bottom: 1px solid #333;"><td style="padding: 8px;">Кастомные виджеты</td><td>WaveformView (волна, метки, зум), PitchGridWidget (питч-сетка)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="el el-btn"></span> Кнопка</span>
+    <span><span class="el el-label"></span> Подпись</span>
+    <span><span class="el el-edit"></span> Поле ввода</span>
+    <span><span class="el el-combo"></span> Выпадающий список</span>
+    <span><span class="el el-check"></span> Флажок</span>
+    <span><span class="el el-slider"></span> Слайдер</span>
+    <span><span class="el el-progress"></span> Прогресс</span>
+    <span><span class="el el-menu"></span> Меню</span>
+    <span><span class="node widget"></span> Контейнер/виджет</span>
+    <span><span class="node ctrl"></span> Элемент управления</span>
+  </div>
+
+  <p style="text-align: center; color: #666; margin-top: 24px; font-size: 0.85rem;">
+    MARKDOWN/PROJECT_SCHEME_DETAILED.html — сущности окон. Общая схема: PROJECT_SCHEME.html. Диаграммы Mermaid: PROJECT_FLOWCHART.md.
+  </p>
+
+</body>
+</html>
