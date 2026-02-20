@@ -22,6 +22,9 @@ const int WaveformView::maxZoom = 1000;
 const int WaveformView::markerHeight = 20;  // Высота области маркеров
 const int WaveformView::markerSpacing = 60;  // Минимальное расстояние между маркерами в пикселях
 
+// Минимальный сегмент между метками: 50 мс (в таком сегменте нельзя создавать новые метки)
+static const qint64 MIN_MARKER_SEGMENT_MS = 50;
+
 WaveformView::WaveformView(QWidget *parent)
     : QWidget(parent)
     , bpm(120.0f)
@@ -196,21 +199,6 @@ void WaveformView::paintEvent(QPaintEvent* event)
                                                  samplesPerPixel, startSample,
                                                  beatVisualizationSettings);
             }
-
-            // Рисуем отклонения долей в пределах канала
-            if (beatVisualizationSettings.showBeatDeviations && !beats.isEmpty()) {
-                BeatVisualizer::drawBeatDeviations(
-                    painter,
-                    beats,
-                    channelRect,
-                    bpm,
-                    sampleRate,
-                    samplesPerPixel,
-                    startSample,
-                    beatVisualizationSettings,
-                    beatDeviationColors
-                );
-            }
         }
     }
 
@@ -308,49 +296,42 @@ void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
 {
     if (audioData.isEmpty()) return;
 
-    // Вычисляем длительность одного такта в сэмплах
     float samplesPerBeat = (60.0f * sampleRate) / bpm;
+    // Длина такта в четвертях: 4/4->4, 3/4->3, 2/4->2, 1/4->1, 6/8->3, 12/8->6
+    float barLengthInQuarters = (beatsPerBar == 6) ? 3.f : (beatsPerBar == 12) ? 6.f : float(qMax(1, beatsPerBar));
+    float samplesPerBar = barLengthInQuarters * samplesPerBeat;
+    // Число долей в такте — по знаменателю: X/4 → 4 удара, X/8 → 8 ударов
+    int subdivisionsPerBar = (beatsPerBar == 6 || beatsPerBar == 12) ? 8 : 4;
+    float samplesPerSubdivision = samplesPerBar / float(subdivisionsPerBar);
 
-    // Количество сэмплов на пиксель с учетом масштаба
     float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
-
-    // Вычисляем начальный сэмпл с учетом смещения и масштаба
     int visibleSamples = int(rect.width() * samplesPerPixel);
     int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
     int startSample = int(horizontalOffset * maxStartSample);
 
-    // Находим первый такт, выровненный по первой обнаруженной доле
-    int firstBeat = 0;
+    int firstSubdivision = 0;
     if (gridStartSample > 0) {
-        // количество ударов от опорной точки до стартового сэмпла
-        float beatsFromGridStart = float(startSample - gridStartSample) / samplesPerBeat;
-        firstBeat = int(qFloor(beatsFromGridStart));
+        float subsFromGrid = float(startSample - gridStartSample) / samplesPerSubdivision;
+        firstSubdivision = int(qFloor(subsFromGrid));
     } else {
-        firstBeat = int(startSample / samplesPerBeat);
+        firstSubdivision = int(startSample / samplesPerSubdivision);
     }
 
-    // Рисуем линии тактов с разной толщиной для сильных и слабых долей
-    for (int beat = firstBeat; ; ++beat) {
-        int samplePos = gridStartSample > 0
-            ? int(gridStartSample + beat * samplesPerBeat)
-            : int(beat * samplesPerBeat);
+    for (int sub = firstSubdivision; ; ++sub) {
+        qint64 samplePos = gridStartSample > 0
+            ? qint64(gridStartSample + sub * samplesPerSubdivision)
+            : qint64(sub * samplesPerSubdivision);
         if (samplePos < startSample) continue;
 
         float x = (samplePos - startSample) / samplesPerPixel;
         if (x >= rect.width()) break;
 
-        // Определяем, является ли это сильной долей (первая доля такта)
-        bool isStrongBeat = (beat % beatsPerBar) == 0;
-
-        // Устанавливаем толщину и цвет пера в зависимости от типа доли
+        bool isStrongBeat = (sub % subdivisionsPerBar) == 0;
         if (isStrongBeat) {
-            // Сильная доля - более жирная линия
             painter.setPen(QPen(colors.getBeatColor(), 2.0));
         } else {
-            // Слабая доля - обычная линия
             painter.setPen(QPen(colors.getBeatColor(), 1.0));
         }
-
         painter.drawLine(QPointF(rect.x() + x, rect.top()), QPointF(rect.x() + x, rect.bottom()));
     }
 }
@@ -397,9 +378,10 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
     painter.setPen(colors.getMarkerTextColor());
     painter.setFont(QFont("Arial", 8));
 
-    // Вычисляем длительность одного такта в сэмплах
     float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
-    float samplesPerBar = samplesPerBeat * qMax(1, beatsPerBar);
+    // Длина такта в четвертях: 4/4->4, 3/4->3, 2/4->2, 1/4->1, 6/8->3, 12/8->6
+    float barLengthInQuarters = (beatsPerBar == 6) ? 3.f : (beatsPerBar == 12) ? 6.f : float(qMax(1, beatsPerBar));
+    float samplesPerBar = barLengthInQuarters * samplesPerBeat;
 
     // Количество сэмплов на пиксель с учетом масштаба
     float samplesPerPixel = float(audioData[0].size()) / (rect.width() * zoomLevel);
@@ -457,18 +439,21 @@ QString WaveformView::getPositionText(qint64 position) const
     }
 
     if (showBarsDisplay) {
-        // Вычисляем такты и доли
         float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
-        float beatsFromStart = float(position) / samplesPerBeat;
-        const int bpb = qMax(1, beatsPerBar);
-        int bar = int(beatsFromStart / bpb) + 1;  // Такты начинаются с 1
-        int beat = int(beatsFromStart) % bpb + 1;  // Доли начинаются с 1
-        float subBeat = (beatsFromStart - float(int(beatsFromStart))) * float(bpb); // Доли такта в beat units
+        float barLengthInQuarters = (beatsPerBar == 6) ? 3.f : (beatsPerBar == 12) ? 6.f : float(qMax(1, beatsPerBar));
+        float samplesPerBar = barLengthInQuarters * samplesPerBeat;
+        int subdivisionsPerBar = (beatsPerBar == 6 || beatsPerBar == 12) ? 8 : 4;
+        float samplesPerSubdivision = samplesPerBar / float(subdivisionsPerBar);
+        float subsFromStart = (gridStartSample > 0)
+            ? float(position - gridStartSample) / samplesPerSubdivision
+            : float(position) / samplesPerSubdivision;
+        if (subsFromStart < 0.0f) subsFromStart = 0.0f;
+        int bar = int(subsFromStart / subdivisionsPerBar) + 1;
+        int beat = int(subsFromStart) % subdivisionsPerBar + 1;
+        float subBeat = (subsFromStart - float(int(subsFromStart))) * float(subdivisionsPerBar);
+        int sub = qBound(1, int(subBeat + 1), subdivisionsPerBar);
 
-        QString barText = QString("%1.%2.%3")
-            .arg(bar)
-            .arg(beat)
-            .arg(int(subBeat + 1));
+        QString barText = QString("%1.%2.%3").arg(bar).arg(beat).arg(sub);
 
         if (!positionText.isEmpty()) {
             positionText += " | ";
@@ -827,23 +812,20 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                     }
                 }
 
-                // Строго ограничиваем позицию соседними метками
-                // Минимальный отступ - 1 сэмпл, чтобы метки не совпадали
-                qint64 minAllowedPos = (prevMarkerPos >= 0) ? (prevMarkerPos + 1) : qint64(0);
-                qint64 maxAllowedPos = (nextMarkerPos >= 0) ? (nextMarkerPos - 1) : qint64(audioData[0].size() - 1);
+                // Минимальный сегмент 50 мс — метки не перескакивают и не сближаются ближе 50 мс
+                const qint64 minSegSamples = (sampleRate * MIN_MARKER_SEGMENT_MS) / 1000;
+                qint64 minAllowedPos = (prevMarkerPos >= 0) ? (prevMarkerPos + minSegSamples) : qint64(0);
+                qint64 maxAllowedPos = (nextMarkerPos >= 0) ? (nextMarkerPos - minSegSamples) : qint64(audioData[0].size() - 1);
 
-                // Дополнительная проверка: если метки слишком близко, не позволяем перемещение
                 if (prevMarkerPos >= 0 && nextMarkerPos >= 0) {
                     qint64 gapSize = nextMarkerPos - prevMarkerPos;
-                    if (gapSize <= 2) {
-                        // Нет места между метками (меньше 2 сэмплов) - оставляем на текущей позиции
+                    if (gapSize < 2 * minSegSamples) {
+                        // Между соседями меньше 100 мс — не двигаем, чтобы не нарушить минимум 50 мс
                         newSample = currentMarkerPos;
                     } else {
-                        // Ограничиваем строго между метками
                         newSample = qBound(minAllowedPos, newSample, maxAllowedPos);
                     }
                 } else {
-                    // Ограничиваем границами аудио или соседними метками
                     newSample = qBound(minAllowedPos, newSample, maxAllowedPos);
                 }
 
@@ -949,10 +931,16 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
 
                 qDebug() << "Marker" << draggingMarkerIndex << "moved to:" << newSample;
 
-                // Сортируем метки по позиции
+                // Сортируем метки по позиции (метки не перескакивают друг через друга)
                 std::sort(markers.begin(), markers.end(), [](const Marker& a, const Marker& b) {
                     return a.position < b.position;
                 });
+
+                // Нулевая метка всегда статична в 0:00
+                if (!markers.isEmpty() && markers[0].isFixed) {
+                    markers[0].position = 0;
+                    markers[0].updateTimeFromSamples(sampleRate);
+                }
 
                 // Находим индекс после сортировки
                 draggingMarkerIndex = -1;
@@ -975,10 +963,9 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 draggingMarkerIndex = -1;
             }
 
-            // Планируем обработку в реальном времени с throttling
             scheduleRealtimeProcess();
-            // Используем throttled update для плавности
-            scheduleUpdate();
+            // 5) Быстрая отрисовка в реальном времени при перемещении метки
+            update();
         }
         return;
     }
@@ -1226,15 +1213,12 @@ bool WaveformView::getBeatsAligned() const
 
 QString WaveformView::getBarText(float beatPosition) const
 {
-    const int bpb = qMax(1, beatsPerBar);
-    int bar = int(beatPosition / bpb) + 1;
-    int beat = int(beatPosition) % bpb + 1;
-    float subBeat = (beatPosition - float(int(beatPosition))) * float(bpb);
-
-    return QString("%1.%2.%3")
-        .arg(bar)
-        .arg(beat)
-        .arg(int(subBeat + 1));
+    int subdivisionsPerBar = (beatsPerBar == 6 || beatsPerBar == 12) ? 8 : 4;
+    int bar = int(beatPosition / subdivisionsPerBar) + 1;
+    int beat = int(beatPosition) % subdivisionsPerBar + 1;
+    float subBeat = (beatPosition - float(int(beatPosition))) * float(subdivisionsPerBar);
+    int sub = qBound(1, int(subBeat + 1), subdivisionsPerBar);
+    return QString("%1.%2.%3").arg(bar).arg(beat).arg(sub);
 }
 
 void WaveformView::setColorScheme(const QString& scheme)
@@ -1393,11 +1377,15 @@ void WaveformView::addMarker(qint64 position)
     // Ограничиваем позицию границами аудио
     position = qBound(qint64(0), position, qint64(audioData[0].size() - 1));
 
-    // Проверяем, нет ли уже метки в этой позиции
+    // Минимальный сегмент между метками в сэмплах (50 мс)
+    const qint64 minSegmentSamples = (sampleRate * MIN_MARKER_SEGMENT_MS) / 1000;
+    if (minSegmentSamples < 1) return;
+
+    // 1) Не создаём метку в том же месте и не ближе 50 мс к существующей
     for (int i = 0; i < markers.size(); ++i) {
-        if (markers[i].position == position) {
-            qDebug() << "addMarker: marker already exists at position:" << position;
-            return; // Метка уже существует, не создаём дубликат
+        if (qAbs(markers[i].position - position) < minSegmentSamples) {
+            qDebug() << "addMarker: marker already exists or too close at position:" << position;
+            return;
         }
     }
 
@@ -1411,21 +1399,22 @@ void WaveformView::addMarker(qint64 position)
 
     qDebug() << "addMarker: adding marker at position:" << position << "audioData size:" << audioData[0].size();
 
-    // Если это первая метка, автоматически создаем начальную и конечную метки
+    // Если это первая метка, автоматически создаем начальную (0) и конечную метки
     bool isFirstMarker = markers.isEmpty();
 
     if (isFirstMarker) {
         qint64 endPosition = audioData[0].size() - 1;
 
-        // Создаем начальную метку (неподвижную, в позиции 0)
+        // Начальная метка всегда статична в 0:00
         markers.append(Marker(0, true, sampleRate)); // true = неподвижная
 
-        // Создаем новую метку в указанной позиции
-        Marker newMarker(position, sampleRate);
-        markers.append(newMarker);
-
-        // Создаем конечную метку (можно двигать, но это особая метка)
-        markers.append(Marker(endPosition, false, true, sampleRate)); // false = можно двигать, true = isEndMarker
+        // Пользовательскую метку добавляем только если не в 0 и не ближе 50 мс от начала
+        if (position >= minSegmentSamples) {
+            Marker newMarker(position, sampleRate);
+            markers.append(newMarker);
+        }
+        // Конечная метка
+        markers.append(Marker(endPosition, false, true, sampleRate));
 
         qDebug() << "addMarker: created start marker at 0, user marker at" << position << "and end marker at" << endPosition;
     } else {
@@ -1447,6 +1436,24 @@ void WaveformView::addMarker(qint64 position)
                     nextMarker = &markers[j];
                     minNextPos = markerPos;
                 }
+            }
+        }
+
+        // 4) Минимальный сегмент 50 мс: между двумя метками нельзя создать новую, если до соседей меньше 50 мс
+        if (prevMarker != nullptr && (position - prevMarker->position) < minSegmentSamples) {
+            qDebug() << "addMarker: segment to previous marker would be < 50 ms";
+            return;
+        }
+        if (nextMarker != nullptr && (nextMarker->position - position) < minSegmentSamples) {
+            qDebug() << "addMarker: segment to next marker would be < 50 ms";
+            return;
+        }
+        // В сегменте длиной 50 мс нельзя создавать новые метки (между prev и next должно быть >= 100 мс для вставки)
+        if (prevMarker != nullptr && nextMarker != nullptr) {
+            qint64 gap = nextMarker->position - prevMarker->position;
+            if (gap < 2 * minSegmentSamples) {
+                qDebug() << "addMarker: gap between neighbors < 100 ms, cannot add marker";
+                return;
             }
         }
 
@@ -1494,10 +1501,16 @@ void WaveformView::addMarker(qint64 position)
         markers.append(newMarker);
     }
 
-    // Сортируем метки по позиции, чтобы они всегда были в порядке
+    // Сортируем метки по позиции (метки не должны перескакивать друг через друга)
     std::sort(markers.begin(), markers.end(), [](const Marker& a, const Marker& b) {
         return a.position < b.position;
     });
+
+    // 1) Начальная (нулевая) метка всегда статична в 0:00
+    if (!markers.isEmpty() && markers[0].isFixed) {
+        markers[0].position = 0;
+        markers[0].updateTimeFromSamples(sampleRate);
+    }
 
     qDebug() << "addMarker: total markers now:" << markers.size();
     update();

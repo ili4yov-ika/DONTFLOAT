@@ -27,7 +27,8 @@ MetronomeController::MetronomeController(QObject *parent)
     , m_lastBeatTime(0)
     , m_currentBeatNumber(0)
 {
-    m_timer->setInterval(10); // Проверяем каждые 10мс для точности
+    m_timer->setInterval(5);  // Проверяем каждые 5 мс для точности
+    m_timer->setTimerType(Qt::PreciseTimer);  // Минимизировать дрейф таймера
 
     m_soundPlayer->setAudioOutput(new QAudioOutput(this));
     m_soundPlayer->audioOutput()->setVolume(0.5f);
@@ -68,7 +69,7 @@ void MetronomeController::setEnabled(bool enabled)
     m_enabled = enabled;
 
     if (m_enabled) {
-        m_timer->start(10);
+        m_timer->start(5);
         m_currentBeatNumber = 0;
         m_lastBeatTime = QDateTime::currentMSecsSinceEpoch();
     } else {
@@ -108,36 +109,46 @@ void MetronomeController::reset()
     m_lastBeatTime = QDateTime::currentMSecsSinceEpoch();
 }
 
+// Примерная задержка вывода звука (мс): буфер звуковой карты + QSoundEffect
+constexpr qint64 kAudioLatencyCompensationMs = 25;
+
 void MetronomeController::onTimerTimeout()
 {
-    // Метроном работает только когда включен И играет аудио
     if (!m_enabled || !m_playing) {
         return;
     }
 
     if (m_bpm <= 0) {
-        return; // Защита от некорректного BPM
+        return;
     }
 
-    qint64 beatInterval = qint64(60000.0f / m_bpm); // интервал между ударами в мс
+    qint64 beatInterval = qint64(60000.0f / m_bpm);
 
-    // Используем системное время для синхронизации
     qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
 
-    // Если это первый запуск, инициализируем время
     if (m_lastBeatTime == 0) {
         m_lastBeatTime = currentTime;
     }
 
-    if (currentTime - m_lastBeatTime >= beatInterval) {
-        // Определяем, какая это доля (большая или малая)
-        bool isStrongBeat = (m_currentBeatNumber % 4 == 0); // Каждая 4-я доля - большая
+    // Следующий удар по сетке — с компенсацией задержки вывода, чтобы звук шёл «в такт»
+    qint64 nextBeatTime = m_lastBeatTime + beatInterval;
+    qint64 triggerTime = nextBeatTime - kAudioLatencyCompensationMs;
+
+    if (currentTime >= triggerTime) {
+        bool isStrongBeat = (m_currentBeatNumber % 4 == 0);
 
         playBeat(isStrongBeat);
         emit beatPlayed(isStrongBeat);
 
-        m_lastBeatTime = currentTime;
+        // Держим сетку: следующий удар ровно через beatInterval от предыдущего по сетке
+        m_lastBeatTime = nextBeatTime;
         m_currentBeatNumber++;
+
+        // Если отстали от сетки (пауза и т.п.), подтягиваем следующую долю к будущему
+        while (m_lastBeatTime + beatInterval < currentTime) {
+            m_lastBeatTime += beatInterval;
+            m_currentBeatNumber++;
+        }
     }
 }
 

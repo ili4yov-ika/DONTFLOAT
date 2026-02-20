@@ -7,6 +7,14 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+static float computeRMS(const QVector<float>& v)
+{
+    if (v.isEmpty()) return 0.0f;
+    double sum = 0.0;
+    for (float x : v) sum += double(x) * double(x);
+    return static_cast<float>(std::sqrt(sum / v.size()));
+}
+
 QVector<float> TimeStretchProcessor::processSegment(const QVector<float>& input, float stretchFactor, bool preservePitch)
 {
     if (input.isEmpty() || stretchFactor <= 0.0f) {
@@ -18,12 +26,25 @@ QVector<float> TimeStretchProcessor::processSegment(const QVector<float>& input,
         return input;
     }
 
-    // Выбираем метод обработки
+    QVector<float> output;
     if (preservePitch) {
-        return processWithPitchPreservation(input, stretchFactor);
+        output = processWithPitchPreservation(input, stretchFactor);
     } else {
-        return processWithSimpleInterpolation(input, stretchFactor);
+        output = processWithSimpleInterpolation(input, stretchFactor);
     }
+
+    // Тонкомпенсация: приводим громкость выхода к громкости входа (по RMS)
+    if (!output.isEmpty()) {
+        float rmsIn = computeRMS(input);
+        float rmsOut = computeRMS(output);
+        const float eps = 1e-6f;
+        if (rmsOut > eps && rmsIn > eps) {
+            float gain = rmsIn / rmsOut;
+            for (float& s : output) s *= gain;
+        }
+    }
+
+    return output;
 }
 
 QVector<float> TimeStretchProcessor::processWithSimpleInterpolation(const QVector<float>& input, float stretchFactor)

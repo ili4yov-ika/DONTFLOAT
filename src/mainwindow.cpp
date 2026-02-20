@@ -19,6 +19,9 @@
 #include <QtMultimedia/QSoundEffect>
 
 #include <QtGui/QKeyEvent>
+#include <QtGui/QDragEnterEvent>
+#include <QtGui/QDropEvent>
+#include <QtCore/QMimeData>
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QComboBox>
@@ -37,6 +40,8 @@
 #include "../include/bpmanalyzer.h"
 #include "../include/loadfiledialog.h"
 #include "../include/metronomesettingsdialog.h"
+#include "../include/markerengine.h"
+#include "../include/timeutils.h"
 #include <QUndoStack>
 #include <QtGui/QShortcut>
 #include <QtWidgets/QDialogButtonBox>
@@ -47,6 +52,8 @@
 #include <QtCore/QRegularExpression>
 #include <QtCore/QUrl>
 #include <QtCore/QtAlgorithms>
+#include <QtCore/QTranslator>
+#include <QtCore/QLocale>
 #include <cmath>
 
 #ifndef M_PI
@@ -66,6 +73,8 @@ MainWindow::MainWindow(QWidget *parent)
     , viewMenu(nullptr)
     , settingsMenu(nullptr)
     , colorSchemeMenu(nullptr)
+    , themesMenu(nullptr)
+    , languageMenu(nullptr)
     , currentFileName("")
     , hasUnsavedChanges(false)
     , isPlaying(false)
@@ -74,6 +83,7 @@ MainWindow::MainWindow(QWidget *parent)
     , mediaPlayer(nullptr)
     , audioOutput(nullptr)
     , settings("DONTFLOAT", "DONTFLOAT")
+    , m_appTranslator(nullptr)
     , metronomeController(nullptr)
     , isLoopEnabled(false)
     , loopStartPosition(0)
@@ -109,6 +119,20 @@ MainWindow::MainWindow(QWidget *parent)
         keyActions2[i] = nullptr;
     }
 
+    // Load and install translator before setupUi (language from settings or system)
+    m_appTranslator = new QTranslator(this);
+    QString lang = settings.value("language", QString()).toString();
+    if (lang.isEmpty()) {
+        QString sys = QLocale::system().name();
+        if (sys.startsWith("en")) lang = "en_US";
+        else if (sys.startsWith("ru")) lang = "ru_RU";
+        else lang = "en_US";
+    }
+    const QString trPath = QCoreApplication::applicationDirPath();
+    if (m_appTranslator->load("DONTFLOAT_" + lang, trPath) || m_appTranslator->load("DONTFLOAT_" + lang, trPath + "/../")) {
+        qApp->installTranslator(m_appTranslator);
+    }
+
     createActions();  // Create actions first
     ui->setupUi(this);  // Then setup UI
     createKeyContextMenu();  // Create key context menu
@@ -116,6 +140,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Устанавливаем стандартные флаги окна (исправлено для корректного закрытия)
     setWindowFlags(Qt::Window);
+
+    // Разрешаем перетаскивание файлов (Drag-and-Drop)
+    setAcceptDrops(true);
 
     // Явно разрешаем изменение размера окна
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -126,6 +153,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     createMenus();   // Then create menus
 
+    // Drag-and-Drop: приём капель на центральном виджете (область волны)
+    QWidget *cw = centralWidget();
+    if (cw) {
+        cw->setAcceptDrops(true);
+        cw->installEventFilter(this);
+    }
+
+    russianAction->setChecked(lang == "ru_RU");
+    englishAction->setChecked(lang == "en_US");
+
     // Настраиваем валидатор для поля BPM
     // QValidator* bpmValidator = new QRegularExpressionValidator(
     //     QRegularExpression("^\\d{1,4}(\\.\\d{1,2})?$"), this);
@@ -134,7 +171,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Настраиваем валидатор для поля Размер такта (целое 1..32)
     // QValidator* barsValidator = new QRegularExpressionValidator(
     //     QRegularExpression("^(?:[1-9]|[12]\\d|3[0-2])$"), this);
-    // if (ui->barsEdit) ui->barsEdit->setValidator(barsValidator);
+    // if (ui->barsCombo) ... (размер такта задаётся комбобоксом)
 
     // Create and setup WaveformView
     waveformView = new WaveformView(this);
@@ -212,7 +249,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Устанавливаем значения по умолчанию в UI
     ui->bpmEdit->setText(QString::number(defaultBPM, 'f', 2));
-    ui->barsEdit->setText(QString("%1/4").arg(defaultBeatsPerBar));
+    const QList<int> bpbValues = { 4, 3, 1, 2, 6, 12 };
+    for (int i = 0; i < qMin(ui->barsCombo->count(), bpbValues.size()); ++i) {
+        ui->barsCombo->setItemData(i, bpbValues[i]);
+    }
+    ui->barsCombo->setCurrentIndex(0); // 4/4
 
     // Create and setup horizontal scrollbar
     horizontalScrollBar = new QScrollBar(Qt::Horizontal, this);
@@ -606,10 +647,44 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     });
 }
 
+void MainWindow::retranslateMenus()
+{
+    if (fileMenu) fileMenu->setTitle(tr("&Файл"));
+    if (editMenu) editMenu->setTitle(tr("&Правка"));
+    if (viewMenu) viewMenu->setTitle(tr("&Вид"));
+    if (themesMenu) themesMenu->setTitle(tr("Темы"));
+    if (colorSchemeMenu) colorSchemeMenu->setTitle(tr("&Цветовая схема"));
+    if (settingsMenu) settingsMenu->setTitle(tr("&Настройки"));
+    if (languageMenu) languageMenu->setTitle(tr("Language"));
+    if (openAct) openAct->setText(tr("&Открыть..."));
+    if (saveAct) saveAct->setText(tr("&Сохранить"));
+    if (exitAct) exitAct->setText(tr("&Выход"));
+    if (defaultThemeAct) { defaultThemeAct->setText(tr("По умолчанию")); defaultThemeAct->setStatusTip(tr("Использовать тему по умолчанию")); }
+    if (darkSchemeAct) { darkSchemeAct->setText(tr("Тёмная")); darkSchemeAct->setStatusTip(tr("Использовать тёмную тему")); }
+    if (lightSchemeAct) { lightSchemeAct->setText(tr("Светлая")); lightSchemeAct->setStatusTip(tr("Использовать светлую тему")); }
+    if (metronomeSettingsAct) { metronomeSettingsAct->setText(tr("Настройки &метронома...")); metronomeSettingsAct->setStatusTip(tr("Настройки метронома")); }
+    if (keyboardShortcutsAct) { keyboardShortcutsAct->setText(tr("&Горячие клавиши...")); keyboardShortcutsAct->setStatusTip(tr("Просмотр горячих клавиш")); }
+    if (playPauseAct) playPauseAct->setText(tr("Воспроизведение/Пауза"));
+    if (stopAct) stopAct->setText(tr("Стоп"));
+    if (metronomeAct) metronomeAct->setText(tr("Метроном"));
+    if (loopStartAct) loopStartAct->setText(tr("Установить начало цикла"));
+    if (loopEndAct) loopEndAct->setText(tr("Установить конец цикла"));
+    if (togglePitchGridAct) { togglePitchGridAct->setStatusTip(tr("Переключить видимость питч-сетки")); if (isPitchGridVisible) togglePitchGridAct->setText(tr("Убрать питч-сетку")); else togglePitchGridAct->setText(tr("Показать питч-сетку")); }
+    if (toggleBeatWaveformAct) { toggleBeatWaveformAct->setText(tr("Силуэт ударных")); toggleBeatWaveformAct->setStatusTip(tr("Переключить отображение силуэта ударных поверх волны")); }
+    if (undoAct) undoAct->setText(tr("&Отменить"));
+    if (redoAct) redoAct->setText(tr("&Повторить"));
+    if (russianAction) russianAction->setText(tr("Русский"));
+    if (englishAction) englishAction->setText(tr("English"));
+    if (applyTimeStretchAct) { applyTimeStretchAct->setText(tr("Применить сжатие-растяжение")); applyTimeStretchAct->setStatusTip(tr("Применить сжатие-растяжение аудио по меткам с тонкомпенсацией")); }
+}
+
 void MainWindow::changeEvent(QEvent *event)
 {
-    // Обрабатываем изменения состояния окна стандартным способом
     QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::LanguageChange) {
+        ui->retranslateUi(this);
+        retranslateMenus();
+    }
 }
 
 void MainWindow::readSettings()
@@ -713,66 +788,21 @@ void MainWindow::setupConnections()
     connect(ui->playButton, &QPushButton::clicked, this, &MainWindow::playAudio);
     connect(ui->stopButton, &QPushButton::clicked, this, &MainWindow::stopAudio);
     connect(ui->bpmEdit, &QLineEdit::editingFinished, this, &MainWindow::updateBPM);
-    connect(ui->barsEdit, &QLineEdit::editingFinished, this, [this]() {
-        QString text = ui->barsEdit->text().trimmed();
-        int numerator = 4; // Числитель по умолчанию
-        int denominator = 4; // Знаменатель по умолчанию
-        bool isValid = false;
-
-        // Парсим значение в формате X/Y или просто X
-        if (text.contains("/")) {
-            QStringList parts = text.split("/");
-            if (parts.size() == 2) {
-                bool ok1 = false, ok2 = false;
-                int num = parts[0].toInt(&ok1);
-                int den = parts[1].toInt(&ok2);
-
-                // Проверяем валидность размера такта
-                if (ok1 && ok2 && num >= 1 && num <= 32 &&
-                    (den == 2 || den == 4 || den == 8 || den == 16)) {
-                    numerator = num;
-                    denominator = den;
-                    isValid = true;
-                }
-            }
-        } else {
-            // Если введено просто число, считаем это числителем с знаменателем 4
-            bool ok = false;
-            int num = text.toInt(&ok);
-            if (ok && num >= 1 && num <= 32) {
-                numerator = num;
-                denominator = 4;
-                isValid = true;
-            }
-        }
-
-        // Если ввод некорректный, показываем сообщение об ошибке
-        if (!isValid) {
-            statusBar()->showMessage(QString::fromUtf8("Некорректный размер такта. Используйте формат X/Y (например, 4/4, 3/4, 2/4, 6/8)"), 3000);
-            ui->barsEdit->setText("4/4"); // Возвращаем к значению по умолчанию
-            return;
-        }
-
-        // Обновляем отображение в поле ввода
-        ui->barsEdit->setText(QString("%1/%2").arg(numerator).arg(denominator));
-
-        // Для внутренней логики используем только числитель (количество долей)
-        // Знаменатель влияет на отображение, но не на логику воспроизведения
-        int bpb = numerator;
-
+    connect(ui->barsCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
+        QVariant v = ui->barsCombo->currentData();
+        int bpb = v.isValid() ? v.toInt() : 4;
+        if (bpb < 1 || bpb > 32) bpb = 4;
         if (waveformView) {
             waveformView->setBeatsPerBar(bpb);
-            // Синхронизируем количество долей в такте с PitchGridWidget
-            if (pitchGridWidget) {
-                pitchGridWidget->setBeatsPerBar(bpb);
-            }
-            // Принудительно обновляем отображение тактов
             waveformView->update();
-            if (pitchGridWidget) {
-                pitchGridWidget->update();
-            }
-            statusBar()->showMessage(QString::fromUtf8("Размер такта изменен на %1/%2").arg(numerator).arg(denominator), 2000);
         }
+        if (pitchGridWidget) {
+            pitchGridWidget->setBeatsPerBar(bpb);
+            pitchGridWidget->update();
+        }
+        updateTimeLabel(mediaPlayer ? mediaPlayer->position() : currentPosition);
+        QString text = ui->barsCombo->currentText();
+        statusBar()->showMessage(tr("Размер такта изменен на %1").arg(text), 2000);
     });
     // Временно закомментировано до пересборки UI
     // После пересборки проекта в Qt Creator раскомментировать эти строки:
@@ -795,16 +825,6 @@ void MainWindow::setupConnections()
             statusBar()->showMessage(tr("Воспроизведение завершено"), 2000);
         }
     });
-
-    // Подключаем комбобокс выбора режима отображения
-    connect(ui->displayModeCombo, &QComboBox::currentIndexChanged, this,
-        [this](int index) {
-            if (waveformView) {
-                waveformView->setTimeDisplayMode(index == 0);
-                waveformView->setBarsDisplayMode(index == 1);
-                updateTimeLabel(mediaPlayer->position());
-            }
-        });
 
     // Связываем горизонтальный скроллбар с WaveformView и PitchGridWidget
     connect(horizontalScrollBar, &QScrollBar::valueChanged, this,
@@ -1063,7 +1083,7 @@ void MainWindow::stopAudio()
     ui->playButton->setIcon(QIcon(":/icons/resources/icons/play.svg"));
     mediaPlayer->stop();
     playbackTimer->stop();
-    ui->timeLabel->setText("00:00:000");
+    ui->timeLabel->setText(formatTimeAndBars(0));
     statusBar()->showMessage(tr("Остановлено"));
 }
 
@@ -1071,13 +1091,7 @@ void MainWindow::updateTime()
 {
     if (isPlaying) {
         currentPosition = mediaPlayer->position();
-        int minutes = (currentPosition / 60000);
-        int seconds = (currentPosition / 1000) % 60;
-        int milliseconds = currentPosition % 1000;
-        ui->timeLabel->setText(QString("%1:%2.%3")
-            .arg(minutes, 2, 10, QChar('0'))
-            .arg(seconds, 2, 10, QChar('0'))
-            .arg(milliseconds / 100)); // Показываем только десятые доли секунды
+        ui->timeLabel->setText(formatTimeAndBars(currentPosition));
     }
 }
 
@@ -1135,32 +1149,7 @@ void MainWindow::decreaseBPM()
 
 void MainWindow::updateTimeLabel(qint64 msPosition)
 {
-    if (ui->displayModeCombo->currentIndex() == 0) {
-        // Режим отображения времени
-        int minutes = (msPosition / 60000);
-        int seconds = (msPosition / 1000) % 60;
-        int milliseconds = msPosition % 1000;
-        ui->timeLabel->setText(QString("%1:%2.%3")
-            .arg(minutes, 2, 10, QChar('0'))
-            .arg(seconds, 2, 10, QChar('0'))
-            .arg(milliseconds / 100));
-    } else {
-        // Режим отображения тактов
-        if (waveformView) {
-            float beatsPerMinute = ui->bpmEdit->text().toFloat();
-            float beatsPerSecond = beatsPerMinute / 60.0f;
-            float secondsFromStart = float(msPosition) / 1000.0f;
-            float beatsFromStart = beatsPerSecond * secondsFromStart;
-            const int bpb = waveformView->getBeatsPerBar();
-            int bar = int(beatsFromStart / bpb) + 1;
-            int beat = int(beatsFromStart) % bpb + 1;
-            float subBeat = (beatsFromStart - float(int(beatsFromStart))) * float(bpb);
-            ui->timeLabel->setText(QString("%1.%2.%3")
-                .arg(bar)
-                .arg(beat)
-                .arg(int(subBeat + 1)));
-        }
-    }
+    ui->timeLabel->setText(formatTimeAndBars(msPosition));
 
     // Показываем информацию о цикле в статусной строке
     if (isLoopEnabled && loopStartPosition > 0 && loopEndPosition > 0) {
@@ -1233,91 +1222,89 @@ void MainWindow::createActions()
     connect(lightSchemeAct, &QAction::triggered, this, [this]() { setColorScheme("light"); });
 
     // Settings actions
-    metronomeSettingsAct = new QAction(QString::fromUtf8("&Метроном..."), this);
-    metronomeSettingsAct->setStatusTip(QString::fromUtf8("Настройки метронома"));
+    metronomeSettingsAct = new QAction(tr("Настройки &метронома..."), this);
+    metronomeSettingsAct->setStatusTip(tr("Настройки метронома"));
     connect(metronomeSettingsAct, &QAction::triggered, this, &MainWindow::showMetronomeSettings);
 
-    keyboardShortcutsAct = new QAction(QString::fromUtf8("&Горячие клавиши..."), this);
-    keyboardShortcutsAct->setStatusTip(QString::fromUtf8("Просмотр горячих клавиш"));
+    keyboardShortcutsAct = new QAction(tr("&Горячие клавиши..."), this);
+    keyboardShortcutsAct->setStatusTip(tr("Просмотр горячих клавиш"));
     connect(keyboardShortcutsAct, &QAction::triggered, this, &MainWindow::showKeyboardShortcuts);
 
     // Playback actions
-    playPauseAct = new QAction(QString::fromUtf8("Воспроизведение/Пауза"), this);
+    playPauseAct = new QAction(tr("Воспроизведение/Пауза"), this);
     playPauseAct->setShortcut(QKeySequence(Qt::Key_Space));
     connect(playPauseAct, &QAction::triggered, this, &MainWindow::playAudio);
 
-    stopAct = new QAction(QString::fromUtf8("Стоп"), this);
+    stopAct = new QAction(tr("Стоп"), this);
     stopAct->setShortcut(QKeySequence(Qt::Key_S));
     connect(stopAct, &QAction::triggered, this, &MainWindow::stopAudio);
 
     // Metronome action
-    metronomeAct = new QAction(QString::fromUtf8("Метроном"), this);
+    metronomeAct = new QAction(tr("Метроном"), this);
     metronomeAct->setShortcut(QKeySequence(Qt::Key_T));
     metronomeAct->setCheckable(true);
     connect(metronomeAct, &QAction::triggered, this, &MainWindow::toggleMetronome);
 
     // Loop actions
-    loopStartAct = new QAction(QString::fromUtf8("Установить начало цикла"), this);
+    loopStartAct = new QAction(tr("Установить начало цикла"), this);
     loopStartAct->setShortcut(QKeySequence(Qt::Key_A));
     connect(loopStartAct, &QAction::triggered, this, &MainWindow::setLoopStart);
 
-    loopEndAct = new QAction(QString::fromUtf8("Установить конец цикла"), this);
+    loopEndAct = new QAction(tr("Установить конец цикла"), this);
     loopEndAct->setShortcut(QKeySequence(Qt::Key_B));
     connect(loopEndAct, &QAction::triggered, this, &MainWindow::setLoopEnd);
 
     // Pitch grid toggle action (по умолчанию заблокирован и показывает "Показать питч-сетку")
-    togglePitchGridAct = new QAction(QString::fromUtf8("Показать питч-сетку"), this);
+    togglePitchGridAct = new QAction(tr("Показать питч-сетку"), this);
     togglePitchGridAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
-    togglePitchGridAct->setStatusTip(QString::fromUtf8("Переключить видимость питч-сетки"));
+    togglePitchGridAct->setStatusTip(tr("Переключить видимость питч-сетки"));
     togglePitchGridAct->setEnabled(false); // Заблокирован по умолчанию
     connect(togglePitchGridAct, &QAction::triggered, this, &MainWindow::togglePitchGrid);
 
     // Beat deviations toggle action
-    // Новые действия для визуализации ударных
-
-    toggleBeatWaveformAct = new QAction(QString::fromUtf8("Силуэт ударных"), this);
+    toggleBeatWaveformAct = new QAction(tr("Силуэт ударных"), this);
     toggleBeatWaveformAct->setCheckable(true);
     toggleBeatWaveformAct->setChecked(true); // Включено по умолчанию
-    toggleBeatWaveformAct->setStatusTip(QString::fromUtf8("Переключить отображение силуэта ударных поверх волны"));
+    toggleBeatWaveformAct->setStatusTip(tr("Переключить отображение силуэта ударных поверх волны"));
     connect(toggleBeatWaveformAct, &QAction::triggered, this, &MainWindow::toggleBeatWaveform);
 
     // Edit actions - use QUndoStack's built-in actions
     undoAct = undoStack->createUndoAction(this);
-    undoAct->setText(QString::fromUtf8("&Отменить"));
+    undoAct->setText(tr("&Отменить"));
     undoAct->setShortcuts(QKeySequence::Undo);
 
     redoAct = undoStack->createRedoAction(this);
-    redoAct->setText(QString::fromUtf8("&Повторить"));
+    redoAct->setText(tr("&Повторить"));
     redoAct->setShortcuts(QKeySequence::Redo);
 
     // Language actions
-    russianAction = new QAction(QString::fromUtf8("Русский"), this);
+    russianAction = new QAction(tr("Русский"), this);
     russianAction->setCheckable(true);
     russianAction->setChecked(true);
     connect(russianAction, &QAction::triggered, this, &MainWindow::setRussianLanguage);
 
-    englishAction = new QAction(QString::fromUtf8("English"), this);
+    englishAction = new QAction(tr("English"), this);
     englishAction->setCheckable(true);
     connect(englishAction, &QAction::triggered, this, &MainWindow::setEnglishLanguage);
 
     // Time stretch action
-    applyTimeStretchAct = new QAction(QString::fromUtf8("Применить сжатие-растяжение"), this);
+    applyTimeStretchAct = new QAction(tr("Применить сжатие-растяжение"), this);
     applyTimeStretchAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
-    applyTimeStretchAct->setStatusTip(QString::fromUtf8("Применить сжатие-растяжение аудио по меткам с тонкомпенсацией"));
+    applyTimeStretchAct->setStatusTip(tr("Применить сжатие-растяжение аудио по меткам с тонкомпенсацией"));
     connect(applyTimeStretchAct, &QAction::triggered, this, &MainWindow::applyTimeStretch);
 }
 
 void MainWindow::createMenus()
 {
     // File menu
-    fileMenu = menuBar()->addMenu(QString::fromUtf8("&Файл"));
+    fileMenu = menuBar()->addMenu(tr("&Файл"));
     fileMenu->addAction(openAct);
     fileMenu->addAction(saveAct);
     fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
 
     // Edit menu
-    editMenu = menuBar()->addMenu(QString::fromUtf8("&Правка"));
+    editMenu = menuBar()->addMenu(tr("&Правка"));
     editMenu->addAction(undoAct);
     editMenu->addAction(redoAct);
     editMenu->addSeparator();
@@ -1325,14 +1312,14 @@ void MainWindow::createMenus()
     editMenu->addSeparator();
 
     // View menu
-    viewMenu = menuBar()->addMenu(QString::fromUtf8("&Вид"));
+    viewMenu = menuBar()->addMenu(tr("&Вид"));
 
     // Themes submenu in View menu
-    QMenu* themesMenu = viewMenu->addMenu(QString::fromUtf8("Темы"));
+    themesMenu = viewMenu->addMenu(tr("Темы"));
     themesMenu->addAction(defaultThemeAct);
 
     // Color scheme submenu in View menu
-    colorSchemeMenu = viewMenu->addMenu(QString::fromUtf8("Цветовое оформление"));
+    colorSchemeMenu = viewMenu->addMenu(tr("&Цветовая схема"));
     colorSchemeMenu->addAction(darkSchemeAct);
     colorSchemeMenu->addAction(lightSchemeAct);
 
@@ -1343,12 +1330,12 @@ void MainWindow::createMenus()
     viewMenu->addAction(toggleBeatWaveformAct);
 
     // Settings menu (last)
-    settingsMenu = menuBar()->addMenu(QString::fromUtf8("&Настройки"));
+    settingsMenu = menuBar()->addMenu(tr("&Настройки"));
     settingsMenu->addAction(metronomeSettingsAct);
     settingsMenu->addAction(keyboardShortcutsAct);
 
     // Language submenu in Settings menu
-    QMenu* languageMenu = settingsMenu->addMenu(QString::fromUtf8("Language"));
+    languageMenu = settingsMenu->addMenu(tr("Language"));
     languageMenu->addAction(russianAction);
     languageMenu->addAction(englishAction);
 }
@@ -1573,7 +1560,7 @@ void MainWindow::resetAudioState()
     currentPosition = 0;
 
     // Обновляем интерфейс
-    ui->timeLabel->setText("00:00:000");
+    ui->timeLabel->setText(formatTimeAndBars(0));
     waveformView->setPlaybackPosition(0);
 
     // Удаляем старые метки при загрузке нового трека
@@ -1647,81 +1634,49 @@ void MainWindow::processAudioFile(const QString& filePath)
 
         dialog.updateProgress(QString::fromUtf8("Анализ завершен"), 100);
         dialog.showResult(analysis);
+        dialog.setBeatsPerBar(4);  // по умолчанию 4/4, пользователь может изменить в поле
 
-        // Сохраняем оригинальные данные
-        QVector<QVector<float>> originalData = audioData;
+        // Сразу показываем загруженное аудио и обнаруженные биты, чтобы пользователь видел файл и сетку до выбора «Выровнять»/«Пропустить»
+        int bpbInitial = dialog.getBeatsPerBar();
+        updateUIAfterAnalysis(audioData, analysis, bpbInitial);
 
         if (dialog.exec() == QDialog::Accepted && dialog.shouldFixBeats()) {
-            dialog.updateProgress(QString::fromUtf8("Выравнивание долей..."), 50);
+            // То же, что при «Пропустить» + «Оставить метки»: только обновить UI и расставить метки по долям
+            int bpb = dialog.getBeatsPerBar();
+            updateUIAfterAnalysis(audioData, analysis, bpb);
+            createDeviationMarkers(options.tolerancePercent);
 
-            // Используем обнаруженный BPM для выравнивания
-            qDebug() << "Using detected BPM:" << analysis.bpm;
-
-            // Создаем копию для исправленных данных
-            QVector<QVector<float>> fixedData = audioData;
-
-            // Выполняем выравнивание долей
-            qDebug() << "Aligning beats with BPM:" << analysis.bpm;
-
-            for (int i = 0; i < fixedData.size(); ++i) {
-                fixedData[i] = BPMAnalyzer::fixBeats(fixedData[i], analysis);
-            }
-
-            // Создаем и выполняем команду отмены
-            BeatFixCommand* command = new BeatFixCommand(waveformView, originalData, fixedData, analysis.bpm, analysis.beats);
-            undoStack->push(command);
-
-            // Устанавливаем флаг выравнивания
-            if (waveformView) {
-                waveformView->setBeatsAligned(true);
-            }
-
-            dialog.updateProgress(QString::fromUtf8("Выравнивание завершено"), 100);
-            statusBar()->showMessage(QString::fromUtf8("Доли выровнены по BPM: %1").arg(analysis.bpm, 0, 'f', 1), 2000);
-            hasUnsavedChanges = true;
+            // Настройка зума и смещения (как в ветке «Пропустить»)
+            waveformView->setZoomLevel(1.0f);
+            const int sampleRate = waveformView->getSampleRate();
+            float samplesPerBeat = (60.0f * sampleRate) / analysis.bpm;
+            float barLengthInQuarters = (bpb == 6) ? 3.f : (bpb == 12) ? 6.f : float(qMax(1, bpb));
+            float samplesPerBar = barLengthInQuarters * samplesPerBeat;
+            float offset = float(analysis.gridStartSample) / samplesPerBar;
+            offset = offset - floor(offset);
+            waveformView->setHorizontalOffset(offset);
         } else {
             // Если пользователь отказался от выравнивания
+            int bpb = dialog.getBeatsPerBar();
+            updateUIAfterAnalysis(audioData, analysis, bpb);
 
-            waveformView->setAudioData(audioData);
-            waveformView->setBeatInfo(analysis.beats);
-            waveformView->setBeatsAligned(false); // Новый анализ - доли не выровнены
-            ui->bpmEdit->setText(QString::number(analysis.bpm, 'f', 2));
-            waveformView->setBPM(analysis.bpm);
-
-            // Если пользователь хочет оставить метки даже при пропуске выравнивания
             if (dialog.keepMarkersOnSkip()) {
                 createDeviationMarkers(options.tolerancePercent);
             }
 
-            // Обновляем метроном
-            if (metronomeController) {
-                metronomeController->setBPM(analysis.bpm);
-            }
-
-            // Обновляем PitchGridWidget
-            if (pitchGridWidget) {
-                pitchGridWidget->setAudioData(audioData);
-                pitchGridWidget->setSampleRate(waveformView->getSampleRate());
-                pitchGridWidget->setBPM(analysis.bpm);
-                // Принудительно обновляем отображение тактов
-                pitchGridWidget->update();
-            }
-
-            // Принудительно обновляем отображение тактов в WaveformView
-            waveformView->update();
-
-            // Выравниваем отображение по тактовой сетке и сбрасываем масштаб
+            // Настройка зума и смещения
             waveformView->setZoomLevel(1.0f);
-            float samplesPerBeat = (float(waveformView->getSampleRate()) * 60.0f) / analysis.bpm;
-            float samplesPerBar = samplesPerBeat * 4.0f;
-            if (!analysis.beats.isEmpty()) {
-                float offset = float(analysis.beats[0].position) / samplesPerBar;
-                offset = offset - floor(offset);
-                waveformView->setHorizontalOffset(offset);
-            } else {
-                waveformView->setHorizontalOffset(0.0f);
-            }
+            const int sampleRate = waveformView->getSampleRate();
+            float samplesPerBeat = (60.0f * sampleRate) / analysis.bpm;
+            float barLengthInQuarters = (bpb == 6) ? 3.f : (bpb == 12) ? 6.f : float(qMax(1, bpb));
+            float samplesPerBar = barLengthInQuarters * samplesPerBeat;
+            float offset = float(analysis.gridStartSample) / samplesPerBar;
+            offset = offset - floor(offset);
+            waveformView->setHorizontalOffset(offset);
         }
+
+        // Обновляем подпись времени/тактов под выбранный размер такта
+        updateTimeLabel(0);
 
         // Обновляем скроллбар
         updateHorizontalScrollBar(waveformView->getZoomLevel());
@@ -1967,6 +1922,58 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     } else {
         QMainWindow::keyPressEvent(event);
     }
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    const QMimeData *mime = event->mimeData();
+    if (!mime->hasUrls()) return;
+
+    QList<QUrl> urls = mime->urls();
+    if (urls.isEmpty()) return;
+
+    QString fileName = urls.first().toLocalFile();
+    if (fileName.isEmpty()) return;
+
+    event->acceptProposedAction();
+
+    if (!maybeSave())
+        return;
+
+    resetAudioState();
+    if (!currentFileName.isEmpty()) {
+        mediaPlayer->stop();
+        mediaPlayer->setSource(QUrl());
+    }
+
+    currentFileName = fileName;
+    updateWindowTitle();
+    processAudioFile(fileName);
+    mediaPlayer->setSource(QUrl::fromLocalFile(fileName));
+    hasUnsavedChanges = false;
+    statusBar()->showMessage(tr("Файл загружен: %1").arg(fileName), 2000);
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == centralWidget()) {
+        if (event->type() == QEvent::DragEnter) {
+            dragEnterEvent(static_cast<QDragEnterEvent*>(event));
+            return true;
+        }
+        if (event->type() == QEvent::Drop) {
+            dropEvent(static_cast<QDropEvent*>(event));
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::toggleMetronome()
@@ -2457,17 +2464,16 @@ void MainWindow::createDeviationMarkers(float tolerancePercent)
         const BPMAnalyzer::BeatInfo& prevBeat = beats[idx - 1];
         const BPMAnalyzer::BeatInfo& currentBeat = beats[idx];
 
-        // Создаём первую метку в ФАКТИЧЕСКОЙ позиции предыдущей доли
-        // (или ожидаемой, если предыдущая доля тоже имела отклонение)
-        Marker startMarker(prevBeat.expectedPosition, sampleRate);
-        startMarker.position = prevBeat.position; // Фактическая позиция предыдущей доли
-        startMarker.timeMs = TimeUtils::samplesToMs(prevBeat.position, sampleRate);
+        // Метки коррекции: position = фактическая доля, originalPosition = ожидаемая по сетке,
+        // чтобы коэффициент сегмента был (actual_interval / expected_interval) != 1.
+        Marker startMarker(prevBeat.position, sampleRate);
+        startMarker.originalPosition = prevBeat.expectedPosition;
+        startMarker.originalTimeMs = TimeUtils::samplesToMs(prevBeat.expectedPosition, sampleRate);
         waveformView->addMarker(startMarker);
 
-        // Создаём вторую метку в ФАКТИЧЕСКОЙ позиции текущей неровной доли
-        Marker endMarker(currentBeat.expectedPosition, sampleRate);
-        endMarker.position = currentBeat.position; // Фактическая позиция текущей доли
-        endMarker.timeMs = TimeUtils::samplesToMs(currentBeat.position, sampleRate);
+        Marker endMarker(currentBeat.position, sampleRate);
+        endMarker.originalPosition = currentBeat.expectedPosition;
+        endMarker.originalTimeMs = TimeUtils::samplesToMs(currentBeat.expectedPosition, sampleRate);
         waveformView->addMarker(endMarker);
 
         markersCreated++;
@@ -2494,6 +2500,54 @@ QString MainWindow::formatTime(qint64 msPosition)
         .arg(minutes, 2, 10, QChar('0'))
         .arg(seconds, 2, 10, QChar('0'))
         .arg(milliseconds / 100);
+}
+
+QString MainWindow::formatTimeAndBars(qint64 msPosition)
+{
+    int minutes = (msPosition / 60000);
+    int seconds = (msPosition / 1000) % 60;
+    int milliseconds = msPosition % 1000;
+    QString timeStr = QString("%1:%2.%3")
+        .arg(minutes, 2, 10, QChar('0'))
+        .arg(seconds, 2, 10, QChar('0'))
+        .arg(milliseconds, 3, 10, QChar('0'));
+    float bpm = ui->bpmEdit->text().toFloat();
+    int bpb = 4;
+    if (waveformView) {
+        bpb = qMax(1, waveformView->getBeatsPerBar());
+    } else {
+        // До загрузки файла берём размер такта из комбобокса
+        QVariant v = ui->barsCombo->currentData();
+        if (v.isValid()) {
+            int num = v.toInt();
+            if (num >= 1 && num <= 32) bpb = num;
+        }
+    }
+    if (bpm <= 0.0f) {
+        return timeStr + " | --.--.--";
+    }
+    int sampleRate = waveformView ? waveformView->getSampleRate() : 44100;
+    qint64 gridStart = waveformView ? waveformView->getGridStartSample() : 0;
+    qint64 samplePos = (msPosition * qint64(sampleRate)) / 1000;
+    float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
+    float barLengthInQuarters = (bpb == 6) ? 3.f : (bpb == 12) ? 6.f : float(qMax(1, bpb));
+    float samplesPerBar = barLengthInQuarters * samplesPerBeat;
+    // Доли в такте по знаменателю: X/4 → 4, X/8 → 8
+    int subdivisionsPerBar = (bpb == 6 || bpb == 12) ? 8 : 4;
+    float samplesPerSubdivision = samplesPerBar / float(subdivisionsPerBar);
+    float subsFromStart;
+    if (gridStart > 0 && waveformView) {
+        subsFromStart = float(samplePos - gridStart) / samplesPerSubdivision;
+        if (subsFromStart < 0.0f) subsFromStart = 0.0f;
+    } else {
+        subsFromStart = float(samplePos) / samplesPerSubdivision;
+    }
+    int bar = int(subsFromStart / subdivisionsPerBar) + 1;
+    int beat = int(subsFromStart) % subdivisionsPerBar + 1;
+    float subBeat = (subsFromStart - float(int(subsFromStart))) * float(subdivisionsPerBar);
+    int sub = qBound(1, int(subBeat + 1), subdivisionsPerBar);
+    QString barsStr = QString("%1.%2.%3").arg(bar).arg(beat).arg(sub);
+    return timeStr + " | " + barsStr;
 }
 
 void MainWindow::togglePitchGrid()
@@ -2847,18 +2901,40 @@ void MainWindow::updateScrollBarTransparency()
 
 void MainWindow::setRussianLanguage()
 {
-    // Пока без функционала - заглушка для будущего
+    if (russianAction->isChecked() && englishAction->isChecked() == false)
+        return;
+    const QString path = QCoreApplication::applicationDirPath();
+    qApp->removeTranslator(m_appTranslator);
+    if (!m_appTranslator->load("DONTFLOAT_ru_RU", path) && !m_appTranslator->load("DONTFLOAT_ru_RU", path + "/../")) {
+        qApp->installTranslator(m_appTranslator);
+        return;
+    }
+    qApp->installTranslator(m_appTranslator);
+    settings.setValue("language", "ru_RU");
     russianAction->setChecked(true);
     englishAction->setChecked(false);
-    qDebug() << "Russian language selected";
+    ui->retranslateUi(this);
+    retranslateMenus();
+    statusBar()->showMessage(tr("Язык: Русский"), 2000);
 }
 
 void MainWindow::setEnglishLanguage()
 {
-    // Пока без функционала - заглушка для будущего
+    if (englishAction->isChecked() && russianAction->isChecked() == false)
+        return;
+    const QString path = QCoreApplication::applicationDirPath();
+    qApp->removeTranslator(m_appTranslator);
+    if (!m_appTranslator->load("DONTFLOAT_en_US", path) && !m_appTranslator->load("DONTFLOAT_en_US", path + "/../")) {
+        qApp->installTranslator(m_appTranslator);
+        return;
+    }
+    qApp->installTranslator(m_appTranslator);
+    settings.setValue("language", "en_US");
     englishAction->setChecked(true);
     russianAction->setChecked(false);
-    qDebug() << "English language selected";
+    ui->retranslateUi(this);
+    retranslateMenus();
+    statusBar()->showMessage(tr("Language: English"), 2000);
 }
 
 void MainWindow::applyTimeStretch()
@@ -3050,6 +3126,240 @@ void MainWindow::toggleBeatWaveform()
             statusBar()->showMessage(QString::fromUtf8("Силуэт ударных отключен"), 2000);
         }
     }
+}
+
+// ============================================================================
+// Вспомогательные методы для рефакторинга
+// ============================================================================
+
+void MainWindow::setBPMAndBeatsPerBar(float bpm, int beatsPerBar)
+{
+    ui->bpmEdit->setText(QString::number(bpm, 'f', 2));
+    for (int i = 0; i < ui->barsCombo->count(); ++i) {
+        if (ui->barsCombo->itemData(i).toInt() == beatsPerBar) {
+            ui->barsCombo->setCurrentIndex(i);
+            break;
+        }
+    }
+}
+
+void MainWindow::updateUIAfterAnalysis(const QVector<QVector<float>>& audioData,
+                                       const BPMAnalyzer::AnalysisResult& analysis,
+                                       int beatsPerBar)
+{
+    if (!waveformView) return;
+
+    waveformView->setAudioData(audioData);
+    waveformView->setBeatInfo(analysis.beats);
+    waveformView->setGridStartSample(analysis.gridStartSample);
+    waveformView->setBPM(analysis.bpm);
+    waveformView->setBeatsAligned(false);
+    waveformView->setBeatsPerBar(beatsPerBar);
+    waveformView->update();
+
+    setBPMAndBeatsPerBar(analysis.bpm, beatsPerBar);
+
+    if (pitchGridWidget) {
+        pitchGridWidget->setAudioData(audioData);
+        pitchGridWidget->setSampleRate(waveformView->getSampleRate());
+        pitchGridWidget->setBPM(analysis.bpm);
+        pitchGridWidget->setBeatsPerBar(beatsPerBar);
+        pitchGridWidget->update();
+    }
+
+    if (metronomeController) {
+        metronomeController->setBPM(analysis.bpm);
+    }
+
+    updateHorizontalScrollBar(waveformView->getZoomLevel());
+}
+
+void MainWindow::updateUIAfterBeatFix(const QVector<QVector<float>>& fixedData,
+                                      const BPMAnalyzer::AnalysisResult& analysis,
+                                      int beatsPerBar)
+{
+    if (!waveformView) return;
+
+    waveformView->setAudioData(fixedData);
+    waveformView->setGridStartSample(analysis.gridStartSample);
+    waveformView->setBPM(analysis.bpm);
+    waveformView->setBeatsAligned(true);
+    waveformView->setBeatsPerBar(beatsPerBar);
+    waveformView->update();
+
+    setBPMAndBeatsPerBar(analysis.bpm, beatsPerBar);
+
+    if (pitchGridWidget) {
+        pitchGridWidget->setAudioData(fixedData);
+        pitchGridWidget->setSampleRate(waveformView->getSampleRate());
+        pitchGridWidget->setBPM(analysis.bpm);
+        pitchGridWidget->setBeatsPerBar(beatsPerBar);
+        pitchGridWidget->update();
+    }
+
+    if (metronomeController) {
+        metronomeController->setBPM(analysis.bpm);
+    }
+
+    // Настройка зума и смещения для выровненного аудио
+    waveformView->setZoomLevel(1.0f);
+    const int sampleRate = waveformView->getSampleRate();
+    float samplesPerBeat = (60.0f * sampleRate) / analysis.bpm;
+    float barLengthInQuarters = (beatsPerBar == 6) ? 3.f : (beatsPerBar == 12) ? 6.f : float(qMax(1, beatsPerBar));
+    float samplesPerBar = barLengthInQuarters * samplesPerBeat;
+    float offset = float(analysis.gridStartSample) / samplesPerBar;
+    offset = offset - floor(offset);
+    waveformView->setHorizontalOffset(offset);
+    updateHorizontalScrollBar(waveformView->getZoomLevel());
+    waveformView->update();
+}
+
+QVector<Marker> MainWindow::createBeatGridMarkers(const BPMAnalyzer::AnalysisResult& analysis,
+                                                  const QVector<QVector<float>>& audioData,
+                                                  int beatsPerBar)
+{
+    QVector<Marker> gridMarkers;
+    if (!waveformView || audioData.isEmpty()) return gridMarkers;
+
+    const int sampleRate = waveformView->getSampleRate();
+    const qint64 totalSamples = audioData[0].size();
+    const qint64 minSegmentSamples = (sampleRate * 50) / 1000; // 50 мс между метками
+
+    if (sampleRate <= 0 || totalSamples <= 0 || analysis.bpm <= 0) {
+        return gridMarkers;
+    }
+
+    float samplesPerBeat = (60.0f * sampleRate) / analysis.bpm;
+    float barLengthInQuarters = (beatsPerBar == 6) ? 3.f : (beatsPerBar == 12) ? 6.f : float(qMax(1, beatsPerBar));
+    float samplesPerBar = barLengthInQuarters * samplesPerBeat;
+
+    // Начальная неподвижная метка
+    gridMarkers.append(Marker(0, true, sampleRate));
+
+    qint64 lastPos = 0;
+    for (int k = 0; ; ++k) {
+        qint64 pos = analysis.gridStartSample + qint64(k * samplesPerBar);
+        if (pos >= totalSamples) break;
+        if (pos > 0 && (pos - lastPos) >= minSegmentSamples) {
+            Marker m(pos, sampleRate);
+            m.originalPosition = pos;
+            m.originalTimeMs = TimeUtils::samplesToMs(pos, sampleRate);
+            m.updateTimeFromSamples(sampleRate);
+            gridMarkers.append(m);
+            lastPos = pos;
+        }
+    }
+
+    // Конечная метка
+    qint64 endPos = totalSamples - 1;
+    if (endPos > lastPos) {
+        Marker endMarker(endPos, false, true, sampleRate);
+        endMarker.originalPosition = endPos;
+        endMarker.originalTimeMs = TimeUtils::samplesToMs(endPos, sampleRate);
+        endMarker.updateTimeFromSamples(sampleRate);
+        gridMarkers.append(endMarker);
+    }
+
+    return gridMarkers;
+}
+
+QVector<Marker> MainWindow::createAlignedBeatMarkers(const QVector<BPMAnalyzer::BeatInfo>& alignedBeats,
+                                                      qint64 totalSamples, int sampleRate)
+{
+    QVector<Marker> markers;
+    if (alignedBeats.isEmpty() || totalSamples <= 0 || sampleRate <= 0) return markers;
+
+    const qint64 minSegmentSamples = (sampleRate * 50) / 1000; // 50 мс между метками
+
+    markers.append(Marker(0, true, sampleRate));
+    qint64 lastPos = 0;
+
+    for (const BPMAnalyzer::BeatInfo& beat : alignedBeats) {
+        qint64 pos = beat.position;
+        if (pos <= 0) continue;
+        if (pos >= totalSamples) break;
+        if (pos - lastPos >= minSegmentSamples) {
+            Marker m(pos, sampleRate);
+            m.originalPosition = pos;
+            m.originalTimeMs = TimeUtils::samplesToMs(pos, sampleRate);
+            m.updateTimeFromSamples(sampleRate);
+            markers.append(m);
+            lastPos = pos;
+        }
+    }
+
+    qint64 endPos = totalSamples - 1;
+    if (endPos > lastPos) {
+        Marker endMarker(endPos, false, true, sampleRate);
+        endMarker.originalPosition = endPos;
+        endMarker.originalTimeMs = TimeUtils::samplesToMs(endPos, sampleRate);
+        endMarker.updateTimeFromSamples(sampleRate);
+        markers.append(endMarker);
+    }
+
+    return markers;
+}
+
+QVector<BPMAnalyzer::BeatInfo> MainWindow::createAlignedBeatGrid(float bpm, qint64 gridStartSample,
+                                                                  qint64 totalSamples, int sampleRate,
+                                                                  const QVector<QVector<float>>& audioData)
+{
+    QVector<BPMAnalyzer::BeatInfo> alignedBeats;
+    if (bpm <= 0 || totalSamples <= 0 || sampleRate <= 0) return alignedBeats;
+
+    const float beatInterval = (60.0f * sampleRate) / bpm;
+    qint64 pos = gridStartSample;
+
+    while (pos < totalSamples) {
+        BPMAnalyzer::BeatInfo beat;
+        beat.position = pos;
+        beat.expectedPosition = pos;
+        beat.confidence = 1.0f;
+        beat.deviation = 0.0f;
+        beat.energy = (pos >= 0 && pos < totalSamples && !audioData.isEmpty() && !audioData[0].isEmpty())
+            ? std::abs(audioData[0][static_cast<int>(pos)]) : 0.0f;
+        alignedBeats.append(beat);
+        pos += static_cast<qint64>(beatInterval);
+    }
+
+    return alignedBeats;
+}
+
+void MainWindow::applyBeatFixToWaveform(const QVector<QVector<float>>& originalData,
+                                        const QVector<QVector<float>>& fixedData,
+                                        const BPMAnalyzer::AnalysisResult& analysis,
+                                        int beatsPerBar)
+{
+    if (!waveformView) return;
+
+    // Создаём выровненную сетку битов
+    const int sampleRate = waveformView->getSampleRate();
+    const qint64 totalSamples = fixedData.isEmpty() ? 0 : fixedData[0].size();
+    QVector<BPMAnalyzer::BeatInfo> alignedBeats = createAlignedBeatGrid(
+        analysis.bpm, analysis.gridStartSample, totalSamples, sampleRate, fixedData);
+
+    // Создаём команду отмены
+    BeatFixCommand* command = new BeatFixCommand(
+        waveformView, originalData, fixedData, analysis.bpm, alignedBeats, analysis.gridStartSample);
+    undoStack->push(command);
+
+    // Применяем выровненные данные к волне
+    waveformView->setAudioData(fixedData);
+    waveformView->setBeatInfo(alignedBeats);
+    waveformView->setGridStartSample(analysis.gridStartSample);
+    waveformView->setBPM(analysis.bpm);
+    waveformView->setBeatsAligned(true);
+    waveformView->setBeatsPerBar(beatsPerBar);
+
+    // Метки по каждой доле выровненной сетки (как при «Пропустить» + оставить метки)
+    waveformView->clearMarkers();
+    QVector<Marker> gridMarkers = createAlignedBeatMarkers(alignedBeats, totalSamples, sampleRate);
+    if (gridMarkers.size() >= 2) {
+        waveformView->setMarkers(gridMarkers);
+    }
+
+    // Обновляем остальной UI (BPM поле, комбобокс, питч-сетка, метроном, зум)
+    updateUIAfterBeatFix(fixedData, analysis, beatsPerBar);
 }
 
 QString MainWindow::saveProcessedAudioToTempWav(const QVector<QVector<float>> &data, int sampleRate) const

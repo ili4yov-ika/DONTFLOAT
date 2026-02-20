@@ -165,37 +165,56 @@ void BeatVisualizer::drawBeatDeviations(QPainter& painter,
                                        const VisualizationSettings& settings,
                                        const BeatDeviationColors& colors)
 {
+    // Быстрый выход если нечего рисовать
     if (beats.isEmpty() || !settings.showBeatDeviations || bpm <= 0.0f) {
         return;
     }
 
     // Вычисляем ожидаемый интервал между битами на основе BPM
-    float expectedBeatInterval = (60.0f * sampleRate) / bpm;
+    const float expectedBeatInterval = (60.0f * sampleRate) / bpm;
+    const float deviationThreshold = settings.deviationThreshold;
+    const qreal rectX = rect.x();
+    const qreal rectWidth = rect.width();
+    const qreal centerY = rect.center().y();
+
+    // Треугольники на всю высоту виджета с небольшими отступами
+    const qreal verticalMargin = rect.height() * 0.02;  // 2% отступ сверху и снизу
+    const qreal topY = rect.top() + verticalMargin;
+    const qreal botY = rect.bottom() - verticalMargin;
+
+    // Включаем антиалиасинг один раз для всех треугольников
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
 
     // Рисуем метки отклонений для каждого бита
     for (int i = 1; i < beats.size(); ++i) {
         const auto& beat = beats[i];
 
-        // Проверяем, есть ли значимое отклонение (больше порога от интервала)
-        if (qAbs(beat.deviation) < settings.deviationThreshold) {
+        // Проверяем, есть ли значимое отклонение (больше порога)
+        if (qAbs(beat.deviation) < deviationThreshold) {
             continue;
         }
 
-        // Определяем ожидаемую позицию бита на основе предыдущего
-        float expectedPosition = float(beats[i-1].position) + expectedBeatInterval;
+        // Используем ожидаемую позицию из анализатора (база для deviation), иначе — от предыдущего бита
+        float expectedPosition;
+        if (beat.expectedPosition != beat.position) {
+            expectedPosition = float(beat.expectedPosition);
+        } else {
+            expectedPosition = float(beats[i - 1].position) + expectedBeatInterval;
+        }
         float actualPosition = float(beat.position);
 
         // Вычисляем координаты для отрисовки
-        float expectedX = float(expectedPosition - startSample) / samplesPerPixel;
-        float actualX = float(actualPosition - startSample) / samplesPerPixel;
+        const float expectedX = float(expectedPosition - startSample) / samplesPerPixel;
+        const float actualX = float(actualPosition - startSample) / samplesPerPixel;
 
-        // Проверяем видимость
-        if (actualX < 0 || expectedX > rect.width()) {
+        // Проверяем видимость: рисуем только когда обе точки внутри канала
+        if (expectedX < 0.0f || expectedX > rectWidth || actualX < 0.0f || actualX > rectWidth) {
             continue;
         }
 
         // Определяем, растянута ли доля (положительное отклонение) или сжата (отрицательное)
-        bool isStretched = beat.deviation > 0;
+        const bool isStretched = beat.deviation > 0;
 
         // Выбираем цвет в зависимости от типа отклонения и состояния выравнивания
         QColor baseColor;
@@ -207,70 +226,40 @@ void BeatVisualizer::drawBeatDeviations(QPainter& painter,
                 colors.compressedAligned : colors.compressedUnaligned;
         }
 
-        // Треугольник должен указывать на фактическую позицию (actualX)
-        float baseX = expectedX;
-        float apexX = actualX;
-        float minX = qMin(baseX, apexX);
-        float maxX = qMax(baseX, apexX);
-
-        // Пропускаем, если полностью вне видимой области
-        if (maxX < 0.0f || minX > rect.width()) {
+        // Расстояние между фактической и ожидаемой позицией (в пикселях)
+        const float rawDistance = expectedX - actualX;
+        const float distance = qAbs(rawDistance);
+        if (distance < 0.5f) {
             continue;
         }
 
-        // Ограничиваем координаты видимой областью
-        baseX = qBound(0.0f, baseX, float(rect.width()));
-        apexX = qBound(0.0f, apexX, float(rect.width()));
-        minX = qMin(baseX, apexX);
-        maxX = qMax(baseX, apexX);
-        float width = maxX - minX;
+        // Ограничиваем размер: макс = 100%, мин = 85% от макс
+        const float maxWidthPx = float(DEVIATION_TRIANGLE_MAX_WIDTH_PX);
+        const float minWidthPx = maxWidthPx * float(DEVIATION_TRIANGLE_MIN_WIDTH_RATIO);
+        const float clampedDistance = qBound(minWidthPx, distance, maxWidthPx);
+        const float direction = (rawDistance > 0.0f) ? 1.0f : -1.0f;
+        const float apexOffset = direction * clampedDistance;
 
-        if (width > 0.5f) {
-                // Рисуем вертикальную линию на фактической позиции бита
-                if (actualX >= 0 && actualX <= rect.width()) {
-                    painter.setPen(QPen(colors.beatLineColor, 1.5f));
-                    painter.drawLine(QPointF(rect.x() + actualX, rect.top()),
-                                   QPointF(rect.x() + actualX, rect.bottom()));
-                }
+        // Абсолютные координаты в виджете (основание = фактическая позиция, вершина = со смещением)
+        const qreal baseX_abs = rectX + qreal(actualX);
+        const qreal apexX_abs = baseX_abs + qreal(apexOffset);
 
-                // Рисуем диагональные линии с треугольным clipping
-                float centerY = rect.height() * 0.5f;
+        // Треугольник: 3 вершины (основание вертикально, вершина по центру)
+        QPolygonF triangle;
+        triangle << QPointF(baseX_abs, topY)
+                 << QPointF(apexX_abs, centerY)
+                 << QPointF(baseX_abs, botY);
 
-                QPainterPath triangleClip;
-                triangleClip.moveTo(rect.x() + baseX, rect.top());              // Верхняя точка основания
-                triangleClip.lineTo(rect.x() + apexX, rect.top() + centerY);    // Вершина (факт. позиция)
-                triangleClip.lineTo(rect.x() + baseX, rect.bottom());           // Нижняя точка основания
-                triangleClip.closeSubpath();
-
-                // Базовая заливка треугольника для подчёркивания формы
-                painter.save();
-                QColor fillColor = baseColor;
-                fillColor.setAlpha(settings.deviationAlpha);
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(fillColor);
-                painter.drawPath(triangleClip);
-                painter.restore();
-
-                // Без дополнительных линий - только заливка и контур
-                // Это позволяет явно увидеть форму треугольника
-
-                // Добавляем бледный фильтр поверх треугольника для лучшей видимости волны
-                painter.save();
-                painter.setClipPath(triangleClip);
-                QColor filterColor(30, 30, 30, 30);
-                painter.fillRect(QRectF(rect.x() + minX, rect.top(), width, rect.height()), filterColor);
-                painter.restore();
-
-                // Контур треугольника для явной геометрии
-                painter.save();
-                QColor outlineColor = baseColor;
-                outlineColor.setAlpha(qMin(255, settings.deviationAlpha + 80));
-                painter.setPen(QPen(outlineColor, 1.0f));
-                painter.setBrush(Qt::NoBrush);
-                painter.drawPath(triangleClip);
-                painter.restore();
+        // Рисуем треугольник (цвет уже задан в baseColor, подправляем только alpha при необходимости)
+        if (baseColor.alpha() < 200) {
+            baseColor.setAlpha(200);
         }
+        painter.setBrush(baseColor);
+        painter.setPen(QPen(baseColor, 1.5));
+        painter.drawPolygon(triangle);
     }
+
+    painter.restore();
 }
 
 void BeatVisualizer::drawBeatWaveform(QPainter& painter,
@@ -286,143 +275,103 @@ void BeatVisualizer::drawBeatWaveform(QPainter& painter,
         return;
     }
 
-    int endSample = qMin(samples.size(), startSample + int(rect.width() * samplesPerPixel));
-
-    // Вычисляем энергетическую огибающую для видимой области
-    const int energyWindowSize = qRound(0.02f * sampleRate); // Окно 20ms
-    QVector<float> energyEnvelope;
-    energyEnvelope.reserve(endSample - startSample);
-
-    for (int s = startSample; s < endSample; ++s) {
-        int localStart = qMax(startSample, s - energyWindowSize / 2);
-        int localEnd = qMin(endSample, s + energyWindowSize / 2);
-
-        // Быстрое вычисление энергии без полного RMS
-        float energy = 0.0f;
-        int count = 0;
-        for (int i = localStart; i < localEnd; i += 4) { // Пропускаем каждый 4-й сэмпл для скорости
-            if (i < samples.size()) {
-                energy += samples[i] * samples[i];
-                count++;
-            }
-        }
-        if (count > 0) {
-            energy = std::sqrt(energy / count);
-        }
-        energyEnvelope.append(energy);
-    }
-
-    // Создаем вектор для хранения энергии ударных для каждого пикселя
-    QVector<float> beatEnvelope(int(rect.width()), 0.0f);
+    const int endSample = qMin(samples.size(), startSample + int(rect.width() * samplesPerPixel));
     const int beatWindowSize = qRound(0.03f * sampleRate); // 30ms
+    const int width = int(rect.width());
+
+    // ОПТИМИЗАЦИЯ: вместо вычисления энергии для каждого сэмпла,
+    // вычисляем только для пикселей в области битов
+    QVector<float> beatEnvelope(width, 0.0f);
     float maxEnergy = 0.0f;
-
-    // Находим максимальную энергию для нормализации
-    for (float e : energyEnvelope) {
-        maxEnergy = qMax(maxEnergy, e);
-    }
-
-    if (maxEnergy <= 0.0f) return; // Нет энергии - нечего рисовать
 
     // Обрабатываем только биты в видимой области
     for (const auto& beat : beats) {
-        qint64 beatPos = beat.position;
+        const qint64 beatPos = beat.position;
 
-        // Пропускаем биты далеко вне видимой области
+        // Быстрый пропуск битов вне видимой области
         if (beatPos < startSample - beatWindowSize || beatPos > endSample + beatWindowSize) {
             continue;
         }
 
         // Вычисляем область влияния бита в пикселях
-        float beatX = (beatPos - startSample) / samplesPerPixel;
+        const float beatX = float(beatPos - startSample) / samplesPerPixel;
+        const float windowPixels = float(beatWindowSize) / samplesPerPixel;
 
-        if (beatX < -beatWindowSize / samplesPerPixel || beatX > rect.width() + beatWindowSize / samplesPerPixel) {
+        if (beatX < -windowPixels || beatX > width + windowPixels) {
             continue;
         }
 
-        // Вычисляем диапазон влияния в пикселях
-        int pixelStart = qMax(0, int(beatX - beatWindowSize / samplesPerPixel));
-        int pixelEnd = qMin(int(rect.width()), int(beatX + beatWindowSize / samplesPerPixel));
+        const int pixelStart = qMax(0, int(beatX - windowPixels));
+        const int pixelEnd = qMin(width, int(beatX + windowPixels));
 
-        // Применяем усиление энергии в области бита
-        for (int x = pixelStart; x < pixelEnd; ++x) {
-            int envelopeIndex = int(x * samplesPerPixel);
-            if (envelopeIndex >= 0 && envelopeIndex < energyEnvelope.size()) {
-                float energy = energyEnvelope[envelopeIndex];
+        // ОПТИМИЗАЦИЯ: упрощенное вычисление энергии по сэмплам
+        const int sampleStart = qMax(startSample, int(beatPos - beatWindowSize));
+        const int sampleEnd = qMin(endSample, int(beatPos + beatWindowSize));
 
-                // Вычисляем реальный индекс сэмпла для вычисления расстояния
-                int actualSampleIndex = startSample + envelopeIndex;
+        float energy = 0.0f;
+        int sampleCount = 0;
+        // Пропускаем каждый 8-й сэмпл для скорости
+        for (int s = sampleStart; s < sampleEnd; s += 8) {
+            if (s < samples.size()) {
+                energy += samples[s] * samples[s];
+                sampleCount++;
+            }
+        }
 
-                // Усиливаем энергию в зависимости от близости к биту
-                float distance = qAbs((beatPos - actualSampleIndex) / float(sampleRate)); // расстояние в секундах
-                float falloff = qMax(0.0f, 1.0f - distance * 20.0f); // затухание
-                float enhancedEnergy = energy * (1.0f + beat.energy * beat.confidence * falloff);
+        if (sampleCount > 0) {
+            energy = std::sqrt(energy / sampleCount) * beat.energy * beat.confidence;
+            maxEnergy = qMax(maxEnergy, energy);
 
-                beatEnvelope[x] = qMax(beatEnvelope[x], enhancedEnergy);
+            // Применяем энергию к пикселям в области влияния
+            const float beatEnergy = energy;
+            for (int x = pixelStart; x < pixelEnd; ++x) {
+                const float distFromBeat = qAbs(x - beatX) / windowPixels;
+                const float falloff = qMax(0.0f, 1.0f - distFromBeat);
+                beatEnvelope[x] = qMax(beatEnvelope[x], beatEnergy * falloff);
             }
         }
     }
 
+    if (maxEnergy <= 0.0f) return;
+
     // Нормализуем энергию
-    if (maxEnergy > 0.0f) {
-        float normalizationFactor = 1.0f / maxEnergy;
-        for (int x = 0; x < beatEnvelope.size(); ++x) {
-            beatEnvelope[x] *= normalizationFactor;
-        }
+    const float normalizationFactor = 1.0f / maxEnergy;
+    for (int x = 0; x < width; ++x) {
+        beatEnvelope[x] *= normalizationFactor;
     }
 
-    // Рисуем полигон силуэта
+    // ОПТИМИЗАЦИЯ: рисуем упрощенный полигон (только видимые точки)
     painter.setRenderHint(QPainter::Antialiasing, false);
 
     QPolygonF beatPolygon;
-    beatPolygon.reserve(int(rect.width()) * 2 + 2);
+    beatPolygon.reserve(width * 2 + 2);
 
-    float centerY = rect.center().y();
-    float halfHeight = rect.height() * 0.5f;
+    const float centerY = rect.center().y();
+    const float halfHeight = rect.height() * 0.5f;
+    const float rectX = rect.x();
+    const float threshold = 0.001f;
 
-    // Верхняя часть силуэта
-    bool hasPoints = false;
-    for (int x = 0; x < rect.width(); ++x) {
-        if (beatEnvelope[x] > 0.001f) {
-            float normalizedEnergy = qBound(0.0f, beatEnvelope[x], 1.0f);
-            float y = centerY - (normalizedEnergy * halfHeight);
-            beatPolygon.append(QPointF(rect.x() + x, y));
-            hasPoints = true;
-        } else if (hasPoints && x < rect.width() - 1 && beatEnvelope[x + 1] <= 0.001f) {
-            beatPolygon.append(QPointF(rect.x() + x, centerY));
-            hasPoints = false;
+    // Верхняя часть силуэта (только точки с энергией)
+    for (int x = 0; x < width; ++x) {
+        if (beatEnvelope[x] > threshold) {
+            const float y = centerY - (beatEnvelope[x] * halfHeight);
+            beatPolygon.append(QPointF(rectX + x, y));
         }
     }
 
-    // Переход к нижней части через центр
-    if (!beatPolygon.isEmpty()) {
-        beatPolygon.append(QPointF(rect.right(), centerY));
-    }
+    if (beatPolygon.isEmpty()) return;
 
     // Нижняя часть силуэта (в обратном порядке)
-    hasPoints = false;
-    for (int x = int(rect.width()) - 1; x >= 0; --x) {
-        if (beatEnvelope[x] > 0.001f) {
-            float normalizedEnergy = qBound(0.0f, beatEnvelope[x], 1.0f);
-            float y = centerY + (normalizedEnergy * halfHeight);
-            beatPolygon.append(QPointF(rect.x() + x, y));
-            hasPoints = true;
-        } else if (hasPoints && x > 0 && beatEnvelope[x - 1] <= 0.001f) {
-            beatPolygon.append(QPointF(rect.x() + x, centerY));
-            hasPoints = false;
+    for (int x = width - 1; x >= 0; --x) {
+        if (beatEnvelope[x] > threshold) {
+            const float y = centerY + (beatEnvelope[x] * halfHeight);
+            beatPolygon.append(QPointF(rectX + x, y));
         }
     }
 
-    // Закрываем полигон
-    if (!beatPolygon.isEmpty()) {
-        beatPolygon.append(beatPolygon.first());
-    }
-
-    // Рисуем полигон с настраиваемой прозрачностью
-    if (beatPolygon.size() >= 3) {
-        int alpha = int(settings.beatWaveformOpacity * 200.0f);
-        painter.setBrush(QBrush(QColor(255, 165, 0, qBound(0, alpha, 255))));
-        painter.setPen(QPen(QColor(255, 165, 0, 200), 1));
-        painter.drawPolygon(beatPolygon);
-    }
+    // Рисуем полигон
+    const int alpha = int(settings.beatWaveformOpacity * 200.0f);
+    painter.setBrush(QBrush(QColor(255, 165, 0, qBound(0, alpha, 255))));
+    painter.setPen(Qt::NoPen);
+    painter.drawPolygon(beatPolygon);
 }

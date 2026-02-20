@@ -1,12 +1,13 @@
 #include "../include/beatfixcommand.h"
-#include <QtWidgets> // Для доступа к QUndoCommand и QList
+#include <QtWidgets>
 #include <numeric>
 
 BeatFixCommand::BeatFixCommand(WaveformView* view,
-                             const QList<QList<float>>& originalData,
-                             const QList<QList<float>>& fixedData,
+                             const QVector<QVector<float>>& originalData,
+                             const QVector<QVector<float>>& fixedData,
                              float bpm,
-                             const QList<BPMAnalyzer::BeatInfo>& beats,
+                             const QVector<BPMAnalyzer::BeatInfo>& beats,
+                             qint64 gridStartSample,
                              QUndoCommand* parent)
     : QUndoCommand(parent)
     , waveformView(view)
@@ -14,6 +15,7 @@ BeatFixCommand::BeatFixCommand(WaveformView* view,
     , fixedAudioData(fixedData)
     , bpmValue(bpm)
     , beatInfo(beats)
+    , gridStartSampleValue(gridStartSample)
 {
     setText(QObject::tr("Выравнивание долей"));
 }
@@ -23,6 +25,7 @@ void BeatFixCommand::undo()
     if (waveformView) {
         waveformView->setAudioData(originalAudioData);
         waveformView->setBeatInfo(beatInfo);
+        waveformView->setGridStartSample(gridStartSampleValue);
         waveformView->setBPM(bpmValue);
         waveformView->setBeatsAligned(false); // Отменяем выравнивание
     }
@@ -33,9 +36,10 @@ void BeatFixCommand::redo()
     if (waveformView) {
         waveformView->setAudioData(fixedAudioData);
         waveformView->setBeatInfo(beatInfo);
+        waveformView->setGridStartSample(gridStartSampleValue);
         // Если доли были неровными, пересчитываем средний BPM по разметке
         if (beatInfo.size() > 2) {
-            QList<float> intervals;
+            QVector<float> intervals;
             intervals.reserve(beatInfo.size() - 1);
             for (int i = 1; i < beatInfo.size(); ++i) {
                 intervals.append(float(beatInfo[i].position - beatInfo[i - 1].position));
@@ -52,4 +56,4 @@ void BeatFixCommand::redo()
         waveformView->setBPM(bpmValue);
         waveformView->setBeatsAligned(true); // Применяем выравнивание
     }
-} 
+}

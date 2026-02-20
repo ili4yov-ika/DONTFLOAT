@@ -4,8 +4,6 @@
 #include <algorithm>
 #include <numeric>
 
-// Заглушки для Mixxx библиотек
-// В реальной интеграции нужно подключить qm-dsp
 #ifdef USE_MIXXX_QM_DSP
 #include <dsp/onsets/DetectionFunction.h>
 #include <dsp/tempotracking/TempoTrackV2.h>
@@ -177,10 +175,45 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
         }
     }
 
-    // Анализ регулярности битов
-    if (!result.beats.isEmpty()) {
-        result.gridStartSample = result.beats.first().position;
+    // Анализ регулярности битов: подбор начала сетки по минимальному отклонению долей от сетки
+    if (!result.beats.isEmpty() && result.bpm > 0.0f && sampleRate > 0) {
+        const float beatInterval = 60.0f * sampleRate / result.bpm;
+        const qint64 maxGridStartSamples = qint64(2.0 * sampleRate);
+        const int numBeats = result.beats.size();
 
+        auto deviationForGridStart = [&](qint64 gridStart) -> float {
+            float sum = 0.0f;
+            const int n = qMin(numBeats, 256);
+            for (int i = 0; i < n; ++i) {
+                float phase = (float(result.beats[i].position) - float(gridStart)) / beatInterval;
+                float nearest = std::round(phase);
+                sum += std::abs(phase - nearest);
+            }
+            return (n > 0) ? sum / n : 1.0f;
+        };
+
+        qint64 bestStart = 0;
+        float bestDev = deviationForGridStart(0);
+
+        for (int phase = 0; phase < qMin(5, numBeats); ++phase) {
+            qint64 cand = result.beats[phase].position - qint64(phase * beatInterval);
+            if (cand < 0) continue;
+            if (cand > maxGridStartSamples) continue;
+            float d = deviationForGridStart(cand);
+            if (d < bestDev) {
+                bestDev = d;
+                bestStart = cand;
+            }
+        }
+
+        result.gridStartSample = bestStart;
+    } else if (!result.beats.isEmpty()) {
+        qint64 detectedStart = result.beats.first().position;
+        const qint64 maxGridStartSamples = qint64(2.0 * sampleRate);
+        result.gridStartSample = (detectedStart <= maxGridStartSamples) ? detectedStart : 0;
+    }
+
+    if (!result.beats.isEmpty()) {
         float totalDeviation = 0.0f;
         float maxDeviation = 0.0f;
 
@@ -415,17 +448,20 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::findBeats(const QVector<float>& samp
     // Размер окна поиска (+-5% от интервала)
     int searchWindow = qRound(beatInterval * options.tolerancePercent / 100.0f);
 
-    // Поиск первого бита
+    // Поиск первой доли только в первом интервале (0 … 1 beat), чтобы сетка строилась от первой доли, а не от второй
     int firstBeat = -1;
     float maxEnergy = 0.0f;
-    for (int i = 0; i < qMin(static_cast<int>(samples.size()), qRound(beatInterval * 2)); ++i) {
+    int searchLimit = qMin(static_cast<int>(samples.size()), qRound(beatInterval));
+    for (int i = 0; i < searchLimit; ++i) {
         float energy = calculateBeatEnergy(samples, i, 1024);
         if (energy > maxEnergy) {
             maxEnergy = energy;
             firstBeat = i;
         }
     }
-
+    if (firstBeat < 0 && !samples.isEmpty()) {
+        firstBeat = 0;
+    }
     if (firstBeat < 0) {
         return beats;
     }
@@ -552,7 +588,9 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPMUsingMixxx(const QVector<floa
     }
 
     result.beats = beats;
-    result.gridStartSample = beats.first().position;
+    qint64 detectedStart = beats.first().position;
+    const qint64 maxGridStartSamples = qint64(2.0 * sampleRate);
+    result.gridStartSample = (detectedStart <= maxGridStartSamples) ? detectedStart : 0;
 
     // Вычисляем BPM на основе обнаруженных битов
     if (beats.size() >= 2) {
@@ -623,8 +661,30 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPMUsingMixxx(const QVector<floa
 
         result.bpm = bestBpm;
 
-        // Пересчитываем метрики регулярности для выбранного BPM
+        // Подбор начала сетки по минимальному отклонению (фаза)
         const float beatIntervalForBest = 60.0f * sampleRate / result.bpm;
+        const qint64 maxGridStartSamples = qint64(2.0 * sampleRate);
+        auto deviationForGridStart = [&](qint64 gridStart) -> float {
+            float sum = 0.0f;
+            const int n = qMin(int(beats.size()), 256);
+            for (int i = 0; i < n; ++i) {
+                float phase = (float(beats[i].position) - float(gridStart)) / beatIntervalForBest;
+                sum += std::abs(phase - std::round(phase));
+            }
+            return (n > 0) ? sum / n : 1.0f;
+        };
+        qint64 bestStart = result.gridStartSample;
+        float bestDev = deviationForGridStart(bestStart);
+        for (int phase = 0; phase < qMin(5, int(beats.size())); ++phase) {
+            qint64 cand = beats[phase].position - qint64(phase * beatIntervalForBest);
+            if (cand >= 0 && cand <= maxGridStartSamples) {
+                float d = deviationForGridStart(cand);
+                if (d < bestDev) { bestDev = d; bestStart = cand; }
+            }
+        }
+        result.gridStartSample = bestStart;
+
+        // Пересчитываем метрики регулярности для выбранного BPM
         float totalDeviation = 0.0f;
         float maxDeviation = 0.0f;
         const int considerCount2 = std::min<int>(int(beats.size()), 512);
@@ -856,12 +916,11 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::createBeatGridFromBPM(const QVector<flo
     // Вычисляем интервал между битами в сэмплах
     float beatInterval = (60.0f * sampleRate) / bpm;
 
-    // Находим первый бит (ищем пик в начале трека)
-    int searchWindow = static_cast<int>(beatInterval * 2);
+    // Первая доля — пик только в первом интервале (0 … 1 beat), чтобы сетка шла от первой доли
+    int searchLimit = std::min(static_cast<int>(beatInterval), static_cast<int>(samples.size()));
     int firstBeat = 0;
     float maxEnergy = 0.0f;
-
-    for (int i = 0; i < std::min(searchWindow, static_cast<int>(samples.size())); ++i) {
+    for (int i = 0; i < searchLimit; ++i) {
         float energy = std::abs(samples[i]);
         if (energy > maxEnergy) {
             maxEnergy = energy;
@@ -869,10 +928,11 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::createBeatGridFromBPM(const QVector<flo
         }
     }
 
-    result.gridStartSample = firstBeat;
+    const qint64 maxGridStartSamples = qint64(2.0 * sampleRate);
+    result.gridStartSample = (firstBeat <= maxGridStartSamples) ? qint64(firstBeat) : 0;
 
-    // Создаем сетку битов
-    int currentBeat = firstBeat;
+    // Создаем сетку битов от определённого начала (или от 0)
+    int currentBeat = (result.gridStartSample > 0) ? firstBeat : 0;
     while (currentBeat < samples.size()) {
         BeatInfo beat;
         beat.position = currentBeat;

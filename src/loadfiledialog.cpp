@@ -4,11 +4,12 @@
 #include <QApplication>
 #include <QTimer>
 
-LoadFileDialog::LoadFileDialog(QWidget *parent, const BPMAnalyzer::AnalysisResult&)
+LoadFileDialog::LoadFileDialog(QWidget *parent, const BPMAnalyzer::AnalysisResult& analysisResult)
     : QDialog(parent)
     , ui(new Ui::LoadFileDialog)
     , fix(false)
 {
+    Q_UNUSED(analysisResult); // данные подставляются через showResult()
     ui->setupUi(this);
 
     // Принудительно устанавливаем белый цвет для всех текстовых элементов
@@ -17,7 +18,19 @@ LoadFileDialog::LoadFileDialog(QWidget *parent, const BPMAnalyzer::AnalysisResul
     ui->preliminaryBPMLabel->setStyleSheet("font-size: 11px; color: white; padding: 2px;");
     ui->computedBPMLabel->setStyleSheet("font-size: 11px; color: white; padding: 2px;");
     ui->deviationLabel->setStyleSheet("font-size: 11px; color: white; padding: 2px;");
+    ui->timeSignatureLabel->setStyleSheet("font-size: 11px; color: white; padding: 2px;");
+    ui->timeSignatureCombo->setStyleSheet("font-size: 11px; color: white; padding: 4px; background: palette(base);");
     ui->keepMarkersOnSkipCheckbox->setStyleSheet("font-size: 12px; color: white; padding: 5px;");
+
+    // ItemData для размера такта: числитель (доли в такте) — 4, 3, 1, 2, 6, 12
+    const QList<int> bpbValues = { 4, 3, 1, 2, 6, 12 };
+    for (int i = 0; i < qMin(ui->timeSignatureCombo->count(), bpbValues.size()); ++i) {
+        ui->timeSignatureCombo->setItemData(i, bpbValues[i]);
+    }
+
+    // Явное подключение кнопок (не полагаемся на connectSlotsByName из .ui)
+    connect(ui->fixButton, &QPushButton::clicked, this, &LoadFileDialog::on_fixButton_clicked);
+    connect(ui->skipButton, &QPushButton::clicked, this, &LoadFileDialog::on_skipButton_clicked);
 
     // Начальное состояние
     updateProgress(QString::fromUtf8("Анализ аудио..."), 0);
@@ -76,6 +89,28 @@ void LoadFileDialog::showResult(const BPMAnalyzer::AnalysisResult& analysis)
     } else {
         ui->skipButton->setText(QString::fromUtf8("Пропустить"));
     }
+}
+
+void LoadFileDialog::setBeatsPerBar(int bpb)
+{
+    bpb = qBound(1, bpb, 32);
+    for (int i = 0; i < ui->timeSignatureCombo->count(); ++i) {
+        if (ui->timeSignatureCombo->itemData(i).toInt() == bpb) {
+            ui->timeSignatureCombo->setCurrentIndex(i);
+            return;
+        }
+    }
+    ui->timeSignatureCombo->setCurrentIndex(0); // 4/4 по умолчанию
+}
+
+int LoadFileDialog::getBeatsPerBar() const
+{
+    QVariant v = ui->timeSignatureCombo->currentData();
+    if (v.isValid()) {
+        int bpb = v.toInt();
+        if (bpb >= 1 && bpb <= 32) return bpb;
+    }
+    return 4;
 }
 
 void LoadFileDialog::on_fixButton_clicked()
