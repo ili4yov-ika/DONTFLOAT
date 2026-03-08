@@ -728,6 +728,18 @@ Shift+B: Remove point B</translation>
 Do you want to save changes?</translation>
     </message>
     <message>
+        <source>Сохранить</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <source>Не сохранять</source>
+        <translation>Don't Save</translation>
+    </message>
+    <message>
+        <source>Отмена</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
         <location line="+75"/>
         <location line="+363"/>
         <source>Файл загружен: %1</source>

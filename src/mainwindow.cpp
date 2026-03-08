@@ -1513,14 +1513,21 @@ bool MainWindow::maybeSave()
     if (!hasUnsavedChanges)
         return true;
 
-    const QMessageBox::StandardButton ret
-        = QMessageBox::warning(this, tr("DONTFLOAT"),
-                             tr("В аудиофайле есть несохраненные изменения.\n"
-                                "Хотите сохранить изменения?"),
-                             QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-    if (ret == QMessageBox::Save)
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(tr("DONTFLOAT"));
+    msgBox.setText(tr("В аудиофайле есть несохраненные изменения.\n"
+                     "Хотите сохранить изменения?"));
+    msgBox.setIcon(QMessageBox::Warning);
+    QPushButton* saveBtn = msgBox.addButton(tr("Сохранить"), QMessageBox::AcceptRole);
+    QPushButton* discardBtn = msgBox.addButton(tr("Не сохранять"), QMessageBox::DestructiveRole);
+    QPushButton* cancelBtn = msgBox.addButton(tr("Отмена"), QMessageBox::RejectRole);
+    msgBox.setDefaultButton(saveBtn);
+    msgBox.setEscapeButton(cancelBtn);
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == saveBtn)
         return doSaveAudioFile();
-    else if (ret == QMessageBox::Cancel)
+    if (msgBox.clickedButton() == cancelBtn)
         return false;
     return true;
 }

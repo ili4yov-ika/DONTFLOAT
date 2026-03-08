@@ -758,6 +758,18 @@ Shift+B: Удалить точку B</translation>
 Хотите сохранить изменения?</translation>
     </message>
     <message>
+        <source>Сохранить</source>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
+        <source>Не сохранять</source>
+        <translation>Не сохранять</translation>
+    </message>
+    <message>
+        <source>Отмена</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
         <location filename="../src/mainwindow.cpp" line="1616"/>
         <location filename="../src/mainwindow.cpp" line="1979"/>
         <source>Файл загружен: %1</source>

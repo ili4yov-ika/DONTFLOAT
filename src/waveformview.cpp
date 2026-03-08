@@ -27,17 +27,21 @@ static const qint64 MIN_MARKER_SEGMENT_MS = 50;
 
 /**
  * Преобразует позицию в исходном аудио в позицию отображения с учётом меток растяжения.
- * Принимает ПРЕДВАРИТЕЛЬНО ОТСОРТИРОВАННЫЕ метки по originalPosition.
- * Используйте mapOriginalSampleToDisplay(pos, markers, size) для автоматической сортировки,
- * или sortedMarkers-вариант напрямую, чтобы избежать повторной сортировки в цикле.
+ * Когда метки перемещены (position != originalPosition), аудио визуально растянуто,
+ * и силуэты ударных должны следовать за этим маппингом.
  */
-static qint64 mapOriginalSampleToDisplaySorted(qint64 originalPos,
-                                               const QVector<Marker>& sorted,
-                                               qint64 totalOriginalSamples)
+static qint64 mapOriginalSampleToDisplay(qint64 originalPos,
+                                         const QVector<Marker>& markers,
+                                         qint64 totalOriginalSamples)
 {
-    if (sorted.size() < 2 || totalOriginalSamples <= 0) {
+    if (markers.size() < 2 || totalOriginalSamples <= 0) {
         return originalPos;
     }
+
+    QVector<Marker> sorted = markers;
+    std::sort(sorted.begin(), sorted.end(), [](const Marker& a, const Marker& b) {
+        return a.originalPosition < b.originalPosition;
+    });
 
     // До первой метки — линейная интерполяция от 0 до первой метки
     if (originalPos <= sorted.first().originalPosition) {
@@ -72,21 +76,6 @@ static qint64 mapOriginalSampleToDisplaySorted(qint64 originalPos,
     }
 
     return originalPos;
-}
-
-// Перегрузка с автоматической сортировкой (для единичных вызовов)
-static qint64 mapOriginalSampleToDisplay(qint64 originalPos,
-                                         const QVector<Marker>& markers,
-                                         qint64 totalOriginalSamples)
-{
-    if (markers.size() < 2 || totalOriginalSamples <= 0) {
-        return originalPos;
-    }
-    QVector<Marker> sorted = markers;
-    std::sort(sorted.begin(), sorted.end(), [](const Marker& a, const Marker& b) {
-        return a.originalPosition < b.originalPosition;
-    });
-    return mapOriginalSampleToDisplaySorted(originalPos, sorted, totalOriginalSamples);
 }
 
 WaveformView::WaveformView(QWidget *parent)
@@ -257,17 +246,6 @@ void WaveformView::paintEvent(QPaintEvent* event)
         float channelHeight = height() / float(audioData.size());
         ViewportGeometry vp = getViewportGeometry(audioData[0].size(), width());
 
-        // Предварительно сортируем маркеры один раз для всего цикла отрисовки
-        QVector<Marker> sortedMarkersForDisplay;
-        if (beatVisualizationSettings.showBeatWaveform && !beats.isEmpty() &&
-            !originalAudioData.isEmpty() && markers.size() >= 2) {
-            sortedMarkersForDisplay = markers;
-            std::sort(sortedMarkersForDisplay.begin(), sortedMarkersForDisplay.end(),
-                      [](const Marker& a, const Marker& b) {
-                return a.originalPosition < b.originalPosition;
-            });
-        }
-
         for (int i = 0; i < audioData.size(); ++i) {
             QRectF channelRect(0, i * channelHeight, width(), channelHeight);
             drawWaveform(painter, audioData[i], channelRect);
@@ -275,10 +253,10 @@ void WaveformView::paintEvent(QPaintEvent* event)
             // Рисуем силуэт ударных поверх основной волны через BeatVisualizer
             if (beatVisualizationSettings.showBeatWaveform && !beats.isEmpty()) {
                 QVector<BPMAnalyzer::BeatInfo> displayBeats = beats;
-                if (!sortedMarkersForDisplay.isEmpty()) {
+                if (!originalAudioData.isEmpty() && markers.size() >= 2) {
                     qint64 refSize = originalAudioData[0].size();
                     for (BPMAnalyzer::BeatInfo& b : displayBeats) {
-                        b.position = mapOriginalSampleToDisplaySorted(b.position, sortedMarkersForDisplay, refSize);
+                        b.position = mapOriginalSampleToDisplay(b.position, markers, refSize);
                     }
                 }
                 BeatVisualizer::drawBeatWaveform(painter, audioData[i], displayBeats,
@@ -546,9 +524,7 @@ void WaveformView::setPlaybackPosition(qint64 position)
 {
     // position приходит в миллисекундах, сохраняем как есть
     playbackPosition = position;
-    // Используем throttled update (~60 FPS): позиция воспроизведения обновляется часто,
-    // прямой update() вызывал бы лишние перерисовки при частых сигналах от QMediaPlayer
-    scheduleUpdate();
+    update();
 }
 
 float WaveformView::getCursorXPosition() const

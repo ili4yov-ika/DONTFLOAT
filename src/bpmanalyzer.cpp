@@ -328,21 +328,20 @@ QVector<QPair<int, float>> BPMAnalyzer::detectPeaks(const QVector<float>& sample
         if (isPeak) {
             // Проверяем минимальное расстояние от предыдущих пиков
             bool tooClose = false;
-            int replaceIdx = -1;
-            for (int pi = 0; pi < peaks.size(); ++pi) {
-                if (std::abs(i - peaks[pi].first) < minPeakDistance) {
-                    if (energy[i] > peaks[pi].second) {
-                        replaceIdx = pi; // Заменяем более слабый пик
+            for (const auto& peak : peaks) {
+                if (std::abs(i - peak.first) < minPeakDistance) {
+                    // Если новый пик сильнее, заменяем старый
+                    if (energy[i] > peak.second) {
+                        peaks.removeAll(peak);
+                        break;
                     } else {
-                        tooClose = true; // Новый пик слабее — пропускаем
+                        tooClose = true;
+                        break;
                     }
-                    break;
                 }
             }
 
-            if (replaceIdx >= 0) {
-                peaks[replaceIdx] = {i, energy[i]}; // O(1) замена вместо O(n) removeAll
-            } else if (!tooClose) {
+            if (!tooClose) {
                 peaks.append({i, energy[i]});
             }
         }
