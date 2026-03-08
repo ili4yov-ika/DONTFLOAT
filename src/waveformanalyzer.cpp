@@ -4,6 +4,10 @@
 #include <cmath>
 #include <algorithm>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // Заглушки для Mixxx библиотек
 #ifdef USE_MIXXX_QM_DSP
 #include <dsp/transforms/FFT.h>
@@ -369,33 +373,75 @@ QVector<float> WaveformAnalyzer::upsample(const QVector<float>& samples, int tar
 
 QVector<float> WaveformAnalyzer::calculateFFT(const QVector<float>& samples, int fftSize) {
     QVector<float> result(fftSize * 2, 0.0f); // Комплексные числа: real + imag
-    
+
     if (samples.isEmpty() || fftSize <= 0) {
         return result;
     }
-    
-    // Простая реализация FFT (заглушка)
-    // В реальной реализации здесь должен быть эффективный FFT алгоритм
-    for (int i = 0; i < std::min(static_cast<int>(samples.size()), fftSize); ++i) {
-        result[i * 2] = samples[i]; // Real part
-        result[i * 2 + 1] = 0.0f;   // Imaginary part
+
+    // Проверяем, что fftSize является степенью двойки
+    // Если нет — сокращаем до ближайшей степени двойки снизу
+    int n = 1;
+    while (n * 2 <= fftSize) n *= 2;
+    if (n != fftSize) {
+        // fftSize не степень двойки, используем ближайшую степень двойки
+        fftSize = n;
+        result.resize(fftSize * 2, 0.0f);
     }
-    
-    // Простое преобразование Фурье (неэффективное, только для демонстрации)
-    for (int k = 0; k < fftSize; ++k) {
-        float real = 0.0f;
-        float imag = 0.0f;
-        
-        for (int n = 0; n < fftSize; ++n) {
-            float angle = -2.0f * M_PI * k * n / fftSize;
-            real += samples[n] * std::cos(angle);
-            imag += samples[n] * std::sin(angle);
+
+    // Заполняем вещественную часть из входных данных (с нулевым дополнением при необходимости)
+    QVector<double> re(fftSize, 0.0);
+    QVector<double> im(fftSize, 0.0);
+    int inputLen = qMin(samples.size(), fftSize);
+    for (int i = 0; i < inputLen; ++i) {
+        re[i] = static_cast<double>(samples[i]);
+    }
+
+    // Алгоритм FFT Кули-Тьюки (итеративный, radix-2, decimation-in-time)
+    // Шаг 1: перестановка с обращением битов (bit-reversal permutation)
+    for (int i = 1, j = 0; i < fftSize; ++i) {
+        int bit = fftSize >> 1;
+        for (; j & bit; bit >>= 1) {
+            j ^= bit;
         }
-        
-        result[k * 2] = real;
-        result[k * 2 + 1] = imag;
+        j ^= bit;
+        if (i < j) {
+            std::swap(re[i], re[j]);
+            std::swap(im[i], im[j]);
+        }
     }
-    
+
+    // Шаг 2: бабочки FFT
+    for (int len = 2; len <= fftSize; len <<= 1) {
+        double wRe = std::cos(-2.0 * M_PI / len);
+        double wIm = std::sin(-2.0 * M_PI / len);
+        for (int i = 0; i < fftSize; i += len) {
+            double curRe = 1.0, curIm = 0.0;
+            int half = len / 2;
+            for (int j = 0; j < half; ++j) {
+                double evenRe = re[i + j];
+                double evenIm = im[i + j];
+                double oddRe  = re[i + j + half] * curRe - im[i + j + half] * curIm;
+                double oddIm  = re[i + j + half] * curIm + im[i + j + half] * curRe;
+
+                re[i + j]        = evenRe + oddRe;
+                im[i + j]        = evenIm + oddIm;
+                re[i + j + half] = evenRe - oddRe;
+                im[i + j + half] = evenIm - oddIm;
+
+                double newCurRe = curRe * wRe - curIm * wIm;
+                double newCurIm = curRe * wIm + curIm * wRe;
+                curRe = newCurRe;
+                curIm = newCurIm;
+            }
+        }
+    }
+
+    // Записываем результат в формате чередующихся вещественной и мнимой частей
+    for (int i = 0; i < fftSize; ++i) {
+        result[i * 2]     = static_cast<float>(re[i]);
+        result[i * 2 + 1] = static_cast<float>(im[i]);
+    }
+
     return result;
 }
 
