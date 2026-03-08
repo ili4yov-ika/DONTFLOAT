@@ -13,24 +13,29 @@ set(CMAKE_AUTORCC ON)
 # Указываем путь для поиска UI файлов
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 
-# Устанавливаем путь к Qt6 (автоматическое определение)
+# Устанавливаем путь к Qt6 (автоматическое определение для Windows и Linux)
 if(EXISTS "C:/Qt/6.9.3/msvc2022_64")
     set(QT_ROOT_DIR "C:/Qt/6.9.3/msvc2022_64")
+    set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR})
+    set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR} CACHE PATH "Qt6 installation path" FORCE)
+    message(STATUS "Используется Qt (Windows): ${QT_ROOT_DIR}")
 elseif(EXISTS "C:/Qt/6.8.3/msvc2022_64")
     set(QT_ROOT_DIR "C:/Qt/6.8.3/msvc2022_64")
+    set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR})
+    set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR} CACHE PATH "Qt6 installation path" FORCE)
+    message(STATUS "Используется Qt (Windows): ${QT_ROOT_DIR}")
+elseif(UNIX)
+    # На Linux/macOS Qt6 ищется через стандартные системные пути
+    message(STATUS "Используется системный Qt6 (Linux/macOS)")
 else()
     message(FATAL_ERROR "Qt не найден! Установите Qt 6.8.3 или 6.9.3 с поддержкой MSVC 2022 64-bit")
 endif()
-
-set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR})
-set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR} CACHE PATH "Qt6 installation path" FORCE)
-message(STATUS "Используется Qt: ${QT_ROOT_DIR}")
 
 # Генерируем compile_commands.json для IntelliSense
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Ensure Qt6 is available
-set(QT_MIN_VERSION "6.8.0")
+set(QT_MIN_VERSION "6.4.0")
 find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Core
     Gui
@@ -141,12 +146,25 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 # Translations: build .qm from .ts (output in build dir; app loads from applicationDirPath())
-find_package(Qt6 REQUIRED COMPONENTS LinguistTools)
-qt_add_lrelease(DONTFLOAT_lrelease
-    TS_FILES ${TRANSLATION_FILES}
-    QM_FILES_OUTPUT_VARIABLE DONTFLOAT_QM_FILES
-)
-add_dependencies(${PROJECT_NAME} DONTFLOAT_lrelease)
+find_package(Qt6 COMPONENTS LinguistTools)
+if(Qt6LinguistTools_FOUND)
+    # Qt6.7+ signature: qt_add_lrelease(target TS_FILES ...)
+    # Qt6.4 signature: qt_add_lrelease(target TS_FILES ...) where target is existing executable
+    if(Qt6LinguistTools_VERSION VERSION_GREATER_EQUAL "6.7.0")
+        qt_add_lrelease(DONTFLOAT_lrelease
+            TS_FILES ${TRANSLATION_FILES}
+            QM_FILES_OUTPUT_VARIABLE DONTFLOAT_QM_FILES
+        )
+        add_dependencies(${PROJECT_NAME} DONTFLOAT_lrelease)
+    else()
+        qt_add_lrelease(${PROJECT_NAME}
+            TS_FILES ${TRANSLATION_FILES}
+            QM_FILES_OUTPUT_VARIABLE DONTFLOAT_QM_FILES
+        )
+    endif()
+else()
+    message(STATUS "Qt6 LinguistTools not found - translations will not be built")
+endif()
 
 # Third-party: Mixxx qm-dsp
 set(QM_DSP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mixxx/lib/qm-dsp)
