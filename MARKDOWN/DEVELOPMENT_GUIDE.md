@@ -47,10 +47,11 @@ DONTFLOAT/
 ├── include/          # Заголовочные файлы (.h)
 ├── src/             # Исходный код (.cpp)
 ├── ui/              # UI файлы (.ui)
-├── resources/       # Ресурсы (иконки, звуки)
-├── docs/            # Документация
+├── resources/       # Ресурсы (иконки, app.rc)
+├── docs/            # Пользовательская документация
 ├── translations/    # Файлы локализации (.ts)
 ├── tests/           # Тесты
+├── tools/           # Скрипты (build_windows_installer.bat, svg_to_ico.py, nsis_installer.nsi)
 ├── thirdparty/      # Сторонние библиотеки
 ├── build/           # Сборка проекта
 └── MARKDOWN/        # Вспомогательная документация
@@ -99,6 +100,19 @@ nmake         # для MSVC
 - Qt 6.8.3 или 6.9.3
 - MSVC 2022 64-bit или MinGW 64-bit
 - CMake 3.16 или выше
+
+#### Сборка Windows installer
+```batch
+tools\build_windows_installer.bat
+```
+Скрипт выполняет: CMake Release, install, windeployqt, NSIS. Результат: `tools/DONTFLOAT_Setup.exe`. Требуется NSIS.
+
+#### Иконка EXE (Windows)
+- **resources/app.rc** — ресурс иконки для EXE
+- **resources/icons/logo.ico** — генерируется из logo.svg
+- **tools/svg_to_ico.py** — конвертация SVG→ICO (Inkscape + Pillow)
+- При отсутствии logo.ico скрипт installer вызывает `python tools/svg_to_ico.py`
+- CMake подключает app.rc только при наличии logo.ico
 
 ## Система команд (Command Pattern)
 

@@ -1,0 +1,33 @@
+Source: dontfloat
+Section: sound
+Priority: optional
+Maintainer: DONTFLOAT Project <maintainer@example.com>
+Build-Depends: cmake (>= 3.16),
+               qt6-base-dev,
+               qt6-multimedia-dev,
+               qt6-tools-dev,
+               qt6-tools-dev-tools,
+               debhelper (>= 12),
+               pkg-config
+Standards-Version: 4.5.0
+Homepage: https://github.com/yourusername/DONTFLOAT
+
+Package: dontfloat
+Architecture: amd64
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libqt6core6 (>= 6.8.0),
+         libqt6gui6 (>= 6.8.0),
+         libqt6widgets6 (>= 6.8.0),
+         libqt6multimedia6 (>= 6.8.0),
+         libqt6multimediawidgets6 (>= 6.8.0)
+Description: Аудиоредактор для выравнивания BPM
+ DONTFLOAT - это аудиоредактор для анализа и выравнивания BPM аудиофайлов.
+ .
+ Основные возможности:
+  - Автоматический анализ BPM с использованием алгоритмов Mixxx
+  - Визуализация звуковой волны
+  - Выравнивание долей по тактовой сетке
+  - Метки сжатия/растяжения для временной коррекции
+  - Метроном с настраиваемым BPM
+  - Питч-сетка для анализа тональности

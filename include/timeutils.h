@@ -72,6 +72,18 @@ public:
      * @return Отформатированная строка (например, "01:23")
      */
     static QString formatTimeShort(qint64 ms);
+
+    /**
+     * @brief Форматирует время и позицию в тактах (MM:SS.mmm | bar.beat.sub)
+     * @param msPosition Время в миллисекундах
+     * @param bpm Темп (ударов в минуту)
+     * @param beatsPerBar Долей в такте (4 для 4/4, 3 для 6/8)
+     * @param sampleRate Частота дискретизации
+     * @param gridStartSample Начальный сэмпл сетки (0 если от начала)
+     * @return Строка вида "01:23.456 | 1.2.3" или "01:23.456 | --.--.--" при bpm <= 0
+     */
+    static QString formatTimeAndBars(qint64 msPosition, float bpm, int beatsPerBar,
+                                     int sampleRate, qint64 gridStartSample);
 };
 
 #endif // TIMEUTILS_H

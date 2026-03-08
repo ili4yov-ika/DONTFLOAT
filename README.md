@@ -47,6 +47,7 @@
 - Прямые края скроллбаров
 - Интуитивное управление
 - Подсказки и статусные сообщения
+- Локализация: русский и английский
 
 ## Управление
 
@@ -60,7 +61,7 @@
 - **Установить точку B**: `B` или ЛКМ на кнопку B
 - **Удалить точку A**: `Shift+A` или ПКМ на кнопку A
 - **Удалить точку B**: `Shift+B` или ПКМ на кнопку B
-- **Добавить метку сжатия/растяжения**: `M` в текущей позиции (ромбики; перетаскивание — ограничено соседними метками, мин. сегмент 50 мс)
+- **Добавить метку растяжения**: `M` в текущей позиции (ромбики; перетаскивание — ограничено соседними метками, мин. сегмент 50 мс)
 
 ### 🔍 Навигация и масштабирование
 - **Масштабирование**:
@@ -160,6 +161,20 @@ cmake --build . --config Release
 cmake .. -DCMAKE_BUILD_TYPE=Debug
 cmake --build . --config Debug
 ```
+
+### Сборка Windows installer (NSIS)
+Для создания установщика DONTFLOAT_Setup.exe:
+```batch
+tools\build_windows_installer.bat
+```
+Требования: CMake, Qt 6.8+, NSIS. Скрипт выполняет Release-сборку, windeployqt и создаёт инсталлер в папке `tools/`. Иконка EXE генерируется из `resources/icons/logo.svg` (Inkscape + Pillow).
+
+### Скрипты и packaging (папка tools/)
+- `tools/README.md` — подробное описание всех скриптов и packaging
+- `build_windows_installer.bat` + `nsis_installer.nsi` — сборка Windows installer (NSIS)
+- `build_deb.sh` + `debian/` — сборка .deb пакета для Debian/Ubuntu
+- `build_rpm.sh` + `rpm/` — сборка .rpm пакета для Fedora/RHEL
+- `svg_to_ico.py` — генерация `resources/icons/logo.ico` из `logo.svg` для иконки EXE
 
 ## Консольный режим
 

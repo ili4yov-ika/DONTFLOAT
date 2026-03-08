@@ -24,6 +24,7 @@
 #include <QUndoStack>
 #include <QUrl>
 #include <QTranslator>
+#include <functional>
 #include "waveformview.h"
 #include "pitchgridwidget.h"
 #include "metronomecontroller.h"
@@ -91,6 +92,8 @@ private:
     void createActions();
     void createKeyContextMenu();
     void createKeyContextMenu2();
+    QMenu* populateKeyContextMenu(QAction* actions[28], std::function<void(const QString&)> setKeyCallback);
+    void updatePitchGridLayout();
     void updateWindowTitle();
     void setupConnections();
     void readSettings();
@@ -101,9 +104,8 @@ private:
     void resetAudioState();
     void processAudioFile(const QString& filePath);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
-    void createDeviationMarkers(float tolerancePercent);
+    void createDeviationMarkers(float tolerancePercent, bool neutralMarkers = false);
     void retranslateMenus();
-    QString formatTime(qint64 msPosition);
     QString formatTimeAndBars(qint64 msPosition);
     void updateHorizontalScrollBar(float zoom);
     void updateHorizontalScrollBarFromOffset(float offset);

@@ -5,10 +5,28 @@ $ErrorActionPreference = "Stop"
 
 # Go to build directory
 $buildDir = Join-Path $PSScriptRoot "..\build"
+if (-not (Test-Path $buildDir)) {
+    Write-Host "Error: build directory not found at $buildDir" -ForegroundColor Red
+    Write-Host "Build the project first: cmake --build build" -ForegroundColor Yellow
+    exit 1
+}
 Set-Location $buildDir
 
-if (-not (Test-Path "Debug")) {
-    Write-Host "Error: build\Debug directory not found!" -ForegroundColor Red
+# Ищем директорию с тестами: build/Debug или build/Desktop_Qt_*/Debug
+$testDir = $null
+if (Test-Path "Debug") {
+    $testDir = "Debug"
+} else {
+    $qtDirs = Get-ChildItem -Directory -Filter "Desktop_Qt_*" -ErrorAction SilentlyContinue
+    foreach ($d in $qtDirs) {
+        if (Test-Path (Join-Path $d.Name "Debug")) {
+            $testDir = Join-Path $d.Name "Debug"
+            break
+        }
+    }
+}
+if (-not $testDir) {
+    Write-Host "Error: Debug directory not found in build!" -ForegroundColor Red
     Write-Host "Build the project first: cmake --build build" -ForegroundColor Yellow
     exit 1
 }
@@ -29,7 +47,7 @@ foreach ($qtPath in $qtPaths) {
 # If specific test is specified, run it
 if ($args.Count -gt 0) {
     $testName = $args[0]
-    $testExe = Join-Path "Debug" "$testName.exe"
+    $testExe = Join-Path $testDir "$testName.exe"
     
     if (Test-Path $testExe) {
         Write-Host "Running test: $testName" -ForegroundColor Green
@@ -38,9 +56,9 @@ if ($args.Count -gt 0) {
         exit $LASTEXITCODE
     }
     else {
-        Write-Host "Error: Test $testName.exe not found in build\Debug\" -ForegroundColor Red
+        Write-Host "Error: Test $testName.exe not found in $testDir" -ForegroundColor Red
         Write-Host "Available tests:" -ForegroundColor Yellow
-        Get-ChildItem -Path "Debug" -Filter "*_test.exe" | ForEach-Object { Write-Host "  $($_.Name)" }
+        Get-ChildItem -Path $testDir -Filter "*_test.exe" | ForEach-Object { Write-Host "  $($_.Name)" }
         exit 1
     }
 }

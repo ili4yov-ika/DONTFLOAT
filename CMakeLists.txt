@@ -101,12 +101,23 @@ set(TRANSLATION_FILES
     translations/DONTFLOAT_en_US.ts
 )
 
+# Windows: embed application icon into EXE
+set(EXTRA_SOURCES "")
+if(WIN32)
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/logo.ico)
+        list(APPEND EXTRA_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc)
+    else()
+        message(STATUS "resources/icons/logo.ico not found - EXE will use default Windows icon. Run: python tools/svg_to_ico.py")
+    endif()
+endif()
+
 # Create executable
 add_executable(${PROJECT_NAME}
     ${SOURCES}
     ${HEADERS}
     ${UI_FILES}
     ${RESOURCE_FILES}
+    ${EXTRA_SOURCES}
 )
 
 # Include directories
@@ -313,6 +324,20 @@ set_tests_properties(bpm_analyzer_test PROPERTIES
 add_qt_test(beat_deviation_test
     tests/beat_deviation_test.cpp
     src/bpmanalyzer.cpp
+)
+
+# Тесты TimeStretchProcessor (тонкомпенсация, processSegment, calculateStretchFactor)
+add_qt_test(timestretchprocessor_test
+    tests/timestretchprocessor_test.cpp
+    src/timestretchprocessor.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+)
+
+set_tests_properties(timestretchprocessor_test PROPERTIES
+    LABELS "timestretch;pitch;unit"
+    DESCRIPTION "Unit tests for time stretch and pitch compensation"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 set_tests_properties(beat_deviation_test PROPERTIES

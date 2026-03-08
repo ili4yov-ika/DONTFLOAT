@@ -51,6 +51,7 @@
 #include <QtWidgets/QVBoxLayout>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QUrl>
+#include <QtCore/QSet>
 #include <QtCore/QtAlgorithms>
 #include <QtCore/QTranslator>
 #include <QtCore/QLocale>
@@ -59,6 +60,24 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+static QStringList translationSearchPaths()
+{
+    QStringList paths;
+    const QString appDir = QCoreApplication::applicationDirPath();
+    paths << appDir << (appDir + "/../") << (appDir + "/../translations/")
+          << (appDir + "/translations/") << (appDir + "/../build");
+    return paths;
+}
+
+static bool loadTranslation(QTranslator *translator, const QString &name)
+{
+    for (const QString &path : translationSearchPaths()) {
+        if (translator->load(name, path))
+            return true;
+    }
+    return false;
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -128,8 +147,7 @@ MainWindow::MainWindow(QWidget *parent)
         else if (sys.startsWith("ru")) lang = "ru_RU";
         else lang = "en_US";
     }
-    const QString trPath = QCoreApplication::applicationDirPath();
-    if (m_appTranslator->load("DONTFLOAT_" + lang, trPath) || m_appTranslator->load("DONTFLOAT_" + lang, trPath + "/../")) {
+    if (loadTranslation(m_appTranslator, "DONTFLOAT_" + lang)) {
         qApp->installTranslator(m_appTranslator);
     }
 
@@ -598,20 +616,7 @@ void MainWindow::showEvent(QShowEvent *event)
             ui->pitchGridWidget->update();
         }
 
-        // Обновляем размеры сплиттера в зависимости от видимости питч-сетки
-        if (mainSplitter) {
-            QWidget* pitchGridContainer = mainSplitter->widget(1);
-
-            if (pitchGridContainer) {
-                if (!isPitchGridVisible) {
-                    // Если питч-сетка скрыта, убеждаемся что волна занимает всё пространство
-                    QList<int> sizes;
-                    int totalHeight = mainSplitter->height();
-                    sizes << totalHeight << 0;
-                    mainSplitter->setSizes(sizes);
-                }
-            }
-        }
+        updatePitchGridLayout();
     });
 }
 
@@ -630,21 +635,32 @@ void MainWindow::resizeEvent(QResizeEvent *event)
             ui->pitchGridWidget->update();
         }
 
-        // Обновляем размеры сплиттера в зависимости от видимости питч-сетки
-        if (mainSplitter) {
-            QWidget* pitchGridContainer = mainSplitter->widget(1);
-
-            if (pitchGridContainer) {
-                if (!isPitchGridVisible) {
-                    // Если питч-сетка скрыта, убеждаемся что волна занимает всё пространство
-                    QList<int> sizes;
-                    int totalHeight = mainSplitter->height();
-                    sizes << totalHeight << 0;
-                    mainSplitter->setSizes(sizes);
-                }
-            }
-        }
+        updatePitchGridLayout();
     });
+}
+
+void MainWindow::updatePitchGridLayout()
+{
+    if (!mainSplitter) return;
+    QWidget* pitchGridContainer = mainSplitter->widget(1);
+    if (!pitchGridContainer) return;
+
+    if (isPitchGridVisible) {
+        pitchGridContainer->setVisible(true);
+        mainSplitter->setChildrenCollapsible(false);
+        int totalHeight = mainSplitter->height();
+        if (totalHeight > 0) {
+            QList<int> sizes;
+            sizes << static_cast<int>(totalHeight * 0.75) << static_cast<int>(totalHeight * 0.25);
+            mainSplitter->setSizes(sizes);
+        }
+    } else {
+        pitchGridContainer->setVisible(false);
+        mainSplitter->setChildrenCollapsible(true);
+        QList<int> sizes;
+        sizes << mainSplitter->height() << 0;
+        mainSplitter->setSizes(sizes);
+    }
 }
 
 void MainWindow::retranslateMenus()
@@ -717,36 +733,15 @@ void MainWindow::readSettings()
     currentKey2 = settings.value("currentKey2", "").toString();
     setKey2(currentKey2);
 
-    // Применяем состояние к сплиттеру
-    if (mainSplitter) {
-        QWidget* pitchGridContainer = mainSplitter->widget(1);
-
-        if (pitchGridContainer) {
-            if (isPitchGridVisible) {
-                // Показываем питч-сетку
-                pitchGridContainer->setVisible(true);
-                mainSplitter->setChildrenCollapsible(false);
-            } else {
-                // Скрываем питч-сетку
-                pitchGridContainer->setVisible(false);
-                mainSplitter->setChildrenCollapsible(true);
-
-                // Устанавливаем размеры так, чтобы волна заняла всё пространство
-                QList<int> sizes;
-                int totalHeight = mainSplitter->height();
-                sizes << totalHeight << 0;
-                mainSplitter->setSizes(sizes);
-            }
-        }
-    }
+    updatePitchGridLayout();
 
     // Обновляем текст действия и состояние (заблокирован/разблокирован)
     if (togglePitchGridAct) {
         if (isPitchGridVisible) {
-            togglePitchGridAct->setText(QString::fromUtf8("Убрать питч-сетку"));
+            togglePitchGridAct->setText(tr("Убрать питч-сетку"));
             togglePitchGridAct->setEnabled(true); // Разблокируем, если видима
         } else {
-            togglePitchGridAct->setText(QString::fromUtf8("Показать питч-сетку"));
+            togglePitchGridAct->setText(tr("Показать питч-сетку"));
             togglePitchGridAct->setEnabled(false); // Блокируем, если скрыта
         }
     }
@@ -991,13 +986,13 @@ void MainWindow::setupConnections()
 
     connect(ui->loopStartButton, &QPushButton::pressed, this, [this]() {
         if (loopStartPosition > 0) {
-            statusBar()->showMessage(tr("Точка A: %1").arg(formatTime(loopStartPosition)), 2000);
+            statusBar()->showMessage(tr("Точка A: %1").arg(TimeUtils::formatTime(loopStartPosition)), 2000);
         }
     });
 
     connect(ui->loopEndButton, &QPushButton::pressed, this, [this]() {
         if (loopEndPosition > 0) {
-            statusBar()->showMessage(tr("Точка B: %1").arg(formatTime(loopEndPosition)), 2000);
+            statusBar()->showMessage(tr("Точка B: %1").arg(TimeUtils::formatTime(loopEndPosition)), 2000);
         }
     });
 
@@ -1153,7 +1148,7 @@ void MainWindow::updateTimeLabel(qint64 msPosition)
 
     // Показываем информацию о цикле в статусной строке
     if (isLoopEnabled && loopStartPosition > 0 && loopEndPosition > 0) {
-        QString loopInfo = tr("Цикл: %1 - %2").arg(formatTime(loopStartPosition)).arg(formatTime(loopEndPosition));
+        QString loopInfo = tr("Цикл: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition));
         if (msPosition >= loopStartPosition && msPosition <= loopEndPosition) {
             statusBar()->showMessage(loopInfo, 1000);
         }
@@ -1172,7 +1167,7 @@ void MainWindow::updatePlaybackPosition(qint64 position)
         if (!waveformView->getMarkers().isEmpty()) {
             WaveformView::ActiveSegmentInfo segmentInfo = waveformView->getActiveSegmentInfo();
             if (segmentInfo.isValid) {
-                QString segmentText = QString::fromUtf8("Сегмент: %1 - %2 | Коэффициент: %3")
+                QString segmentText = tr("Сегмент: %1 - %2 | Коэффициент: %3")
                     .arg(segmentInfo.startMarkerTime)
                     .arg(segmentInfo.endMarkerTime)
                     .arg(segmentInfo.stretchFactor, 0, 'f', 3);
@@ -1195,30 +1190,30 @@ void MainWindow::updatePlaybackPosition(qint64 position)
 void MainWindow::createActions()
 {
     // File actions
-    openAct = new QAction(QString::fromUtf8("&Открыть..."), this);
+    openAct = new QAction(tr("&Открыть..."), this);
     openAct->setShortcuts(QKeySequence::Open);
     connect(openAct, &QAction::triggered, this, &MainWindow::openAudioFile);
 
-    saveAct = new QAction(QString::fromUtf8("&Сохранить"), this);
+    saveAct = new QAction(tr("&Сохранить"), this);
     saveAct->setShortcuts(QKeySequence::Save);
     connect(saveAct, &QAction::triggered, this, &MainWindow::saveAudioFile);
 
-    exitAct = new QAction(QString::fromUtf8("&Выход"), this);
+    exitAct = new QAction(tr("&Выход"), this);
     exitAct->setShortcuts(QKeySequence::Quit);
     connect(exitAct, &QAction::triggered, this, &QWidget::close);
 
     // Theme actions
-    defaultThemeAct = new QAction(QString::fromUtf8("По умолчанию"), this);
-    defaultThemeAct->setStatusTip(QString::fromUtf8("Использовать тему по умолчанию"));
+    defaultThemeAct = new QAction(tr("По умолчанию"), this);
+    defaultThemeAct->setStatusTip(tr("Использовать тему по умолчанию"));
     connect(defaultThemeAct, &QAction::triggered, this, [this]() { setTheme("default"); });
 
     // Color scheme actions
-    darkSchemeAct = new QAction(QString::fromUtf8("Тёмная"), this);
-    darkSchemeAct->setStatusTip(QString::fromUtf8("Использовать тёмную тему"));
+    darkSchemeAct = new QAction(tr("Тёмная"), this);
+    darkSchemeAct->setStatusTip(tr("Использовать тёмную тему"));
     connect(darkSchemeAct, &QAction::triggered, this, [this]() { setColorScheme("dark"); });
 
-    lightSchemeAct = new QAction(QString::fromUtf8("Светлая"), this);
-    lightSchemeAct->setStatusTip(QString::fromUtf8("Использовать светлую тему"));
+    lightSchemeAct = new QAction(tr("Светлая"), this);
+    lightSchemeAct->setStatusTip(tr("Использовать светлую тему"));
     connect(lightSchemeAct, &QAction::triggered, this, [this]() { setColorScheme("light"); });
 
     // Settings actions
@@ -1390,13 +1385,13 @@ void MainWindow::setupShortcuts()
 void MainWindow::showKeyboardShortcuts()
 {
     QDialog dialog(this);
-    dialog.setWindowTitle(QString::fromUtf8("Горячие клавиши"));
+    dialog.setWindowTitle(tr("Просмотр горячих клавиш"));
     dialog.setMinimumWidth(400);
 
     auto layout = new QVBoxLayout(&dialog);
     auto label = new QLabel(&dialog);
     label->setTextFormat(Qt::RichText);
-    label->setText(QString::fromUtf8(
+    label->setText(tr(
         "<h3>Горячие клавиши</h3>"
         "<p><b>Пробел или P</b> - Воспроизведение/Пауза</p>"
         "<p><b>S</b> - Стоп</p>"
@@ -1431,7 +1426,7 @@ void MainWindow::setLoopStart()
         // Визуально показываем, что точка A установлена
         ui->loopStartButton->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; border: 2px solid #45a049; }");
 
-        statusBar()->showMessage(QString::fromUtf8("Установлена точка A (начало цикла): %1").arg(formatTime(loopStartPosition)), 3000);
+        statusBar()->showMessage(tr("Установлена точка A (начало цикла): %1").arg(TimeUtils::formatTime(loopStartPosition)), 3000);
 
         // Если точка B уже установлена, показываем сообщение в статусбаре
         if (loopEndPosition > 0 && loopEndPosition > loopStartPosition) {
@@ -1456,7 +1451,7 @@ void MainWindow::setLoopEnd()
         // Визуально показываем, что точка B установлена
         ui->loopEndButton->setStyleSheet("QPushButton { background-color: #f44336; color: white; border: 2px solid #da190b; }");
 
-        statusBar()->showMessage(QString::fromUtf8("Установлена точка B (конец цикла): %1").arg(formatTime(loopEndPosition)), 3000);
+        statusBar()->showMessage(tr("Установлена точка B (конец цикла): %1").arg(TimeUtils::formatTime(loopEndPosition)), 3000);
 
         // Если точка A уже установлена, показываем сообщение в статусбаре
         if (loopStartPosition > 0) {
@@ -1607,9 +1602,9 @@ void MainWindow::processAudioFile(const QString& filePath)
 
     // Создаем диалог сразу, до загрузки файла
     LoadFileDialog dialog(this, BPMAnalyzer::AnalysisResult());
-    dialog.setWindowTitle(QString::fromUtf8("Анализ и выравнивание долей"));
+    dialog.setWindowTitle(tr("Анализ и выравнивание долей"));
     dialog.setWindowModality(Qt::ApplicationModal);
-    dialog.updateProgress(QString::fromUtf8("Загрузка аудиофайла..."), 10);
+    dialog.updateProgress(tr("Загрузка аудиофайла..."), 10);
     dialog.show();
     dialog.raise();
     dialog.activateWindow();
@@ -1629,10 +1624,10 @@ void MainWindow::processAudioFile(const QString& filePath)
         options.useMixxxAlgorithm = true; // Используем алгоритм Mixxx для лучшей точности
 
         // Анализируем BPM с отображением прогресса
-        dialog.updateProgress(QString::fromUtf8("Анализ аудио..."), 50);
+        dialog.updateProgress(tr("Анализ аудио..."), 50);
         BPMAnalyzer::AnalysisResult analysis = BPMAnalyzer::analyzeBPM(audioData[0], waveformView->getSampleRate(), options);
 
-        dialog.updateProgress(QString::fromUtf8("Анализ завершен"), 100);
+        dialog.updateProgress(tr("Анализ завершён."), 100);
         dialog.showResult(analysis);
         dialog.setBeatsPerBar(4);  // по умолчанию 4/4, пользователь может изменить в поле
 
@@ -1661,7 +1656,7 @@ void MainWindow::processAudioFile(const QString& filePath)
             updateUIAfterAnalysis(audioData, analysis, bpb);
 
             if (dialog.keepMarkersOnSkip()) {
-                createDeviationMarkers(options.tolerancePercent);
+                createDeviationMarkers(options.tolerancePercent, true); // нейтральные метки — без растяжения
             }
 
             // Настройка зума и смещения
@@ -2011,7 +2006,7 @@ void MainWindow::toggleLoop()
     if (isLoopEnabled) {
         // Включаем цикл
         ui->loopButton->setStyleSheet("QPushButton { background-color: #2196F3; color: white; border: 2px solid #1976D2; }");
-        statusBar()->showMessage(tr("Цикл включен: %1 - %2").arg(formatTime(loopStartPosition)).arg(formatTime(loopEndPosition)), 3000);
+        statusBar()->showMessage(tr("Цикл включен: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition)), 3000);
     } else {
         // Выключаем цикл
         ui->loopButton->setStyleSheet("");
@@ -2036,7 +2031,7 @@ void MainWindow::updateLoopPoints()
             }
 
             // Показываем сообщение о цикле
-            statusBar()->showMessage(tr("Цикл: %1 - %2").arg(formatTime(loopStartPosition)).arg(formatTime(loopEndPosition)), 1000);
+            statusBar()->showMessage(tr("Цикл: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition)), 1000);
         }
     }
 }
@@ -2415,7 +2410,7 @@ void MainWindow::constrainWindowSize()
     // Убираем все ограничения, чтобы окно могло разворачиваться на весь экран
 }
 
-void MainWindow::createDeviationMarkers(float tolerancePercent)
+void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMarkers)
 {
     if (!waveformView) {
         return;
@@ -2424,7 +2419,7 @@ void MainWindow::createDeviationMarkers(float tolerancePercent)
     // Получаем информацию о долях из WaveformView
     QVector<BPMAnalyzer::BeatInfo> beats = waveformView->getBeatInfo();
     if (beats.isEmpty()) {
-        statusBar()->showMessage(QString::fromUtf8("Информация о долях отсутствует"), 3000);
+        statusBar()->showMessage(tr("Информация о долях отсутствует"), 3000);
         return;
     }
 
@@ -2433,7 +2428,7 @@ void MainWindow::createDeviationMarkers(float tolerancePercent)
     int sampleRate = waveformView->getSampleRate();
 
     if (bpm <= 0 || sampleRate <= 0) {
-        statusBar()->showMessage(QString::fromUtf8("Некорректные параметры BPM или sampleRate"), 3000);
+        statusBar()->showMessage(tr("Некорректные параметры BPM или sampleRate"), 3000);
         return;
     }
 
@@ -2445,11 +2440,12 @@ void MainWindow::createDeviationMarkers(float tolerancePercent)
     QVector<int> unalignedIndices = BPMAnalyzer::findUnalignedBeats(beats, deviationThreshold);
 
     if (unalignedIndices.isEmpty()) {
-        statusBar()->showMessage(QString::fromUtf8("Неровные доли не найдены"), 3000);
+        statusBar()->showMessage(tr("Неровные доли не найдены"), 3000);
         return;
     }
 
     int markersCreated = 0;
+    QSet<qint64> addedPositions; // Избегаем дубликатов при последовательных неровных долях
 
     // Создаём метки для интервалов между долями
     // Для каждой неровной доли создаем пару меток:
@@ -2464,26 +2460,32 @@ void MainWindow::createDeviationMarkers(float tolerancePercent)
         const BPMAnalyzer::BeatInfo& prevBeat = beats[idx - 1];
         const BPMAnalyzer::BeatInfo& currentBeat = beats[idx];
 
-        // Метки коррекции: position = фактическая доля, originalPosition = ожидаемая по сетке,
-        // чтобы коэффициент сегмента был (actual_interval / expected_interval) != 1.
-        Marker startMarker(prevBeat.position, sampleRate);
-        startMarker.originalPosition = prevBeat.expectedPosition;
-        startMarker.originalTimeMs = TimeUtils::samplesToMs(prevBeat.expectedPosition, sampleRate);
-        waveformView->addMarker(startMarker);
-
-        Marker endMarker(currentBeat.position, sampleRate);
-        endMarker.originalPosition = currentBeat.expectedPosition;
-        endMarker.originalTimeMs = TimeUtils::samplesToMs(currentBeat.expectedPosition, sampleRate);
-        waveformView->addMarker(endMarker);
-
-        markersCreated++;
+        // Метки коррекции: position = фактическая доля.
+        // Если neutralMarkers — originalPosition = position (сегменты не сжимаются/не растягиваются).
+        // Иначе originalPosition = ожидаемая по сетке (коэффициент сегмента (actual/expected) != 1).
+        if (!addedPositions.contains(prevBeat.position)) {
+            Marker startMarker(prevBeat.position, sampleRate);
+            startMarker.originalPosition = neutralMarkers ? prevBeat.position : prevBeat.expectedPosition;
+            startMarker.originalTimeMs = TimeUtils::samplesToMs(startMarker.originalPosition, sampleRate);
+            waveformView->addMarker(startMarker);
+            addedPositions.insert(prevBeat.position);
+            markersCreated++;
+        }
+        if (!addedPositions.contains(currentBeat.position)) {
+            Marker endMarker(currentBeat.position, sampleRate);
+            endMarker.originalPosition = neutralMarkers ? currentBeat.position : currentBeat.expectedPosition;
+            endMarker.originalTimeMs = TimeUtils::samplesToMs(endMarker.originalPosition, sampleRate);
+            waveformView->addMarker(endMarker);
+            addedPositions.insert(currentBeat.position);
+            markersCreated++;
+        }
     }
 
     // Сортируем метки по позиции
     waveformView->sortMarkers();
 
     statusBar()->showMessage(
-        QString::fromUtf8("Создано %1 пар меток коррекции для %2 неровных долей")
+        tr("Создано %1 меток коррекции для %2 неровных долей")
             .arg(markersCreated)
             .arg(unalignedIndices.size()),
         5000);
@@ -2491,103 +2493,35 @@ void MainWindow::createDeviationMarkers(float tolerancePercent)
     waveformView->update();
 }
 
-QString MainWindow::formatTime(qint64 msPosition)
-{
-    int minutes = (msPosition / 60000);
-    int seconds = (msPosition / 1000) % 60;
-    int milliseconds = msPosition % 1000;
-    return QString("%1:%2.%3")
-        .arg(minutes, 2, 10, QChar('0'))
-        .arg(seconds, 2, 10, QChar('0'))
-        .arg(milliseconds / 100);
-}
-
 QString MainWindow::formatTimeAndBars(qint64 msPosition)
 {
-    int minutes = (msPosition / 60000);
-    int seconds = (msPosition / 1000) % 60;
-    int milliseconds = msPosition % 1000;
-    QString timeStr = QString("%1:%2.%3")
-        .arg(minutes, 2, 10, QChar('0'))
-        .arg(seconds, 2, 10, QChar('0'))
-        .arg(milliseconds, 3, 10, QChar('0'));
     float bpm = ui->bpmEdit->text().toFloat();
     int bpb = 4;
     if (waveformView) {
         bpb = qMax(1, waveformView->getBeatsPerBar());
     } else {
-        // До загрузки файла берём размер такта из комбобокса
         QVariant v = ui->barsCombo->currentData();
         if (v.isValid()) {
             int num = v.toInt();
             if (num >= 1 && num <= 32) bpb = num;
         }
     }
-    if (bpm <= 0.0f) {
-        return timeStr + " | --.--.--";
-    }
     int sampleRate = waveformView ? waveformView->getSampleRate() : 44100;
     qint64 gridStart = waveformView ? waveformView->getGridStartSample() : 0;
-    qint64 samplePos = (msPosition * qint64(sampleRate)) / 1000;
-    float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
-    float barLengthInQuarters = (bpb == 6) ? 3.f : (bpb == 12) ? 6.f : float(qMax(1, bpb));
-    float samplesPerBar = barLengthInQuarters * samplesPerBeat;
-    // Доли в такте по знаменателю: X/4 → 4, X/8 → 8
-    int subdivisionsPerBar = (bpb == 6 || bpb == 12) ? 8 : 4;
-    float samplesPerSubdivision = samplesPerBar / float(subdivisionsPerBar);
-    float subsFromStart;
-    if (gridStart > 0 && waveformView) {
-        subsFromStart = float(samplePos - gridStart) / samplesPerSubdivision;
-        if (subsFromStart < 0.0f) subsFromStart = 0.0f;
-    } else {
-        subsFromStart = float(samplePos) / samplesPerSubdivision;
-    }
-    int bar = int(subsFromStart / subdivisionsPerBar) + 1;
-    int beat = int(subsFromStart) % subdivisionsPerBar + 1;
-    float subBeat = (subsFromStart - float(int(subsFromStart))) * float(subdivisionsPerBar);
-    int sub = qBound(1, int(subBeat + 1), subdivisionsPerBar);
-    QString barsStr = QString("%1.%2.%3").arg(bar).arg(beat).arg(sub);
-    return timeStr + " | " + barsStr;
+    return TimeUtils::formatTimeAndBars(msPosition, bpm, bpb, sampleRate, gridStart);
 }
 
 void MainWindow::togglePitchGrid()
 {
     isPitchGridVisible = !isPitchGridVisible;
-
-    if (mainSplitter) {
-        QWidget* pitchGridContainer = mainSplitter->widget(1); // pitchGridContainer - второй виджет в сплиттере
-
-        if (pitchGridContainer) {
-            if (isPitchGridVisible) {
-                // Показываем питч-сетку и восстанавливаем сплиттер
-                pitchGridContainer->setVisible(true);
-                mainSplitter->setChildrenCollapsible(false);
-
-                // Восстанавливаем пропорции сплиттера (75% для волны, 25% для питч-сетки)
-                QList<int> sizes;
-                int totalHeight = mainSplitter->height();
-                sizes << static_cast<int>(totalHeight * 0.75) << static_cast<int>(totalHeight * 0.25);
-                mainSplitter->setSizes(sizes);
-            } else {
-                // Скрываем питч-сетку и делаем волну на весь экран
-                pitchGridContainer->setVisible(false);
-                mainSplitter->setChildrenCollapsible(true);
-
-                // Устанавливаем размеры так, чтобы волна заняла всё пространство
-                QList<int> sizes;
-                int totalHeight = mainSplitter->height();
-                sizes << totalHeight << 0; // Вся высота для волны, 0 для питч-сетки
-                mainSplitter->setSizes(sizes);
-            }
-        }
-    }
+    updatePitchGridLayout();
 
     // Обновляем текст действия и состояние (заблокирован/разблокирован)
     if (isPitchGridVisible) {
-        togglePitchGridAct->setText(QString::fromUtf8("Убрать питч-сетку"));
+        togglePitchGridAct->setText(tr("Убрать питч-сетку"));
         togglePitchGridAct->setEnabled(true); // Разблокируем, если видима
     } else {
-        togglePitchGridAct->setText(QString::fromUtf8("Показать питч-сетку"));
+        togglePitchGridAct->setText(tr("Показать питч-сетку"));
         togglePitchGridAct->setEnabled(false); // Блокируем, если скрыта
     }
 
@@ -2597,94 +2531,56 @@ void MainWindow::togglePitchGrid()
 
 void MainWindow::createKeyContextMenu()
 {
-    keyContextMenu = new QMenu(this);
-
-    // Создаем действия для всех тональностей
-    QStringList majorKeys = {
-        "C Major", "C# Major", "D Major", "D# Major", "E Major", "F Major",
-        "F# Major", "G Major", "G# Major", "A Major", "A# Major", "B Major"
-    };
-
-    QStringList minorKeys = {
-        "C Minor", "C# Minor", "D Minor", "D# Minor", "E Minor", "F Minor",
-        "F# Minor", "G Minor", "G# Minor", "A Minor", "A# Minor", "B Minor"
-    };
-
-    // Добавляем мажорные тональности
-    QMenu* majorMenu = keyContextMenu->addMenu("Мажорные");
-    for (int i = 0; i < majorKeys.size(); ++i) {
-        keyActions[i] = new QAction(majorKeys[i], this);
-        keyActions[i]->setData(majorKeys[i]);
-        connect(keyActions[i], &QAction::triggered, this, [this, majorKeys, i]() {
-            setKey(majorKeys[i]);
-        });
-        majorMenu->addAction(keyActions[i]);
-    }
-
-    // Добавляем минорные тональности
-    QMenu* minorMenu = keyContextMenu->addMenu("Минорные");
-    for (int i = 0; i < minorKeys.size(); ++i) {
-        keyActions[i + 12] = new QAction(minorKeys[i], this);
-        keyActions[i + 12]->setData(minorKeys[i]);
-        connect(keyActions[i + 12], &QAction::triggered, this, [this, minorKeys, i]() {
-            setKey(minorKeys[i]);
-        });
-        minorMenu->addAction(keyActions[i + 12]);
-    }
-
-    // Добавляем разделитель и опцию "Не определена"
-    keyContextMenu->addSeparator();
-    QAction* unknownAction = new QAction("Не определена", this);
-    connect(unknownAction, &QAction::triggered, this, [this]() {
-        setKey("");
-    });
-    keyContextMenu->addAction(unknownAction);
+    keyContextMenu = populateKeyContextMenu(keyActions, [this](const QString& k) { setKey(k); });
 }
 
 void MainWindow::createKeyContextMenu2()
 {
-    keyContextMenu2 = new QMenu(this);
+    keyContextMenu2 = populateKeyContextMenu(keyActions2, [this](const QString& k) { setKey2(k); });
+}
 
-    // Создаем действия для всех тональностей
-    QStringList majorKeys = {
+QMenu* MainWindow::populateKeyContextMenu(QAction* actions[28],
+                                          std::function<void(const QString&)> setKeyCallback)
+{
+    QMenu* menu = new QMenu(this);
+    static const QStringList majorKeys = {
         "C Major", "C# Major", "D Major", "D# Major", "E Major", "F Major",
         "F# Major", "G Major", "G# Major", "A Major", "A# Major", "B Major"
     };
-
-    QStringList minorKeys = {
+    static const QStringList minorKeys = {
         "C Minor", "C# Minor", "D Minor", "D# Minor", "E Minor", "F Minor",
         "F# Minor", "G Minor", "G# Minor", "A Minor", "A# Minor", "B Minor"
     };
 
-    // Добавляем мажорные тональности
-    QMenu* majorMenu = keyContextMenu2->addMenu("Мажорные");
+    QMenu* majorMenu = menu->addMenu(tr("Мажорные"));
     for (int i = 0; i < majorKeys.size(); ++i) {
-        keyActions2[i] = new QAction(majorKeys[i], this);
-        keyActions2[i]->setData(majorKeys[i]);
-        connect(keyActions2[i], &QAction::triggered, this, [this, majorKeys, i]() {
-            setKey2(majorKeys[i]);
+        QString key = majorKeys[i];
+        actions[i] = new QAction(key, this);
+        actions[i]->setData(key);
+        connect(actions[i], &QAction::triggered, this, [setKeyCallback, key]() {
+            setKeyCallback(key);
         });
-        majorMenu->addAction(keyActions2[i]);
+        majorMenu->addAction(actions[i]);
     }
 
-    // Добавляем минорные тональности
-    QMenu* minorMenu = keyContextMenu2->addMenu("Минорные");
+    QMenu* minorMenu = menu->addMenu(tr("Минорные"));
     for (int i = 0; i < minorKeys.size(); ++i) {
-        keyActions2[i + 12] = new QAction(minorKeys[i], this);
-        keyActions2[i + 12]->setData(minorKeys[i]);
-        connect(keyActions2[i + 12], &QAction::triggered, this, [this, minorKeys, i]() {
-            setKey2(minorKeys[i]);
+        QString key = minorKeys[i];
+        actions[i + 12] = new QAction(key, this);
+        actions[i + 12]->setData(key);
+        connect(actions[i + 12], &QAction::triggered, this, [setKeyCallback, key]() {
+            setKeyCallback(key);
         });
-        minorMenu->addAction(keyActions2[i + 12]);
+        minorMenu->addAction(actions[i + 12]);
     }
 
-    // Добавляем разделитель и опцию "Не определена"
-    keyContextMenu2->addSeparator();
-    QAction* unknownAction = new QAction("Не определена", this);
-    connect(unknownAction, &QAction::triggered, this, [this]() {
-        setKey2("");
+    menu->addSeparator();
+    QAction* unknownAction = new QAction(tr("Не определена"), this);
+    connect(unknownAction, &QAction::triggered, this, [setKeyCallback]() {
+        setKeyCallback(QString());
     });
-    keyContextMenu2->addAction(unknownAction);
+    menu->addAction(unknownAction);
+    return menu;
 }
 
 void MainWindow::analyzeKey()
@@ -2736,7 +2632,7 @@ void MainWindow::showKeyContextMenu2(const QPoint& pos)
 void MainWindow::setKey(const QString& key)
 {
     currentKey = key;
-    ui->keyInput->setText(key.isEmpty() ? "Не определена" : key);
+    ui->keyInput->setText(key.isEmpty() ? tr("Не определена") : key);
 
     // Обновляем стиль поля ввода в зависимости от того, определена ли тональность
     if (key.isEmpty()) {
@@ -2770,7 +2666,7 @@ void MainWindow::setKey(const QString& key)
 void MainWindow::setKey2(const QString& key)
 {
     currentKey2 = key;
-    ui->keyInput2->setText(key.isEmpty() ? "Модуляция" : key);
+    ui->keyInput2->setText(key.isEmpty() ? tr("Модуляция") : key);
 
     // Обновляем стиль поля ввода в зависимости от того, определена ли тональность
     if (key.isEmpty()) {
@@ -2901,12 +2797,16 @@ void MainWindow::updateScrollBarTransparency()
 
 void MainWindow::setRussianLanguage()
 {
-    if (russianAction->isChecked() && englishAction->isChecked() == false)
+    if (settings.value("language").toString() == "ru_RU")
         return;
-    const QString path = QCoreApplication::applicationDirPath();
     qApp->removeTranslator(m_appTranslator);
-    if (!m_appTranslator->load("DONTFLOAT_ru_RU", path) && !m_appTranslator->load("DONTFLOAT_ru_RU", path + "/../")) {
+    if (!loadTranslation(m_appTranslator, "DONTFLOAT_ru_RU")) {
+        // Restore previous translator and revert checkboxes
+        loadTranslation(m_appTranslator, "DONTFLOAT_en_US");
         qApp->installTranslator(m_appTranslator);
+        russianAction->setChecked(false);
+        englishAction->setChecked(true);
+        statusBar()->showMessage(tr("Ошибка загрузки перевода"), 3000);
         return;
     }
     qApp->installTranslator(m_appTranslator);
@@ -2920,12 +2820,16 @@ void MainWindow::setRussianLanguage()
 
 void MainWindow::setEnglishLanguage()
 {
-    if (englishAction->isChecked() && russianAction->isChecked() == false)
+    if (settings.value("language").toString() == "en_US")
         return;
-    const QString path = QCoreApplication::applicationDirPath();
     qApp->removeTranslator(m_appTranslator);
-    if (!m_appTranslator->load("DONTFLOAT_en_US", path) && !m_appTranslator->load("DONTFLOAT_en_US", path + "/../")) {
+    if (!loadTranslation(m_appTranslator, "DONTFLOAT_en_US")) {
+        // Restore previous translator and revert checkboxes
+        loadTranslation(m_appTranslator, "DONTFLOAT_ru_RU");
         qApp->installTranslator(m_appTranslator);
+        englishAction->setChecked(false);
+        russianAction->setChecked(true);
+        statusBar()->showMessage(tr("Ошибка загрузки перевода"), 3000);
         return;
     }
     qApp->installTranslator(m_appTranslator);
@@ -2940,7 +2844,7 @@ void MainWindow::setEnglishLanguage()
 void MainWindow::applyTimeStretch()
 {
     if (!waveformView) {
-        statusBar()->showMessage(QString::fromUtf8("Ошибка: WaveformView не инициализирован"), 3000);
+        statusBar()->showMessage(tr("Ошибка: WaveformView не инициализирован"), 3000);
         return;
     }
 
@@ -2949,8 +2853,8 @@ void MainWindow::applyTimeStretch()
 
     if (currentMarkers.size() < 2) {
         QMessageBox::warning(this,
-                            QString::fromUtf8("Недостаточно меток"),
-                            QString::fromUtf8("Для применения сжатия-растяжения необходимо минимум 2 метки.\n"
+                            tr("Недостаточно меток"),
+                            tr("Для применения растяжения необходимо минимум 2 метки.\n"
                                             "Используйте клавишу M для добавления меток."));
         return;
     }
@@ -2959,7 +2863,7 @@ void MainWindow::applyTimeStretch()
     const QVector<QVector<float>>& oldData = waveformView->getAudioData();
 
     if (oldData.isEmpty()) {
-        statusBar()->showMessage(QString::fromUtf8("Ошибка: нет загруженного аудио"), 3000);
+        statusBar()->showMessage(tr("Ошибка: нет загруженного аудио"), 3000);
         return;
     }
 
@@ -2979,7 +2883,7 @@ void MainWindow::applyTimeStretch()
     }
 
     if (newData.isEmpty() || newData[0].isEmpty()) {
-        statusBar()->showMessage(QString::fromUtf8("Ошибка при обработке аудио"), 3000);
+        statusBar()->showMessage(tr("Ошибка при обработке аудио"), 3000);
         return;
     }
 
@@ -3013,7 +2917,7 @@ void MainWindow::applyTimeStretch()
         newData,
         currentMarkers,
         newMarkers,
-        QString::fromUtf8("Применить сжатие-растяжение")
+        tr("Применить сжатие-растяжение")
     );
 
     // Применяем команду (push автоматически вызывает redo())
@@ -3044,7 +2948,7 @@ void MainWindow::applyTimeStretch()
         }
     }
 
-    statusBar()->showMessage(QString::fromUtf8("Сжатие-растяжение применено успешно. Размер: %1 → %2 сэмплов")
+    statusBar()->showMessage(tr("Растяжение применено успешно. Размер: %1 → %2 сэмплов")
                              .arg(oldData.isEmpty() ? 0 : oldData[0].size())
                              .arg(newData.isEmpty() ? 0 : newData[0].size()), 5000);
 }
@@ -3121,9 +3025,9 @@ void MainWindow::toggleBeatWaveform()
         toggleBeatWaveformAct->setChecked(!currentState);
 
         if (!currentState) {
-            statusBar()->showMessage(QString::fromUtf8("Силуэт ударных включен"), 2000);
+            statusBar()->showMessage(tr("Силуэт ударных включен"), 2000);
         } else {
-            statusBar()->showMessage(QString::fromUtf8("Силуэт ударных отключен"), 2000);
+            statusBar()->showMessage(tr("Силуэт ударных отключен"), 2000);
         }
     }
 }

@@ -25,7 +25,7 @@ public:
     };
 
     /**
-     * @brief Результат применения сжатия/растяжения по меткам
+     * @brief Результат применения растяжения по меткам
      */
     struct StretchResult {
         QVector<QVector<float>> audioData; ///< Обработанные аудиоданные
@@ -154,6 +154,15 @@ private:
      * @return Ресемплированный сигнал
      */
     static QVector<float> resample(const QVector<float>& input, float inputSampleRate, float outputSampleRate);
+
+    /**
+     * @brief Сдвиг тона на коэффициент без изменения длительности
+     * Ускорен на 60% → тон опущен на 60%; замедлен на 40% → тон повышен на 40%
+     * @param input Входной сигнал
+     * @param pitchFactor Коэффициент сдвига тона (= stretchFactor сегмента)
+     * @return Сигнал той же длины с изменённым тоном
+     */
+    static QVector<float> applyPitchShiftByFactor(const QVector<float>& input, float pitchFactor);
 };
 
 #endif // TIMESTRETCHPROCESSOR_H

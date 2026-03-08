@@ -33,7 +33,7 @@ LoadFileDialog::LoadFileDialog(QWidget *parent, const BPMAnalyzer::AnalysisResul
     connect(ui->skipButton, &QPushButton::clicked, this, &LoadFileDialog::on_skipButton_clicked);
 
     // Начальное состояние
-    updateProgress(QString::fromUtf8("Анализ аудио..."), 0);
+    updateProgress(tr("Анализ аудио..."), 0);
 }
 
 LoadFileDialog::~LoadFileDialog()
@@ -52,26 +52,26 @@ void LoadFileDialog::updateProgress(const QString& status, int progress)
 void LoadFileDialog::showResult(const BPMAnalyzer::AnalysisResult& analysis)
 {
     // Общее сообщение
-    ui->infoLabel->setText(QString::fromUtf8("Анализ завершён."));
+    ui->infoLabel->setText(tr("Анализ завершён."));
     ui->infoLabel->setStyleSheet("font-size: 12px; color: white; padding: 5px;");
 
     // Предварительный BPM (на основе Mixxx), если доступен
     if (analysis.hasPreliminaryBPM) {
-        ui->preliminaryBPMLabel->setText(QString::fromUtf8("Предварительный BPM (на основе Mixxx): %1 BPM")
+        ui->preliminaryBPMLabel->setText(tr("Предварительный BPM (на основе Mixxx): %1 BPM")
             .arg(analysis.preliminaryBPM, 0, 'f', 3));
     } else {
-        ui->preliminaryBPMLabel->setText(QString::fromUtf8("Предварительный BPM (на основе Mixxx): -- BPM"));
+        ui->preliminaryBPMLabel->setText(tr("Предварительный BPM (на основе Mixxx): -- BPM"));
     }
     ui->preliminaryBPMLabel->setStyleSheet("font-size: 11px; color: white; padding: 2px;");
 
     // Вычисленный BPM (уверенность)
-    ui->computedBPMLabel->setText(QString::fromUtf8("Вычисленный BPM (уверенность %1%): %2 BPM")
+    ui->computedBPMLabel->setText(tr("Вычисленный BPM (уверенность %1%): %2 BPM")
         .arg(analysis.confidence * 100.0f, 0, 'f', 0)
         .arg(analysis.bpm, 0, 'f', 0));
     ui->computedBPMLabel->setStyleSheet("font-size: 11px; color: white; padding: 2px;");
 
     // Среднее отклонение
-    ui->deviationLabel->setText(QString::fromUtf8("Среднее отклонение: %1%")
+    ui->deviationLabel->setText(tr("Среднее отклонение: %1%")
         .arg(analysis.averageDeviation * 100.0f, 0, 'f', 1));
     ui->deviationLabel->setStyleSheet("font-size: 11px; color: white; padding: 2px;");
 
@@ -85,9 +85,9 @@ void LoadFileDialog::showResult(const BPMAnalyzer::AnalysisResult& analysis)
 
     // Если доли ровные и уверенность высокая, предлагаем пропустить
     if (!analysis.hasIrregularBeats && analysis.confidence > 0.8f) {
-        ui->skipButton->setText(QString::fromUtf8("Пропустить (доли ровные)"));
+        ui->skipButton->setText(tr("Пропустить (доли ровные)"));
     } else {
-        ui->skipButton->setText(QString::fromUtf8("Пропустить"));
+        ui->skipButton->setText(tr("Пропустить"));
     }
 }
 

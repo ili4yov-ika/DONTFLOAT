@@ -1,5 +1,6 @@
 #include "../include/timeutils.h"
 #include <QtCore/QString>
+#include <QtCore/QtGlobal>
 
 qint64 TimeUtils::samplesToMs(qint64 samples, int sampleRate)
 {
@@ -62,9 +63,37 @@ QString TimeUtils::formatTimeShort(qint64 ms)
     int totalSeconds = static_cast<int>(ms / 1000);
     int minutes = totalSeconds / 60;
     int seconds = totalSeconds % 60;
-    
+
     return QString("%1:%2")
         .arg(minutes, 2, 10, QChar('0'))
         .arg(seconds, 2, 10, QChar('0'));
+}
+
+QString TimeUtils::formatTimeAndBars(qint64 msPosition, float bpm, int beatsPerBar,
+                                    int sampleRate, qint64 gridStartSample)
+{
+    QString timeStr = formatTimeWithMs(msPosition);
+    if (bpm <= 0.0f) {
+        return timeStr + " | --.--.--";
+    }
+    qint64 samplePos = (msPosition * qint64(sampleRate)) / 1000;
+    float samplesPerBeat = (float(sampleRate) * 60.0f) / bpm;
+    float barLengthInQuarters = (beatsPerBar == 6) ? 3.f : (beatsPerBar == 12) ? 6.f : float(qMax(1, beatsPerBar));
+    float samplesPerBar = barLengthInQuarters * samplesPerBeat;
+    int subdivisionsPerBar = (beatsPerBar == 6 || beatsPerBar == 12) ? 8 : 4;
+    float samplesPerSubdivision = samplesPerBar / float(subdivisionsPerBar);
+    float subsFromStart;
+    if (gridStartSample > 0) {
+        subsFromStart = float(samplePos - gridStartSample) / samplesPerSubdivision;
+        if (subsFromStart < 0.0f) subsFromStart = 0.0f;
+    } else {
+        subsFromStart = float(samplePos) / samplesPerSubdivision;
+    }
+    int bar = int(subsFromStart / subdivisionsPerBar) + 1;
+    int beat = int(subsFromStart) % subdivisionsPerBar + 1;
+    float subBeat = (subsFromStart - float(int(subsFromStart))) * float(subdivisionsPerBar);
+    int sub = qBound(1, int(subBeat + 1), subdivisionsPerBar);
+    QString barsStr = QString("%1.%2.%3").arg(bar).arg(beat).arg(sub);
+    return timeStr + " | " + barsStr;
 }
 

@@ -28,12 +28,16 @@ QVector<float> TimeStretchProcessor::processSegment(const QVector<float>& input,
 
     QVector<float> output;
     if (preservePitch) {
+        // 1) Растяжение с сохранением тона (WSOLA) — получаем нужную длительность
         output = processWithPitchPreservation(input, stretchFactor);
+        // 2) Тонкомпенсация: тон меняется на тот же % что и длительность
+        // Ускорен на 60% → тон опущен на 60%; замедлен на 40% → тон повышен на 40%
+        output = applyPitchShiftByFactor(output, stretchFactor);
     } else {
         output = processWithSimpleInterpolation(input, stretchFactor);
     }
 
-    // Тонкомпенсация: приводим громкость выхода к громкости входа (по RMS)
+    // Нормализация громкости: приводим RMS выхода к RMS входа
     if (!output.isEmpty()) {
         float rmsIn = computeRMS(input);
         float rmsOut = computeRMS(output);
@@ -225,6 +229,24 @@ QVector<float> TimeStretchProcessor::resample(const QVector<float>& input, float
     }
 
     return output;
+}
+
+QVector<float> TimeStretchProcessor::applyPitchShiftByFactor(const QVector<float>& input, float pitchFactor)
+{
+    if (input.isEmpty() || pitchFactor <= 0.0f) {
+        return input;
+    }
+    if (qAbs(pitchFactor - 1.0f) < 0.001f) {
+        return input;
+    }
+
+    // Ресемплинг: input как бы записан при rate pitchFactor, выводим при rate 1
+    // → выход короче в pitchFactor раз (тон выше при factor>1)
+    QVector<float> resampled = resample(input, pitchFactor, 1.0f);
+    if (resampled.isEmpty()) return input;
+
+    // Растягиваем обратно до исходной длины (простая интерполяция, без сохранения тона)
+    return processWithSimpleInterpolation(resampled, pitchFactor);
 }
 
 QVector<QVector<float>> TimeStretchProcessor::processChannels(const QVector<QVector<float>>& input, float stretchFactor, bool preservePitch)
