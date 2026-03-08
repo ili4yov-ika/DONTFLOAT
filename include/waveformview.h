@@ -90,7 +90,7 @@ public:
     // Метод для обновления исходных данных (используется TimeStretchCommand)
     void updateOriginalData(const QVector<QVector<float>>& newData);
 
-    // Методы для применения сжатия-растяжения
+    // Методы для применения растяжения
     // Возвращает структуру с обработанными данными и новыми позициями меток
     // Теперь использует TimeStretchProcessor::StretchResult
     TimeStretchProcessor::StretchResult applyTimeStretch(const QVector<Marker>& markers) const;
@@ -118,6 +118,15 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
+
+    /// Параметры видимой области волны (сэмплы/пиксель, startSample и т.д.)
+    struct ViewportGeometry {
+        float samplesPerPixel = 0.0f;
+        int visibleSamples = 0;
+        int maxStartSample = 0;
+        int startSample = 0;
+    };
+    ViewportGeometry getViewportGeometry(qint64 sampleCount, float viewWidth) const;
 
 private:
     void drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
