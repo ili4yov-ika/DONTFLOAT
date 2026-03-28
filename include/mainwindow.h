@@ -5,6 +5,7 @@
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
+#include <QtGui/QShortcut>
 #include <QFileDialog>
 #include <QScreen>
 #include <QTimer>
@@ -26,7 +27,13 @@
 #include <QTranslator>
 #include <functional>
 #include "waveformview.h"
+#include "spectrogramsettingsdialog.h"
+#include "reverbsettingsdialog.h"
+#include "reverbsc_engine.h"
+#include "pitchshiftsettingsdialog.h"
+#include "granularpitchshifter_engine.h"
 #include "pitchgridwidget.h"
+#include "shortcutsdialog.h"
 #include "metronomecontroller.h"
 // #include "beatvisualizationsettingsdialog.h"
 
@@ -86,6 +93,8 @@ private slots:
     void toggleBeatWaveform();
     void applyTimeStretch();
     void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
+    void createOnsetMarkersAuto();        // Авто-метки по транзиентам (Onset detection)
+    void createBeatGridMarkersAuto();     // Авто-метки по тактовой сетке
 
 private:
     void createMenus();
@@ -99,11 +108,14 @@ private:
     void readSettings();
     void writeSettings();
     void setupShortcuts();
+    void applyShortcuts();
     bool maybeSave();
     bool doSaveAudioFile();
     void resetAudioState();
     void processAudioFile(const QString& filePath);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
+    /// Сброс A/B цикла и кнопок после загрузки нового файла
+    void resetLoopStateAfterNewFile();
     void createDeviationMarkers(float tolerancePercent, bool neutralMarkers = false);
     void retranslateMenus();
     QString formatTimeAndBars(qint64 msPosition);
@@ -112,8 +124,8 @@ private:
     void constrainWindowSize();
 
     // Вспомогательные методы для рефакторинга
-    void updateUIAfterAnalysis(const QVector<QVector<float>>& audioData, 
-                                const BPMAnalyzer::AnalysisResult& analysis, 
+    void updateUIAfterAnalysis(const QVector<QVector<float>>& audioData,
+                                const BPMAnalyzer::AnalysisResult& analysis,
                                 int beatsPerBar);
     void updateUIAfterBeatFix(const QVector<QVector<float>>& fixedData,
                               const BPMAnalyzer::AnalysisResult& analysis,
@@ -154,6 +166,7 @@ private:
     QMenu *colorSchemeMenu;
     QMenu *themesMenu;
     QMenu *languageMenu;
+    QMenu *waveformViewMenu;
 
     // Action components
     QAction *openAct;
@@ -173,6 +186,16 @@ private:
     QAction *loopEndAct;
     QAction *togglePitchGridAct;
     QAction *toggleBeatWaveformAct;
+    QAction *waveformPeaksAct;
+    QAction *waveformSpectrogramAct;
+    QAction *spectrogramSettingsAct;
+    SpectrogramSettingsDialog* spectrogramSettingsDialog;
+    QAction *reverbSettingsAct;
+    ReverbSettingsDialog* reverbSettingsDialog;
+    ReverbEngine::ReverbParams reverbParams;
+    QAction *pitchShiftSettingsAct;
+    PitchShiftSettingsDialog* pitchShiftSettingsDialog;
+    GranularEngine::Params pitchShiftParams;
     QAction *russianAction;
     QAction *englishAction;
     QAction *applyTimeStretchAct;
@@ -187,6 +210,7 @@ private:
     QTimer *playbackTimer;
     QMediaPlayer *mediaPlayer;
     QAudioOutput *audioOutput;
+    QTimer *markerPreviewTimer; // debounce для обновления воспроизведения после перетаскивания меток
 
     // Settings
     QSettings settings;
@@ -213,6 +237,12 @@ private:
 
     // Undo/Redo stack
     QUndoStack *undoStack;
+
+    // Shortcuts (QShortcut objects, keys updated in applyShortcuts)
+    QShortcut *playShortcut;
+    QShortcut *shiftAShortcut;
+    QShortcut *shiftBShortcut;
+    QShortcut *markerShortcut;
 };
 
 #endif // MAINWINDOW_H

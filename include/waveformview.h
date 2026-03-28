@@ -18,6 +18,7 @@
 #include "beatvisualizer.h"
 #include "markerengine.h"
 #include "timestretchprocessor.h"
+#include "fft_engine.h"
 
 class WaveformView : public QWidget
 {
@@ -25,6 +26,48 @@ class WaveformView : public QWidget
 
 public:
     explicit WaveformView(QWidget *parent = nullptr);
+
+    enum class WaveformRenderMode {
+        Peaks,
+        Spectrogram
+    };
+
+    enum class SpectrogramColorScheme {
+        HeatMap,    // чёрный → синий → красный → жёлтый → белый
+        Grayscale,  // чёрно-белый
+        Cool        // тёмно-синий → голубой → белый
+    };
+
+    enum class SpectrogramWindowFunction {
+        Rectangular = 0,
+        BlackmanHarris,   // рекомендуется по умолчанию
+        Hamming,
+        Hanning
+    };
+
+    struct SpectrogramSettings {
+        int windowSize    = 1024;   // размер FFT-окна (256/512/1024/2048)
+        int maxFrames     = 512;    // максимальное кол-во временных кадров
+        int freqBins      = 256;    // частотных полос на дисплее
+        bool logFreqScale = true;   // логарифмическая шкала частот
+        bool dbAmplitude  = true;   // dB амплитуда
+        int  zeroPadFactor = 2;     // zero-padding (FFT-блок = nextPow2(windowSize)*zeroPadFactor)
+        float floorDb     = -90.f;  // нижняя граница dB
+        SpectrogramColorScheme    colorScheme    = SpectrogramColorScheme::HeatMap;
+        SpectrogramWindowFunction windowFunction = SpectrogramWindowFunction::BlackmanHarris;
+
+        bool operator==(const SpectrogramSettings& o) const {
+            return windowSize    == o.windowSize
+                && maxFrames     == o.maxFrames
+                && freqBins      == o.freqBins
+                && logFreqScale  == o.logFreqScale
+                && dbAmplitude   == o.dbAmplitude
+                && zeroPadFactor == o.zeroPadFactor
+                && floorDb       == o.floorDb
+                && colorScheme   == o.colorScheme
+                && windowFunction == o.windowFunction;
+        }
+    };
 
     void setAudioData(const QVector<QVector<float>>& data);
     void setBeatInfo(const QVector<BPMAnalyzer::BeatInfo>& beats);
@@ -56,6 +99,10 @@ public:
     bool getShowBeatWaveform() const;
     void setBeatsAligned(bool aligned);
     bool getBeatsAligned() const;
+    void setWaveformRenderMode(WaveformRenderMode mode);
+    WaveformRenderMode getWaveformRenderMode() const { return renderMode; }
+    void setSpectrogramSettings(const SpectrogramSettings& s);
+    SpectrogramSettings getSpectrogramSettings() const { return spectrogramSettings; }
 
     // Методы для работы с метками
     void addMarker(qint64 position);
@@ -63,6 +110,7 @@ public:
     void removeMarker(int index);
     void sortMarkers();
     QVector<Marker> getMarkers() const { return markers; }
+    QVector<Marker> snapMarkersToGrid(const QVector<Marker>& markersIn) const;
 
     // Метод для получения информации об активном сегменте
     struct ActiveSegmentInfo {
@@ -79,6 +127,7 @@ public:
         // Нулевая метка статична в 0:00
         if (!markers.isEmpty() && markers[0].isFixed) {
             markers[0].position = 0;
+            markers[0].originalPosition = 0;
         }
         for (Marker& marker : markers) {
             marker.updateTimeFromSamples(sampleRate);
@@ -137,6 +186,7 @@ private:
     void drawBarMarkers(QPainter& painter, const QRectF& rect);
     void drawLoopMarkers(QPainter& painter, const QRect& rect);
     void drawMarkers(QPainter& painter, const QRect& rect);
+    qint64 snapSampleToGrid(qint64 samplePos) const;
 
     // Новые методы для визуализации области конца таймлайна и растяжения
     void drawTailArea(QPainter& painter, const QRect& rect);
@@ -200,6 +250,11 @@ private:
     // Настройки визуализации ударных (используются через BeatVisualizer)
     BeatVisualizer::VisualizationSettings beatVisualizationSettings;
     BeatVisualizer::BeatDeviationColors beatDeviationColors;
+
+    WaveformRenderMode renderMode;
+    SpectrogramSettings spectrogramSettings;
+    QVector<QImage> spectrogramImages; // по одному изображению на канал
+    bool spectrogramDirty;
 
     static const int minZoom;
     static const int maxZoom;

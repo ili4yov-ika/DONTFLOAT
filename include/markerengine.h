@@ -38,6 +38,7 @@ struct MarkerData {
 struct Marker : public MarkerData {
     // UI-специфичные поля
     bool isDragging;           ///< Флаг перетаскивания
+    bool isSelected;           ///< Флаг выделения метки
     QPoint dragStartPos;       ///< Начальная позиция перетаскивания (в пикселях)
     qint64 dragStartSample;    ///< Начальный сэмпл при перетаскивании
 
