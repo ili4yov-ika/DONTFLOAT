@@ -89,6 +89,14 @@ cd build
 ctest -R bpm_analyzer_test
 ```
 
+Если сборка лежит в подкаталоге пресета (например `build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug`), укажите его явно:
+
+```powershell
+ctest --test-dir build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug -C Debug
+```
+
+На Windows CMake подставляет Qt в `PATH` для CTest через скрипт `tests/RunQtTest.cmake` (иначе возможна ошибка загрузки DLL `0xc0000135`).
+
 ### Способ 3: Напрямую через исполняемый файл
 
 **Windows:**

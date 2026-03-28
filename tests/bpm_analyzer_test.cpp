@@ -27,6 +27,9 @@ private slots:
     // Тест анализа BPM на реальных файлах из source4test
     void testAnalyzeBPMFromSourceFiles();
 
+    // Регрессия: длинный сигнал + Mixxx (хвост beat_period после viterbi не должен давать UB / assert STL в Debug MSVC)
+    void testMixxxAnalyzeLongSyntheticNoCrash();
+
 private:
     QString getTestDataPath(const QString& filename);
     QVector<QVector<float>> loadAudioFile(const QString& filePath, int& sampleRate);
@@ -361,6 +364,36 @@ void BPMAnalyzerTest::testAnalyzeBPMFromSourceFiles()
         }
         #endif
     }
+}
+
+void BPMAnalyzerTest::testMixxxAnalyzeLongSyntheticNoCrash()
+{
+#ifdef USE_MIXXX_QM_DSP
+    constexpr int sampleRate = 44100;
+    constexpr int durationSec = 10;
+    const int n = sampleRate * durationSec;
+    QVector<float> samples;
+    samples.resize(n);
+    // Детерминированный «шум»: достаточно длины onset-функции, чтобы проявлялся хвост beat_period.
+    for (int i = 0; i < n; ++i) {
+        const float x = float(i % 997) / 997.0f - 0.5f;
+        samples[i] = x * 0.15f;
+    }
+
+    BPMAnalyzer::AnalysisOptions options;
+    options.useMixxxAlgorithm = true;
+    options.assumeFixedTempo = true;
+    options.minBPM = 60.0f;
+    options.maxBPM = 200.0f;
+
+    BPMAnalyzer::AnalysisResult result = BPMAnalyzer::analyzeBPM(samples, sampleRate, options);
+    QVERIFY2(result.bpm < 500.0f,
+               "BPM после Mixxx на синтетике должен оставаться конечным (нет UB)");
+    QVERIFY2(result.confidence >= 0.0f && result.confidence <= 1.0f,
+               "confidence в допустимом диапазоне");
+#else
+    QSKIP("Mixxx qm-dsp не подключён (USE_MIXXX_QM_DSP)");
+#endif
 }
 
 QTEST_MAIN(BPMAnalyzerTest)
