@@ -62,23 +62,27 @@ void MarkerData::updateSamplesFromTime(int sampleRate)
 Marker::Marker()
     : MarkerData()
     , isDragging(false)
+    , isSelected(false)
     , dragStartSample(0)
 {}
 
 Marker::Marker(qint64 pos, int sampleRate)
     : MarkerData(pos, sampleRate)
     , isDragging(false)
+    , isSelected(false)
     , dragStartSample(0)
 {}
 
 Marker::Marker(qint64 pos, bool fixed, int sampleRate)
     : MarkerData(pos, fixed, sampleRate)
     , isDragging(false)
+    , isSelected(false)
     , dragStartSample(0)
 {}
 
 Marker::Marker(qint64 pos, bool fixed, bool endMarker, int sampleRate)
     : MarkerData(pos, fixed, endMarker, sampleRate)
     , isDragging(false)
+    , isSelected(false)
     , dragStartSample(0)
 {}

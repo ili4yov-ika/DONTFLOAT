@@ -28,12 +28,11 @@ QVector<float> TimeStretchProcessor::processSegment(const QVector<float>& input,
 
     QVector<float> output;
     if (preservePitch) {
-        // 1) Растяжение с сохранением тона (WSOLA) — получаем нужную длительность
+        // Растяжение с сохранением высоты тона (WSOLA):
+        // длительность меняется, но тональность остаётся неизменной.
         output = processWithPitchPreservation(input, stretchFactor);
-        // 2) Тонкомпенсация: тон меняется на тот же % что и длительность
-        // Ускорен на 60% → тон опущен на 60%; замедлен на 40% → тон повышен на 40%
-        output = applyPitchShiftByFactor(output, stretchFactor);
     } else {
+        // Простое растяжение/сжатие интерполяцией — меняет и длительность, и тональность.
         output = processWithSimpleInterpolation(input, stretchFactor);
     }
 

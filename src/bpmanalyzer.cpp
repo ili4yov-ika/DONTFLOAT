@@ -22,6 +22,43 @@ namespace {
         }
         return result;
     }
+
+    bool sanitizeBeatPeriods(std::vector<int>& beatPeriod, size_t dfSize) {
+        const int maxSafePeriod = std::max(1, static_cast<int>(dfSize) - 1);
+        bool hasValidPeriod = false;
+        for (int& period : beatPeriod) {
+            if (period <= 0) {
+                period = 1;
+            } else if (period > maxSafePeriod) {
+                period = maxSafePeriod;
+            }
+            hasValidPeriod = true;
+        }
+        return hasValidPeriod;
+    }
+
+    // viterbi_decode заполняет только первые T элементов; хвост остаётся 0.
+    // В TempoTrackV2::calculateBeats period==0 даёт mu==0 и деление на ноль в log(.../mu) → UB и падения STL в Debug MSVC.
+    void stabilizeBeatPeriodTail(std::vector<int>& beatPeriod) {
+        int carry = 1;
+        for (size_t i = 0; i < beatPeriod.size(); ++i) {
+            if (beatPeriod[i] > 0) {
+                carry = beatPeriod[i];
+            } else {
+                beatPeriod[i] = carry;
+            }
+        }
+    }
+
+    BPMAnalyzer::BeatInfo makeBeatInfo(qint64 position, float energy, float confidence) {
+        BPMAnalyzer::BeatInfo beat;
+        beat.position = position;
+        beat.expectedPosition = position;
+        beat.confidence = confidence;
+        beat.deviation = 0.0f;
+        beat.energy = energy;
+        return beat;
+    }
 }
 
 BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& samples,
@@ -788,38 +825,48 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
 
     // Подготавливаем данные (пропускаем первые 2 значения как в Mixxx)
     std::vector<double> df;
-    std::vector<double> beatPeriod;
+    std::vector<int> beatPeriod;
+    df.reserve(detectionFunction.size() > 2 ? detectionFunction.size() - 2 : 0);
     for (int i = 2; i < static_cast<int>(detectionFunction.size()); ++i) {
         df.push_back(detectionFunction[i]);
-        beatPeriod.push_back(0.0);
     }
+
+    // Для очень коротких последовательностей Mixxx-трекер нестабилен
+    if (df.size() < 3) {
+        return beats;
+    }
+
+    // Внутри TempoTrackV2::viterbi_decode выходной путь индексируется по числу
+    // внутренних окон и может быть длиннее грубой оценки (df/128).
+    // Выделяем буфер с запасом по длине df, чтобы исключить выход за границы.
+    beatPeriod.assign(df.size(), 0);
 
     // Вычисляем период битов
     tt.calculateBeatPeriod(df, beatPeriod);
 
+    stabilizeBeatPeriodTail(beatPeriod);
+
+    // Защита от некорректных значений периода:
+    // отрицательные/нулевые/слишком большие значения ломают внутреннюю индексацию.
+    if (!sanitizeBeatPeriods(beatPeriod, df.size())) {
+        return beats;
+    }
+
     // Вычисляем позиции битов
     std::vector<double> beatPositions;
     tt.calculateBeats(df, beatPeriod, beatPositions);
+    beats.reserve(static_cast<int>(beatPositions.size()));
 
     // Преобразуем в BeatInfo
     for (size_t i = 0; i < beatPositions.size(); ++i) {
-        BeatInfo beat;
-        beat.position = static_cast<qint64>(
-            (beatPositions[i] * stepSize) + stepSize / 2
-        );
-        beat.expectedPosition = beat.position; // Будет обновлено в calculateDeviations
-        beat.confidence = 0.9f; // Mixxx обычно даёт хорошие результаты
-        beat.deviation = 0.0f; // Будет вычислено позже
-        // Исправляем проблему с типами: приводим оба аргумента к одному типу
-        // Используем индекс из df, ограничивая его размером массива
+        const qint64 position = static_cast<qint64>((beatPositions[i] * stepSize) + stepSize / 2);
+        float energy = 0.0f;
         if (!df.empty() && i < df.size()) {
-            beat.energy = df[i];
+            energy = static_cast<float>(df[i]);
         } else if (!df.empty()) {
-            beat.energy = df[df.size() - 1]; // Используем последний элемент
-        } else {
-            beat.energy = 0.0;
+            energy = static_cast<float>(df.back());
         }
-        beats.append(beat);
+        beats.append(makeBeatInfo(position, energy, 0.9f));
     }
 #else
     // Упрощённый алгоритм обнаружения битов
@@ -844,16 +891,15 @@ QVector<BPMAnalyzer::BeatInfo> BPMAnalyzer::trackBeats(const QVector<double>& de
     }
 
     // Преобразуем пики в биты
+    const auto maxIt = std::max_element(detectionFunction.begin(), detectionFunction.end());
+    const double maxDetection = (maxIt != detectionFunction.end()) ? *maxIt : 0.0;
     for (int peakIdx : peaks) {
-        BeatInfo beat;
-        beat.position = static_cast<qint64>(peakIdx * stepSize + stepSize / 2);
-        beat.expectedPosition = beat.position; // Будет обновлено в calculateDeviations
-        beat.confidence = static_cast<float>(
-            detectionFunction[peakIdx] / (*std::max_element(detectionFunction.begin(), detectionFunction.end()))
-        );
-        beat.deviation = 0.0f;
-        beat.energy = static_cast<float>(detectionFunction[peakIdx]);
-        beats.append(beat);
+        const qint64 position = static_cast<qint64>(peakIdx * stepSize + stepSize / 2);
+        const float energy = static_cast<float>(detectionFunction[peakIdx]);
+        const float confidence = (maxDetection > 0.0)
+            ? static_cast<float>(detectionFunction[peakIdx] / maxDetection)
+            : 0.0f;
+        beats.append(makeBeatInfo(position, energy, confidence));
     }
 
     // Фильтруем слишком близкие биты (минимальный интервал 100мс)
