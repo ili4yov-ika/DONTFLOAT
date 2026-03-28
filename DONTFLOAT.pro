@@ -12,6 +12,7 @@ TARGET = DONTFLOAT
 TEMPLATE = app
 
 INCLUDEPATH += include/
+INCLUDEPATH += ui
 
 # Third-party: Mixxx qm-dsp
 QM_DSP_ROOT = $$PWD/thirdparty/mixxx/lib/qm-dsp
@@ -54,6 +55,9 @@ exists($$QM_DSP_ROOT) {
     # MSVC требует _USE_MATH_DEFINES для M_PI
     win32-msvc*: DEFINES += _USE_MATH_DEFINES
 
+    # Как в CMake: pthread для qm-dsp на Unix (не Windows)
+    unix:!win32: DEFINES += USE_PTHREADS
+
     # Подавляем предупреждения компилятора для внешней библиотеки Mixxx
     # C4244: преобразование типов (double->float, int64_t->int, size_t->int) - нормально для библиотеки
     # C4267: преобразование size_t в меньший тип - нормально для библиотеки
@@ -68,6 +72,9 @@ exists($$QM_DSP_ROOT) {
 } else {
     message("Warning: qm-dsp not found at $$QM_DSP_ROOT, using simplified BPM analyzer")
 }
+
+# MSVC + qm-dsp: см. CMakeLists.txt — _ITERATOR_DEBUG_LEVEL=0 для всего exe (в т.ч. Qt Creator).
+win32-msvc*:exists($$QM_DSP_ROOT): DEFINES += _ITERATOR_DEBUG_LEVEL=0
 
 SOURCES += \
         src/main.cpp\
@@ -87,7 +94,14 @@ SOURCES += \
         src/timestretchcommand.cpp \
         src/timestretchprocessor.cpp \
         src/timeutils.cpp \
-        src/beatvisualizer.cpp
+        src/beatvisualizer.cpp \
+        src/spectrogramsettingsdialog.cpp \
+        src/reverbsettingsdialog.cpp \
+        src/pitchshiftsettingsdialog.cpp \
+        src/shortcutsdialog.cpp \
+        thirdparty/lmms/plugins/ReverbSC/base.c \
+        thirdparty/lmms/plugins/ReverbSC/revsc.c \
+        thirdparty/lmms/plugins/ReverbSC/dcblock.c
         # src/beatvisualizationsettingsdialog.cpp
 
 HEADERS += \
@@ -107,7 +121,11 @@ HEADERS += \
         include/timestretchcommand.h \
         include/timestretchprocessor.h \
         include/timeutils.h \
-        include/beatvisualizer.h
+        include/beatvisualizer.h \
+        include/spectrogramsettingsdialog.h \
+        include/reverbsettingsdialog.h \
+        include/pitchshiftsettingsdialog.h \
+        include/shortcutsdialog.h
         # include/beatvisualizationsettingsdialog.h
 
 FORMS += \
@@ -117,10 +135,16 @@ FORMS += \
         # ui/beatvisualizationsettingsdialog.ui
 
 TRANSLATIONS += \
-        translations/DONTFLOAT_ru_RU.ts
+        translations/ru_RU.ts \
+        translations/en_US.ts
 
 RESOURCES += \
         resources.qrc
+
+# Иконка EXE (как в CMake: resources/app.rc + icons/logo.ico)
+win32:exists($$PWD/resources/app.rc) {
+    RC_FILE = resources/app.rc
+}
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

@@ -5,6 +5,13 @@ project(DONTFLOAT VERSION 0.0.0.1 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# MSVC: в qm-dsp (TempoTrackV2::calculateBeatPeriod) std::copy(df.begin()+(i+k), …);
+# проверяемые итераторы в Debug дают assert _Verify_offset. Задаём явно для всех CONFIG,
+# чтобы Qt Creator / qmake и мульти-конфиг не пропускали уровень (как у MinGW).
+if(MSVC)
+    add_compile_definitions(_ITERATOR_DEBUG_LEVEL=0)
+endif()
+
 # Enable automatic handling of Qt files
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -60,6 +67,14 @@ set(SOURCES
     src/beatvisualizer.cpp
     src/timestretchprocessor.cpp
     src/timeutils.cpp
+    src/spectrogramsettingsdialog.cpp
+    src/reverbsettingsdialog.cpp
+    src/pitchshiftsettingsdialog.cpp
+    src/shortcutsdialog.cpp
+    # ReverbSC C-sources from LMMS/SoundPipe (GPL-2, original authors: Sean Costello, Paul Batchelor)
+    thirdparty/lmms/plugins/ReverbSC/base.c
+    thirdparty/lmms/plugins/ReverbSC/revsc.c
+    thirdparty/lmms/plugins/ReverbSC/dcblock.c
 )
 
 # Add header files
@@ -81,6 +96,13 @@ set(HEADERS
     include/beatvisualizer.h
     include/timestretchprocessor.h
     include/timeutils.h
+    include/spectrogramsettingsdialog.h
+    include/fft_engine.h
+    include/reverbsc_engine.h
+    include/reverbsettingsdialog.h
+    include/granularpitchshifter_engine.h
+    include/pitchshiftsettingsdialog.h
+    include/shortcutsdialog.h
 )
 
 # Add UI files
@@ -97,8 +119,8 @@ set(RESOURCE_FILES
 
 # Add translation files
 set(TRANSLATION_FILES
-    translations/DONTFLOAT_ru_RU.ts
-    translations/DONTFLOAT_en_US.ts
+    translations/ru_RU.ts
+    translations/en_US.ts
 )
 
 # Windows: embed application icon into EXE
@@ -220,6 +242,10 @@ if(EXISTS ${QM_DSP_ROOT})
         )
     elseif(UNIX)
         target_compile_definitions(qm_dsp PRIVATE USE_PTHREADS)
+        # Third-party qm-dsp: suppress known external warnings on GCC/Clang
+        target_compile_options(qm_dsp PRIVATE
+            -Wno-sign-compare
+        )
     endif()
 
     # Директории включений (как в Mixxx)
@@ -236,6 +262,21 @@ if(EXISTS ${QM_DSP_ROOT})
 else()
     message(WARNING "qm-dsp not found at ${QM_DSP_ROOT}, using simplified BPM analyzer")
     message(STATUS "Building with simplified BPM analyzer (qm-dsp not found)")
+endif()
+
+# Third-party ReverbSC C sources: suppress external unused-parameter warnings
+if(MSVC)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lmms/plugins/ReverbSC/dcblock.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lmms/plugins/ReverbSC/revsc.c
+        PROPERTIES COMPILE_OPTIONS "/wd4100"
+    )
+else()
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lmms/plugins/ReverbSC/dcblock.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lmms/plugins/ReverbSC/revsc.c
+        PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter"
+    )
 endif()
 
 # Set Windows executable properties
@@ -299,10 +340,23 @@ function(add_qt_test test_name)
         target_compile_definitions(${test_name} PRIVATE USE_MIXXX_QM_DSP)
     endif()
 
-    # Добавляем тест в CTest
-    add_test(NAME ${test_name} COMMAND ${test_name})
+    # CTest: на Windows тесты не видят Qt DLL (0xc0000135), если bin не в PATH — запуск через cmake -P.
+    if(WIN32 AND DEFINED QT_ROOT_DIR)
+        add_test(NAME ${test_name}
+            COMMAND ${CMAKE_COMMAND}
+                -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                -DCONFIG=$<CONFIG>
+                -DTARGET_NAME=${test_name}
+                -DQT_ROOT=${QT_ROOT_DIR}
+                -DWORKING_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DCMAKE_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}
+                -DCMAKE_COMMAND=${CMAKE_COMMAND}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/RunQtTest.cmake
+        )
+    else()
+        add_test(NAME ${test_name} COMMAND ${test_name})
+    endif()
 
-    # Устанавливаем рабочую директорию для тестов (чтобы они могли найти файлы из source4test)
     set_tests_properties(${test_name} PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )

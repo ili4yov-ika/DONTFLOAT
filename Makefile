@@ -373,7 +373,7 @@ distdir: FORCE
 	$(COPY_FILE) --parents include/mainwindow.h include/waveformview.h include/pitchgridwidget.h include/waveformcolors.h include/bpmanalyzer.h include/keyanalyzer.h include/waveformanalyzer.h include/audiocommand.h include/loadfiledialog.h include/metronomesettingsdialog.h include/metronomecontroller.h include/beatfixcommand.h include/timestretchcommand.h include/timestretchprocessor.h $(DISTDIR)/
 	$(COPY_FILE) --parents src/main.cpp src/mainwindow.cpp src/waveformview.cpp src/pitchgridwidget.cpp src/waveformcolors.cpp src/bpmanalyzer.cpp src/keyanalyzer.cpp src/waveformanalyzer.cpp src/audiocommand.cpp src/loadfiledialog.cpp src/metronomesettingsdialog.cpp src/metronomecontroller.cpp src/beatfixcommand.cpp src/timestretchcommand.cpp src/timestretchprocessor.cpp $(DISTDIR)/
 	$(COPY_FILE) --parents ui/mainwindow.ui ui/loadfiledialog.ui ui/metronomesettingsdialog.ui $(DISTDIR)/
-	$(COPY_FILE) --parents translations/DONTFLOAT_ru_RU.ts $(DISTDIR)/
+	$(COPY_FILE) --parents translations/ru_RU.ts translations/en_US.ts $(DISTDIR)/
 
 
 clean: compiler_clean 
