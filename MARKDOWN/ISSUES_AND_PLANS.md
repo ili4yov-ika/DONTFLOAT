@@ -235,6 +235,13 @@ Mixxx algorithm detected BPM: 106.97 with 257 beats
 
 ## Известные баги
 
+### 0. Падение анализа BPM (MSVC Debug, ~50 % прогресса, `cannot seek vector iterator before begin`)
+
+#### Статус: ✅ ИСПРАВЛЕНО (2026-03-28)
+**Описание**: При анализе через `TempoTrackV2` буфер `beat_period` после `viterbi_decode` заполнялся только для первых `T` кадров; хвост оставался **0**. В `calculateBeats` (qm-dsp) значение **period == 0** приводило к **mu == 0** и делению на ноль в `log((round(2*mu)-j)/mu)`, что в Debug давало UB и падение в проверках STL.
+
+**Решение**: В `src/bpmanalyzer.cpp` после `calculateBeatPeriod` вызывается `stabilizeBeatPeriodTail()` — нули заменяются предыдущим ненулевым периодом (старт с 1), затем действует существующая `sanitizeBeatPeriods`.
+
 ### 1. Синтетические данные в консольном режиме
 
 #### Статус: 🔄 ЧАСТИЧНО ИСПРАВЛЕНО (DLL проблема решена)

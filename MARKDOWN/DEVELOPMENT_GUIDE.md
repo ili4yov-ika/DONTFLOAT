@@ -246,8 +246,8 @@ QString scheme = settings.value("colorScheme", "dark").toString();
 ## Локализация
 
 ### Файлы переводов
-- **Русский**: DONTFLOAT_ru_RU.ts
-- **Английский**: DONTFLOAT_en_US.ts
+- **Русский**: ru_RU.ts
+- **Английский**: en_US.ts
 - Использование Qt Linguist для редактирования
 
 ### Тексты

@@ -216,4 +216,4 @@ tests/
 ### Локализация
 - Поддержка русского и английского языков
 - Файлы в директории translations/
-- Формат: DONTFLOAT_ru_RU.ts, DONTFLOAT_en_US.ts
+- Формат: ru_RU.ts, en_US.ts

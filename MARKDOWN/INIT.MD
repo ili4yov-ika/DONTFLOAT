@@ -169,7 +169,7 @@ DONTFLOAT/
 - Используйте Qt Linguist для редактирования
 - Поддерживайте русский и английский языки
 - Файлы в директории translations/
-- Формат: DONTFLOAT_ru_RU.ts, DONTFLOAT_en_US.ts
+- Формат: ru_RU.ts, en_US.ts
 
 ### Тексты
 - Все пользовательские тексты через tr()
