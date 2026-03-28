@@ -2,18 +2,19 @@
 #define BEATFIXCOMMAND_H
 
 #include <QUndoCommand>
-#include <QList>
+#include <QVector>
 #include "waveformview.h"
 #include "bpmanalyzer.h"
 
 class BeatFixCommand : public QUndoCommand
 {
 public:
-    BeatFixCommand(WaveformView* view, 
-                  const QList<QList<float>>& originalData,
-                  const QList<QList<float>>& fixedData,
+    BeatFixCommand(WaveformView* view,
+                  const QVector<QVector<float>>& originalData,
+                  const QVector<QVector<float>>& fixedData,
                   float bpm,
-                  const QList<BPMAnalyzer::BeatInfo>& beats,
+                  const QVector<BPMAnalyzer::BeatInfo>& beats,
+                  qint64 gridStartSample = 0,
                   QUndoCommand* parent = nullptr);
 
     void undo() override;
@@ -21,10 +22,11 @@ public:
 
 private:
     WaveformView* waveformView;
-    QList<QList<float>> originalAudioData;
-    QList<QList<float>> fixedAudioData;
+    QVector<QVector<float>> originalAudioData;
+    QVector<QVector<float>> fixedAudioData;
     float bpmValue;
-    QList<BPMAnalyzer::BeatInfo> beatInfo;
+    QVector<BPMAnalyzer::BeatInfo> beatInfo;
+    qint64 gridStartSampleValue;
 };
 
 #endif // BEATFIXCOMMAND_H 

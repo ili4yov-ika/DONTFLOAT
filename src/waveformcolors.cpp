@@ -1,11 +1,11 @@
-#include "waveformcolors.h"
+#include "../include/waveformcolors.h"
 
 WaveformColors::WaveformColors() {
     setupDefaultColors();
 }
 
 void WaveformColors::setupDefaultColors() {
-    // Цвета по умолчанию (темная тема)
+    // Цвета по умолчанию (тёмная тема)
     m_lowColor = QColor(255, 50, 50);      // Красный для низких частот
     m_midColor = QColor(50, 255, 50);      // Зеленый для средних частот
     m_highColor = QColor(50, 50, 255);     // Синий для высоких частот
@@ -54,7 +54,7 @@ void WaveformColors::setupLightColors() {
 }
 
 void WaveformColors::setColorScheme(const QString& scheme) {
-    if (scheme == "dark") {
+    if (scheme == "dark" || scheme == "default") {
         setupDarkColors();
     } else if (scheme == "light") {
         setupLightColors();

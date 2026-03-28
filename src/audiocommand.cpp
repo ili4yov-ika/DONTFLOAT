@@ -1,5 +1,5 @@
-#include "audiocommand.h"
-#include "waveformview.h"
+#include "../include/audiocommand.h"
+#include "../include/waveformview.h"
 
 AudioCommand::AudioCommand(WaveformView* view, const QVector<QVector<float>>& oldData,
                          const QVector<QVector<float>>& newData, const QString& text)

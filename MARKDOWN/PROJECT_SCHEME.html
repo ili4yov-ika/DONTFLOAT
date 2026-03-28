@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DONTFLOAT — общая схема проекта</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #1e1e1e;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 24px;
+      line-height: 1.4;
+    }
+    h1 {
+      text-align: center;
+      color: #2a82da;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 32px;
+    }
+    .diagram {
+      margin-bottom: 48px;
+    }
+    .diagram-title {
+      font-size: 1.1rem;
+      color: #2a82da;
+      margin-bottom: 16px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #444;
+    }
+    .box {
+      border: 1px solid #555;
+      border-radius: 6px;
+      padding: 10px 14px;
+      background: #2d2d2d;
+      text-align: center;
+      min-width: 100px;
+    }
+    .box.entry { background: #252535; border-color: #2a82da; }
+    .box.gui { background: #1a2a1a; border-color: #3d7e3d; }
+    .box.console { background: #2a2525; border-color: #8b4513; }
+    .box.core { background: #2a2a3a; border-color: #6a5acd; }
+    .box.widget { background: #2d3530; border-color: #5f9ea0; }
+    .box.audio { background: #352a2a; border-color: #b22222; }
+    .box.command { background: #2a352a; border-color: #228b22; }
+    .arrow { color: #666; font-size: 14px; }
+    .flow-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+    .flow-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .hub {
+      border: 2px solid #2a82da;
+      background: #1a2a3a;
+      padding: 16px 24px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    .cluster {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+      border: 1px dashed #444;
+      border-radius: 8px;
+      background: #252525;
+    }
+    .cluster-title {
+      width: 100%;
+      text-align: center;
+      color: #888;
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+    }
+    .center-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .arrow-down::after {
+      content: '▼';
+      display: block;
+      color: #555;
+      font-size: 12px;
+    }
+    .arrow-right {
+      color: #555;
+      align-self: center;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 24px;
+      padding: 12px;
+      background: #252525;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .legend .dot { width: 12px; height: 12px; border-radius: 3px; }
+    .legend .dot.entry { background: #2a82da; }
+    .legend .dot.gui { background: #3d7e3d; }
+    .legend .dot.console { background: #8b4513; }
+    .legend .dot.core { background: #6a5acd; }
+    .legend .dot.widget { background: #5f9ea0; }
+    .legend .dot.audio { background: #b22222; }
+    .legend .dot.command { background: #228b22; }
+  </style>
+</head>
+<body>
+
+  <h1>DONTFLOAT</h1>
+  <p class="subtitle">Общая схема проекта (архитектура и потоки данных)</p>
+
+  <!-- 1. Точка входа -->
+  <section class="diagram">
+    <div class="diagram-title">1. Точка входа (main.cpp)</div>
+    <div class="center-wrap">
+      <div class="box entry">main()</div>
+      <div class="arrow-down"></div>
+      <div class="flow-row">
+        <div class="box console">-c --console<br><small>QCoreApplication</small></div>
+        <span class="arrow">← →</span>
+        <div class="box gui">GUI<br><small>QApplication</small></div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-col">
+          <div class="box console">runConsoleMode()</div>
+          <div class="arrow-down"></div>
+          <div class="box console">loadAudioFile → BPMAnalyzer::analyzeBPM</div>
+          <div class="arrow-down"></div>
+          <div class="box console">Вывод в консоль</div>
+        </div>
+        <div class="flow-col">
+          <div class="box gui">Fusion + тёмная палитра</div>
+          <div class="arrow-down"></div>
+          <div class="box gui">MainWindow</div>
+          <div class="arrow-down"></div>
+          <div class="box gui">guiApp.exec()</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. MainWindow и компоненты -->
+  <section class="diagram">
+    <div class="diagram-title">2. MainWindow и подчинённые компоненты</div>
+    <div class="center-wrap">
+      <div class="hub">MainWindow</div>
+      <div class="arrow-down"></div>
+      <div class="flow-row" style="gap: 24px;">
+        <div class="cluster" style="flex: 1; max-width: 320px;">
+          <div class="cluster-title">Виджеты</div>
+          <div class="box widget">WaveformView</div>
+          <div class="box widget">PitchGridWidget</div>
+          <div class="box widget">QSplitter</div>
+          <div class="box widget">ScrollBar (гориз./верт.)</div>
+        </div>
+        <div class="cluster" style="flex: 1; max-width: 260px;">
+          <div class="cluster-title">Воспроизведение</div>
+          <div class="box audio">QMediaPlayer</div>
+          <div class="box audio">QAudioOutput</div>
+          <div class="box audio">playbackTimer</div>
+        </div>
+        <div class="cluster" style="flex: 1; max-width: 260px;">
+          <div class="cluster-title">Настройки и состояние</div>
+          <div class="box core">QSettings</div>
+          <div class="box command">QUndoStack</div>
+          <div class="box core">MetronomeController</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Загрузка аудио -->
+  <section class="diagram">
+    <div class="diagram-title">3. Загрузка и обработка аудиофайла</div>
+    <div class="flow-row" style="justify-content: center; flex-wrap: wrap;">
+      <div class="box audio">Файл (WAV/MP3/FLAC)</div>
+      <span class="arrow-right">→</span>
+      <div class="box core">openAudioFile / Drag&Drop</div>
+      <span class="arrow-right">→</span>
+      <div class="box core">processAudioFile()</div>
+      <span class="arrow-right">→</span>
+      <div class="box widget">LoadFileDialog</div>
+      <span class="arrow-right">→</span>
+      <div class="box core">loadAudioFile()<br><small>QAudioDecoder → float</small></div>
+      <span class="arrow-right">→</span>
+      <div class="box widget">WaveformView::setAudioData</div>
+      <span class="arrow-right">→</span>
+      <div class="box audio">QMediaPlayer::setSource</div>
+    </div>
+  </section>
+
+  <!-- 4. WaveformView и зависимости -->
+  <section class="diagram">
+    <div class="diagram-title">4. WaveformView: данные и зависимости</div>
+    <div class="center-wrap">
+      <div class="hub">WaveformView</div>
+      <div class="flow-row" style="margin-top: 12px;">
+        <div class="box core">audioData</div>
+        <div class="box core">beats (BeatInfo)</div>
+        <div class="box core">markers (Marker)</div>
+        <div class="box core">playbackPosition</div>
+        <div class="box core">zoom / offset</div>
+      </div>
+      <div class="cluster-title" style="margin-top: 16px;">Использует</div>
+      <div class="flow-row">
+        <div class="box audio">BPMAnalyzer</div>
+        <div class="box core">MarkerEngine</div>
+        <div class="box audio">TimeStretchProcessor</div>
+        <div class="box widget">BeatVisualizer</div>
+        <div class="box core">TimeUtils / WaveformColors</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Система команд -->
+  <section class="diagram">
+    <div class="diagram-title">5. Система команд (Command Pattern)</div>
+    <div class="center-wrap">
+      <div class="box command" style="padding: 14px 20px;">QUndoStack (MainWindow)</div>
+      <div class="arrow-down"></div>
+      <div class="flow-row">
+        <div class="box command">AudioCommand</div>
+        <div class="box command">BeatFixCommand</div>
+        <div class="box command">TimeStretchCommand</div>
+      </div>
+      <div class="arrow-down"></div>
+      <div class="box widget">WaveformView (undo/redo)</div>
+    </div>
+  </section>
+
+  <!-- 6. Общий поток данных -->
+  <section class="diagram">
+    <div class="diagram-title">6. Общий поток данных</div>
+    <div class="flow-row" style="justify-content: center; flex-wrap: wrap;">
+      <div class="box audio">Файл</div>
+      <span class="arrow-right">→</span>
+      <div class="box core">loadAudioFile</div>
+      <span class="arrow-right">→</span>
+      <div class="box widget">WaveformView</div>
+      <span class="arrow-right">→</span>
+      <div class="box core">BPMAnalyzer</div>
+      <span class="arrow-right">→</span>
+      <div class="box widget">биты / метки</div>
+      <span class="arrow-right">→</span>
+      <div class="box command">Команды (BeatFix / TimeStretch)</div>
+      <span class="arrow-right">→</span>
+      <div class="box command">QUndoStack</div>
+    </div>
+  </section>
+
+  <div class="legend">
+    <span><span class="dot entry"></span> Точка входа</span>
+    <span><span class="dot gui"></span> GUI</span>
+    <span><span class="dot console"></span> Консоль</span>
+    <span><span class="dot core"></span> Ядро/утилиты</span>
+    <span><span class="dot widget"></span> Виджеты/UI</span>
+    <span><span class="dot audio"></span> Аудио/анализ</span>
+    <span><span class="dot command"></span> Команды/стек</span>
+  </div>
+
+  <p style="text-align: center; color: #666; margin-top: 32px; font-size: 0.9rem;">
+    Общая схема: PROJECT_SCHEME.html. Подробная схема окон (кнопки, поля, списки): <a href="PROJECT_SCHEME_DETAILED.html" style="color:#5f9ea0;">PROJECT_SCHEME_DETAILED.html</a>. Диаграммы Mermaid: PROJECT_FLOWCHART.md.
+  </p>
+
+</body>
+</html>

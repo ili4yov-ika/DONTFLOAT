@@ -1,0 +1,21 @@
+# Конфигурация clang-tidy для проекта DONTFLOAT
+# Подавляем предупреждения стиля кода для внешних библиотек
+
+Checks: >-
+  -*,
+  -readability-braces-around-statements,
+  -readability-non-const-parameter,
+  -include-cleaner
+
+# Исключаем файлы библиотек Mixxx из проверок
+# Используем несколько вариантов для надежности
+ExcludeHeaderFilterRegex: 'thirdparty/.*'
+ExcludeRegex: 'thirdparty/.*'
+
+# Дополнительно: отключаем конкретные проверки глобально
+# (они все равно отключены в Checks выше, но для надежности)
+CheckOptions:
+  readability-braces-around-statements: None
+  readability-non-const-parameter: None
+  include-cleaner: None
+

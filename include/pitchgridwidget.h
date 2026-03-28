@@ -19,10 +19,12 @@ public:
     void setAudioData(const QVector<QVector<float>>& data);
     void setSampleRate(int rate);
     void setPlaybackPosition(qint64 position); // position в миллисекундах
+    void setCursorPosition(float xPosition); // Позиция каретки в пикселях от WaveformView
     void setHorizontalOffset(float offset);
     void setVerticalOffset(float offset);
     void setZoomLevel(float zoom);
     void setBPM(float bpm);
+    void setBeatsPerBar(int beatsPerBar);
     void setPitchRange(int minPitch, int maxPitch);
     void setColorScheme(const QString& scheme);
 
@@ -41,7 +43,6 @@ private:
     void drawPitchGrid(QPainter& painter, const QRect& rect);
     void drawPlaybackCursor(QPainter& painter, const QRect& rect);
     void drawPitchLabels(QPainter& painter, const QRect& rect);
-    void drawTimeGrid(QPainter& painter, const QRect& rect);
     QPointF sampleToPoint(int sampleIndex, int pitch, const QRectF& rect) const;
     QString getPitchName(int midiNote) const;
     int getPitchFromY(int y, const QRect& rect) const;
@@ -50,10 +51,12 @@ private:
     QVector<QVector<float>> audioData;
     int sampleRate;
     qint64 playbackPosition;
+    float cursorXPosition; // Позиция каретки в пикселях от WaveformView
     float horizontalOffset;
     float verticalOffset;
     float zoomLevel;
     float bpm;
+    int beatsPerBar;
     int minPitch;
     int maxPitch;
     bool isDragging;

@@ -5,6 +5,7 @@
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
+#include <QtGui/QShortcut>
 #include <QFileDialog>
 #include <QScreen>
 #include <QTimer>
@@ -14,14 +15,27 @@
 #include <QStatusBar>
 #include <QSettings>
 #include <QScrollBar>
+#include <QSplitter>
+#include <QResizeEvent>
 #include <QtMultimedia/QAudioFormat>
 #include <QtMultimedia/QMediaPlayer>
 #include <QtMultimedia/QAudioOutput>
 #include <QtMultimedia/QAudioDecoder>
 #include <QSoundEffect>
 #include <QUndoStack>
+#include <QUrl>
+#include <QTranslator>
+#include <functional>
 #include "waveformview.h"
+#include "spectrogramsettingsdialog.h"
+#include "reverbsettingsdialog.h"
+#include "reverbsc_engine.h"
+#include "pitchshiftsettingsdialog.h"
+#include "granularpitchshifter_engine.h"
 #include "pitchgridwidget.h"
+#include "shortcutsdialog.h"
+#include "metronomecontroller.h"
+// #include "beatvisualizationsettingsdialog.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -37,7 +51,13 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void changeEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
     void openAudioFile();
@@ -59,37 +79,95 @@ private slots:
     void showKeyboardShortcuts();
     void setLoopStart();
     void setLoopEnd();
+    void clearLoopStart();
+    void clearLoopEnd();
+    void togglePitchGrid();
+    void analyzeKey();
+    void showKeyContextMenu(const QPoint& pos);
+    void showKeyContextMenu2(const QPoint& pos);
+    void setKey(const QString& key);
+    void setKey2(const QString& key);
+    void updateScrollBarTransparency();
+    void setRussianLanguage();
+    void setEnglishLanguage();
+    void toggleBeatWaveform();
+    void applyTimeStretch();
+    void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
+    void createOnsetMarkersAuto();        // Авто-метки по транзиентам (Onset detection)
+    void createBeatGridMarkersAuto();     // Авто-метки по тактовой сетке
 
 private:
     void createMenus();
     void createActions();
+    void createKeyContextMenu();
+    void createKeyContextMenu2();
+    QMenu* populateKeyContextMenu(QAction* actions[28], std::function<void(const QString&)> setKeyCallback);
+    void updatePitchGridLayout();
     void updateWindowTitle();
     void setupConnections();
     void readSettings();
     void writeSettings();
     void setupShortcuts();
+    void applyShortcuts();
     bool maybeSave();
     bool doSaveAudioFile();
     void resetAudioState();
     void processAudioFile(const QString& filePath);
     QVector<QVector<float>> loadAudioFile(const QString& filePath);
-    void createSimpleMetronomeSound();
+    /// Сброс A/B цикла и кнопок после загрузки нового файла
+    void resetLoopStateAfterNewFile();
+    void createDeviationMarkers(float tolerancePercent, bool neutralMarkers = false);
+    void retranslateMenus();
+    QString formatTimeAndBars(qint64 msPosition);
+    void updateHorizontalScrollBar(float zoom);
+    void updateHorizontalScrollBarFromOffset(float offset);
+    void constrainWindowSize();
+
+    // Вспомогательные методы для рефакторинга
+    void updateUIAfterAnalysis(const QVector<QVector<float>>& audioData,
+                                const BPMAnalyzer::AnalysisResult& analysis,
+                                int beatsPerBar);
+    void updateUIAfterBeatFix(const QVector<QVector<float>>& fixedData,
+                              const BPMAnalyzer::AnalysisResult& analysis,
+                              int beatsPerBar);
+    void setBPMAndBeatsPerBar(float bpm, int beatsPerBar);
+    QVector<Marker> createBeatGridMarkers(const BPMAnalyzer::AnalysisResult& analysis,
+                                          const QVector<QVector<float>>& audioData,
+                                          int beatsPerBar);
+    // Метки по каждой доле выровненной сетки (для «Выровнять» — как при «Пропустить» + оставить метки)
+    QVector<Marker> createAlignedBeatMarkers(const QVector<BPMAnalyzer::BeatInfo>& alignedBeats,
+                                              qint64 totalSamples, int sampleRate);
+    QVector<BPMAnalyzer::BeatInfo> createAlignedBeatGrid(float bpm, qint64 gridStartSample,
+                                                         qint64 totalSamples, int sampleRate,
+                                                         const QVector<QVector<float>>& audioData);
+    void applyBeatFixToWaveform(const QVector<QVector<float>>& originalData,
+                                const QVector<QVector<float>>& fixedData,
+                                const BPMAnalyzer::AnalysisResult& analysis,
+                                int beatsPerBar);
+
+    // Сохранение обработанного аудио во временный WAV-файл
+    // и возврат пути к нему. Используется для того, чтобы
+    // QMediaPlayer воспроизводил уже обработанное аудио.
+    QString saveProcessedAudioToTempWav(const QVector<QVector<float>> &data, int sampleRate) const;
 
     // UI components
     Ui::MainWindow *ui;
     WaveformView *waveformView;
     PitchGridWidget *pitchGridWidget;
     QScrollBar *horizontalScrollBar;
-    QScrollBar *waveformVerticalScrollBar;
     QScrollBar *pitchGridVerticalScrollBar;
-    
+    QSplitter *mainSplitter;
+
     // Menu components
     QMenu *fileMenu;
     QMenu *editMenu;
     QMenu *viewMenu;
     QMenu *settingsMenu;
     QMenu *colorSchemeMenu;
-    
+    QMenu *themesMenu;
+    QMenu *languageMenu;
+    QMenu *waveformViewMenu;
+
     // Action components
     QAction *openAct;
     QAction *saveAct;
@@ -106,34 +184,65 @@ private:
     QAction *metronomeAct;
     QAction *loopStartAct;
     QAction *loopEndAct;
+    QAction *togglePitchGridAct;
+    QAction *toggleBeatWaveformAct;
+    QAction *waveformPeaksAct;
+    QAction *waveformSpectrogramAct;
+    QAction *spectrogramSettingsAct;
+    SpectrogramSettingsDialog* spectrogramSettingsDialog;
+    QAction *reverbSettingsAct;
+    ReverbSettingsDialog* reverbSettingsDialog;
+    ReverbEngine::ReverbParams reverbParams;
+    QAction *pitchShiftSettingsAct;
+    PitchShiftSettingsDialog* pitchShiftSettingsDialog;
+    GranularEngine::Params pitchShiftParams;
+    QAction *russianAction;
+    QAction *englishAction;
+    QAction *applyTimeStretchAct;
 
     // File management
     QString currentFileName;
     bool hasUnsavedChanges;
-    
+
     // Playback components
     bool isPlaying;
     qint64 currentPosition;
     QTimer *playbackTimer;
     QMediaPlayer *mediaPlayer;
     QAudioOutput *audioOutput;
+    QTimer *markerPreviewTimer; // debounce для обновления воспроизведения после перетаскивания меток
 
     // Settings
     QSettings settings;
+    QTranslator* m_appTranslator;
 
     // Metronome components
-    QTimer *metronomeTimer;
-    QSoundEffect *metronomeSound;
-    bool isMetronomeEnabled;
-    qint64 lastBeatTime;
-    
+    MetronomeController *metronomeController;
+
     // Loop components
     bool isLoopEnabled;
     qint64 loopStartPosition;
     qint64 loopEndPosition;
 
+    // Pitch grid visibility
+    bool isPitchGridVisible;
+
+    // Key analysis
+    QString currentKey;
+    QString currentKey2; // For modulation
+    QMenu *keyContextMenu;
+    QMenu *keyContextMenu2; // For second key field
+    QAction *keyActions[28]; // 14 major + 14 minor keys
+    QAction *keyActions2[28]; // 14 major + 14 minor keys for second field
+
     // Undo/Redo stack
     QUndoStack *undoStack;
+
+    // Shortcuts (QShortcut objects, keys updated in applyShortcuts)
+    QShortcut *playShortcut;
+    QShortcut *shiftAShortcut;
+    QShortcut *shiftBShortcut;
+    QShortcut *markerShortcut;
 };
 
 #endif // MAINWINDOW_H

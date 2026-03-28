@@ -1,110 +1,237 @@
-#include "metronomesettingsdialog.h"
-#include <QDialogButtonBox>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QLabel>
+#include "../include/metronomesettingsdialog.h"
+#include "../include/metronomecontroller.h"
+#include "ui_metronomesettingsdialog.h"
 #include <QFileDialog>
 #include <QUrl>
+#include <QDir>
+#include <QFile>
+#include <QDataStream>
+#include <QDebug>
+#include <QEventLoop>
+#include <QTimer>
+#include <QPushButton>
+#include <QSlider>
+#include <QDialogButtonBox>
+#include <QtMultimedia/QAudioOutput>
+#include <QtMultimedia/QMediaPlayer>
 
-MetronomeSettingsDialog::MetronomeSettingsDialog(QWidget *parent)
-    : QDialog(parent), settings("DONTFLOAT", "DONTFLOAT"), metronomeSound(new QSoundEffect(this))
+#ifdef _MSC_VER
+#ifndef _USE_MATH_DEFINES
+#define _USE_MATH_DEFINES
+#endif
+#endif
+#include <cmath>
+
+MetronomeSettingsDialog::MetronomeSettingsDialog(QWidget *parent, MetronomeController *controller)
+    : QDialog(parent)
+    , ui(new Ui::MetronomeSettingsDialog)
+    , settings("DONTFLOAT", "DONTFLOAT")
+    , metronomeController(controller)
 {
-    setWindowTitle(tr("Настройки метронома"));
-    setMinimumWidth(300);
+    ui->setupUi(this);
 
-    auto mainLayout = new QVBoxLayout(this);
+    // Инициализируем звуковые эффекты
+    metronomeSoundEffect = new QSoundEffect(this);
+    metronomeSoundEffect->setVolume(1.0f);
 
-    // Громкость
-    auto volumeLayout = new QHBoxLayout;
-    auto volumeLabel = new QLabel(tr("Громкость:"), this);
-    volumeSpinBox = new QSpinBox(this);
-    volumeSpinBox->setRange(0, 100);
-    volumeSpinBox->setSuffix("%");
-    volumeLayout->addWidget(volumeLabel);
-    volumeLayout->addWidget(volumeSpinBox);
-    mainLayout->addLayout(volumeLayout);
+    metronomePlayer = new QMediaPlayer(this);
+    metronomePlayer->setAudioOutput(new QAudioOutput(this));
 
-    // Выбор звука
-    auto soundLayout = new QHBoxLayout;
-    auto soundLabel = new QLabel(tr("Звук:"), this);
-    soundComboBox = new QComboBox(this);
-    soundComboBox->addItem(tr("Щелчок (стандартный)"), "click");
-    soundLayout->addWidget(soundLabel);
-    soundLayout->addWidget(soundComboBox);
-    mainLayout->addLayout(soundLayout);
+    // Создаем звук метронома программно
+    createMetronomeSound();
 
-    // Кнопка выбора пользовательского звука
-    selectSoundButton = new QPushButton(tr("Выбрать звук"), this);
-    connect(selectSoundButton, &QPushButton::clicked, this, &MetronomeSettingsDialog::onSelectSoundButtonClicked);
-    mainLayout->addWidget(selectSoundButton);
-
-    // Кнопка тестирования
-    testButton = new QPushButton(tr("Тест"), this);
-    connect(testButton, &QPushButton::clicked, this, &MetronomeSettingsDialog::onTestButtonClicked);
-    mainLayout->addWidget(testButton);
-
-    // Стандартные кнопки
-    auto buttonBox = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
-        Qt::Horizontal, this);
-    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    // Подключаем сигналы кнопок
+    connect(ui->testButton, &QPushButton::clicked, this, &MetronomeSettingsDialog::onTestButtonClicked);
+    connect(ui->testWeakButton, &QPushButton::clicked, this, &MetronomeSettingsDialog::onTestWeakButtonClicked);
+    connect(ui->selectSoundButton, &QPushButton::clicked, this, &MetronomeSettingsDialog::onSelectSoundButtonClicked);
+    connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(this, &QDialog::accepted, this, &MetronomeSettingsDialog::saveSettings);
-    mainLayout->addWidget(buttonBox);
 
-    // Загружаем сохраненные настройки
+    // Подключаем сигналы ползунков
+    connect(ui->strongBeatSlider, &QSlider::valueChanged, this, &MetronomeSettingsDialog::onStrongBeatVolumeChanged);
+    connect(ui->weakBeatSlider, &QSlider::valueChanged, this, &MetronomeSettingsDialog::onWeakBeatVolumeChanged);
+
+    // Загружаем настройки: сначала из контроллера (если есть), иначе из QSettings
     loadSettings();
+
+    // Обновляем статус загрузки звука
+    updateSoundStatus();
 }
 
 MetronomeSettingsDialog::~MetronomeSettingsDialog()
 {
-    delete metronomeSound;
+    // Очищаем временный файл звука
+    if (!metronomeSoundFile.isEmpty() && QFile::exists(metronomeSoundFile)) {
+        QFile::remove(metronomeSoundFile);
+    }
+    delete ui;
 }
 
 void MetronomeSettingsDialog::saveSettings()
 {
-    settings.setValue("Metronome/Volume", volumeSpinBox->value());
-    settings.setValue("Metronome/Sound", soundComboBox->currentData());
+    int strongVolume = ui->strongBeatSlider->value();
+    int weakVolume = ui->weakBeatSlider->value();
+
+    // Сохраняем в QSettings
+    settings.setValue("Metronome/StrongBeatVolume", strongVolume);
+    settings.setValue("Metronome/WeakBeatVolume", weakVolume);
+    settings.setValue("Metronome/Sound", ui->soundComboBox->currentData());
+
+    // Применяем к контроллеру напрямую (если есть)
+    if (metronomeController) {
+        metronomeController->setStrongBeatVolume(strongVolume);
+        metronomeController->setWeakBeatVolume(weakVolume);
+    }
 }
 
 void MetronomeSettingsDialog::loadSettings()
 {
-    volumeSpinBox->setValue(settings.value("Metronome/Volume", 50).toInt());
+    // Если есть контроллер, используем его текущие значения (более актуальные)
+    if (metronomeController) {
+        ui->strongBeatSlider->setValue(metronomeController->getStrongBeatVolume());
+        ui->weakBeatSlider->setValue(metronomeController->getWeakBeatVolume());
+    } else {
+        // Иначе загружаем из QSettings
+        ui->strongBeatSlider->setValue(settings.value("Metronome/StrongBeatVolume", 100).toInt());
+        ui->weakBeatSlider->setValue(settings.value("Metronome/WeakBeatVolume", 90).toInt());
+    }
+
     QString sound = settings.value("Metronome/Sound", "click").toString();
-    int index = soundComboBox->findData(sound);
+    int index = ui->soundComboBox->findData(sound);
     if (index != -1)
     {
-        soundComboBox->setCurrentIndex(index);
+        ui->soundComboBox->setCurrentIndex(index);
     }
+}
+
+void MetronomeSettingsDialog::createMetronomeSound()
+{
+    // Создаем простой звук метронома (короткий "клик" - синусоида 1000 Гц)
+    const int sampleRate = 44100;
+    const double duration = 0.05; // 50 мс
+    const int frequency = 1000; // 1000 Гц
+    const int numSamples = static_cast<int>(sampleRate * duration);
+
+    QByteArray wavData;
+    QDataStream stream(&wavData, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+
+    // WAV заголовок
+    stream.writeRawData("RIFF", 4);
+    stream << quint32(36 + numSamples * 2); // Размер файла - 8
+    stream.writeRawData("WAVE", 4);
+    stream.writeRawData("fmt ", 4);
+    stream << quint32(16); // Размер fmt chunk
+    stream << quint16(1); // Audio format (1 = PCM)
+    stream << quint16(1); // Количество каналов (моно)
+    stream << quint32(sampleRate); // Sample rate
+    stream << quint32(sampleRate * 2); // Byte rate
+    stream << quint16(2); // Block align
+    stream << quint16(16); // Bits per sample
+    stream.writeRawData("data", 4);
+    stream << quint32(numSamples * 2); // Размер данных
+
+    // Генерируем синусоиду с затуханием
+    for (int i = 0; i < numSamples; ++i) {
+        double t = double(i) / sampleRate;
+        double amplitude = 0.5 * exp(-t * 20.0); // Экспоненциальное затухание
+        qint16 sample = qint16(amplitude * 32767.0 * sin(2.0 * M_PI * frequency * t));
+        stream << sample;
+    }
+
+    // Сохраняем во временный файл
+    QString tempFile = QDir::tempPath() + "/metronome_test.wav";
+    QFile file(tempFile);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(wavData);
+        file.close();
+        metronomeSoundFile = tempFile;
+        metronomeSoundEffect->setSource(QUrl::fromLocalFile(tempFile));
+        metronomePlayer->setSource(QUrl::fromLocalFile(tempFile));
+    }
+    // Если не удалось создать, продолжаем без звука
 }
 
 void MetronomeSettingsDialog::onTestButtonClicked()
 {
-    QString selectedSound = soundComboBox->currentData().toString();
-    int volume = volumeSpinBox->value();
+    int strongVolume = ui->strongBeatSlider->value();
+    playTestSound(strongVolume, true);
+}
 
-    QString soundPath;
+void MetronomeSettingsDialog::onTestWeakButtonClicked()
+{
+    int weakVolume = ui->weakBeatSlider->value();
+    playTestSound(weakVolume, false);
+}
 
-    if (selectedSound == "click")
-    {
-        // Используем системный звук или создаем простой звук
-        soundPath = "qrc:/sounds/metronome.wav";
-    }
-    else
-    {
-        soundPath = selectedSound; // Пользовательский путь
+void MetronomeSettingsDialog::playTestSound(int volume, bool isStrong)
+{
+    Q_UNUSED(isStrong); // Параметр пока не используется
+    if (metronomeSoundFile.isEmpty()) {
+        return; // Звук не создан
     }
 
-    metronomeSound->setSource(QUrl::fromLocalFile(soundPath));
-    metronomeSound->setVolume(volume / 100.0f);
-    
-    // Проверяем, загрузился ли звук
-    if (metronomeSound->status() != QSoundEffect::Ready) {
-        qWarning() << "Failed to load metronome sound for testing:" << metronomeSound->status();
-        return;
+    // Пробуем воспроизвести через QSoundEffect (быстрее для коротких звуков)
+    if (metronomeSoundEffect && metronomeSoundEffect->status() == QSoundEffect::Ready) {
+        metronomeSoundEffect->setVolume(volume / 100.0f);
+        metronomeSoundEffect->play();
+    } else if (metronomePlayer && metronomePlayer->mediaStatus() == QMediaPlayer::LoadedMedia) {
+        // Fallback на QMediaPlayer
+        metronomePlayer->audioOutput()->setVolume(volume / 100.0f);
+        metronomePlayer->setPosition(0);
+        metronomePlayer->play();
+    } else {
+        // Если звук еще не загружен, пытаемся загрузить
+        metronomeSoundEffect->setSource(QUrl::fromLocalFile(metronomeSoundFile));
+        QEventLoop loop;
+        QTimer timeoutTimer;
+        timeoutTimer.setSingleShot(true);
+        timeoutTimer.setInterval(500); // 500мс таймаут
+
+        connect(metronomeSoundEffect, &QSoundEffect::statusChanged, &loop, [&]() {
+            if (metronomeSoundEffect->status() == QSoundEffect::Ready ||
+                metronomeSoundEffect->status() == QSoundEffect::Error) {
+                loop.quit();
+            }
+        });
+        connect(&timeoutTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+        timeoutTimer.start();
+        loop.exec();
+
+        if (metronomeSoundEffect->status() == QSoundEffect::Ready) {
+            metronomeSoundEffect->setVolume(volume / 100.0f);
+            metronomeSoundEffect->play();
+        }
+        // Если не загрузился, просто пропускаем без вывода
     }
-    
-    metronomeSound->play();
+}
+
+void MetronomeSettingsDialog::updateSoundStatus()
+{
+    QString status;
+    if (metronomeSoundEffect && metronomeSoundEffect->status() == QSoundEffect::Ready) {
+        status = "✓ Звук готов";
+    } else if (metronomePlayer && metronomePlayer->mediaStatus() == QMediaPlayer::LoadedMedia) {
+        status = "✓ Звук готов (QMediaPlayer)";
+    } else {
+        status = "⚠ Звук не загружен";
+    }
+
+    if (ui->statusLabel) {
+        ui->statusLabel->setText(status);
+    }
+}
+
+void MetronomeSettingsDialog::onStrongBeatVolumeChanged(int value)
+{
+    ui->strongBeatValueLabel->setText(QString::number(value) + "%");
+}
+
+void MetronomeSettingsDialog::onWeakBeatVolumeChanged(int value)
+{
+    ui->weakBeatValueLabel->setText(QString::number(value) + "%");
 }
 
 void MetronomeSettingsDialog::onSelectSoundButtonClicked()
@@ -112,7 +239,7 @@ void MetronomeSettingsDialog::onSelectSoundButtonClicked()
     QString fileName = QFileDialog::getOpenFileName(this, tr("Выберите звук метронома"), "", tr("Аудиофайлы (*.wav *.mp3)"));
     if (!fileName.isEmpty())
     {
-        soundComboBox->addItem(tr("Пользовательский"), fileName);
-        soundComboBox->setCurrentIndex(soundComboBox->count() - 1);
+        ui->soundComboBox->addItem(tr("Пользовательский"), fileName);
+        ui->soundComboBox->setCurrentIndex(ui->soundComboBox->count() - 1);
     }
 }

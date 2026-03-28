@@ -4,42 +4,147 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
 
+# Указываем версию MSVC компилятора для qmake
+# MSVC 14.44 соответствует версии компилятора 19.44
+win32-msvc*: QMAKE_MSC_VER = 1944
+
 TARGET = DONTFLOAT
 TEMPLATE = app
 
 INCLUDEPATH += include/
+INCLUDEPATH += ui
+
+# Third-party: Mixxx qm-dsp
+QM_DSP_ROOT = $$PWD/thirdparty/mixxx/lib/qm-dsp
+exists($$QM_DSP_ROOT) {
+    # Добавляем пути включений
+    INCLUDEPATH += $$QM_DSP_ROOT
+    INCLUDEPATH += $$QM_DSP_ROOT/include
+
+    # Добавляем файлы qm-dsp (те же, что использует Mixxx)
+    SOURCES += \
+        $$QM_DSP_ROOT/base/Pitch.cpp \
+        $$QM_DSP_ROOT/dsp/chromagram/Chromagram.cpp \
+        $$QM_DSP_ROOT/dsp/chromagram/ConstantQ.cpp \
+        $$QM_DSP_ROOT/dsp/keydetection/GetKeyMode.cpp \
+        $$QM_DSP_ROOT/dsp/onsets/DetectionFunction.cpp \
+        $$QM_DSP_ROOT/dsp/onsets/PeakPicking.cpp \
+        $$QM_DSP_ROOT/dsp/phasevocoder/PhaseVocoder.cpp \
+        $$QM_DSP_ROOT/dsp/rateconversion/Decimator.cpp \
+        $$QM_DSP_ROOT/dsp/signalconditioning/DFProcess.cpp \
+        $$QM_DSP_ROOT/dsp/signalconditioning/FiltFilt.cpp \
+        $$QM_DSP_ROOT/dsp/signalconditioning/Filter.cpp \
+        $$QM_DSP_ROOT/dsp/signalconditioning/Framer.cpp \
+        $$QM_DSP_ROOT/dsp/tempotracking/DownBeat.cpp \
+        $$QM_DSP_ROOT/dsp/tempotracking/TempoTrack.cpp \
+        $$QM_DSP_ROOT/dsp/tempotracking/TempoTrackV2.cpp \
+        $$QM_DSP_ROOT/dsp/tonal/ChangeDetectionFunction.cpp \
+        $$QM_DSP_ROOT/dsp/tonal/TCSgram.cpp \
+        $$QM_DSP_ROOT/dsp/tonal/TonalEstimator.cpp \
+        $$QM_DSP_ROOT/dsp/transforms/FFT.cpp \
+        $$QM_DSP_ROOT/ext/kissfft/kiss_fft.c \
+        $$QM_DSP_ROOT/ext/kissfft/tools/kiss_fftr.c \
+        $$QM_DSP_ROOT/maths/Correlation.cpp \
+        $$QM_DSP_ROOT/maths/KLDivergence.cpp \
+        $$QM_DSP_ROOT/maths/MathUtilities.cpp
+
+    # Определения компилятора (как в Mixxx)
+    DEFINES += kiss_fft_scalar=double
+    DEFINES += USE_MIXXX_QM_DSP
+
+    # MSVC требует _USE_MATH_DEFINES для M_PI
+    win32-msvc*: DEFINES += _USE_MATH_DEFINES
+
+    # Как в CMake: pthread для qm-dsp на Unix (не Windows)
+    unix:!win32: DEFINES += USE_PTHREADS
+
+    # Подавляем предупреждения компилятора для внешней библиотеки Mixxx
+    # C4244: преобразование типов (double->float, int64_t->int, size_t->int) - нормально для библиотеки
+    # C4267: преобразование size_t в меньший тип - нормально для библиотеки
+    # C4828: проблемы с кодировкой файла - не критично
+    # В qmake сложно применять флаги только к отдельным файлам, поэтому применяем глобально для MSVC
+    win32-msvc* {
+        QMAKE_CXXFLAGS += /wd4244 /wd4267 /wd4828
+        QMAKE_CFLAGS += /wd4244 /wd4267 /wd4828
+    }
+
+    message("Mixxx qm-dsp enabled: $$QM_DSP_ROOT")
+} else {
+    message("Warning: qm-dsp not found at $$QM_DSP_ROOT, using simplified BPM analyzer")
+}
+
+# MSVC + qm-dsp: см. CMakeLists.txt — _ITERATOR_DEBUG_LEVEL=0 для всего exe (в т.ч. Qt Creator).
+win32-msvc*:exists($$QM_DSP_ROOT): DEFINES += _ITERATOR_DEBUG_LEVEL=0
 
 SOURCES += \
         src/main.cpp\
         src/mainwindow.cpp \
         src/waveformview.cpp \
+        src/markerengine.cpp \
         src/pitchgridwidget.cpp \
         src/waveformcolors.cpp \
         src/bpmanalyzer.cpp \
+        src/keyanalyzer.cpp \
+        src/waveformanalyzer.cpp \
         src/audiocommand.cpp \
-        src/bpmfixdialog.cpp \
+        src/loadfiledialog.cpp \
         src/metronomesettingsdialog.cpp \
-        src/beatfixcommand.cpp
+        src/metronomecontroller.cpp \
+        src/beatfixcommand.cpp \
+        src/timestretchcommand.cpp \
+        src/timestretchprocessor.cpp \
+        src/timeutils.cpp \
+        src/beatvisualizer.cpp \
+        src/spectrogramsettingsdialog.cpp \
+        src/reverbsettingsdialog.cpp \
+        src/pitchshiftsettingsdialog.cpp \
+        src/shortcutsdialog.cpp \
+        thirdparty/lmms/plugins/ReverbSC/base.c \
+        thirdparty/lmms/plugins/ReverbSC/revsc.c \
+        thirdparty/lmms/plugins/ReverbSC/dcblock.c
+        # src/beatvisualizationsettingsdialog.cpp
 
 HEADERS += \
         include/mainwindow.h \
         include/waveformview.h \
+        include/markerengine.h \
         include/pitchgridwidget.h \
         include/waveformcolors.h \
         include/bpmanalyzer.h \
+        include/keyanalyzer.h \
+        include/waveformanalyzer.h \
         include/audiocommand.h \
-        include/bpmfixdialog.h \
+        include/loadfiledialog.h \
         include/metronomesettingsdialog.h \
-        include/beatfixcommand.h
+        include/metronomecontroller.h \
+        include/beatfixcommand.h \
+        include/timestretchcommand.h \
+        include/timestretchprocessor.h \
+        include/timeutils.h \
+        include/beatvisualizer.h \
+        include/spectrogramsettingsdialog.h \
+        include/reverbsettingsdialog.h \
+        include/pitchshiftsettingsdialog.h \
+        include/shortcutsdialog.h
+        # include/beatvisualizationsettingsdialog.h
 
 FORMS += \
-        ui/mainwindow.ui
+        ui/mainwindow.ui \
+        ui/loadfiledialog.ui \
+        ui/metronomesettingsdialog.ui
+        # ui/beatvisualizationsettingsdialog.ui
 
 TRANSLATIONS += \
-        translations/DONTFLOAT_ru_RU.ts
+        translations/ru_RU.ts \
+        translations/en_US.ts
 
 RESOURCES += \
         resources.qrc
+
+# Иконка EXE (как в CMake: resources/app.rc + icons/logo.ico)
+win32:exists($$PWD/resources/app.rc) {
+    RC_FILE = resources/app.rc
+}
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

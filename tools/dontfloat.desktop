@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=DONTFLOAT
+Name[ru]=DONTFLOAT
+Comment=Аудиоредактор для выравнивания BPM
+Comment[ru]=Аудиоредактор для выравнивания BPM
+Comment[en]=Audio editor for BPM alignment
+Exec=DONTFLOAT %F
+Icon=dontfloat
+Terminal=false
+Categories=AudioVideo;Audio;AudioVideoEditing;
+MimeType=audio/wav;audio/mpeg;audio/flac;
+StartupNotify=true

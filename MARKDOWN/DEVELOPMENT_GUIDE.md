@@ -1,0 +1,335 @@
+# Руководство по разработке DONTFLOAT
+
+## Стандарты кодирования
+
+### Именование
+- **Классы**: PascalCase (MainWindow, WaveformView)
+- **Функции/методы**: camelCase (openAudioFile, updateTime)
+- **Переменные**: camelCase (currentPosition, isPlaying)
+- **Константы**: UPPER_CASE (QT_MIN_VERSION)
+- **Файлы**: snake_case (mainwindow.cpp, waveformview.h)
+
+### Заголовочные файлы
+- Всегда используйте include guards: `#ifndef CLASSNAME_H`
+- Группируйте includes: Qt, стандартная библиотека, локальные
+- Объявляйте слоты в private slots секции
+- Используйте forward declarations где возможно
+
+### Исходные файлы
+- Реализация в соответствующих .cpp файлах
+- Используйте const где возможно
+- Предпочитайте ссылки указателям для параметров
+- Обрабатывайте ошибки через исключения или возвращаемые значения
+
+## Qt специфичные правила
+
+### UI компоненты
+- Используйте Qt Designer для создания .ui файлов
+- Наследуйтесь от соответствующих Qt классов
+- Используйте Q_OBJECT макрос для классов с сигналами/слотами
+- Применяйте Qt стили через QPalette для темной темы
+
+### Сигналы и слоты
+- Используйте новые синтаксисы Qt5/6: `connect(sender, &Class::signal, receiver, &Class::slot)`
+- Группируйте слоты в private slots секции
+- Используйте lambda функции для простых операций
+
+### Ресурсы
+- Все ресурсы в resources.qrc файле
+- Используйте префикс :/icons/ для иконок
+- Поддерживайте SVG формат для масштабируемости
+
+## Структура проекта
+
+### Директории
+```
+DONTFLOAT/
+├── include/          # Заголовочные файлы (.h)
+├── src/             # Исходный код (.cpp)
+├── ui/              # UI файлы (.ui)
+├── resources/       # Ресурсы (иконки, app.rc)
+├── docs/            # Пользовательская документация
+├── translations/    # Файлы локализации (.ts)
+├── tests/           # Тесты
+├── tools/           # Скрипты (build_windows_installer.bat, svg_to_ico.py, nsis_installer.nsi)
+├── thirdparty/      # Сторонние библиотеки
+├── build/           # Сборка проекта
+└── MARKDOWN/        # Вспомогательная документация
+```
+
+### Файлы сборки
+- **CMakeLists.txt**: Основной файл CMake
+- **DONTFLOAT.pro**: Файл qmake
+- **resources.qrc**: Ресурсы Qt
+
+### Сборка проекта
+
+#### CMake (рекомендуется)
+```bash
+# Создание директории сборки
+mkdir build
+cd build
+
+# Конфигурация проекта
+cmake ..
+
+# Сборка
+cmake --build . --config Debug
+# или для Release
+cmake --build . --config Release
+```
+
+**Особенности сборки**:
+- Проект поддерживает языки C и C++ (`LANGUAGES C CXX`)
+- C файлы kiss_fft компилируются отдельно с установкой `LANGUAGE C`
+- Автоматическая обработка MOC/QT для Qt классов
+- Поддержка MSVC 2022 и MinGW
+
+#### qmake (альтернатива)
+```bash
+# Генерация Makefile
+qmake DONTFLOAT.pro
+
+# Сборка
+mingw32-make  # для MinGW
+# или
+nmake         # для MSVC
+```
+
+**Требования**:
+- Qt 6.8.3 или 6.9.3
+- MSVC 2022 64-bit или MinGW 64-bit
+- CMake 3.16 или выше
+
+#### Сборка Windows installer
+```batch
+tools\build_windows_installer.bat
+```
+Скрипт выполняет: CMake Release, install, windeployqt, NSIS. Результат: `tools/DONTFLOAT_Setup.exe`. Требуется NSIS.
+
+#### Иконка EXE (Windows)
+- **resources/app.rc** — ресурс иконки для EXE
+- **resources/icons/logo.ico** — генерируется из logo.svg
+- **tools/svg_to_ico.py** — конвертация SVG→ICO (Inkscape + Pillow)
+- При отсутствии logo.ico скрипт installer вызывает `python tools/svg_to_ico.py`
+- CMake подключает app.rc только при наличии logo.ico
+
+## Система команд (Command Pattern)
+
+### Базовый класс Command
+```cpp
+class Command {
+public:
+    virtual ~Command() = default;
+    virtual void execute() = 0;
+    virtual void undo() = 0;
+    virtual QString description() const = 0;
+};
+```
+
+### AudioCommand
+- Загрузка аудиофайлов
+- Сохранение результатов
+- Валидация форматов
+
+### BeatFixCommand
+- Исправление отклонений битов
+- Интеграция с QUndoStack
+- Поддержка отмены/повтора
+
+### TimeStretchCommand
+- Реализовано: сжатие/растяжение по меткам (Ctrl+T)
+- Сохранение исходных данных для отмены через QUndoStack
+- Поддержка тонкомпенсации (WSOLA в TimeStretchProcessor)
+- Интеграция с MarkerEngine (MarkerData) и TimeStretchProcessor
+
+## Консольный режим
+
+### Реализация
+```cpp
+int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& options) {
+    // Создание синтетических данных для демонстрации
+    // Анализ BPM
+    // Вывод результатов
+}
+```
+
+### Парсинг командной строки
+- Использование QCommandLineParser
+- Поддержка опций: -c, -f, --min-bpm, --max-bpm, --mixxx, --fast, --variable-tempo
+- Валидация входных параметров
+
+## Система тестирования
+
+### Структура тестов
+```
+tests/
+├── test_bpm/                    # Тестовые аудиофайлы
+│   └── example_80BPM.mp3       # Пример файла для тестирования
+├── CMakeLists.txt              # Конфигурация CMake для тестов
+├── README.md                   # Документация тестов
+├── test_bpm_analysis.cpp       # Полная система тестирования BPM
+├── simple_synthetic_test.cpp   # Синтетический тест
+├── functional_test.bat         # Функциональный тест
+├── ui_diagnostic_test.bat      # Диагностика UI
+├── color_fix_test.bat          # Тест цветовых схем
+└── dark_theme_fix_test.bat     # Тест темной темы
+```
+
+### Типы тестов
+- **Функциональные**: Проверка GUI и консольного режима
+- **BPM тесты**: Тестирование анализа BPM
+- **Синтетические**: Тестирование с искусственными данными
+- **UI тесты**: Проверка интерфейса и цветовых схем
+
+## Цветовые схемы
+
+### Реализация тем
+```cpp
+void MainWindow::setColorScheme(const QString& scheme) {
+    if (scheme == "dark") {
+        // Установка темной палитры
+        QPalette darkPalette;
+        // ... настройки цветов ...
+        qApp->setPalette(darkPalette);
+    } else if (scheme == "light") {
+        // Установка светлой палитры
+        QPalette lightPalette;
+        // ... настройки цветов ...
+        qApp->setPalette(lightPalette);
+    }
+
+    // Сохранение настроек
+    settings.setValue("colorScheme", scheme);
+}
+```
+
+### Цветовая палитра
+- **Темная тема**: Темные тона с белым текстом
+- **Светлая тема**: Светлые тона с черным текстом
+- **Сохранение**: Настройки сохраняются в QSettings
+
+## Обработка аудио
+
+### Поддерживаемые форматы
+- WAV, MP3, FLAC
+- Частота дискретизации: 44.1 kHz
+- Битность: 16-bit, 24-bit, 32-bit
+- Каналы: Моно, Стерео
+
+### Технические требования
+- Декодирование в 32-bit float
+- Нормализация аудиоданных
+- Асинхронная обработка
+- Эффективное управление памятью
+
+## Настройки
+
+### QSettings
+```cpp
+QSettings settings("DONTFLOAT", "DONTFLOAT");
+settings.setValue("colorScheme", "dark");
+QString scheme = settings.value("colorScheme", "dark").toString();
+```
+
+### Сохраняемые параметры
+- BPM трека
+- Настройки метронома (громкость сильной/слабой доли)
+- Режим отображения времени
+- Размеры окон и элементы интерфейса
+- Видимость питч-сетки (по умолчанию: скрыта)
+- Цветовая схема
+- Настройки визуализации ударных
+- Выбранный язык интерфейса
+- Последний открытый файл
+
+## Локализация
+
+### Файлы переводов
+- **Русский**: ru_RU.ts
+- **Английский**: en_US.ts
+- Использование Qt Linguist для редактирования
+
+### Тексты
+- Все пользовательские тексты через tr()
+- Использование осмысленных контекстов
+- Поддержка множественных форм
+
+## Визуализация отклонений битов
+
+### Общие принципы
+- **Не использовать qDebug()** в функциях отрисовки (вызываются каждый кадр)
+- **save()/restore() вне циклов** - включать один раз для всех элементов
+- **Вычисления вне циклов** - константы рассчитывать до цикла
+- **Рисовать один раз** - не дублировать для каждого канала
+
+### Пример оптимизированной отрисовки
+```cpp
+void drawElements(QPainter& painter, const QVector<Item>& items) {
+    // ПРАВИЛЬНО: Константы вне цикла
+    const qreal rectX = rect.x();
+    const qreal centerY = rect.center().y();
+    
+    // ПРАВИЛЬНО: save/restore вне цикла
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    
+    for (const auto& item : items) {
+        // НЕТ qDebug() здесь!
+        // НЕТ save/restore здесь!
+        drawSingleItem(painter, item, rectX, centerY);
+    }
+    
+    painter.restore();
+}
+```
+
+### Типичные ошибки
+❌ **Плохо:**
+```cpp
+for (int i = 0; i < items.size(); ++i) {
+    qDebug() << "Drawing item" << i;  // МЕДЛЕННО!
+    painter.save();  // МЕДЛЕННО!
+    painter.setRenderHint(...);  // МЕДЛЕННО!
+    painter.drawPolygon(triangle);
+    painter.restore();  // МЕДЛЕННО!
+}
+```
+
+✅ **Хорошо:**
+```cpp
+painter.save();
+painter.setRenderHint(...);
+for (const auto& item : items) {
+    painter.drawPolygon(triangle);  // Быстро
+}
+painter.restore();
+```
+
+## Производительность
+
+### Оптимизация
+- Отрисовка только видимой области
+- Агрегация сэмплов при масштабировании
+- Кэширование промежуточных вычислений
+- Асинхронная обработка
+
+### Память
+- Эффективное управление RAM
+- Автоматическая очистка неиспользуемых данных
+- Умное кэширование результатов
+- Мониторинг использования памяти
+
+## Отладка
+
+### Логирование
+- Использование qDebug() для логирования
+- Проверка корректности аудиофайлов
+- Валидация входных параметров
+- Обработка исключений
+
+### Тестирование
+- Проверка всех компонентов
+- Валидация входных данных
+- Тестирование граничных случаев
+- Проверка производительности

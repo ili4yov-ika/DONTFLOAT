@@ -1,0 +1,33 @@
+CompileFlags:
+  Add:
+    - -std=c++17
+    - -Iinclude
+    - -Iui
+    - -Ibuild/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug
+    - -IC:/Qt/6.9.3/msvc2022_64/include
+    - -IC:/Qt/6.9.3/msvc2022_64/include/QtCore
+    - -IC:/Qt/6.9.3/msvc2022_64/include/QtGui
+    - -IC:/Qt/6.9.3/msvc2022_64/include/QtWidgets
+    - -IC:/Qt/6.9.3/msvc2022_64/include/QtMultimedia
+    - -IC:/Qt/6.9.3/msvc2022_64/include/QtMultimediaWidgets
+    - -IC:/Qt/6.9.3/msvc2022_64/include/QtNetwork
+    - -DQT_CORE_LIB
+    - -DQT_GUI_LIB
+    - -DQT_WIDGETS_LIB
+    - -DQT_MULTIMEDIA_LIB
+    - -DQT_MULTIMEDIAWIDGETS_LIB
+    - -DQT_NETWORK_LIB
+    - -Dkiss_fft_scalar=double
+    - -D_USE_MATH_DEFINES
+    - -DUNICODE
+    - -D_UNICODE
+    - -DWIN32
+    - -D_DEBUG
+    - -Wno-everything
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+  Suppress:
+    - unused-includes
+    - missing-includes
+    - unused-using-decls
