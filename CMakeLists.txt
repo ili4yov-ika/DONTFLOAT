@@ -20,24 +20,22 @@ set(CMAKE_AUTORCC ON)
 # Указываем путь для поиска UI файлов
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 
-# Устанавливаем путь к Qt6 (автоматическое определение)
-if(EXISTS "C:/Qt/6.9.3/msvc2022_64")
-    set(QT_ROOT_DIR "C:/Qt/6.9.3/msvc2022_64")
-elseif(EXISTS "C:/Qt/6.8.3/msvc2022_64")
-    set(QT_ROOT_DIR "C:/Qt/6.8.3/msvc2022_64")
+# Qt6: на Windows добавляем типовые пути установщика Qt; на Linux/macOS — системный Qt
+# или -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64 (или аналог).
+set(QT_MIN_VERSION "6.8.0")
+if(WIN32)
+    if(EXISTS "C:/Qt/6.9.3/msvc2022_64")
+        list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.9.3/msvc2022_64")
+    elseif(EXISTS "C:/Qt/6.8.3/msvc2022_64")
+        list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.8.3/msvc2022_64")
+    endif()
 else()
-    message(FATAL_ERROR "Qt не найден! Установите Qt 6.8.3 или 6.9.3 с поддержкой MSVC 2022 64-bit")
+    message(STATUS "Сборка ${CMAKE_SYSTEM_NAME}: поиск Qt6 через CMAKE_PREFIX_PATH и стандартные каталоги.")
 endif()
-
-set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR})
-set(CMAKE_PREFIX_PATH ${QT_ROOT_DIR} CACHE PATH "Qt6 installation path" FORCE)
-message(STATUS "Используется Qt: ${QT_ROOT_DIR}")
 
 # Генерируем compile_commands.json для IntelliSense
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Ensure Qt6 is available
-set(QT_MIN_VERSION "6.8.0")
 find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Core
     Gui
@@ -46,6 +44,21 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     MultimediaWidgets
     Test
 )
+
+# Каталог Qt для CTest на Windows (PATH к DLL); на Linux не используется.
+if(WIN32)
+    if(EXISTS "C:/Qt/6.9.3/msvc2022_64")
+        set(QT_ROOT_DIR "C:/Qt/6.9.3/msvc2022_64")
+    elseif(EXISTS "C:/Qt/6.8.3/msvc2022_64")
+        set(QT_ROOT_DIR "C:/Qt/6.8.3/msvc2022_64")
+    else()
+        get_filename_component(_qt6_cmake_parent "${Qt6_DIR}" DIRECTORY)
+        get_filename_component(_qt6_lib "${_qt6_cmake_parent}" DIRECTORY)
+        get_filename_component(QT_ROOT_DIR "${_qt6_lib}" DIRECTORY)
+    endif()
+    set(QT_ROOT_DIR "${QT_ROOT_DIR}" CACHE PATH "Qt6 root (Windows CTest / DLL PATH)" FORCE)
+    message(STATUS "Используется Qt: ${QT_ROOT_DIR}")
+endif()
 
 # Add source files
 set(SOURCES
@@ -143,15 +156,20 @@ add_executable(${PROJECT_NAME}
 )
 
 # Include directories
-target_include_directories(${PROJECT_NAME} PRIVATE
+set(_DONTFLOAT_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/Desktop_Qt_6_8_3_MSVC2022_64bit-Debug
-    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_autogen/include_Debug
-    ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_autogen/include_Release
     ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_autogen
 )
+if(WIN32)
+    list(APPEND _DONTFLOAT_INCLUDE_DIRS
+        ${CMAKE_CURRENT_BINARY_DIR}/Desktop_Qt_6_8_3_MSVC2022_64bit-Debug
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_autogen/include_Debug
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}_autogen/include_Release
+    )
+endif()
+target_include_directories(${PROJECT_NAME} PRIVATE ${_DONTFLOAT_INCLUDE_DIRS})
 
 # Link Qt libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -241,6 +259,8 @@ if(EXISTS ${QM_DSP_ROOT})
             COMPILE_OPTIONS "/wd4244;/wd4267;/wd4828"
         )
     elseif(UNIX)
+        find_package(Threads REQUIRED)
+        target_link_libraries(qm_dsp PRIVATE Threads::Threads)
         target_compile_definitions(qm_dsp PRIVATE USE_PTHREADS)
         # Third-party qm-dsp: suppress known external warnings on GCC/Clang
         target_compile_options(qm_dsp PRIVATE
@@ -433,9 +453,9 @@ if(WIN32)
     set(CPACK_GENERATOR "NSIS;ZIP")
     set(CPACK_NSIS_PACKAGE_NAME "DONTFLOAT")
     set(CPACK_NSIS_DISPLAY_NAME "DONTFLOAT")
-    set(CPACK_NSIS_HELP_LINK "https://github.com/yourusername/DONTFLOAT")
-    set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/yourusername/DONTFLOAT")
-    set(CPACK_NSIS_CONTACT "maintainer@example.com")
+    set(CPACK_NSIS_HELP_LINK "https://https://github.com/ili4yov-ika/DONTFLOAT")
+    set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/ili4yov-ika/DONTFLOAT")
+    set(CPACK_NSIS_CONTACT "ilichyov.kolyan@yandex.ru")
     set(CPACK_NSIS_MODIFY_PATH ON)
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
 endif()
@@ -443,15 +463,15 @@ endif()
 # Linux DEB
 if(UNIX AND NOT APPLE)
     set(CPACK_GENERATOR "DEB;RPM;TGZ")
-    
+
     # DEB настройки
     set(CPACK_DEBIAN_PACKAGE_NAME "dontfloat")
-    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "DONTFLOAT Project <maintainer@example.com>")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "DONTFLOAT Project <ilichyov.kolyan@yandex.ru>")
     set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6 (>= 6.8.0), libqt6gui6 (>= 6.8.0), libqt6widgets6 (>= 6.8.0), libqt6multimedia6 (>= 6.8.0), libqt6multimediawidgets6 (>= 6.8.0)")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-    
+
     # RPM настройки
     set(CPACK_RPM_PACKAGE_NAME "dontfloat")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/Multimedia")
