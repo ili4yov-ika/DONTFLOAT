@@ -220,7 +220,7 @@
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Решение проблем
 - [DEVELOPMENT_HISTORY.md](DEVELOPMENT_HISTORY.md) - История разработки
 - [ISSUES_AND_PLANS.md](ISSUES_AND_PLANS.md) - Проблемы и планы
-- [MIXXX_LIBRARIES_STATUS.md](MIXXX_LIBRARIES_STATUS.md) - Статус библиотек Mixxx
+- [../thirdparty/README.md](../thirdparty/README.md) - Сторонние библиотеки: qm-dsp (standalone), LMMS и др.
 - [TIMESTRETCH_FEATURE.md](TIMESTRETCH_FEATURE.md) - Функция растяжения времени
 - [DOCUMENTATION_CHANGELOG.md](DOCUMENTATION_CHANGELOG.md) - История изменений документации
 - [BEAT_DEVIATION_VISUALIZATION.md](BEAT_DEVIATION_VISUALIZATION.md) - Визуализация отклонений (отключена)
@@ -228,7 +228,7 @@
 
 ### 📋 Обновления
 
-**Последнее обновление**: 2026-02-14
+**Последнее обновление**: 2026-05-30
 
 Документация приведена в соответствие с кодовой базой DONTFLOAT версии 0.0.0.1.
 

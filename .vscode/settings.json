@@ -26,8 +26,8 @@
         "${workspaceFolder}/build",
         "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
         "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug",
-        "${workspaceFolder}/thirdparty/mixxx/lib/qm-dsp",
-        "${workspaceFolder}/thirdparty/mixxx/lib/qm-dsp/include"
+        "${workspaceFolder}/thirdparty/qm-dsp",
+        "${workspaceFolder}/thirdparty/qm-dsp/include"
     ],
     "C_Cpp.default.defines": [
         "QT_CORE_LIB",

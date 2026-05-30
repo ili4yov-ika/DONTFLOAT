@@ -14,8 +14,8 @@ TEMPLATE = app
 INCLUDEPATH += include/
 INCLUDEPATH += ui
 
-# Third-party: Mixxx qm-dsp
-QM_DSP_ROOT = $$PWD/thirdparty/mixxx/lib/qm-dsp
+# Third-party: qm-dsp (standalone, ранее бралась из thirdparty/mixxx/lib/qm-dsp)
+QM_DSP_ROOT = $$PWD/thirdparty/qm-dsp
 exists($$QM_DSP_ROOT) {
     # Добавляем пути включений
     INCLUDEPATH += $$QM_DSP_ROOT
@@ -102,7 +102,6 @@ SOURCES += \
         thirdparty/lmms/plugins/ReverbSC/base.c \
         thirdparty/lmms/plugins/ReverbSC/revsc.c \
         thirdparty/lmms/plugins/ReverbSC/dcblock.c
-        # src/beatvisualizationsettingsdialog.cpp
 
 HEADERS += \
         include/mainwindow.h \
@@ -125,14 +124,15 @@ HEADERS += \
         include/spectrogramsettingsdialog.h \
         include/reverbsettingsdialog.h \
         include/pitchshiftsettingsdialog.h \
-        include/shortcutsdialog.h
-        # include/beatvisualizationsettingsdialog.h
+        include/shortcutsdialog.h \
+        include/fft_engine.h \
+        include/reverbsc_engine.h \
+        include/granularpitchshifter_engine.h
 
 FORMS += \
         ui/mainwindow.ui \
         ui/loadfiledialog.ui \
         ui/metronomesettingsdialog.ui
-        # ui/beatvisualizationsettingsdialog.ui
 
 TRANSLATIONS += \
         translations/ru_RU.ts \

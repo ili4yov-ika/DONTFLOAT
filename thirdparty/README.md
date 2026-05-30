@@ -6,12 +6,16 @@
 
 | Библиотека | Лицензия | Назначение |
 |---|---|---|
-| **Mixxx** (qm-dsp) | GPLv2 | BPM-анализ, детектирование битов |
+| **qm-dsp** (standalone) | GPLv2 | BPM-анализ, детектирование битов, тональность — **собирается** |
+| **Mixxx** | GPLv2 | Референс алгоритмов beat tracking (полное дерево, опционально) |
 | **Aubio** | GPLv3 | Onset detection, pitch, ритмический анализ |
+| **Audacity** | GPLv2/v3 | Референс обработки и визуализации аудио |
 | **Essentia** | AGPL v3 | Комплексный аудиоанализ, тональность |
 | **SoundTouch** | LGPL | Изменение темпа и тона |
 | **Sonic Visualiser** | GPLv2 | Визуализация, Vamp-плагины |
 | **LMMS** | GPLv2 | FFT-алгоритмы, DSP-эффекты, анализ спектра |
+
+> **Сборка**: единственный сторонний код, который реально компилируется в DONTFLOAT, — это `thirdparty/qm-dsp` (отдельная копия qm-dsp) и три C-файла `thirdparty/lmms/plugins/ReverbSC`. Остальные каталоги (`mixxx`, `aubio`, `audacity`, `essentia`, `soundtouch`, `sonic-visualiser`) хранятся как референс и для будущей интеграции, в текущей сборке не участвуют.
 
 ---
 
@@ -33,6 +37,11 @@
 - **Описание**: Библиотека для цифровой обработки сигналов и музыкальной информатики
 - **Разработчик**: Centre for Digital Music, Queen Mary University of London
 - **Лицензия**: GPLv2
+- **Расположение**: `thirdparty/qm-dsp` — **отдельная** копия библиотеки. Ранее
+  бралась из дерева Mixxx (`thirdparty/mixxx/lib/qm-dsp`); теперь сборка
+  (`DONTFLOAT.pro` и `CMakeLists.txt`, переменная `QM_DSP_ROOT`) ссылается
+  напрямую на `thirdparty/qm-dsp`, поэтому полное дерево Mixxx для сборки
+  **не требуется** и может быть удалено.
 - **Назначение в DONTFLOAT**: Анализ тональности, ритмический анализ
 - **Что делает**:
   - Анализ хроматограмм (хроматический вектор)
@@ -196,8 +205,8 @@ fft_helpers.cpp → include/fft_engine.h:
 
 | Технология | Источник | Файл в проекте |
 |---|---|---|
-| BPM-анализ | Mixxx / qm-dsp | `src/bpmanalyzer.cpp` |
-| Анализ тональности | Mixxx / qm-dsp | `src/keyanalyzer.cpp` |
+| BPM-анализ | qm-dsp (`thirdparty/qm-dsp`) | `src/bpmanalyzer.cpp` |
+| Анализ тональности | qm-dsp (`thirdparty/qm-dsp`) | `src/keyanalyzer.cpp` |
 | Time stretch (WSOLA) | Собственная реализация | `src/timestretchprocessor.cpp` |
 | FFT оконные функции | LMMS fft_helpers | `include/fft_engine.h` |
 | Спектрограмма (Cooley-Tukey FFT) | Адаптация из LMMS | `include/fft_engine.h`, `src/waveformview.cpp` |

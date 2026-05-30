@@ -99,6 +99,56 @@ void alignWaveformViewToBarGrid(WaveformView *waveformView, float bpm, int beats
     waveformView->setHorizontalOffset(offset);
 }
 
+// Раскладывает кадры QAudioBuffer по каналам (моно/стерео), конвертируя любой
+// формат сэмплов в float [-1; 1]. Берутся первые два канала (как и раньше).
+void appendAudioBuffer(const QAudioBuffer& buffer, QVector<float>& left, QVector<float>& right)
+{
+    const int frames = buffer.frameCount();
+    const int ch = buffer.format().channelCount();
+    if (frames <= 0 || ch <= 0)
+        return;
+
+    const bool stereo = ch > 1;
+    auto push = [&](float l, float r) {
+        left.append(l);
+        if (stereo)
+            right.append(r);
+    };
+
+    switch (buffer.format().sampleFormat()) {
+    case QAudioFormat::Float: {
+        const float* d = buffer.constData<float>();
+        for (int i = 0; i < frames; ++i)
+            push(d[i * ch], stereo ? d[i * ch + 1] : 0.f);
+        break;
+    }
+    case QAudioFormat::Int16: {
+        const qint16* d = buffer.constData<qint16>();
+        constexpr float k = 1.0f / 32768.0f;
+        for (int i = 0; i < frames; ++i)
+            push(d[i * ch] * k, stereo ? d[i * ch + 1] * k : 0.f);
+        break;
+    }
+    case QAudioFormat::Int32: {
+        const qint32* d = buffer.constData<qint32>();
+        constexpr float k = 1.0f / 2147483648.0f;
+        for (int i = 0; i < frames; ++i)
+            push(float(d[i * ch]) * k, stereo ? float(d[i * ch + 1]) * k : 0.f);
+        break;
+    }
+    case QAudioFormat::UInt8: {
+        const quint8* d = buffer.constData<quint8>();
+        constexpr float k = 1.0f / 128.0f;
+        for (int i = 0; i < frames; ++i)
+            push((int(d[i * ch]) - 128) * k, stereo ? (int(d[i * ch + 1]) - 128) * k : 0.f);
+        break;
+    }
+    default:
+        // Неизвестный формат сэмпла — пропускаем буфер.
+        break;
+    }
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent)
@@ -1023,11 +1073,22 @@ void MainWindow::setupConnections()
                 this, &MainWindow::createOnsetMarkersAuto);
     }
 
-    // Авто-метки по тактовой сетке (Beat Grid)
+    // Авто-привязка всех меток к тактовой сетке (Beat Grid)
     if (ui->gridMarkersButton) {
-        ui->gridMarkersButton->setToolTip(tr("Автоматически создать метки по тактовой сетке"));
+        ui->gridMarkersButton->setToolTip(
+            tr("Привязать все метки к тактовой сетке BPM (подразделения такта)"));
         connect(ui->gridMarkersButton, &QPushButton::clicked,
-                this, &MainWindow::createBeatGridMarkersAuto);
+                this, &MainWindow::snapAllMarkersToGrid);
+    }
+    if (ui->gridBackButton) {
+        ui->gridBackButton->setToolTip(tr("Сдвинуть тактовую сетку на один удар назад"));
+        connect(ui->gridBackButton, &QPushButton::clicked,
+                this, &MainWindow::shiftBeatGridBackward);
+    }
+    if (ui->gridForwardButton) {
+        ui->gridForwardButton->setToolTip(tr("Сдвинуть тактовую сетку на один удар вперёд"));
+        connect(ui->gridForwardButton, &QPushButton::clicked,
+                this, &MainWindow::shiftBeatGridForward);
     }
 
     // Подключаем правую кнопку мыши для удаления меток цикла
@@ -1500,6 +1561,7 @@ void MainWindow::setupShortcuts()
     shiftBShortcut->setContext(Qt::ApplicationShortcut);
     connect(shiftBShortcut, &QShortcut::activated, this, &MainWindow::clearLoopEnd);
 
+    // Добавление метки растяжения только здесь (настраиваемая клавиша AddMarker), без дублирования в keyPressEvent / WaveformView
     markerShortcut = new QShortcut(QKeySequence(Qt::Key_M), this);
     markerShortcut->setContext(Qt::ApplicationShortcut);
     connect(markerShortcut, &QShortcut::activated, this, [this]() {
@@ -1756,8 +1818,13 @@ void MainWindow::processAudioFile(const QString& filePath)
     dialog.activateWindow();
     QApplication::processEvents();
 
-    const QVector<QVector<float>> audioData = loadAudioFile(filePath);
-    if (audioData.isEmpty()) {
+    bool loadOk = false;
+    const QVector<QVector<float>> audioData = loadAudioFile(filePath, &loadOk,
+        [this, &dialog](int percent) {
+            // Декодирование занимает «нижнюю» часть прогресс-бара (10..45 %).
+            dialog.updateProgress(tr("Загрузка аудиофайла..."), 10 + (percent * 35) / 100);
+        });
+    if (!loadOk || audioData.isEmpty()) {
         dialog.close();
         setEnabled(true);
         statusBar()->showMessage(tr("Ошибка загрузки файла"), 3000);
@@ -1809,29 +1876,36 @@ void MainWindow::resetLoopStateAfterNewFile()
     ui->loopButton->setChecked(false);
 }
 
-QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath)
+QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath,
+                                                  bool* ok,
+                                                  const std::function<void(int)>& onProgress)
 {
+    if (ok)
+        *ok = false;
+
     QVector<QVector<float>> channels;
     QAudioDecoder decoder;
 
-    // Настраиваем формат аудио
-    QAudioFormat format;
-    format.setSampleRate(44100);
-    format.setChannelCount(2);
-    format.setSampleFormat(QAudioFormat::Float);
-    decoder.setAudioFormat(format);
-
+    // Декодируем в НАТИВНОМ формате файла: не навязываем 44100/стерео,
+    // чтобы не ресемплировать и не искажать анализ BPM/тональности.
+    // Частота и число каналов берутся из первого пришедшего буфера.
     decoder.setSource(QUrl::fromLocalFile(filePath));
-
-    // Проверяем, поддерживается ли формат
-    if (!decoder.audioFormat().isValid()) {
-        statusBar()->showMessage(tr("Ошибка: неподдерживаемый формат аудио"), 3000);
-        return channels;
-    }
 
     QEventLoop loop;
     QVector<float> leftChannel;
     QVector<float> rightChannel;
+    bool decodeError = false;
+    int detectedSampleRate = 0;
+    bool reserved = false;
+    int lastReportedPercent = -1;
+
+    // Сторожевой таймер: прерываем ожидание, если декодер «завис»
+    // (нет новых данных дольше 15 секунд).
+    QTimer stallTimer;
+    stallTimer.setSingleShot(true);
+    stallTimer.setInterval(15000);
+    connect(&stallTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    stallTimer.start();
 
     // Обработка ошибок декодера
     connect(&decoder, static_cast<void(QAudioDecoder::*)(QAudioDecoder::Error)>(&QAudioDecoder::error),
@@ -1850,36 +1924,54 @@ QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath)
                 default:
                     errorStr += tr("неизвестная ошибка");
             }
+            decodeError = true;
             statusBar()->showMessage(errorStr, 3000);
             loop.quit();
         });
 
     connect(&decoder, &QAudioDecoder::bufferReady, this,
         [&]() {
-            QAudioBuffer buffer = decoder.read();
-            if (!buffer.isValid() || buffer.frameCount() == 0) {
-                statusBar()->showMessage(tr("Ошибка: некорректные данные в буфере"), 3000);
+            const QAudioBuffer buffer = decoder.read();
+            if (!buffer.isValid() || buffer.frameCount() == 0)
                 return;
+
+            stallTimer.start(); // данные пришли — перезапускаем сторож
+
+            const int rate = buffer.format().sampleRate();
+            if (rate > 0 && detectedSampleRate == 0) {
+                detectedSampleRate = rate;
+                // Сохраняем нативную частоту дискретизации для всего пайплайна.
+                if (waveformView)
+                    waveformView->setSampleRate(rate);
             }
 
-            if (buffer.format().sampleFormat() != QAudioFormat::Float) {
-                statusBar()->showMessage(tr("Ошибка: неподдерживаемый формат данных"), 3000);
-                return;
+            // Однократно резервируем память по оценке длительности файла.
+            if (!reserved && detectedSampleRate > 0) {
+                const qint64 durMs = decoder.duration();
+                if (durMs > 0) {
+                    const qint64 estFrames =
+                        (durMs * detectedSampleRate) / 1000 + buffer.frameCount();
+                    leftChannel.reserve(estFrames);
+                    if (buffer.format().channelCount() > 1)
+                        rightChannel.reserve(estFrames);
+                    reserved = true;
+                }
             }
 
-            const float* data = buffer.constData<float>();
-            int frameCount = buffer.frameCount();
-            int channelCount = buffer.format().channelCount();
+            appendAudioBuffer(buffer, leftChannel, rightChannel);
 
-            // Устанавливаем частоту дискретизации для визуализации
-            if (waveformView && buffer.format().sampleRate() > 0) {
-                waveformView->setSampleRate(buffer.format().sampleRate());
-            }
-
-            for (int i = 0; i < frameCount; ++i) {
-                leftChannel.append(data[i * channelCount]);
-                if (channelCount > 1) {
-                    rightChannel.append(data[i * channelCount + 1]);
+            // Сообщаем о прогрессе декодирования (по длительности).
+            if (onProgress && detectedSampleRate > 0) {
+                const qint64 durMs = decoder.duration();
+                if (durMs > 0) {
+                    const qint64 doneMs =
+                        (qint64(leftChannel.size()) * 1000) / detectedSampleRate;
+                    const int percent =
+                        int(qBound(qint64(0), doneMs * 100 / durMs, qint64(99)));
+                    if (percent != lastReportedPercent) {
+                        lastReportedPercent = percent;
+                        onProgress(percent);
+                    }
                 }
             }
         });
@@ -1888,12 +1980,17 @@ QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath)
 
     decoder.start();
     loop.exec();
+    decoder.stop();
+
+    if (decodeError)
+        return channels; // ok остаётся false
 
     if (!leftChannel.isEmpty()) {
         channels.append(leftChannel);
-        if (!rightChannel.isEmpty()) {
+        if (!rightChannel.isEmpty())
             channels.append(rightChannel);
-        }
+        if (ok)
+            *ok = true;
     }
 
     return channels;
@@ -2018,16 +2115,6 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         increaseBPM();
     } else if (event->key() == Qt::Key_Down && event->modifiers() == Qt::ControlModifier) {
         decreaseBPM();
-    } else if (event->key() == Qt::Key_M) {
-        // Добавляем метку в текущей позиции воспроизведения
-        if (waveformView) {
-            qint64 playbackPos = waveformView->getPlaybackPosition();
-            qint64 samplePos = (playbackPos * waveformView->getSampleRate()) / 1000;
-            qDebug() << "Adding marker at playbackPos:" << playbackPos << "ms, samplePos:" << samplePos;
-            waveformView->addMarker(samplePos);
-            qDebug() << "Marker added, total markers:" << waveformView->getMarkers().size();
-            statusBar()->showMessage(tr("Метка добавлена"), 2000);
-        }
     } else {
         QMainWindow::keyPressEvent(event);
     }
@@ -2522,6 +2609,108 @@ void MainWindow::constrainWindowSize()
     setMaximumWidth(16777215);  // Максимальное значение для размера
 
     // Убираем все ограничения, чтобы окно могло разворачиваться на весь экран
+}
+
+void MainWindow::snapAllMarkersToGrid()
+{
+    if (!waveformView) {
+        statusBar()->showMessage(tr("Волновая форма не инициализирована."), 3000);
+        return;
+    }
+
+    const QVector<QVector<float>>& data = waveformView->getAudioData();
+    if (data.isEmpty() || data[0].isEmpty()) {
+        statusBar()->showMessage(tr("Аудиоданные не загружены."), 3000);
+        return;
+    }
+
+    const float bpm = waveformView->getBPM();
+    if (bpm <= 0.0f || waveformView->getBeatInfo().isEmpty()) {
+        statusBar()->showMessage(tr("Нет тактовой сетки для привязки (BPM или доли не определены)."), 4000);
+        return;
+    }
+
+    QVector<Marker> markers = waveformView->getMarkers();
+    if (markers.size() < 2) {
+        statusBar()->showMessage(tr("Нет меток для привязки к тактовой сетке."), 3000);
+        return;
+    }
+
+    QVector<Marker> snapped = waveformView->snapMarkersToGrid(markers);
+    if (snapped.isEmpty() || snapped.size() != markers.size()) {
+        statusBar()->showMessage(tr("Не удалось привязать метки к тактовой сетке."), 3000);
+        return;
+    }
+
+    int movedCount = 0;
+    for (int i = 0; i < markers.size(); ++i) {
+        if (markers[i].position != snapped[i].position) {
+            ++movedCount;
+        }
+    }
+
+    waveformView->setMarkers(snapped);
+
+    if (movedCount > 0) {
+        statusBar()->showMessage(
+            tr("Метки привязаны к тактовой сетке (%1 шт.)").arg(movedCount),
+            4000);
+    } else {
+        statusBar()->showMessage(tr("Все метки уже на тактовой сетке."), 3000);
+    }
+}
+
+void MainWindow::shiftBeatGridBackward()
+{
+    shiftBeatGridByBeats(-1);
+}
+
+void MainWindow::shiftBeatGridForward()
+{
+    shiftBeatGridByBeats(1);
+}
+
+void MainWindow::shiftBeatGridByBeats(int beatDelta)
+{
+    if (!waveformView) {
+        statusBar()->showMessage(tr("Волновая форма не инициализирована."), 3000);
+        return;
+    }
+
+    const QVector<QVector<float>>& data = waveformView->getAudioData();
+    if (data.isEmpty() || data[0].isEmpty()) {
+        statusBar()->showMessage(tr("Аудиоданные не загружены."), 3000);
+        return;
+    }
+
+    const float bpm = waveformView->getBPM();
+    const int sampleRate = waveformView->getSampleRate();
+    if (bpm <= 0.0f || sampleRate <= 0) {
+        statusBar()->showMessage(tr("Нет тактовой сетки для сдвига (BPM не определён)."), 4000);
+        return;
+    }
+
+    const qint64 beatSamples = qMax<qint64>(1, qRound((60.0f * sampleRate) / bpm));
+    const qint64 oldGridStart = waveformView->getGridStartSample();
+    const qint64 maxGridStart = qMax<qint64>(0, data[0].size() - 1);
+    const qint64 newGridStart = qBound<qint64>(
+        0,
+        oldGridStart + beatDelta * beatSamples,
+        maxGridStart);
+
+    if (newGridStart == oldGridStart) {
+        statusBar()->showMessage(tr("Тактовая сетка уже на границе аудиофайла."), 3000);
+        return;
+    }
+
+    waveformView->setGridStartSample(newGridStart);
+    updateTimeLabel(currentPosition);
+    waveformView->update();
+
+    const QString direction = beatDelta < 0 ? tr("назад") : tr("вперёд");
+    statusBar()->showMessage(
+        tr("Тактовая сетка сдвинута на один удар %1").arg(direction),
+        3000);
 }
 
 void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMarkers)
@@ -3246,58 +3435,6 @@ void MainWindow::createOnsetMarkersAuto()
         4000);
 }
 
-void MainWindow::createBeatGridMarkersAuto()
-{
-    const QString dialogTitle = tr("Авто-метки по тактовой сетке");
-
-    if (!waveformView) {
-        QMessageBox::warning(this, dialogTitle, tr("Волновая форма не инициализирована."));
-        return;
-    }
-
-    const QVector<QVector<float>>& data = waveformView->getAudioData();
-    if (data.isEmpty() || data[0].isEmpty()) {
-        QMessageBox::warning(this, dialogTitle, tr("Аудиоданные не загружены."));
-        return;
-    }
-
-    const int sampleRate = waveformView->getSampleRate();
-    if (sampleRate <= 0) {
-        QMessageBox::warning(this, dialogTitle, tr("Некорректная частота дискретизации."));
-        return;
-    }
-
-    const float bpm = waveformView->getBPM();
-    if (bpm <= 0.0f) {
-        QMessageBox::warning(this, dialogTitle, tr("Некорректное значение BPM."));
-        return;
-    }
-
-    const qint64 gridStart = qMax<qint64>(0, waveformView->getGridStartSample());
-    const int numSamples = data[0].size();
-    if (gridStart >= numSamples) {
-        QMessageBox::warning(this, dialogTitle, tr("Точка начала сетки выходит за пределы аудиофайла."));
-        return;
-    }
-
-    QVector<Marker> existing = waveformView->getMarkers();
-    if (!existing.isEmpty()) {
-        QVector<Marker> snapped = waveformView->snapMarkersToGrid(existing);
-        waveformView->setMarkers(snapped);
-        waveformView->sortMarkers();
-        waveformView->update();
-
-        statusBar()->showMessage(
-            tr("Авто-метки по тактовой сетке обновлены"),
-            4000);
-    } else {
-        // Нет меток — ничего не делаем, чтобы не создавать их «с нуля»
-        statusBar()->showMessage(
-            tr("Нет меток для привязки к тактовой сетке"),
-            3000);
-    }
-}
-
 void MainWindow::toggleBeatWaveform()
 {
     if (waveformView) {
@@ -3397,55 +3534,6 @@ void MainWindow::updateUIAfterBeatFix(const QVector<QVector<float>>& fixedData,
     waveformView->setHorizontalOffset(offset);
     updateHorizontalScrollBar(waveformView->getZoomLevel());
     waveformView->update();
-}
-
-QVector<Marker> MainWindow::createBeatGridMarkers(const BPMAnalyzer::AnalysisResult& analysis,
-                                                  const QVector<QVector<float>>& audioData,
-                                                  int beatsPerBar)
-{
-    QVector<Marker> gridMarkers;
-    if (!waveformView || audioData.isEmpty()) return gridMarkers;
-
-    const int sampleRate = waveformView->getSampleRate();
-    const qint64 totalSamples = audioData[0].size();
-    const qint64 minSegmentSamples = (sampleRate * 50) / 1000; // 50 мс между метками
-
-    if (sampleRate <= 0 || totalSamples <= 0 || analysis.bpm <= 0) {
-        return gridMarkers;
-    }
-
-    float samplesPerBeat = (60.0f * sampleRate) / analysis.bpm;
-    float barLengthInQuarters = (beatsPerBar == 6) ? 3.f : (beatsPerBar == 12) ? 6.f : float(qMax(1, beatsPerBar));
-    float samplesPerBar = barLengthInQuarters * samplesPerBeat;
-
-    // Начальная неподвижная метка
-    gridMarkers.append(Marker(0, true, sampleRate));
-
-    qint64 lastPos = 0;
-    for (int k = 0; ; ++k) {
-        qint64 pos = analysis.gridStartSample + qint64(k * samplesPerBar);
-        if (pos >= totalSamples) break;
-        if (pos > 0 && (pos - lastPos) >= minSegmentSamples) {
-            Marker m(pos, sampleRate);
-            m.originalPosition = pos;
-            m.originalTimeMs = TimeUtils::samplesToMs(pos, sampleRate);
-            m.updateTimeFromSamples(sampleRate);
-            gridMarkers.append(m);
-            lastPos = pos;
-        }
-    }
-
-    // Конечная метка
-    qint64 endPos = totalSamples - 1;
-    if (endPos > lastPos) {
-        Marker endMarker(endPos, false, true, sampleRate);
-        endMarker.originalPosition = endPos;
-        endMarker.originalTimeMs = TimeUtils::samplesToMs(endPos, sampleRate);
-        endMarker.updateTimeFromSamples(sampleRate);
-        gridMarkers.append(endMarker);
-    }
-
-    return gridMarkers;
 }
 
 QVector<Marker> MainWindow::createAlignedBeatMarkers(const QVector<BPMAnalyzer::BeatInfo>& alignedBeats,

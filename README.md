@@ -107,9 +107,10 @@
 
 ### Аудио форматы
 - **Поддерживаемые**: WAV, MP3, FLAC
-- **Частота дискретизации**: 44.1 kHz (рекомендуется)
-- **Битность**: 16-bit, 24-bit, 32-bit
+- **Частота дискретизации**: любая — файл декодируется в своём нативном формате, без принудительного ресемплинга (частота определяется из файла и используется для анализа BPM/тональности)
+- **Битность**: 8/16/24/32-bit и float (при загрузке конвертируется во float)
 - **Каналы**: Моно, Стерео
+- **Сохранение**: WAV PCM 16-bit
 
 ## Сборка
 
@@ -208,5 +209,5 @@ GNU GPL — см. файл [LICENSE](LICENSE).
 - [Проблемы и планы](MARKDOWN/ISSUES_AND_PLANS.md) — баги, отключённые функции, планы
 - [Консольный режим](MARKDOWN/CONSOLE_MODE.md) — запуск из командной строки
 - [Time Stretch](MARKDOWN/TIMESTRETCH_FEATURE.md) — сжатие-растяжение по меткам (WSOLA)
-- [Статус Mixxx](MARKDOWN/MIXXX_LIBRARIES_STATUS.md) — библиотеки qm-dsp
+- [Сторонние библиотеки](thirdparty/README.md) — qm-dsp (standalone) и прочие зависимости
 - [Тестирование](MARKDOWN/TESTING_GUIDE.md), [Решение проблем](MARKDOWN/TROUBLESHOOTING.md), [История разработки](MARKDOWN/DEVELOPMENT_HISTORY.md)

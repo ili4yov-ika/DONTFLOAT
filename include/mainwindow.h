@@ -94,7 +94,9 @@ private slots:
     void applyTimeStretch();
     void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
     void createOnsetMarkersAuto();        // Авто-метки по транзиентам (Onset detection)
-    void createBeatGridMarkersAuto();     // Авто-метки по тактовой сетке
+    void snapAllMarkersToGrid();          // Привязать все метки к тактовой сетке
+    void shiftBeatGridBackward();         // Сдвинуть тактовую сетку на один удар назад
+    void shiftBeatGridForward();          // Сдвинуть тактовую сетку на один удар вперёд
 
 private:
     void createMenus();
@@ -113,7 +115,12 @@ private:
     bool doSaveAudioFile();
     void resetAudioState();
     void processAudioFile(const QString& filePath);
-    QVector<QVector<float>> loadAudioFile(const QString& filePath);
+    /// Декодирует аудиофайл в его нативном формате (без принудительного ресемплинга).
+    /// \a ok (если задан) выставляется в true только при успешном декодировании.
+    /// \a onProgress (если задан) вызывается с процентом декодирования (0..100).
+    QVector<QVector<float>> loadAudioFile(const QString& filePath,
+                                          bool* ok = nullptr,
+                                          const std::function<void(int)>& onProgress = {});
     /// Сброс A/B цикла и кнопок после загрузки нового файла
     void resetLoopStateAfterNewFile();
     void createDeviationMarkers(float tolerancePercent, bool neutralMarkers = false);
@@ -122,6 +129,7 @@ private:
     void updateHorizontalScrollBar(float zoom);
     void updateHorizontalScrollBarFromOffset(float offset);
     void constrainWindowSize();
+    void shiftBeatGridByBeats(int beatDelta);
 
     // Вспомогательные методы для рефакторинга
     void updateUIAfterAnalysis(const QVector<QVector<float>>& audioData,
@@ -131,9 +139,6 @@ private:
                               const BPMAnalyzer::AnalysisResult& analysis,
                               int beatsPerBar);
     void setBPMAndBeatsPerBar(float bpm, int beatsPerBar);
-    QVector<Marker> createBeatGridMarkers(const BPMAnalyzer::AnalysisResult& analysis,
-                                          const QVector<QVector<float>>& audioData,
-                                          int beatsPerBar);
     // Метки по каждой доле выровненной сетки (для «Выровнять» — как при «Пропустить» + оставить метки)
     QVector<Marker> createAlignedBeatMarkers(const QVector<BPMAnalyzer::BeatInfo>& alignedBeats,
                                               qint64 totalSamples, int sampleRate);
