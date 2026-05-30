@@ -93,21 +93,26 @@ QVector<float> TimeStretchProcessor::processWithSimpleInterpolation(const QVecto
 
 QVector<float> TimeStretchProcessor::processWithPitchPreservation(const QVector<float>& input, float stretchFactor)
 {
-    // WSOLA: time-stretch в временной области с сохранением высоты тона
+    // WSOLA с ФИКСИРОВАННЫМ синтез-хопом: на каждом кадре выход продвигается на
+    // постоянный synthesisHop, а вход — на analysisHop = synthesisHop / stretchFactor.
+    // Благодаря этому overlap = windowSize - synthesisHop постоянен при любом коэффициенте,
+    // и высота тона сохраняется и при сжатии, и при сколь угодно сильном растяжении
+    // (старая схема с переменным выходным хопом «вырождалась» в ресемплинг при factor > ~1.9).
     const int inputSize = input.size();
-    const int targetSize = static_cast<int>(inputSize * stretchFactor);
+    const int targetSize = static_cast<int>(std::lround(double(inputSize) * double(stretchFactor)));
 
     if (targetSize <= 0) {
         return QVector<float>();
     }
 
     const int windowSize = 2048;
-    const int analysisHop = windowSize / 2;
-    const int outputHop = qMax(1, static_cast<int>(std::round(analysisHop * stretchFactor)));
-    const int overlap = windowSize - outputHop;
-    const int searchRadius = analysisHop / 2;
+    const int synthesisHop = windowSize / 4;             // 75% overlap — постоянный
+    const double analysisHop = double(synthesisHop) / double(stretchFactor);
+    const int overlap = windowSize - synthesisHop;
+    const int searchRadius = synthesisHop / 2;
 
-    if (inputSize < windowSize * 2 || overlap < 64) {
+    // Слишком короткий сегмент для WSOLA — мягкий откат на интерполяцию.
+    if (inputSize < windowSize + synthesisHop || analysisHop < 1.0) {
         return processWithSimpleInterpolation(input, stretchFactor);
     }
 
@@ -122,46 +127,50 @@ QVector<float> TimeStretchProcessor::processWithPitchPreservation(const QVector<
 
     auto addWindowedFrame = [&](int inputPos, int outputPos) {
         for (int i = 0; i < windowSize; ++i) {
-            int inIdx = inputPos + i;
-            int outIdx = outputPos + i;
+            const int inIdx = inputPos + i;
+            const int outIdx = outputPos + i;
             if (inIdx >= inputSize || outIdx >= outputCapacity) {
                 break;
             }
-            float w = window[i];
+            if (inIdx < 0) {
+                continue;
+            }
+            const float w = window[i];
             output[outIdx] += input[inIdx] * w;
             windowSum[outIdx] += w;
         }
     };
 
-    int inputPos = 0;
     int outputPos = 0;
+    double analysisPos = 0.0;
 
-    // Первый кадр без выравнивания
-    addWindowedFrame(inputPos, outputPos);
+    // Первый кадр — с начала входа, без поиска.
+    addWindowedFrame(0, 0);
 
     while (true) {
-        inputPos += analysisHop;
-        outputPos += outputHop;
+        outputPos += synthesisHop;
+        analysisPos += analysisHop;
+        const int idealInPos = static_cast<int>(std::lround(analysisPos));
 
-        if (inputPos + windowSize >= inputSize) {
-            break;
-        }
         if (outputPos + windowSize >= outputCapacity) {
             break;
         }
+        if (idealInPos + windowSize >= inputSize) {
+            break;
+        }
 
-        const int searchStart = qMax(0, inputPos - searchRadius);
-        const int searchEnd = qMin(inputSize - windowSize, inputPos + searchRadius);
+        // WSOLA: ищем сдвиг входа в пределах searchRadius, максимизируя кросс-корреляцию
+        // с уже записанным overlap-регионом выхода (избегаем фазовых разрывов).
+        const int searchStart = qMax(0, idealInPos - searchRadius);
+        const int searchEnd = qMin(inputSize - windowSize, idealInPos + searchRadius);
 
-        int bestPos = inputPos;
+        int bestPos = idealInPos;
         float bestCorr = -1.0e30f;
 
         for (int cand = searchStart; cand <= searchEnd; ++cand) {
             float corr = 0.0f;
             for (int i = 0; i < overlap; ++i) {
-                float outSample = output[outputPos + i];
-                float inSample = input[cand + i];
-                corr += outSample * inSample;
+                corr += output[outputPos + i] * input[cand + i];
             }
             if (corr > bestCorr) {
                 bestCorr = corr;
@@ -172,7 +181,7 @@ QVector<float> TimeStretchProcessor::processWithPitchPreservation(const QVector<
         addWindowedFrame(bestPos, outputPos);
     }
 
-    // Нормализация по оконной сумме
+    // Нормализация по оконной сумме (компенсация перекрытия окон).
     for (int i = 0; i < targetSize; ++i) {
         if (windowSum[i] > 0.0001f) {
             output[i] /= windowSum[i];

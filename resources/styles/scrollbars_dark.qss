@@ -1,0 +1,45 @@
+/* Тёмная схема скроллбаров. Применяется к горизонтальному и вертикальному
+   скроллбару: правила для неподходящей ориентации просто игнорируются. */
+QScrollBar:horizontal {
+    background: #404040;
+    height: 20px;
+    border: none;
+}
+QScrollBar::handle:horizontal {
+    background: #606060;
+    min-width: 20px;
+    border-radius: 0px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #707070;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    background: none;
+    border: none;
+}
+QScrollBar:vertical {
+    background: rgba(64, 64, 64, 128);
+    width: 16px;
+    border: none;
+    border-radius: 8px;
+}
+QScrollBar::handle:vertical {
+    background: rgba(96, 96, 96, 180);
+    min-height: 20px;
+    border-radius: 8px;
+    margin: 2px;
+}
+QScrollBar::handle:vertical:hover {
+    background: rgba(112, 112, 112, 200);
+}
+QScrollBar::handle:vertical:pressed {
+    background: rgba(160, 160, 160, 255);
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    background: none;
+    border: none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+    border: none;
+}

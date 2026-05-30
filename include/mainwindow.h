@@ -35,6 +35,7 @@
 #include "pitchgridwidget.h"
 #include "shortcutsdialog.h"
 #include "metronomecontroller.h"
+#include "keyselectionmenu.h"
 // #include "beatvisualizationsettingsdialog.h"
 
 QT_BEGIN_NAMESPACE
@@ -101,12 +102,14 @@ private slots:
 private:
     void createMenus();
     void createActions();
-    void createKeyContextMenu();
-    void createKeyContextMenu2();
-    QMenu* populateKeyContextMenu(QAction* actions[28], std::function<void(const QString&)> setKeyCallback);
     void updatePitchGridLayout();
     void updateWindowTitle();
     void setupConnections();
+    // Применение цветовой схемы: фон виджетов и стили скроллбаров (см. :/styles/*.qss).
+    // scheme: "dark" | "light" | "default" (тёмный фон) | "system" (сброс стилей).
+    void applyWidgetBackgrounds(const QString& scheme);
+    void applyScrollBarStyles(const QString& scheme);
+    static QString loadStyleSheet(const QString& resourcePath);
     void readSettings();
     void writeSettings();
     void setupShortcuts();
@@ -235,10 +238,8 @@ private:
     // Key analysis
     QString currentKey;
     QString currentKey2; // For modulation
-    QMenu *keyContextMenu;
-    QMenu *keyContextMenu2; // For second key field
-    QAction *keyActions[28]; // 14 major + 14 minor keys
-    QAction *keyActions2[28]; // 14 major + 14 minor keys for second field
+    KeySelectionMenu *keyMenu;  // Контекстное меню для основного поля тональности
+    KeySelectionMenu *keyMenu2; // Контекстное меню для поля модуляции
 
     // Undo/Redo stack
     QUndoStack *undoStack;

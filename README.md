@@ -179,8 +179,8 @@ tools\build_windows_installer.bat
 
 ## Консольный режим
 
-- Запуск без GUI: `DONTFLOAT.exe -c -f <файл>` с опциями `--mixxx`, `--min-bpm`, `--max-bpm` и др.
-- **Ограничение**: в консоли пока используются синтетические данные; полная загрузка файлов и анализ работают в GUI. Подробнее: [MARKDOWN/CONSOLE_MODE.md](MARKDOWN/CONSOLE_MODE.md).
+- Запуск без GUI: `DONTFLOAT.exe -c -f <файл>` с опциями `--min-bpm`, `--max-bpm`, `--simple`, `--fast` и др.
+- Файл декодируется по-настоящему (`QAudioDecoder`, нативный формат) и анализируется алгоритмом Mixxx (qm-dsp) — по умолчанию. На Windows вывод идёт в консоль родителя или в перенаправление (`> файл`). Подробнее: [MARKDOWN/CONSOLE_MODE.md](MARKDOWN/CONSOLE_MODE.md).
 
 ## Лицензия
 

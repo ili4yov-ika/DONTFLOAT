@@ -615,6 +615,9 @@ QVector<Marker> WaveformView::snapMarkersToGrid(const QVector<Marker>& markersIn
 {
     QVector<Marker> result = markersIn;
     for (Marker& m : result) {
+        // Неподвижная метка начала — не трогаем (snapSampleToGrid(0) сдвинула бы к gridStart)
+        if (m.isFixed)
+            continue;
         m.position = snapSampleToGrid(m.position);
         // После привязки к сетке «исходное» состояние = текущее (корректная работа растяжения и отрисовки)
         m.originalPosition = m.position;
@@ -1443,6 +1446,8 @@ void WaveformView::mouseReleaseEvent(QMouseEvent* event)
 
 void WaveformView::keyPressEvent(QKeyEvent* event)
 {
+    // Пользовательские метки: только QShortcut AddMarker в MainWindow (настраиваемая клавиша, без дубляжа).
+
     // Специальная обработка Ctrl+A для меток растяжения
     if (event->key() == Qt::Key_A && (event->modifiers() & Qt::ControlModifier)) {
         int selectedCount = 0;
@@ -1473,15 +1478,6 @@ void WaveformView::keyPressEvent(QKeyEvent* event)
             break;
         case Qt::Key_Down:
             setZoomLevel(zoomLevel / zoomStep);
-            break;
-        case Qt::Key_M:
-            // Добавляем метку в текущей позиции воспроизведения
-            if (!audioData.isEmpty()) {
-                qint64 playbackPos = playbackPosition; // playbackPosition уже в миллисекундах
-                qint64 samplePos = (playbackPos * sampleRate) / 1000;
-                qDebug() << "WaveformView: Key M pressed, adding marker at samplePos:" << samplePos;
-                addMarker(samplePos);
-            }
             break;
         default:
             QWidget::keyPressEvent(event);
@@ -1958,6 +1954,13 @@ void WaveformView::sortMarkers()
               [](const Marker& a, const Marker& b) {
         return a.position < b.position;
     });
+    if (!markers.isEmpty() && markers[0].isFixed) {
+        markers[0].position = 0;
+        markers[0].originalPosition = 0;
+        markers[0].updateTimeFromSamples(sampleRate);
+    }
+    update();
+    emit markersChanged();
 }
 
 void WaveformView::removeMarker(int index)
@@ -2414,7 +2417,7 @@ void WaveformView::processRealtimeStretch()
         originalAudioData,  // Всегда используем исходные данные
         markerData,         // Текущие метки с их position и originalPosition
         sampleRate,
-        false               // Быстрый предпросмотр без тонкомпенсации
+        true                // Тонкомпенсация (WSOLA) — чтобы превью звучало без сдвига высоты
     );
 
     // Обновляем только audioData для визуализации

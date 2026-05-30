@@ -13,6 +13,10 @@
     <qresource prefix="/sounds">
         <file>resources/sounds/metronome.wav</file>
     </qresource>
+    <qresource prefix="/styles">
+        <file>resources/styles/scrollbars_dark.qss</file>
+        <file>resources/styles/scrollbars_light.qss</file>
+    </qresource>
     <qresource prefix="/ui">
         <file>ui/mainwindow.ui</file>
         <file>ui/loadfiledialog.ui</file>

@@ -1,5 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="ru_RU">
+    <!-- Политика подменю выбора языка и автонимов: см. MARKDOWN/INIT.MD (Локализация, выбор языка). Пояснения к строкам в translatorcomment у соответствующих message. -->
 <context>
     <name>LoadFileDialog</name>
     <message>
@@ -520,6 +521,7 @@
         <translation>&amp;Настройки</translation>
     </message>
     <message>
+        <translatorcomment>Политика проекта: заголовок подменю остаётся латиницей «Language», не переводить (в т.ч. не «Язык»).</translatorcomment>
         <location filename="../src/mainwindow.cpp" line="689" />
         <location filename="../src/mainwindow.cpp" line="1459" />
         <source>Language</source>
@@ -674,10 +676,18 @@
         <translation>&amp;Повторить</translation>
     </message>
     <message>
+        <translatorcomment>Название языка: автоним кириллицей «Русский». Не заменять на «Russian», падеж «Русским» и т.п.</translatorcomment>
         <location filename="../src/mainwindow.cpp" line="707" />
         <location filename="../src/mainwindow.cpp" line="1335" />
         <source>Русский</source>
         <translation>Русский</translation>
+    </message>
+    <message>
+        <translatorcomment>Название языка: латиница «English». Не переводить на «Английский» и т.п.</translatorcomment>
+        <location filename="../src/mainwindow.cpp" line="731" />
+        <location filename="../src/mainwindow.cpp" line="1366" />
+        <source>English</source>
+        <translation>English</translation>
     </message>
     <message>
         <location filename="../src/mainwindow.cpp" line="709" />
@@ -985,9 +995,24 @@ Shift+B: Удалить точку B</translation>
         <translation>Сохранить аудиофайл</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1930" />
-        <source>WAV файлы (*.wav);;Все файлы (*)</source>
-        <translation>WAV файлы (*.wav);;Все файлы (*)</translation>
+        <location filename="../src/mainwindow.cpp" line="1670" />
+        <source>WAV 32-bit float (*.wav)</source>
+        <translation>WAV 32-bit float (*.wav)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1671" />
+        <source>WAV 24-bit PCM (*.wav)</source>
+        <translation>WAV 24-bit PCM (*.wav)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1672" />
+        <source>WAV 16-bit PCM (*.wav)</source>
+        <translation>WAV 16-bit PCM (*.wav)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1673" />
+        <source>Все файлы (*)</source>
+        <translation>Все файлы (*)</translation>
     </message>
     <message>
         <location filename="../src/mainwindow.cpp" line="1985" />
@@ -1103,13 +1128,25 @@ Shift+B: Удалить точку B</translation>
         <translation>Тональность определена: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2942" />
-        <location filename="../src/mainwindow.cpp" line="2965" />
+        <location filename="../src/mainwindow.cpp" line="2924" />
+        <location filename="../src/mainwindow.cpp" line="2947" />
         <source>Ошибка загрузки перевода</source>
         <translation>Ошибка загрузки перевода</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2980" />
+        <translatorcomment>Сообщение статуса после переключения на ru: оставить формулировку источника (не калькировать «Language: Russian»).</translatorcomment>
+        <location filename="../src/mainwindow.cpp" line="2933" />
+        <source>Язык: Русский</source>
+        <translation>Язык: Русский</translation>
+    </message>
+    <message>
+        <translatorcomment>Сообщение статуса после переключения на en: строка в коде на английском; перевод совпадает с источником (не «Язык: английский»).</translatorcomment>
+        <location filename="../src/mainwindow.cpp" line="2956" />
+        <source>Language: English</source>
+        <translation>Language: English</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2962" />
         <source>Ошибка: WaveformView не инициализирован</source>
         <translation>Ошибка: WaveformView не инициализирован</translation>
     </message>

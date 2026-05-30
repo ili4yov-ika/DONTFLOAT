@@ -10,6 +10,7 @@
 #include <QtMultimedia/QAudioDecoder>
 #include <QtMultimedia/QAudioFormat>
 #include "../include/bpmanalyzer.h"
+#include "../include/audiofileservice.h"
 
 class BPMAnalyzerTest : public QObject
 {
@@ -82,120 +83,27 @@ QString BPMAnalyzerTest::getTestDataPath(const QString& filename)
 
 QVector<QVector<float>> BPMAnalyzerTest::loadAudioFile(const QString& filePath, int& sampleRate)
 {
-    QVector<QVector<float>> channels;
     sampleRate = 0;
-    
+
     QFileInfo fileInfo(filePath);
     if (!fileInfo.exists()) {
         qWarning() << "Файл не существует:" << filePath;
-        return channels;
+        return {};
     }
-    
-    QAudioDecoder decoder;
-    decoder.setSource(QUrl::fromLocalFile(filePath));
-    
-    // Настраиваем формат аудио
-    QAudioFormat format;
-    format.setSampleRate(44100);
-    format.setChannelCount(2);
-    format.setSampleFormat(QAudioFormat::Float);
-    decoder.setAudioFormat(format);
-    
-    QVector<float> leftChannel;
-    QVector<float> rightChannel;
-    
-    QEventLoop loop;
-    bool errorOccurred = false;
-    bool finished = false;
-    
-    // Обработка ошибок
-    connect(&decoder, static_cast<void(QAudioDecoder::*)(QAudioDecoder::Error)>(&QAudioDecoder::error),
-        [&](QAudioDecoder::Error error) {
-            if (error != QAudioDecoder::NoError) {
-                errorOccurred = true;
-                qWarning() << "Ошибка декодирования:" << error;
-                loop.quit();
-            }
-        });
-    
-    // Обработка готовности буфера
-    connect(&decoder, &QAudioDecoder::bufferReady, [&]() {
-        QAudioBuffer buffer = decoder.read();
-        if (buffer.isValid()) {
-            const float* data = buffer.constData<float>();
-            int frameCount = buffer.frameCount();
-            int channelCount = buffer.format().channelCount();
-            
-            if (sampleRate == 0) {
-                sampleRate = buffer.format().sampleRate();
-            }
-            
-            for (int i = 0; i < frameCount; ++i) {
-                if (channelCount >= 1) {
-                    leftChannel.append(data[i * channelCount]);
-                }
-                if (channelCount >= 2) {
-                    rightChannel.append(data[i * channelCount + 1]);
-                } else if (channelCount == 1) {
-                    rightChannel.append(data[i * channelCount]);
-                }
-            }
-        }
-    });
-    
-    // Обработка завершения
-    connect(&decoder, &QAudioDecoder::finished, [&]() {
-        finished = true;
-        loop.quit();
-    });
-    
-    // Таймаут на случай зависания
-    QTimer::singleShot(30000, [&]() {
-        if (!finished) {
-            qWarning() << "Таймаут загрузки файла";
-            errorOccurred = true;
-            loop.quit();
-        }
-    });
-    
-    // Запускаем декодирование
-    decoder.start();
-    
-    if (decoder.error() != QAudioDecoder::NoError) {
-        qWarning() << "Не удалось запустить декодер:" << decoder.error();
-        return channels;
+
+    // Декодирование через общий AudioFileService (нативный формат, без ресемплинга).
+    const AudioFileService::DecodeResult res = AudioFileService::decode(filePath);
+    if (!res.ok) {
+        qWarning() << "Ошибка при загрузке файла:" << filePath << res.error;
+        return {};
     }
-    
-    // Ждем завершения
-    loop.exec();
-    
-    if (errorOccurred) {
-        qWarning() << "Ошибка при загрузке файла:" << filePath;
-        return channels;
-    }
-    
-    if (leftChannel.isEmpty() && rightChannel.isEmpty()) {
-        qWarning() << "Не удалось загрузить аудиоданные из файла:" << filePath;
-        return channels;
-    }
-    
-    // Если только один канал, дублируем его
-    if (rightChannel.isEmpty() && !leftChannel.isEmpty()) {
-        rightChannel = leftChannel;
-    }
-    if (leftChannel.isEmpty() && !rightChannel.isEmpty()) {
-        leftChannel = rightChannel;
-    }
-    
-    channels.append(leftChannel);
-    channels.append(rightChannel);
-    
-    qDebug() << "Загружено аудио:" << filePath;
-    qDebug() << "  Каналов:" << channels.size();
-    qDebug() << "  Сэмплов на канал:" << (channels.isEmpty() ? 0 : channels[0].size());
-    qDebug() << "  Sample rate:" << sampleRate;
-    
-    return channels;
+
+    sampleRate = res.sampleRate;
+    qDebug() << "Загружено аудио:" << filePath
+             << "каналов:" << res.channels.size()
+             << "сэмплов на канал:" << (res.channels.isEmpty() ? 0 : res.channels[0].size())
+             << "sample rate:" << sampleRate;
+    return res.channels;
 }
 
 void BPMAnalyzerTest::testAnalyzeBPMFromSourceFiles()

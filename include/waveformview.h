@@ -133,6 +133,7 @@ public:
             marker.updateTimeFromSamples(sampleRate);
         }
         update();
+        emit markersChanged();
     }
     void clearMarkers();
 

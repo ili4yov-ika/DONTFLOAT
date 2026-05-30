@@ -10,61 +10,60 @@
 #include <QDir>
 #include <QUrl>
 #include <QEventLoop>
+#include <QTimer>
 #include <QtMultimedia/QAudioDecoder>
 #include <QtMultimedia/QAudioBuffer>
 #include <QtMultimedia/QAudioFormat>
 #include <QObject>
 #include <iostream>
-#include <cmath>
-#include <cstdlib>
 #include "../include/mainwindow.h"
 #include "../include/bpmanalyzer.h"
+#include "../include/audiofileservice.h"
 #include <QStyleFactory>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <cstdio>
+
+// Приложение собрано как GUI (subsystem:windows). При запуске из cmd с перенаправлением
+// (> file | pipe) стандартные потоки уже подключены и работают. А вот при запуске из
+// терминала без перенаправления у GUI-процесса нет своей консоли — тогда подключаемся к
+// консоли родителя (cmd/powershell), чтобы консольный режим (-c) печатал результат.
+static void initConsoleIO()
+{
+    auto isConnected = [](DWORD nStd) {
+        const DWORD type = GetFileType(GetStdHandle(nStd));
+        return type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE || type == FILE_TYPE_CHAR;
+    };
+
+    const bool outConnected = isConnected(STD_OUTPUT_HANDLE);
+    const bool errConnected = isConnected(STD_ERROR_HANDLE);
+    if (outConnected && errConnected)
+        return; // потоки уже подключены (перенаправление или существующая консоль)
+
+    if (!AttachConsole(ATTACH_PARENT_PROCESS))
+        return; // родитель без консоли (например, запуск из GUI) — выводить некуда
+
+    FILE* f = nullptr;
+    if (!outConnected) freopen_s(&f, "CONOUT$", "w", stdout);
+    if (!errConnected) freopen_s(&f, "CONOUT$", "w", stderr);
+    freopen_s(&f, "CONIN$", "r", stdin);
+    std::ios::sync_with_stdio(true);
+}
 #endif
 
-// Простая функция загрузки аудиофайла для консольного режима
-// Использует упрощенный подход без connect для избежания проблем компиляции
-bool loadAudioFile(const QString& /*filePath*/, QVector<float>& samples, int& sampleRate) {
-    // Для демонстрации создаем синтетические данные
-    // В реальной реализации здесь должен быть код загрузки файла
-    // Параметр filePath пока не используется, но сохранен для совместимости
-
-    std::cout << "Примечание: Используются синтетические данные для демонстрации" << std::endl;
-
-    // Создаем тестовый сигнал с известным BPM
-    sampleRate = 44100;
-    const float testBPM = 80.0f;
-    const float duration = 5.0f; // 5 секунд
-    const int totalSamples = static_cast<int>(sampleRate * duration);
-
-    samples.clear();
-    samples.reserve(totalSamples);
-
-    // Создаем синусоидальный сигнал с битами
-    const float beatInterval = 60.0f / testBPM; // интервал между битами в секундах
-    const int samplesPerBeat = static_cast<int>(sampleRate * beatInterval);
-
-    for (int i = 0; i < totalSamples; ++i) {
-        float sample = 0.0f;
-
-        // Добавляем основной тон (440 Hz)
-        sample += 0.3f * std::sin(2.0f * M_PI * 440.0f * i / sampleRate);
-
-        // Добавляем биты (короткие импульсы)
-        if (i % samplesPerBeat < samplesPerBeat / 10) {
-            sample += 0.8f * std::sin(2.0f * M_PI * 880.0f * i / sampleRate);
-        }
-
-        // Добавляем немного шума для реалистичности
-        sample += 0.1f * ((float)rand() / RAND_MAX - 0.5f);
-
-        samples.append(sample);
+// Декодирует аудиофайл в моно-сигнал для анализа BPM (консольный режим).
+// Использует общий AudioFileService (нативный формат, без принудительного ресемплинга).
+bool loadAudioFile(const QString& filePath, QVector<float>& samples, int& sampleRate) {
+    const AudioFileService::DecodeResult res = AudioFileService::decode(filePath);
+    if (!res.ok) {
+        if (!res.error.isEmpty())
+            std::cout << "ОШИБКА декодирования: " << res.error.toStdString() << std::endl;
+        return false;
     }
-
-    return true;
+    samples = AudioFileService::toMono(res.channels);
+    sampleRate = res.sampleRate;
+    return !samples.isEmpty();
 }
 
 // Функция для консольного режима
@@ -183,8 +182,12 @@ int main(int argc, char *argv[])
     parser.addOption(maxBPMOption);
 
     QCommandLineOption useMixxxOption("mixxx",
-                                     "Использовать алгоритм Mixxx");
+                                     "Использовать алгоритм Mixxx (по умолчанию включён)");
     parser.addOption(useMixxxOption);
+
+    QCommandLineOption simpleOption("simple",
+                                     "Использовать упрощённый алгоритм вместо Mixxx");
+    parser.addOption(simpleOption);
 
     QCommandLineOption fastAnalysisOption("fast",
                                          "Быстрый анализ");
@@ -213,6 +216,9 @@ int main(int argc, char *argv[])
     }
 
     if (consoleMode) {
+#ifdef Q_OS_WIN
+        initConsoleIO(); // подключаем потоки вывода к консоли/перенаправлению
+#endif
         if (filePath.isEmpty()) {
             std::cout << "Ошибка: Для консольного режима необходимо указать файл с помощью -f" << std::endl;
             std::cout << "Использование: DONTFLOAT -c -f <путь_к_файлу>" << std::endl;
@@ -231,7 +237,9 @@ int main(int argc, char *argv[])
         BPMAnalyzer::AnalysisOptions options;
         options.minBPM = 60.0f;  // По умолчанию
         options.maxBPM = 200.0f; // По умолчанию
-        options.useMixxxAlgorithm = args.contains("--mixxx");
+        // Алгоритм Mixxx (qm-dsp) — по умолчанию, как в GUI. Упрощённый алгоритм
+        // плохо работает на реальных записях, поэтому Mixxx можно лишь отключить явно.
+        options.useMixxxAlgorithm = !args.contains("--simple");
         options.fastAnalysis = args.contains("--fast");
         options.assumeFixedTempo = !args.contains("--variable-tempo");
 

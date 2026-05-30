@@ -94,6 +94,9 @@ SOURCES += \
         src/timestretchcommand.cpp \
         src/timestretchprocessor.cpp \
         src/timeutils.cpp \
+        src/wavwriter.cpp \
+        src/audiofileservice.cpp \
+        src/keyselectionmenu.cpp \
         src/beatvisualizer.cpp \
         src/spectrogramsettingsdialog.cpp \
         src/reverbsettingsdialog.cpp \
@@ -120,6 +123,9 @@ HEADERS += \
         include/timestretchcommand.h \
         include/timestretchprocessor.h \
         include/timeutils.h \
+        include/wavwriter.h \
+        include/audiofileservice.h \
+        include/keyselectionmenu.h \
         include/beatvisualizer.h \
         include/spectrogramsettingsdialog.h \
         include/reverbsettingsdialog.h \

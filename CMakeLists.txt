@@ -80,6 +80,9 @@ set(SOURCES
     src/beatvisualizer.cpp
     src/timestretchprocessor.cpp
     src/timeutils.cpp
+    src/wavwriter.cpp
+    src/audiofileservice.cpp
+    src/keyselectionmenu.cpp
     src/spectrogramsettingsdialog.cpp
     src/reverbsettingsdialog.cpp
     src/pitchshiftsettingsdialog.cpp
@@ -109,6 +112,9 @@ set(HEADERS
     include/beatvisualizer.h
     include/timestretchprocessor.h
     include/timeutils.h
+    include/wavwriter.h
+    include/audiofileservice.h
+    include/keyselectionmenu.h
     include/spectrogramsettingsdialog.h
     include/fft_engine.h
     include/reverbsc_engine.h
@@ -386,6 +392,7 @@ endfunction()
 add_qt_test(bpm_analyzer_test
     tests/bpm_analyzer_test.cpp
     src/bpmanalyzer.cpp
+    src/audiofileservice.cpp
 )
 
 set_tests_properties(bpm_analyzer_test PROPERTIES

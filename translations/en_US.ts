@@ -1,5 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="en_US">
+    <!-- Language submenu and autonyms policy: see MARKDOWN/INIT.MD (Localization, language selection). Per-message notes in translatorcomment. -->
 <context>
     <name>LoadFileDialog</name>
     <message>
@@ -524,6 +525,7 @@
         <translation>&amp;Settings</translation>
     </message>
     <message>
+        <translatorcomment>DONTFLOAT policy: submenu title stays the literal string «Language» in every locale (do not translate to «Язык», etc.).</translatorcomment>
         <location filename="../src/mainwindow.cpp" line="689" />
         <location filename="../src/mainwindow.cpp" line="1459" />
         <source>Language</source>
@@ -678,10 +680,18 @@
         <translation>&amp;Redo</translation>
     </message>
     <message>
+        <translatorcomment>Language name autonym: keep Cyrillic «Русский» in the English .ts as well (do not use «Russian» here).</translatorcomment>
         <location filename="../src/mainwindow.cpp" line="707" />
         <location filename="../src/mainwindow.cpp" line="1335" />
         <source>Русский</source>
-        <translation>Russian</translation>
+        <translation>Русский</translation>
+    </message>
+    <message>
+        <translatorcomment>Language name autonym: keep «English» (do not translate to localized demonyms).</translatorcomment>
+        <location filename="../src/mainwindow.cpp" line="731" />
+        <location filename="../src/mainwindow.cpp" line="1366" />
+        <source>English</source>
+        <translation>English</translation>
     </message>
     <message>
         <location filename="../src/mainwindow.cpp" line="709" />
@@ -989,9 +999,24 @@ Save before closing?</translation>
         <translation>Save Audio File</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1930" />
-        <source>WAV файлы (*.wav);;Все файлы (*)</source>
-        <translation>WAV files (*.wav);;All files (*)</translation>
+        <location filename="../src/mainwindow.cpp" line="1670" />
+        <source>WAV 32-bit float (*.wav)</source>
+        <translation>WAV 32-bit float (*.wav)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1671" />
+        <source>WAV 24-bit PCM (*.wav)</source>
+        <translation>WAV 24-bit PCM (*.wav)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1672" />
+        <source>WAV 16-bit PCM (*.wav)</source>
+        <translation>WAV 16-bit PCM (*.wav)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1673" />
+        <source>Все файлы (*)</source>
+        <translation>All files (*)</translation>
     </message>
     <message>
         <location filename="../src/mainwindow.cpp" line="1985" />
@@ -1107,23 +1132,25 @@ Save before closing?</translation>
         <translation>Key: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2942" />
-        <location filename="../src/mainwindow.cpp" line="2965" />
+        <location filename="../src/mainwindow.cpp" line="2924" />
+        <location filename="../src/mainwindow.cpp" line="2947" />
         <source>Ошибка загрузки перевода</source>
         <translation>Translation load error</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2951" />
+        <translatorcomment>Status after switching UI to Russian: English UI may show a short English gloss; keep clear wording. Autonym policy applies to menu items, not necessarily this status string.</translatorcomment>
+        <location filename="../src/mainwindow.cpp" line="2933" />
         <source>Язык: Русский</source>
         <translation>Language: Russian</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2974" />
+        <translatorcomment>Status after switching UI to English: keep the same English wording as the source string.</translatorcomment>
+        <location filename="../src/mainwindow.cpp" line="2956" />
         <source>Language: English</source>
         <translation>Language: English</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2980" />
+        <location filename="../src/mainwindow.cpp" line="2962" />
         <source>Ошибка: WaveformView не инициализирован</source>
         <translation>Error: WaveformView not initialized</translation>
     </message>
@@ -1225,12 +1252,6 @@ Press M to add markers.</translation>
         <location filename="../src/mainwindow.cpp" line="3360" />
         <source>Силуэт ударных отключен</source>
         <translation>Beat waveform disabled</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="708" />
-        <location filename="../src/mainwindow.cpp" line="1340" />
-        <source>English</source>
-        <translation>English</translation>
     </message>
 </context>
 <context>

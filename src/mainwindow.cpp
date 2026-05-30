@@ -45,6 +45,8 @@
 #include "../include/metronomesettingsdialog.h"
 #include "../include/markerengine.h"
 #include "../include/timeutils.h"
+#include "../include/wavwriter.h"
+#include "../include/audiofileservice.h"
 #include <QUndoStack>
 #include <QtGui/QShortcut>
 #include <QtWidgets/QDialogButtonBox>
@@ -99,56 +101,6 @@ void alignWaveformViewToBarGrid(WaveformView *waveformView, float bpm, int beats
     waveformView->setHorizontalOffset(offset);
 }
 
-// Раскладывает кадры QAudioBuffer по каналам (моно/стерео), конвертируя любой
-// формат сэмплов в float [-1; 1]. Берутся первые два канала (как и раньше).
-void appendAudioBuffer(const QAudioBuffer& buffer, QVector<float>& left, QVector<float>& right)
-{
-    const int frames = buffer.frameCount();
-    const int ch = buffer.format().channelCount();
-    if (frames <= 0 || ch <= 0)
-        return;
-
-    const bool stereo = ch > 1;
-    auto push = [&](float l, float r) {
-        left.append(l);
-        if (stereo)
-            right.append(r);
-    };
-
-    switch (buffer.format().sampleFormat()) {
-    case QAudioFormat::Float: {
-        const float* d = buffer.constData<float>();
-        for (int i = 0; i < frames; ++i)
-            push(d[i * ch], stereo ? d[i * ch + 1] : 0.f);
-        break;
-    }
-    case QAudioFormat::Int16: {
-        const qint16* d = buffer.constData<qint16>();
-        constexpr float k = 1.0f / 32768.0f;
-        for (int i = 0; i < frames; ++i)
-            push(d[i * ch] * k, stereo ? d[i * ch + 1] * k : 0.f);
-        break;
-    }
-    case QAudioFormat::Int32: {
-        const qint32* d = buffer.constData<qint32>();
-        constexpr float k = 1.0f / 2147483648.0f;
-        for (int i = 0; i < frames; ++i)
-            push(float(d[i * ch]) * k, stereo ? float(d[i * ch + 1]) * k : 0.f);
-        break;
-    }
-    case QAudioFormat::UInt8: {
-        const quint8* d = buffer.constData<quint8>();
-        constexpr float k = 1.0f / 128.0f;
-        for (int i = 0; i < frames; ++i)
-            push((int(d[i * ch]) - 128) * k, stereo ? (int(d[i * ch + 1]) - 128) * k : 0.f);
-        break;
-    }
-    default:
-        // Неизвестный формат сэмпла — пропускаем буфер.
-        break;
-    }
-}
-
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent)
@@ -182,8 +134,8 @@ MainWindow::MainWindow(QWidget *parent)
     , isPitchGridVisible(false) // По умолчанию питч-сетка скрыта
     , currentKey("")
     , currentKey2("")
-    , keyContextMenu(nullptr)
-    , keyContextMenu2(nullptr)
+    , keyMenu(nullptr)
+    , keyMenu2(nullptr)
     , playShortcut(nullptr)
     , shiftAShortcut(nullptr)
     , shiftBShortcut(nullptr)
@@ -208,12 +160,6 @@ MainWindow::MainWindow(QWidget *parent)
     togglePitchGridAct = nullptr;
     undoStack = new QUndoStack(this);
 
-    // Initialize key actions arrays
-    for (int i = 0; i < 28; ++i) {
-        keyActions[i] = nullptr;
-        keyActions2[i] = nullptr;
-    }
-
     // Load and install translator before setupUi (language from settings or system)
     m_appTranslator = new QTranslator(this);
     QString lang = settings.value("language", QString()).toString();
@@ -229,8 +175,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     createActions();  // Create actions first
     ui->setupUi(this);  // Then setup UI
-    createKeyContextMenu();  // Create key context menu
-    createKeyContextMenu2();  // Create second key context menu
+
+    // Меню тональностей вынесены в отдельный класс KeySelectionMenu.
+    keyMenu = new KeySelectionMenu(this);
+    keyMenu2 = new KeySelectionMenu(this);
+    connect(keyMenu, &KeySelectionMenu::keySelected, this, &MainWindow::setKey);
+    connect(keyMenu2, &KeySelectionMenu::keySelected, this, &MainWindow::setKey2);
 
     // Устанавливаем стандартные флаги окна (исправлено для корректного закрытия)
     setWindowFlags(Qt::Window);
@@ -386,60 +336,7 @@ MainWindow::MainWindow(QWidget *parent)
     int scrollBarWidth = 16; // Стандартная ширина скроллбара
     pitchGridVerticalScrollBar->setFixedWidth(scrollBarWidth);
 
-    // Настраиваем цвета скроллбаров
-    QString currentScheme = settings.value("colorScheme", "dark").toString();
-    if (currentScheme == "dark") {
-        horizontalScrollBar->setStyleSheet(
-            "QScrollBar:horizontal {"
-            "    background: #404040;"
-            "    height: 20px;"
-            "    border: none;"
-            "}"
-            "QScrollBar::handle:horizontal {"
-            "    background: #606060;"
-            "    min-width: 20px;"
-            "    border-radius: 0px;"
-            "}"
-            "QScrollBar::handle:horizontal:hover {"
-            "    background: #707070;"
-            "}"
-            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
-            "    background: none;"
-            "    border: none;"
-            "}"
-        );
-
-
-
-        pitchGridVerticalScrollBar->setStyleSheet(
-            "QScrollBar:vertical {"
-            "    background: rgba(64, 64, 64, 128);"
-            "    width: 16px;"
-            "    border: none;"
-            "    border-radius: 8px;"
-            "}"
-            "QScrollBar::handle:vertical {"
-            "    background: rgba(96, 96, 96, 180);"
-            "    min-height: 20px;"
-            "    border-radius: 8px;"
-            "    margin: 2px;"
-            "}"
-            "QScrollBar::handle:vertical:hover {"
-            "    background: rgba(112, 112, 112, 200);"
-            "}"
-            "QScrollBar::handle:vertical:pressed {"
-            "    background: rgba(160, 160, 160, 255);"
-            "}"
-            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-            "    background: none;"
-            "    border: none;"
-            "}"
-            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
-            "    background: none;"
-            "    border: none;"
-            "}"
-        );
-    }
+    // Стили скроллбаров применяются ниже (после readSettings) единым вызовом applyScrollBarStyles().
 
     // Initialize audio
     mediaPlayer = new QMediaPlayer(this);
@@ -457,149 +354,11 @@ MainWindow::MainWindow(QWidget *parent)
     // Restore window state
     readSettings();
 
-    // Применяем сохраненную цветовую схему или темную по умолчанию
-    currentScheme = settings.value("colorScheme", "dark").toString();
-    if (currentScheme == "dark") {
-        if (ui->waveformWidget) {
-            ui->waveformWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
-        }
-        if (ui->pitchGridWidget) {
-            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
-        }
-        if (ui->scrollBarWidget) {
-            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #404040; }");
-        }
-        // rulerWidget больше не существует в новой структуре UI
-    } else if (currentScheme == "light") {
-        if (ui->waveformWidget) {
-            ui->waveformWidget->setStyleSheet("QWidget { background-color: #f5f5f5; }");
-        }
-        if (ui->pitchGridWidget) {
-            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #f5f5f5; }");
-        }
-        if (ui->scrollBarWidget) {
-            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #e0e0e0; }");
-        }
-        // rulerWidget больше не существует в новой структуре UI
-
-        // Применяем светлые стили к скроллбарам для светлой темы
-        if (horizontalScrollBar) {
-            horizontalScrollBar->setStyleSheet(
-                "QScrollBar:horizontal {"
-                "    background: #e0e0e0;"
-                "    height: 20px;"
-                "    border: none;"
-                "}"
-                "QScrollBar::handle:horizontal {"
-                "    background: #c0c0c0;"
-                "    min-width: 20px;"
-                "    border-radius: 0px;"
-                "}"
-                "QScrollBar::handle:horizontal:hover {"
-                "    background: #a0a0a0;"
-                "}"
-                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-        if (pitchGridVerticalScrollBar) {
-            pitchGridVerticalScrollBar->setStyleSheet(
-                "QScrollBar:vertical {"
-                "    background: rgba(224, 224, 224, 128);"
-                "    width: 16px;"
-                "    border: none;"
-                "    border-radius: 8px;"
-                "}"
-                "QScrollBar::handle:vertical {"
-                "    background: rgba(192, 192, 192, 180);"
-                "    min-height: 20px;"
-                "    border-radius: 8px;"
-                "    margin: 2px;"
-                "}"
-                "QScrollBar::handle:vertical:hover {"
-                "    background: rgba(160, 160, 160, 200);"
-                "}"
-                "QScrollBar::handle:vertical:pressed {"
-                "    background: rgba(128, 128, 128, 255);"
-                "}"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-    } else {
-        // По умолчанию - тёмная схема
-        if (ui->waveformWidget) {
-            ui->waveformWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
-        }
-        if (ui->pitchGridWidget) {
-            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
-        }
-        if (ui->scrollBarWidget) {
-            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #404040; }");
-        }
-        // rulerWidget больше не существует в новой структуре UI
-
-        // Применяем тёмные стили к скроллбарам для темы по умолчанию
-        if (horizontalScrollBar) {
-            horizontalScrollBar->setStyleSheet(
-                "QScrollBar:horizontal {"
-                "    background: #404040;"
-                "    height: 16px;"
-                "    border: none;"
-                "}"
-                "QScrollBar::handle:horizontal {"
-                "    background: #606060;"
-                "    min-width: 20px;"
-                "    border-radius: 0px;"
-                "}"
-                "QScrollBar::handle:horizontal:hover {"
-                "    background: #707070;"
-                "}"
-                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-        if (pitchGridVerticalScrollBar) {
-            pitchGridVerticalScrollBar->setStyleSheet(
-                "QScrollBar:vertical {"
-                "    background: rgba(64, 64, 64, 128);"
-                "    width: 16px;"
-                "    border: none;"
-                "    border-radius: 8px;"
-                "}"
-                "QScrollBar::handle:vertical {"
-                "    background: rgba(96, 96, 96, 180);"
-                "    min-height: 20px;"
-                "    border-radius: 8px;"
-                "    margin: 2px;"
-                "}"
-                "QScrollBar::handle:vertical:hover {"
-                "    background: rgba(112, 112, 112, 200);"
-                "}"
-                "QScrollBar::handle:vertical:pressed {"
-                "    background: rgba(160, 160, 160, 255);"
-                "}"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-    }
+    // Применяем сохранённую цветовую схему (тёмная по умолчанию):
+    // фон виджетов и стили скроллбаров вынесены в helpers / :/styles/*.qss.
+    const QString currentScheme = settings.value("colorScheme", "dark").toString();
+    applyWidgetBackgrounds(currentScheme);
+    applyScrollBarStyles(currentScheme);
 
     // Initialize timer for time updates
     playbackTimer = new QTimer(this);
@@ -1883,117 +1642,22 @@ QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath,
     if (ok)
         *ok = false;
 
-    QVector<QVector<float>> channels;
-    QAudioDecoder decoder;
+    // Декодирование вынесено в AudioFileService (нативный формат, без ресемплинга).
+    const AudioFileService::DecodeResult res = AudioFileService::decode(filePath, onProgress);
 
-    // Декодируем в НАТИВНОМ формате файла: не навязываем 44100/стерео,
-    // чтобы не ресемплировать и не искажать анализ BPM/тональности.
-    // Частота и число каналов берутся из первого пришедшего буфера.
-    decoder.setSource(QUrl::fromLocalFile(filePath));
-
-    QEventLoop loop;
-    QVector<float> leftChannel;
-    QVector<float> rightChannel;
-    bool decodeError = false;
-    int detectedSampleRate = 0;
-    bool reserved = false;
-    int lastReportedPercent = -1;
-
-    // Сторожевой таймер: прерываем ожидание, если декодер «завис»
-    // (нет новых данных дольше 15 секунд).
-    QTimer stallTimer;
-    stallTimer.setSingleShot(true);
-    stallTimer.setInterval(15000);
-    connect(&stallTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    stallTimer.start();
-
-    // Обработка ошибок декодера
-    connect(&decoder, static_cast<void(QAudioDecoder::*)(QAudioDecoder::Error)>(&QAudioDecoder::error),
-        [&](QAudioDecoder::Error error) {
-            QString errorStr = tr("Ошибка декодирования: ");
-            switch (error) {
-                case QAudioDecoder::ResourceError:
-                    errorStr += tr("файл не найден или недоступен");
-                    break;
-                case QAudioDecoder::FormatError:
-                    errorStr += tr("неподдерживаемый формат");
-                    break;
-                case QAudioDecoder::AccessDeniedError:
-                    errorStr += tr("нет доступа к файлу");
-                    break;
-                default:
-                    errorStr += tr("неизвестная ошибка");
-            }
-            decodeError = true;
-            statusBar()->showMessage(errorStr, 3000);
-            loop.quit();
-        });
-
-    connect(&decoder, &QAudioDecoder::bufferReady, this,
-        [&]() {
-            const QAudioBuffer buffer = decoder.read();
-            if (!buffer.isValid() || buffer.frameCount() == 0)
-                return;
-
-            stallTimer.start(); // данные пришли — перезапускаем сторож
-
-            const int rate = buffer.format().sampleRate();
-            if (rate > 0 && detectedSampleRate == 0) {
-                detectedSampleRate = rate;
-                // Сохраняем нативную частоту дискретизации для всего пайплайна.
-                if (waveformView)
-                    waveformView->setSampleRate(rate);
-            }
-
-            // Однократно резервируем память по оценке длительности файла.
-            if (!reserved && detectedSampleRate > 0) {
-                const qint64 durMs = decoder.duration();
-                if (durMs > 0) {
-                    const qint64 estFrames =
-                        (durMs * detectedSampleRate) / 1000 + buffer.frameCount();
-                    leftChannel.reserve(estFrames);
-                    if (buffer.format().channelCount() > 1)
-                        rightChannel.reserve(estFrames);
-                    reserved = true;
-                }
-            }
-
-            appendAudioBuffer(buffer, leftChannel, rightChannel);
-
-            // Сообщаем о прогрессе декодирования (по длительности).
-            if (onProgress && detectedSampleRate > 0) {
-                const qint64 durMs = decoder.duration();
-                if (durMs > 0) {
-                    const qint64 doneMs =
-                        (qint64(leftChannel.size()) * 1000) / detectedSampleRate;
-                    const int percent =
-                        int(qBound(qint64(0), doneMs * 100 / durMs, qint64(99)));
-                    if (percent != lastReportedPercent) {
-                        lastReportedPercent = percent;
-                        onProgress(percent);
-                    }
-                }
-            }
-        });
-
-    connect(&decoder, &QAudioDecoder::finished, &loop, &QEventLoop::quit);
-
-    decoder.start();
-    loop.exec();
-    decoder.stop();
-
-    if (decodeError)
-        return channels; // ok остаётся false
-
-    if (!leftChannel.isEmpty()) {
-        channels.append(leftChannel);
-        if (!rightChannel.isEmpty())
-            channels.append(rightChannel);
-        if (ok)
-            *ok = true;
+    if (!res.ok) {
+        if (!res.error.isEmpty())
+            statusBar()->showMessage(tr("Ошибка декодирования: %1").arg(res.error), 3000);
+        return {};
     }
 
-    return channels;
+    // Сохраняем нативную частоту дискретизации для всего пайплайна.
+    if (waveformView && res.sampleRate > 0)
+        waveformView->setSampleRate(res.sampleRate);
+
+    if (ok)
+        *ok = true;
+    return res.channels;
 }
 
 void MainWindow::saveAudioFile()
@@ -2003,78 +1667,54 @@ void MainWindow::saveAudioFile()
 
 bool MainWindow::doSaveAudioFile()
 {
+    const QString filterFloat = tr("WAV 32-bit float (*.wav)");
+    const QString filterPcm24 = tr("WAV 24-bit PCM (*.wav)");
+    const QString filterPcm16 = tr("WAV 16-bit PCM (*.wav)");
+    const QString filterAll = tr("Все файлы (*)");
+    const QString filters = filterFloat + QStringLiteral(";;")
+                          + filterPcm24 + QStringLiteral(";;")
+                          + filterPcm16 + QStringLiteral(";;")
+                          + filterAll;
+
+    QString selectedFilter;
     QString fileName = QFileDialog::getSaveFileName(this,
         tr("Сохранить аудиофайл"), "",
-        tr("WAV файлы (*.wav);;Все файлы (*)"));
+        filters,
+        &selectedFilter);
 
-    if (!fileName.isEmpty()) {
-        if (!fileName.endsWith(".wav", Qt::CaseInsensitive)) {
-            fileName += ".wav";
-        }
-
-        QFile file(fileName);
-        if (file.open(QIODevice::WriteOnly)) {
-            // Получаем данные из WaveformView
-            const QVector<QVector<float>>& audioData = waveformView->getAudioData();
-            if (!audioData.isEmpty()) {
-                // Заголовок WAV файла
-                QDataStream out(&file);
-                out.setByteOrder(QDataStream::LittleEndian);
-
-                // RIFF заголовок
-                out.writeRawData("RIFF", 4);
-                qint32 fileSize = 36 + audioData[0].size() * 2 * audioData.size(); // 2 байта на сэмпл
-                out << fileSize;
-                out.writeRawData("WAVE", 4);
-
-                // fmt подчанк
-                out.writeRawData("fmt ", 4);
-                qint32 fmtSize = 16;
-                out << fmtSize;
-                qint16 audioFormat = 1; // PCM
-                out << audioFormat;
-                qint16 numChannels = audioData.size();
-                out << numChannels;
-                qint32 sampleRate = waveformView->getSampleRate();
-                out << sampleRate;
-                qint32 byteRate = sampleRate * numChannels * 2;
-                out << byteRate;
-                qint16 blockAlign = numChannels * 2;
-                out << blockAlign;
-                qint16 bitsPerSample = 16;
-                out << bitsPerSample;
-
-                // data подчанк
-                out.writeRawData("data", 4);
-                qint32 dataSize = audioData[0].size() * 2 * numChannels;
-                out << dataSize;
-
-                // Записываем сэмплы
-                for (int i = 0; i < audioData[0].size(); ++i) {
-                    for (int channel = 0; channel < numChannels; ++channel) {
-                        float sample = audioData[channel][i];
-                        qint16 pcmSample = qint16(sample * 32767.0f);
-                        out << pcmSample;
-                    }
-                }
-
-                file.close();
-                hasUnsavedChanges = false;
-                statusBar()->showMessage(tr("Файл сохранен: %1").arg(fileName), 2000);
-                return true;
-            } else {
-                statusBar()->showMessage(tr("Ошибка: нет данных для сохранения"), 2000);
-                return false;
-            }
-        } else {
-            QMessageBox::warning(this, tr("DONTFLOAT"),
-                               tr("Не удалось сохранить файл %1:\n%2.")
-                               .arg(QDir::toNativeSeparators(fileName),
-                                   file.errorString()));
-            return false;
-        }
+    if (fileName.isEmpty()) {
+        return false;
     }
-    return false;
+    if (!fileName.endsWith(".wav", Qt::CaseInsensitive)) {
+        fileName += ".wav";
+    }
+
+    const QVector<QVector<float>>& audioData = waveformView->getAudioData();
+    if (audioData.isEmpty()) {
+        statusBar()->showMessage(tr("Ошибка: нет данных для сохранения"), 2000);
+        return false;
+    }
+
+    WavWriter::WriteOptions writeOptions;
+    if (selectedFilter == filterFloat) {
+        writeOptions.format = WavWriter::SampleFormat::Float32;
+    } else if (selectedFilter == filterPcm24) {
+        writeOptions.format = WavWriter::SampleFormat::Pcm24;
+    } else {
+        writeOptions.format = WavWriter::SampleFormat::Pcm16;
+    }
+
+    QString error;
+    if (!WavWriter::writeFile(fileName, audioData, waveformView->getSampleRate(), &error, writeOptions)) {
+        QMessageBox::warning(this, tr("DONTFLOAT"),
+                           tr("Не удалось сохранить файл %1:\n%2.")
+                           .arg(QDir::toNativeSeparators(fileName), error));
+        return false;
+    }
+
+    hasUnsavedChanges = false;
+    statusBar()->showMessage(tr("Файл сохранен: %1").arg(fileName), 2000);
+    return true;
 }
 
 void MainWindow::updateWindowTitle()
@@ -2249,6 +1889,52 @@ void MainWindow::showMetronomeSettings()
     }
 }
 
+QString MainWindow::loadStyleSheet(const QString& resourcePath)
+{
+    QFile file(resourcePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "Не удалось загрузить стиль:" << resourcePath;
+        return QString();
+    }
+    return QString::fromUtf8(file.readAll());
+}
+
+void MainWindow::applyWidgetBackgrounds(const QString& scheme)
+{
+    // "system" — сброс пользовательских стилей (пустая строка), иначе цвет фона.
+    QString waveBg, scrollBg;
+    if (scheme == "light") {
+        waveBg = QStringLiteral("#f5f5f5");
+        scrollBg = QStringLiteral("#e0e0e0");
+    } else if (scheme != "system") { // dark / default / прочее → тёмный фон
+        waveBg = QStringLiteral("#2b2b2b");
+        scrollBg = QStringLiteral("#404040");
+    }
+
+    auto sheetFor = [](const QString& color) {
+        return color.isEmpty() ? QString()
+                               : QStringLiteral("QWidget { background-color: %1; }").arg(color);
+    };
+
+    if (ui->waveformWidget)  ui->waveformWidget->setStyleSheet(sheetFor(waveBg));
+    if (ui->pitchGridWidget) ui->pitchGridWidget->setStyleSheet(sheetFor(waveBg));
+    if (ui->scrollBarWidget) ui->scrollBarWidget->setStyleSheet(sheetFor(scrollBg));
+}
+
+void MainWindow::applyScrollBarStyles(const QString& scheme)
+{
+    // "system" — сброс (пустая строка), light — светлая схема, иначе — тёмная.
+    QString qss;
+    if (scheme == "light") {
+        qss = loadStyleSheet(QStringLiteral(":/styles/resources/styles/scrollbars_light.qss"));
+    } else if (scheme != "system") {
+        qss = loadStyleSheet(QStringLiteral(":/styles/resources/styles/scrollbars_dark.qss"));
+    }
+
+    if (horizontalScrollBar)        horizontalScrollBar->setStyleSheet(qss);
+    if (pitchGridVerticalScrollBar) pitchGridVerticalScrollBar->setStyleSheet(qss);
+}
+
 void MainWindow::setTheme(const QString& theme)
 {
     if (theme == "default") {
@@ -2269,42 +1955,16 @@ void MainWindow::setTheme(const QString& theme)
         defaultPalette.setColor(QPalette::HighlightedText, QColor(239, 240, 241));
         qApp->setPalette(defaultPalette);
 
-        // Применяем цвета по умолчанию к виджетам
-        if (ui->waveformWidget) {
-            ui->waveformWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
-        }
-        if (ui->pitchGridWidget) {
-            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
-        }
-        if (ui->scrollBarWidget) {
-            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #404040; }");
-        }
-        // rulerWidget больше не существует в новой структуре UI
+        // Тёмный фон виджетов; стили скроллбаров для "default" не трогаем (как и раньше).
+        applyWidgetBackgrounds("default");
     } else {
         // System theme
         qApp->setStyle(QStyleFactory::create("Fusion"));
         qApp->setPalette(QApplication::style()->standardPalette());
 
-        // Сбрасываем стили виджетов для системной темы
-        if (ui->waveformWidget) {
-            ui->waveformWidget->setStyleSheet("");
-        }
-        if (ui->pitchGridWidget) {
-            ui->pitchGridWidget->setStyleSheet("");
-        }
-        if (ui->scrollBarWidget) {
-            ui->scrollBarWidget->setStyleSheet("");
-        }
-        // rulerWidget больше не существует в новой структуре UI
-
-        // Сбрасываем стили скроллбаров для системной темы
-        if (horizontalScrollBar) {
-            horizontalScrollBar->setStyleSheet("");
-        }
-
-        if (pitchGridVerticalScrollBar) {
-            pitchGridVerticalScrollBar->setStyleSheet("");
-        }
+        // Сбрасываем пользовательские стили виджетов и скроллбаров.
+        applyWidgetBackgrounds("system");
+        applyScrollBarStyles("system");
     }
 
     settings.setValue("theme", theme);
@@ -2331,19 +1991,6 @@ void MainWindow::setColorScheme(const QString& scheme)
         darkPalette.setColor(QPalette::Highlight, QColor(42, 130, 218));
         darkPalette.setColor(QPalette::HighlightedText, Qt::black);
         qApp->setPalette(darkPalette);
-
-        // Применяем тёмные цвета к виджетам
-        if (ui->waveformWidget) {
-            ui->waveformWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
-        }
-        if (ui->pitchGridWidget) {
-            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #2b2b2b; }");
-        }
-        if (ui->scrollBarWidget) {
-            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #404040; }");
-        }
-        // rulerWidget больше не существует в новой структуре UI
-
     } else if (scheme == "light") {
         // Установка светлой темы для всего приложения
         qApp->setStyle(QStyleFactory::create("Fusion"));
@@ -2362,18 +2009,6 @@ void MainWindow::setColorScheme(const QString& scheme)
         lightPalette.setColor(QPalette::Highlight, QColor(0, 120, 215));
         lightPalette.setColor(QPalette::HighlightedText, Qt::white);
         qApp->setPalette(lightPalette);
-
-        // Применяем светлые цвета к виджетам
-        if (ui->waveformWidget) {
-            ui->waveformWidget->setStyleSheet("QWidget { background-color: #f5f5f5; }");
-        }
-        if (ui->pitchGridWidget) {
-            ui->pitchGridWidget->setStyleSheet("QWidget { background-color: #f5f5f5; }");
-        }
-        if (ui->scrollBarWidget) {
-            ui->scrollBarWidget->setStyleSheet("QWidget { background-color: #e0e0e0; }");
-        }
-        // rulerWidget больше не существует в новой структуре UI
     }
 
     // Применяем схему к WaveformView
@@ -2386,167 +2021,9 @@ void MainWindow::setColorScheme(const QString& scheme)
         pitchGridWidget->setColorScheme(scheme);
     }
 
-    // Обновляем стили скроллбаров
-    if (scheme == "dark") {
-        if (horizontalScrollBar) {
-            horizontalScrollBar->setStyleSheet(
-                "QScrollBar:horizontal {"
-                "    background: #404040;"
-                "    height: 20px;"
-                "    border: none;"
-                "}"
-                "QScrollBar::handle:horizontal {"
-                "    background: #606060;"
-                "    min-width: 20px;"
-                "    border-radius: 0px;"
-                "}"
-                "QScrollBar::handle:horizontal:hover {"
-                "    background: #707070;"
-                "}"
-                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-        if (pitchGridVerticalScrollBar) {
-            pitchGridVerticalScrollBar->setStyleSheet(
-                "QScrollBar:vertical {"
-                "    background: rgba(64, 64, 64, 128);"
-                "    width: 16px;"
-                "    border: none;"
-                "    border-radius: 8px;"
-                "}"
-                "QScrollBar::handle:vertical {"
-                "    background: rgba(96, 96, 96, 180);"
-                "    min-height: 20px;"
-                "    border-radius: 8px;"
-                "    margin: 2px;"
-                "}"
-                "QScrollBar::handle:vertical:hover {"
-                "    background: rgba(112, 112, 112, 200);"
-                "}"
-                "QScrollBar::handle:vertical:pressed {"
-                "    background: rgba(160, 160, 160, 255);"
-                "}"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-    } else if (scheme == "light") {
-        if (horizontalScrollBar) {
-            horizontalScrollBar->setStyleSheet(
-                "QScrollBar:horizontal {"
-                "    background: #e0e0e0;"
-                "    height: 20px;"
-                "    border: none;"
-                "}"
-                "QScrollBar::handle:horizontal {"
-                "    background: #c0c0c0;"
-                "    min-width: 20px;"
-                "    border-radius: 0px;"
-                "}"
-                "QScrollBar::handle:horizontal:hover {"
-                "    background: #a0a0a0;"
-                "}"
-                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-
-        if (pitchGridVerticalScrollBar) {
-            pitchGridVerticalScrollBar->setStyleSheet(
-                "QScrollBar:vertical {"
-                "    background: rgba(224, 224, 224, 128);"
-                "    width: 16px;"
-                "    border: none;"
-                "    border-radius: 8px;"
-                "}"
-                "QScrollBar::handle:vertical {"
-                "    background: rgba(192, 192, 192, 180);"
-                "    min-height: 20px;"
-                "    border-radius: 8px;"
-                "    margin: 2px;"
-                "}"
-                "QScrollBar::handle:vertical:hover {"
-                "    background: rgba(160, 160, 160, 200);"
-                "}"
-                "QScrollBar::handle:vertical:pressed {"
-                "    background: rgba(128, 128, 128, 255);"
-                "}"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-    } else {
-        // По умолчанию - тёмная схема
-        if (horizontalScrollBar) {
-            horizontalScrollBar->setStyleSheet(
-                "QScrollBar:horizontal {"
-                "    background: #404040;"
-                "    height: 20px;"
-                "    border: none;"
-                "}"
-                "QScrollBar::handle:horizontal {"
-                "    background: #606060;"
-                "    min-width: 20px;"
-                "    border-radius: 0px;"
-                "}"
-                "QScrollBar::handle:horizontal:hover {"
-                "    background: #707070;"
-                "}"
-                "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-
-        if (pitchGridVerticalScrollBar) {
-            pitchGridVerticalScrollBar->setStyleSheet(
-                "QScrollBar:vertical {"
-                "    background: rgba(64, 64, 64, 128);"
-                "    width: 16px;"
-                "    border: none;"
-                "    border-radius: 8px;"
-                "}"
-                "QScrollBar::handle:vertical {"
-                "    background: rgba(96, 96, 96, 180);"
-                "    min-height: 20px;"
-                "    border-radius: 8px;"
-                "    margin: 2px;"
-                "}"
-                "QScrollBar::handle:vertical:hover {"
-                "    background: rgba(112, 112, 112, 200);"
-                "}"
-                "QScrollBar::handle:vertical:pressed {"
-                "    background: rgba(160, 160, 160, 255);"
-                "}"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
-                "    background: none;"
-                "    border: none;"
-                "}"
-            );
-        }
-    }
+    // Фон виджетов и стили скроллбаров — единые helpers (см. :/styles/*.qss).
+    applyWidgetBackgrounds(scheme);
+    applyScrollBarStyles(scheme);
 
     settings.setValue("colorScheme", scheme);
     statusBar()->showMessage(tr("Цветовая схема изменена: %1").arg(scheme == "dark" ? "Тёмная" : "Светлая"), 2000);
@@ -2832,60 +2309,6 @@ void MainWindow::togglePitchGrid()
     settings.setValue("pitchGridVisible", isPitchGridVisible);
 }
 
-void MainWindow::createKeyContextMenu()
-{
-    keyContextMenu = populateKeyContextMenu(keyActions, [this](const QString& k) { setKey(k); });
-}
-
-void MainWindow::createKeyContextMenu2()
-{
-    keyContextMenu2 = populateKeyContextMenu(keyActions2, [this](const QString& k) { setKey2(k); });
-}
-
-QMenu* MainWindow::populateKeyContextMenu(QAction* actions[28],
-                                          std::function<void(const QString&)> setKeyCallback)
-{
-    QMenu* menu = new QMenu(this);
-    static const QStringList majorKeys = {
-        "C Major", "C# Major", "D Major", "D# Major", "E Major", "F Major",
-        "F# Major", "G Major", "G# Major", "A Major", "A# Major", "B Major"
-    };
-    static const QStringList minorKeys = {
-        "C Minor", "C# Minor", "D Minor", "D# Minor", "E Minor", "F Minor",
-        "F# Minor", "G Minor", "G# Minor", "A Minor", "A# Minor", "B Minor"
-    };
-
-    QMenu* majorMenu = menu->addMenu(tr("Мажорные"));
-    for (int i = 0; i < majorKeys.size(); ++i) {
-        QString key = majorKeys[i];
-        actions[i] = new QAction(key, this);
-        actions[i]->setData(key);
-        connect(actions[i], &QAction::triggered, this, [setKeyCallback, key]() {
-            setKeyCallback(key);
-        });
-        majorMenu->addAction(actions[i]);
-    }
-
-    QMenu* minorMenu = menu->addMenu(tr("Минорные"));
-    for (int i = 0; i < minorKeys.size(); ++i) {
-        QString key = minorKeys[i];
-        actions[i + 12] = new QAction(key, this);
-        actions[i + 12]->setData(key);
-        connect(actions[i + 12], &QAction::triggered, this, [setKeyCallback, key]() {
-            setKeyCallback(key);
-        });
-        minorMenu->addAction(actions[i + 12]);
-    }
-
-    menu->addSeparator();
-    QAction* unknownAction = new QAction(tr("Не определена"), this);
-    connect(unknownAction, &QAction::triggered, this, [setKeyCallback]() {
-        setKeyCallback(QString());
-    });
-    menu->addAction(unknownAction);
-    return menu;
-}
-
 void MainWindow::analyzeKey()
 {
     if (!waveformView || waveformView->getAudioData().isEmpty()) {
@@ -2920,16 +2343,14 @@ void MainWindow::analyzeKey()
 
 void MainWindow::showKeyContextMenu(const QPoint& pos)
 {
-    if (keyContextMenu) {
-        keyContextMenu->exec(ui->keyInput->mapToGlobal(pos));
-    }
+    if (keyMenu)
+        keyMenu->popup(ui->keyInput, pos);
 }
 
 void MainWindow::showKeyContextMenu2(const QPoint& pos)
 {
-    if (keyContextMenu2) {
-        keyContextMenu2->exec(ui->keyInput2->mapToGlobal(pos));
-    }
+    if (keyMenu2)
+        keyMenu2->popup(ui->keyInput2, pos);
 }
 
 void MainWindow::setKey(const QString& key)
@@ -3637,22 +3058,6 @@ void MainWindow::applyBeatFixToWaveform(const QVector<QVector<float>>& originalD
 
 QString MainWindow::saveProcessedAudioToTempWav(const QVector<QVector<float>> &data, int sampleRate) const
 {
-    if (data.isEmpty() || data[0].isEmpty() || sampleRate <= 0) {
-        qWarning() << "saveProcessedAudioToTempWav: invalid data or sampleRate";
-        return QString();
-    }
-
-    int channels = data.size();
-    qint64 frames = data[0].size();
-
-    // Проверяем, что все каналы одинаковой длины
-    for (int ch = 1; ch < channels; ++ch) {
-        if (data[ch].size() != frames) {
-            qWarning() << "saveProcessedAudioToTempWav: channel size mismatch";
-            return QString();
-        }
-    }
-
     QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
     if (tempDir.isEmpty()) {
         tempDir = QDir::currentPath();
@@ -3663,69 +3068,19 @@ QString MainWindow::saveProcessedAudioToTempWav(const QVector<QVector<float>> &d
         dir.mkpath(tempDir);
     }
 
-    QString filePath = dir.filePath("dontfloat_processed.wav");
-    QFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly)) {
-        qWarning() << "saveProcessedAudioToTempWav: cannot open file for writing:" << filePath;
+    const QString filePath = dir.filePath("dontfloat_processed.wav");
+
+    WavWriter::WriteOptions writeOptions;
+    writeOptions.format = WavWriter::SampleFormat::Float32;
+    writeOptions.dither = false;
+
+    QString error;
+    if (!WavWriter::writeFile(filePath, data, sampleRate, &error, writeOptions)) {
+        qWarning() << "saveProcessedAudioToTempWav:" << error;
         return QString();
     }
 
-    // Параметры WAV
-    const int bitsPerSample = 16;
-    const int bytesPerSample = bitsPerSample / 8;
-    const int byteRate = sampleRate * channels * bytesPerSample;
-    const int blockAlign = channels * bytesPerSample;
-    const qint64 dataChunkSize = frames * channels * bytesPerSample;
-    const qint64 riffChunkSize = 36 + dataChunkSize;
-
-    // Пишем заголовок WAV (RIFF little-endian)
-    auto writeLE32 = [&](quint32 value) {
-        char b[4];
-        b[0] = static_cast<char>(value & 0xFF);
-        b[1] = static_cast<char>((value >> 8) & 0xFF);
-        b[2] = static_cast<char>((value >> 16) & 0xFF);
-        b[3] = static_cast<char>((value >> 24) & 0xFF);
-        file.write(b, 4);
-    };
-    auto writeLE16 = [&](quint16 value) {
-        char b[2];
-        b[0] = static_cast<char>(value & 0xFF);
-        b[1] = static_cast<char>((value >> 8) & 0xFF);
-        file.write(b, 2);
-    };
-
-    // RIFF header
-    file.write("RIFF", 4);
-    writeLE32(static_cast<quint32>(riffChunkSize));
-    file.write("WAVE", 4);
-
-    // fmt chunk
-    file.write("fmt ", 4);
-    writeLE32(16);                    // Subchunk1Size for PCM
-    writeLE16(1);                     // AudioFormat PCM
-    writeLE16(static_cast<quint16>(channels));
-    writeLE32(static_cast<quint32>(sampleRate));
-    writeLE32(static_cast<quint32>(byteRate));
-    writeLE16(static_cast<quint16>(blockAlign));
-    writeLE16(static_cast<quint16>(bitsPerSample));
-
-    // data chunk
-    file.write("data", 4);
-    writeLE32(static_cast<quint32>(dataChunkSize));
-
-    // Пишем interleaved PCM16 данные
-    for (qint64 i = 0; i < frames; ++i) {
-        for (int ch = 0; ch < channels; ++ch) {
-            float sample = data[ch][static_cast<int>(i)];
-            // Клэмпим в [-1.0, 1.0] и конвертируем в int16
-            if (sample > 1.0f) sample = 1.0f;
-            if (sample < -1.0f) sample = -1.0f;
-            qint16 s = static_cast<qint16>(sample * 32767.0f);
-            writeLE16(static_cast<quint16>(s));
-        }
-    }
-
-    file.close();
-    qDebug() << "saveProcessedAudioToTempWav: written" << frames << "frames to" << filePath;
+    qDebug() << "saveProcessedAudioToTempWav: written" << (data.isEmpty() ? 0 : data[0].size())
+             << "frames to" << filePath;
     return filePath;
 }
