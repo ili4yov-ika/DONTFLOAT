@@ -250,6 +250,28 @@
                                 </widget>
                             </item>
                             <item>
+                                <widget class="QPushButton" name="gridBackButton">
+                                    <property name="minimumSize">
+                                        <size>
+                                            <width>32</width>
+                                            <height>32</height>
+                                        </size>
+                                    </property>
+                                    <property name="maximumSize">
+                                        <size>
+                                            <width>32</width>
+                                            <height>32</height>
+                                        </size>
+                                    </property>
+                                    <property name="toolTip">
+                                        <string>Сдвинуть тактовую сетку на один удар назад</string>
+                                    </property>
+                                    <property name="text">
+                                        <string>&lt;</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item>
                                 <widget class="QPushButton" name="gridMarkersButton">
                                     <property name="minimumSize">
                                         <size>
@@ -264,10 +286,32 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Авто-метки по тактовой сетке</string>
+                                        <string>Привязать все метки к тактовой сетке BPM</string>
                                     </property>
                                     <property name="text">
                                         <string>BG</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item>
+                                <widget class="QPushButton" name="gridForwardButton">
+                                    <property name="minimumSize">
+                                        <size>
+                                            <width>32</width>
+                                            <height>32</height>
+                                        </size>
+                                    </property>
+                                    <property name="maximumSize">
+                                        <size>
+                                            <width>32</width>
+                                            <height>32</height>
+                                        </size>
+                                    </property>
+                                    <property name="toolTip">
+                                        <string>Сдвинуть тактовую сетку на один удар вперёд</string>
+                                    </property>
+                                    <property name="text">
+                                        <string>&gt;</string>
                                     </property>
                                 </widget>
                             </item>
