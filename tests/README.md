@@ -8,6 +8,7 @@
 
 - **bpm_analyzer_test.cpp** - Интеграционный тест анализатора BPM на реальных аудиофайлах из `source4test/`
 - **beat_deviation_test.cpp** - Юнит-тесты для вычисления отклонений долей и поиска неровных долей (новое с 2026-01-12)
+- **ui_responsiveness_test.cpp** - Интеграционный UI-тест: загрузка `example_V80BPM.mp3`, метки выравнивания, перетаскивание меток, `applyTimeStretch`, плавность `QMediaPlayer`
 
 ## Тестовые данные
 
@@ -15,6 +16,32 @@
 
 - `example_C80BPM.mp3` - Файл с постоянными 80 BPM
 - `example_V80BPM.mp3` - Файл с переменными 80 BPM
+
+### ui_responsiveness_test
+
+Интеграционный UI-тест на `example_V80BPM.mp3` (локально, не в CI по умолчанию):
+
+1. Загрузка MP3 и анализ BPM (Mixxx)
+2. Создание меток коррекции (как при «Выравнивании» в GUI)
+3. **testMarkerDragUiResponsiveness** — симуляция перетаскивания метки (`QTest`), проверка `markerDragFinished` и времени отклика
+4. **testApplyTimeStretchAfterAlignment** — полное растяжение по меткам, проверка длины и времени
+5. **testProcessedPlaybackSmoothness** — воспроизведение обработанного WAV через `QMediaPlayer`, монотонность позиции
+
+```powershell
+cd build
+ctest -C Release -R ui_responsiveness_test --output-on-failure
+# или
+.\Release\ui_responsiveness_test.exe -v2
+```
+
+Переменные окружения (опционально):
+
+| Переменная | По умолчанию | Назначение |
+|------------|--------------|------------|
+| `DONTFLOAT_RUN_UI_TEST=1` | — | Запускать в CI (иначе `QSKIP` при `CI`/`GITHUB_ACTIONS`) |
+| `DONTFLOAT_UI_DRAG_MAX_MS` | 8000 | Лимит времени перетаскивания метки |
+| `DONTFLOAT_UI_STRETCH_MAX_MS` | 120000 | Лимит `applyTimeStretch` |
+| `DONTFLOAT_UI_MEDIA_LOAD_MS` | 10000 | Таймаут загрузки WAV в плеер |
 
 ## Сборка тестов
 

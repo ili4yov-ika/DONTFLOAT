@@ -427,6 +427,27 @@ set_tests_properties(beat_deviation_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# UI: отклик при перетаскивании меток и плавность воспроизведения после выравнивания
+add_qt_test(ui_responsiveness_test
+    tests/ui_responsiveness_test.cpp
+    include/waveformview.h
+    src/waveformview.cpp
+    src/waveformcolors.cpp
+    src/beatvisualizer.cpp
+    src/timestretchprocessor.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+    src/bpmanalyzer.cpp
+    src/audiofileservice.cpp
+    src/wavwriter.cpp
+)
+
+set_tests_properties(ui_responsiveness_test PROPERTIES
+    LABELS "ui;integration;audio;timestretch;files"
+    DESCRIPTION "UI responsiveness after beat alignment on example_V80BPM.mp3"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # ============================================================================
 # CPack конфигурация для создания установочных пакетов
 # ============================================================================
