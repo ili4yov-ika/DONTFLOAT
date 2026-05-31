@@ -145,12 +145,9 @@ public:
     // Теперь использует TimeStretchProcessor::StretchResult
     TimeStretchProcessor::StretchResult applyTimeStretch(const QVector<Marker>& markers) const;
 
-    // Новые методы для улучшенной визуализации ударных (временно отключены)
-    /*
     void setBeatVisualizationSettings(const BeatVisualizer::VisualizationSettings& settings);
     BeatVisualizer::VisualizationSettings getBeatVisualizationSettings() const { return beatVisualizationSettings; }
-    void analyzeBeats(); // Запуск анализа ударных
-    */
+    void analyzeBeats();
 
 signals:
     void positionChanged(qint64 position); // Сигнал для обновления позиции воспроизведения (в миллисекундах)
@@ -261,6 +258,8 @@ private:
     static const int maxZoom;
     static const int markerHeight;
     static const int markerSpacing;
+    static constexpr float defaultScrollStep = 0.1f;  // 10% ширины окна
+    static constexpr float defaultZoomStep = 1.2f;    // 20% изменение масштаба
 };
 
 #endif // WAVEFORMVIEW_H

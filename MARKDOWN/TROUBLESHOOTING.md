@@ -28,16 +28,15 @@ set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
 
 **Проблема**: Функция `loadAudioFile` не существовала в классе `WaveformAnalyzer`.
 
-**Решение**: Создана функция `loadAudioFile()` в `src/main.cpp` с использованием `QAudioDecoder`.
+**Решение**: Функция `loadAudioFile()` в `src/main.cpp` декодирует файл через `AudioFileService` (тот же путь, что в GUI).
 
 ```cpp
-bool loadAudioFile(const QString& /*filePath*/, QVector<float>& samples, int& sampleRate) {
-    // Создание синтетических данных для демонстрации
-    sampleRate = 44100;
-    const float testBPM = 80.0f;
-    const float duration = 5.0f;
-    // ... реализация ...
-    return true;
+bool loadAudioFile(const QString& filePath, QVector<float>& samples, int& sampleRate) {
+    const AudioFileService::DecodeResult res = AudioFileService::decode(filePath);
+    if (!res.ok) return false;
+    samples = AudioFileService::toMono(res.channels);
+    sampleRate = res.sampleRate;
+    return !samples.isEmpty();
 }
 ```
 
@@ -250,30 +249,12 @@ tests/
 └── updated_functional_test.bat # Обновленный функциональный тест
 ```
 
-### Синтетические тесты
+### Синтетические тесты (unit)
+
+Синтетические сигналы используются в **юнит-тестах** (`beat_deviation_test`, `testMixxxAnalyzeLongSyntheticNoCrash` в `bpm_analyzer_test`), а не в консольном режиме приложения.
 
 ```cpp
-// Создание синтетических данных для демонстрации
-const float testBPM = 80.0f;
-const float duration = 5.0f;
-const int totalSamples = static_cast<int>(sampleRate * duration);
-
-for (int i = 0; i < totalSamples; ++i) {
-    float sample = 0.0f;
-
-    // Основной тон (440 Hz)
-    sample += 0.3f * std::sin(2.0f * M_PI * 440.0f * i / sampleRate);
-
-    // Биты (короткие импульсы)
-    if (i % samplesPerBeat < samplesPerBeat / 10) {
-        sample += 0.8f * std::sin(2.0f * M_PI * 880.0f * i / sampleRate);
-    }
-
-    // Шум для реалистичности
-    sample += 0.1f * ((float)rand() / RAND_MAX - 0.5f);
-
-    samples.append(sample);
-}
+// Пример: синтетический сигнал в bpm_analyzer_test.cpp для регрессии Mixxx
 ```
 
 ## Рекомендации по решению проблем

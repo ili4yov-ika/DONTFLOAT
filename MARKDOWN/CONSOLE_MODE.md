@@ -25,6 +25,10 @@ DONTFLOAT.exe -c -f <путь_к_файлу> [опции]
 - **--fast**: Быстрый анализ
 - **--variable-tempo**: Предполагать переменный темп
 
+### GUI (без `-c`)
+- **--verbose**, **-v**: включить отладочные сообщения старта (`QLoggingCategory` `dontfloat.startup`)
+- Или переменная окружения: `QT_LOGGING_RULES=dontfloat.startup.debug=true`
+
 ## Примеры использования
 
 ### Базовый анализ
@@ -274,7 +278,7 @@ def analyze_bpm(file_path):
     result = subprocess.run([
         'DONTFLOAT.exe', '-c', '-f', file_path, '--mixxx'
     ], capture_output=True, text=True)
-    
+
     if result.returncode == 0:
         # Парсинг результата
         lines = result.stdout.split('\n')

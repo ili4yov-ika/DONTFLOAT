@@ -14,6 +14,11 @@ namespace {
     constexpr float kStepSecs = 0.01161f; // ~12ms разрешение для BeatMap
     constexpr int kMaximumBinSizeHz = 50; // Hz
 
+    constexpr float kPeakThresholdMin = 0.05f;
+    constexpr float kPeakThresholdMax = 0.3f;
+    constexpr float kPeakThresholdStep = 0.05f;
+    constexpr int kMinPeaksForAnalysis = 10;
+
     // Вспомогательная функция для вычисления следующей степени двойки
     int nextPowerOfTwo(int value) {
         int result = 1;
@@ -103,9 +108,9 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
     QVector<AnalysisResult> candidates;
 
     // Анализ 1: Обнаружение пиков с разными порогами
-    for (float threshold = 0.05f; threshold <= 0.3f; threshold += 0.05f) {
+    for (float threshold = kPeakThresholdMin; threshold <= kPeakThresholdMax; threshold += kPeakThresholdStep) {
         auto peaks = detectPeaks(samples, threshold);
-        if (peaks.size() < 10) continue; // Недостаточно пиков
+        if (peaks.size() < kMinPeaksForAnalysis) continue;
 
         float confidence;
         float avgInterval = calculateAverageInterval(peaks, options.assumeFixedTempo, &confidence);

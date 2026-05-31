@@ -36,7 +36,6 @@
 #include "shortcutsdialog.h"
 #include "metronomecontroller.h"
 #include "keyselectionmenu.h"
-// #include "beatvisualizationsettingsdialog.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }

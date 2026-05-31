@@ -180,7 +180,8 @@ tools\build_windows_installer.bat
 ## Консольный режим
 
 - Запуск без GUI: `DONTFLOAT.exe -c -f <файл>` с опциями `--min-bpm`, `--max-bpm`, `--simple`, `--fast` и др.
-- Файл декодируется по-настоящему (`QAudioDecoder`, нативный формат) и анализируется алгоритмом Mixxx (qm-dsp) — по умолчанию. На Windows вывод идёт в консоль родителя или в перенаправление (`> файл`). Подробнее: [MARKDOWN/CONSOLE_MODE.md](MARKDOWN/CONSOLE_MODE.md).
+- Файл декодируется через `AudioFileService` (нативный формат) и анализируется алгоритмом Mixxx (qm-dsp) — по умолчанию. На Windows вывод идёт в консоль родителя или в перенаправление (`> файл`). Подробнее: [MARKDOWN/CONSOLE_MODE.md](MARKDOWN/CONSOLE_MODE.md).
+- GUI: отладка старта только с `--verbose` / `-v` (категория `dontfloat.startup`).
 
 ## Лицензия
 

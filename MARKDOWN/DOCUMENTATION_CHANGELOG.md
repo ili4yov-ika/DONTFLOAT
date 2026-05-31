@@ -1,5 +1,12 @@
 # История изменений документации
 
+## 2026-05-31 (отладочный вывод GUI)
+
+- Убраны `std::cout`/`qDebug` при каждом запуске GUI; диагностика старта — категория
+  `dontfloat.startup` (включить: `--verbose` / `-v` или `QT_LOGGING_RULES`).
+- Обновлены `docs/architecture.md`, `MARKDOWN/PROJECT_FLOWCHART.md`, `MARKDOWN/TESTING_GUIDE.md`,
+  `MARKDOWN/TROUBLESHOOTING.md`, `MARKDOWN/ISSUES_AND_PLANS.md`.
+
 ## 2026-05-30 (консольный режим)
 
 ### Консольный режим

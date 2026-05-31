@@ -1,4 +1,5 @@
 #include "../include/mainwindow.h"
+#include "../include/uiconstants.h"
 #include "../include/spectrogramsettingsdialog.h"
 #include "../include/reverbsettingsdialog.h"
 #include "../include/pitchshiftsettingsdialog.h"
@@ -140,24 +141,37 @@ MainWindow::MainWindow(QWidget *parent)
     , shiftAShortcut(nullptr)
     , shiftBShortcut(nullptr)
     , markerShortcut(nullptr)
+    , waveformViewMenu(nullptr)
+    , openAct(nullptr)
+    , saveAct(nullptr)
+    , exitAct(nullptr)
+    , undoAct(nullptr)
+    , redoAct(nullptr)
+    , defaultThemeAct(nullptr)
+    , darkSchemeAct(nullptr)
+    , lightSchemeAct(nullptr)
+    , metronomeSettingsAct(nullptr)
+    , keyboardShortcutsAct(nullptr)
+    , playPauseAct(nullptr)
+    , stopAct(nullptr)
+    , metronomeAct(nullptr)
+    , loopStartAct(nullptr)
+    , loopEndAct(nullptr)
+    , togglePitchGridAct(nullptr)
+    , toggleBeatWaveformAct(nullptr)
+    , waveformPeaksAct(nullptr)
+    , waveformSpectrogramAct(nullptr)
+    , spectrogramSettingsAct(nullptr)
+    , spectrogramSettingsDialog(nullptr)
+    , reverbSettingsAct(nullptr)
+    , reverbSettingsDialog(nullptr)
+    , pitchShiftSettingsAct(nullptr)
+    , pitchShiftSettingsDialog(nullptr)
+    , russianAction(nullptr)
+    , englishAction(nullptr)
+    , applyTimeStretchAct(nullptr)
+    , markerPreviewTimer(nullptr)
 {
-    // Initialize all pointers to nullptr first
-    openAct = nullptr;
-    saveAct = nullptr;
-    exitAct = nullptr;
-    undoAct = nullptr;
-    redoAct = nullptr;
-    defaultThemeAct = nullptr;
-    darkSchemeAct = nullptr;
-    lightSchemeAct = nullptr;
-    metronomeSettingsAct = nullptr;
-    keyboardShortcutsAct = nullptr;
-    playPauseAct = nullptr;
-    stopAct = nullptr;
-    metronomeAct = nullptr;
-    loopStartAct = nullptr;
-    loopEndAct = nullptr;
-    togglePitchGridAct = nullptr;
     undoStack = new QUndoStack(this);
 
     // Load and install translator before setupUi (language from settings or system)
@@ -207,16 +221,6 @@ MainWindow::MainWindow(QWidget *parent)
     russianAction->setChecked(lang == "ru_RU");
     englishAction->setChecked(lang == "en_US");
 
-    // Настраиваем валидатор для поля BPM
-    // QValidator* bpmValidator = new QRegularExpressionValidator(
-    //     QRegularExpression("^\\d{1,4}(\\.\\d{1,2})?$"), this);
-    // ui->bpmEdit->setValidator(bpmValidator);
-
-    // Настраиваем валидатор для поля Размер такта (целое 1..32)
-    // QValidator* barsValidator = new QRegularExpressionValidator(
-    //     QRegularExpression("^(?:[1-9]|[12]\\d|3[0-2])$"), this);
-    // if (ui->barsCombo) ... (размер такта задаётся комбобоксом)
-
     // Create and setup WaveformView
     waveformView = new WaveformView(this);
     if (!ui->waveformWidget->layout()) {
@@ -236,7 +240,8 @@ MainWindow::MainWindow(QWidget *parent)
     if (mainSplitter) {
         // Set initial splitter sizes (75% for waveform, 25% for pitch grid)
         QList<int> sizes;
-        sizes << 450 << 150; // 75% and 25% of 600px total height
+        sizes << UiConstants::kDefaultSplitterWaveformHeight
+              << UiConstants::kDefaultSplitterPitchGridHeight;
         mainSplitter->setSizes(sizes);
 
         // Set minimum sizes
@@ -247,10 +252,10 @@ MainWindow::MainWindow(QWidget *parent)
         QWidget* pitchGridContainer = mainSplitter->widget(1);
 
         if (waveformContainer) {
-            waveformContainer->setMinimumHeight(150);
+            waveformContainer->setMinimumHeight(UiConstants::kWaveformContainerMinHeight);
         }
         if (pitchGridContainer) {
-            pitchGridContainer->setMinimumHeight(80);
+            pitchGridContainer->setMinimumHeight(UiConstants::kPitchGridContainerMinHeight);
             // По умолчанию скрываем питч-сетку
             pitchGridContainer->setVisible(false);
             mainSplitter->setChildrenCollapsible(true);
@@ -260,7 +265,7 @@ MainWindow::MainWindow(QWidget *parent)
             if (totalHeight > 0) {
                 sizes << totalHeight << 0;
             } else {
-                sizes << 450 << 0; // Временные размеры, если высота еще не установлена
+                sizes << UiConstants::kDefaultSplitterWaveformHeight << 0;
             }
             mainSplitter->setSizes(sizes);
         }
@@ -332,9 +337,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->pitchGridWidget->setLayout(new QVBoxLayout());
     ui->pitchGridWidget->layout()->addWidget(pitchGridScrollContainer);
 
-    // Устанавливаем ширину вертикального скроллбара
-    int scrollBarWidth = 16; // Стандартная ширина скроллбара
-    pitchGridVerticalScrollBar->setFixedWidth(scrollBarWidth);
+    pitchGridVerticalScrollBar->setFixedWidth(UiConstants::kScrollBarWidthPx);
 
     // Стили скроллбаров применяются ниже (после readSettings) единым вызовом applyScrollBarStyles().
 
@@ -1606,14 +1609,12 @@ void MainWindow::processAudioFile(const QString& filePath)
     const bool accepted = (dialog.exec() == QDialog::Accepted);
     const int beatsPerBar = dialog.getBeatsPerBar();
 
+    updateUIAfterAnalysis(audioData, analysis, beatsPerBar);
+
     if (accepted && dialog.shouldFixBeats()) {
-        updateUIAfterAnalysis(audioData, analysis, beatsPerBar);
         createDeviationMarkers(analysisOptions.tolerancePercent);
-    } else {
-        updateUIAfterAnalysis(audioData, analysis, beatsPerBar);
-        if (dialog.keepMarkersOnSkip()) {
-            createDeviationMarkers(analysisOptions.tolerancePercent, true);
-        }
+    } else if (dialog.keepMarkersOnSkip()) {
+        createDeviationMarkers(analysisOptions.tolerancePercent, true);
     }
 
     alignWaveformViewToBarGrid(waveformView, analysis.bpm, beatsPerBar, analysis.gridStartSample);
@@ -2442,12 +2443,12 @@ void MainWindow::updateScrollBarTransparency()
     float distanceToScrollBar = qAbs(cursorX - pitchGridRect.width());
 
     // Определяем прозрачность на основе расстояния
-    int alpha = 128; // Базовая прозрачность (50%)
+    int alpha = UiConstants::kScrollBarAlphaBase;
 
-    if (distanceToScrollBar < 50) { // Если каретка близко к скроллбару
-        alpha = 13; // 5% прозрачности (255 * 0.05 ≈ 13)
-    } else if (distanceToScrollBar < 100) { // Если каретка в средней зоне
-        alpha = 64; // 25% прозрачности
+    if (distanceToScrollBar < UiConstants::kScrollBarNearCursorDistancePx) {
+        alpha = UiConstants::kScrollBarAlphaNear;
+    } else if (distanceToScrollBar < UiConstants::kScrollBarMediumCursorDistancePx) {
+        alpha = UiConstants::kScrollBarAlphaMedium;
     }
 
     // Применяем новую прозрачность к скроллбару
@@ -2456,7 +2457,7 @@ void MainWindow::updateScrollBarTransparency()
         pitchGridVerticalScrollBar->setStyleSheet(
             QString("QScrollBar:vertical {"
                 "    background: rgba(64, 64, 64, %1);"
-                "    width: 16px;"
+                "    width: %4px;"
                 "    border: none;"
                 "    border-radius: 8px;"
                 "}"
@@ -2483,12 +2484,13 @@ void MainWindow::updateScrollBarTransparency()
             .arg(alpha)
             .arg(qMin(255, alpha + 50))
             .arg(qMin(255, alpha + 70))
+            .arg(UiConstants::kScrollBarWidthPx)
         );
     } else {
         pitchGridVerticalScrollBar->setStyleSheet(
             QString("QScrollBar:vertical {"
                 "    background: rgba(224, 224, 224, %1);"
-                "    width: 16px;"
+                "    width: %4px;"
                 "    border: none;"
                 "    border-radius: 8px;"
                 "}"
@@ -2515,6 +2517,7 @@ void MainWindow::updateScrollBarTransparency()
             .arg(alpha)
             .arg(qMin(255, alpha + 50))
             .arg(qMin(255, alpha + 70))
+            .arg(UiConstants::kScrollBarWidthPx)
         );
     }
 }
@@ -2813,8 +2816,8 @@ void MainWindow::createOnsetMarkersAuto()
         return;
     }
 
-    const float threshold = maxDiff * 0.3f; // порог: 30% от максимального всплеска
-    const int minDistanceSamples = sampleRate / 10; // минимум 100 мс между онсетами
+    const float threshold = maxDiff * UiConstants::kOnsetDetectionThresholdRatio;
+    const int minDistanceSamples = sampleRate / UiConstants::kOnsetMinDistanceSampleRateDivisor;
 
     QVector<qint64> onsetSamples;
     onsetSamples.reserve(256);

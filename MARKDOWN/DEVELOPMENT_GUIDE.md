@@ -147,17 +147,22 @@ public:
 
 ### Реализация
 ```cpp
+bool loadAudioFile(const QString& filePath, QVector<float>& samples, int& sampleRate) {
+    const AudioFileService::DecodeResult res = AudioFileService::decode(filePath);
+    if (!res.ok) return false;
+    samples = AudioFileService::toMono(res.channels);
+    sampleRate = res.sampleRate;
+    return !samples.isEmpty();
+}
+
 int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& options) {
-    // Создание синтетических данных для демонстрации
-    // Анализ BPM
-    // Вывод результатов
+    // Декодирование, BPMAnalyzer::analyzeBPM, вывод в stdout
 }
 ```
 
 ### Парсинг командной строки
-- Использование QCommandLineParser
-- Поддержка опций: -c, -f, --min-bpm, --max-bpm, --mixxx, --fast, --variable-tempo
-- Валидация входных параметров
+- Консоль: `-c`, `-f`, `--min-bpm`, `--max-bpm`, `--mixxx`, `--simple`, `--fast`, `--variable-tempo`
+- GUI: `--verbose` / `-v` — категория логов `dontfloat.startup`; иначе отладка старта отключена
 
 ## Система тестирования
 

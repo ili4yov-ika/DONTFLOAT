@@ -125,6 +125,7 @@ HEADERS += \
         include/timeutils.h \
         include/wavwriter.h \
         include/audiofileservice.h \
+        include/uiconstants.h \
         include/keyselectionmenu.h \
         include/beatvisualizer.h \
         include/spectrogramsettingsdialog.h \

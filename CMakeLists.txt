@@ -114,6 +114,7 @@ set(HEADERS
     include/timeutils.h
     include/wavwriter.h
     include/audiofileservice.h
+    include/uiconstants.h
     include/keyselectionmenu.h
     include/spectrogramsettingsdialog.h
     include/fft_engine.h

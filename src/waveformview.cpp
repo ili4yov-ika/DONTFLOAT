@@ -92,8 +92,8 @@ WaveformView::WaveformView(QWidget *parent)
     , isRightMousePanning(false)
     , loopStartPosition(0)
     , loopEndPosition(0)
-    , scrollStep(0.1f)    // 10% от ширины окна
-    , zoomStep(1.2f)      // 20% изменение масштаба
+    , scrollStep(defaultScrollStep)
+    , zoomStep(defaultZoomStep)
     , showTimeDisplay(true)
     , showBarsDisplay(false)
     , beatsPerBar(4)

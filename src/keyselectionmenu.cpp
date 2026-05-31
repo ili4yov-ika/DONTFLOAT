@@ -19,7 +19,7 @@ KeySelectionMenu::KeySelectionMenu(QWidget* parent)
 
     auto addKeys = [this](QMenu* submenu, const QStringList& keys) {
         for (const QString& key : keys) {
-            QAction* action = submenu->addAction(key);
+            QAction* action = submenu->addAction(tr(key.toUtf8().constData()));
             action->setData(key);
             connect(action, &QAction::triggered, this, [this, key]() {
                 emit keySelected(key);

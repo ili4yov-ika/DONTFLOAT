@@ -17,7 +17,7 @@ flowchart TB
         B -->|Да| C[QCoreApplication]
         B -->|Нет| D[QApplication]
         C --> E[runConsoleMode]
-        E --> F[loadAudioFile синтетический]
+        E --> F[AudioFileService::decode]
         F --> G[BPMAnalyzer::analyzeBPM]
         G --> H[Вывод в консоль]
         D --> I[Тема Fusion, тёмная палитра]
@@ -26,8 +26,8 @@ flowchart TB
     end
 ```
 
-- **GUI-режим**: создаётся `QApplication`, настраивается тема и палитра, создаётся и показывается `MainWindow`, запускается event loop.
-- **Консольный режим** (`-c -f <файл>`): создаётся `QCoreApplication`, загружаются (пока синтетические) данные, вызывается `BPMAnalyzer::analyzeBPM`, результат выводится в консоль.
+- **GUI-режим**: создаётся `QApplication`, настраивается тема и палитра, создаётся и показывается `MainWindow`, запускается event loop. Диагностика старта — категория `dontfloat.startup` (включить: `--verbose` или `QT_LOGGING_RULES`).
+- **Консольный режим** (`-c -f <файл>`): создаётся `QCoreApplication`, файл декодируется через `AudioFileService`, вызывается `BPMAnalyzer::analyzeBPM`, результат выводится в stdout.
 
 ---
 

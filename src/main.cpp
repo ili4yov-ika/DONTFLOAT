@@ -5,21 +5,15 @@
 #include <QColor>
 #include <QCommandLineParser>
 #include <QCommandLineOption>
-#include <QDebug>
+#include <QLoggingCategory>
 #include <QFileInfo>
-#include <QDir>
-#include <QUrl>
-#include <QEventLoop>
-#include <QTimer>
-#include <QtMultimedia/QAudioDecoder>
-#include <QtMultimedia/QAudioBuffer>
-#include <QtMultimedia/QAudioFormat>
-#include <QObject>
 #include <iostream>
 #include "../include/mainwindow.h"
 #include "../include/bpmanalyzer.h"
 #include "../include/audiofileservice.h"
 #include <QStyleFactory>
+
+Q_LOGGING_CATEGORY(lcStartup, "dontfloat.startup")
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -39,10 +33,10 @@ static void initConsoleIO()
     const bool outConnected = isConnected(STD_OUTPUT_HANDLE);
     const bool errConnected = isConnected(STD_ERROR_HANDLE);
     if (outConnected && errConnected)
-        return; // потоки уже подключены (перенаправление или существующая консоль)
+        return;
 
     if (!AttachConsole(ATTACH_PARENT_PROCESS))
-        return; // родитель без консоли (например, запуск из GUI) — выводить некуда
+        return;
 
     FILE* f = nullptr;
     if (!outConnected) freopen_s(&f, "CONOUT$", "w", stdout);
@@ -52,9 +46,20 @@ static void initConsoleIO()
 }
 #endif
 
+namespace {
+
+void configureStartupLogging(bool verbose)
+{
+    if (verbose) {
+        QLoggingCategory::setFilterRules(QStringLiteral("dontfloat.startup.debug=true"));
+    } else {
+        QLoggingCategory::setFilterRules(QStringLiteral("dontfloat.startup.debug=false"));
+    }
+}
+
 // Декодирует аудиофайл в моно-сигнал для анализа BPM (консольный режим).
-// Использует общий AudioFileService (нативный формат, без принудительного ресемплинга).
-bool loadAudioFile(const QString& filePath, QVector<float>& samples, int& sampleRate) {
+bool loadAudioFile(const QString& filePath, QVector<float>& samples, int& sampleRate)
+{
     const AudioFileService::DecodeResult res = AudioFileService::decode(filePath);
     if (!res.ok) {
         if (!res.error.isEmpty())
@@ -66,15 +71,12 @@ bool loadAudioFile(const QString& filePath, QVector<float>& samples, int& sample
     return !samples.isEmpty();
 }
 
-// Функция для консольного режима
-int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& options) {
-    // Настраиваем вывод в консоль
-    qSetMessagePattern("[%{type}] %{appname} (%{file}:%{line}) - %{message}");
-
+int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& options)
+{
     std::cout << "=== Консольный режим DONTFLOAT ===" << std::endl;
     std::cout << "Анализ файла: " << filePath.toStdString() << std::endl;
 
-    QFileInfo fileInfo(filePath);
+    const QFileInfo fileInfo(filePath);
     if (!fileInfo.exists()) {
         std::cout << "ОШИБКА: Файл не найден: " << filePath.toStdString() << std::endl;
         return 1;
@@ -82,7 +84,6 @@ int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& 
 
     std::cout << "Загрузка аудиофайла..." << std::endl;
 
-    // Загружаем аудиофайл
     QVector<float> samples;
     int sampleRate = 0;
 
@@ -105,8 +106,7 @@ int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& 
 
     std::cout << std::endl << "Начинаем анализ BPM..." << std::endl;
 
-    // Анализируем BPM
-    BPMAnalyzer::AnalysisResult result = BPMAnalyzer::analyzeBPM(samples, sampleRate, options);
+    const BPMAnalyzer::AnalysisResult result = BPMAnalyzer::analyzeBPM(samples, sampleRate, options);
 
     std::cout << std::endl << "=== РЕЗУЛЬТАТЫ АНАЛИЗА ===" << std::endl;
     std::cout << "Определенный BPM: " << result.bpm << std::endl;
@@ -120,27 +120,30 @@ int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& 
         std::cout << "Предварительный BPM: " << result.preliminaryBPM << std::endl;
     }
 
-    if (result.beats.size() > 0) {
+    if (!result.beats.isEmpty()) {
         std::cout << "Начальная позиция сетки: " << result.gridStartSample << " сэмплов" << std::endl;
-        std::cout << "Начальная позиция сетки: " << QString::number((double)result.gridStartSample / sampleRate, 'f', 3).toStdString() << " секунд" << std::endl;
+        std::cout << "Начальная позиция сетки: "
+                  << QString::number((double)result.gridStartSample / sampleRate, 'f', 3).toStdString()
+                  << " секунд" << std::endl;
     }
 
-    // Показываем первые несколько битов
-    if (result.beats.size() > 0) {
+    if (!result.beats.isEmpty()) {
         std::cout << std::endl << "Первые 10 битов:" << std::endl;
         std::cout << "Позиция(сэмплы) | Позиция(сек) | Уверенность | Отклонение | Энергия" << std::endl;
         std::cout << "----------------|--------------|-------------|------------|--------" << std::endl;
 
-        int count = qMin(10, result.beats.size());
+        const int count = qMin(10, result.beats.size());
         for (int i = 0; i < count; ++i) {
             const auto& beat = result.beats[i];
-            double timeInSeconds = (double)beat.position / sampleRate;
+            const double timeInSeconds = (double)beat.position / sampleRate;
             std::cout << QString("%1 | %2 | %3 | %4 | %5")
-                        .arg(beat.position, 14)
-                        .arg(QString::number(timeInSeconds, 'f', 3), 12)
-                        .arg(QString::number(beat.confidence * 100, 'f', 1) + "%", 11)
-                        .arg(QString::number(beat.deviation * 100, 'f', 2) + "%", 10)
-                        .arg(QString::number(beat.energy, 'f', 4), 8).toStdString() << std::endl;
+                             .arg(beat.position, 14)
+                             .arg(QString::number(timeInSeconds, 'f', 3), 12)
+                             .arg(QString::number(beat.confidence * 100, 'f', 1) + "%", 11)
+                             .arg(QString::number(beat.deviation * 100, 'f', 2) + "%", 10)
+                             .arg(QString::number(beat.energy, 'f', 4), 8)
+                             .toStdString()
+                      << std::endl;
         }
 
         if (result.beats.size() > 10) {
@@ -152,62 +155,19 @@ int runConsoleMode(const QString& filePath, const BPMAnalyzer::AnalysisOptions& 
     return 0;
 }
 
+} // namespace
+
 int main(int argc, char *argv[])
 {
-    // Вывод в консоль ДО создания Qt приложения
-    std::cout << "=== DONTFLOAT: Начало выполнения ===" << std::endl;
-    std::cout.flush();
-
-    // Сначала парсим командную строку без создания приложения
-    QCommandLineParser parser;
-    parser.setApplicationDescription("DONTFLOAT - Анализатор и корректор BPM аудиофайлов");
-    parser.addHelpOption();
-    parser.addVersionOption();
-
-    // Опции для консольного режима
-    QCommandLineOption consoleOption(QStringList() << "c" << "console",
-                                   "Запуск в консольном режиме");
-    parser.addOption(consoleOption);
-
-    QCommandLineOption fileOption(QStringList() << "f" << "file",
-                                 "Путь к аудиофайлу для анализа", "file");
-    parser.addOption(fileOption);
-
-    QCommandLineOption minBPMOption("min-bpm",
-                                   "Минимальный BPM для анализа", "min", "60");
-    parser.addOption(minBPMOption);
-
-    QCommandLineOption maxBPMOption("max-bpm",
-                                   "Максимальный BPM для анализа", "max", "200");
-    parser.addOption(maxBPMOption);
-
-    QCommandLineOption useMixxxOption("mixxx",
-                                     "Использовать алгоритм Mixxx (по умолчанию включён)");
-    parser.addOption(useMixxxOption);
-
-    QCommandLineOption simpleOption("simple",
-                                     "Использовать упрощённый алгоритм вместо Mixxx");
-    parser.addOption(simpleOption);
-
-    QCommandLineOption fastAnalysisOption("fast",
-                                         "Быстрый анализ");
-    parser.addOption(fastAnalysisOption);
-
-    QCommandLineOption variableTempoOption("variable-tempo",
-                                          "Предполагать переменный темп");
-    parser.addOption(variableTempoOption);
-
-    // Проверяем аргументы без создания приложения
     QStringList args;
     for (int i = 0; i < argc; ++i) {
         args << QString::fromLocal8Bit(argv[i]);
     }
 
-    // Проверяем, нужен ли консольный режим
-    bool consoleMode = args.contains("-c") || args.contains("--console");
-    QString filePath;
+    const bool consoleMode = args.contains("-c") || args.contains("--console");
+    const bool verboseStartup = args.contains("--verbose") || args.contains("-v");
 
-    // Простой парсинг для консольного режима
+    QString filePath;
     for (int i = 0; i < args.size(); ++i) {
         if ((args[i] == "-f" || args[i] == "--file") && i + 1 < args.size()) {
             filePath = args[i + 1];
@@ -217,7 +177,7 @@ int main(int argc, char *argv[])
 
     if (consoleMode) {
 #ifdef Q_OS_WIN
-        initConsoleIO(); // подключаем потоки вывода к консоли/перенаправлению
+        initConsoleIO();
 #endif
         if (filePath.isEmpty()) {
             std::cout << "Ошибка: Для консольного режима необходимо указать файл с помощью -f" << std::endl;
@@ -225,20 +185,14 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        // Создаем QCoreApplication для консольного режима
         QCoreApplication app(argc, argv);
-
-        // Установка информации о приложении для QSettings
         QCoreApplication::setOrganizationName("DONTFLOAT");
         QCoreApplication::setApplicationName("DONTFLOAT");
         QCoreApplication::setApplicationVersion("0.0.0.1");
 
-        // Настройки анализа из командной строки
         BPMAnalyzer::AnalysisOptions options;
-        options.minBPM = 60.0f;  // По умолчанию
-        options.maxBPM = 200.0f; // По умолчанию
-        // Алгоритм Mixxx (qm-dsp) — по умолчанию, как в GUI. Упрощённый алгоритм
-        // плохо работает на реальных записях, поэтому Mixxx можно лишь отключить явно.
+        options.minBPM = 60.0f;
+        options.maxBPM = 200.0f;
         options.useMixxxAlgorithm = !args.contains("--simple");
         options.fastAnalysis = args.contains("--fast");
         options.assumeFixedTempo = !args.contains("--variable-tempo");
@@ -246,38 +200,26 @@ int main(int argc, char *argv[])
         return runConsoleMode(filePath, options);
     }
 
-    // GUI режим - создаем QApplication
     QApplication guiApp(argc, argv);
+    configureStartupLogging(verboseStartup);
 
-    // Настраиваем вывод qDebug() в консоль
-    qSetMessagePattern("[%{type}] %{appname} (%{file}:%{line}) - %{message}");
-
-    // Диагностика: проверяем, что Qt инициализирован
-    std::cout << "=== Запуск DONTFLOAT ===" << std::endl;
-    std::cout << "Qt Application создан успешно" << std::endl;
-    std::cout << "Qt версия: " << QT_VERSION_STR << std::endl;
-    qDebug() << "Qt Application создан успешно";
-    qDebug() << "Qt версия:" << QT_VERSION_STR;
-
-    // Установка информации о приложении для QSettings
     QCoreApplication::setOrganizationName("DONTFLOAT");
     QCoreApplication::setApplicationName("DONTFLOAT");
     QCoreApplication::setApplicationVersion("0.0.0.1");
 
-    // Установка иконки приложения
+    qCDebug(lcStartup) << "Qt Application создан, версия" << QT_VERSION_STR;
+
     QIcon::setThemeName("DONTFLOAT");
     QIcon appIcon(":/icons/resources/icons/logo.svg");
     if (appIcon.isNull()) {
         qWarning() << "Не удалось загрузить иконку приложения";
     } else {
-        qDebug() << "Иконка приложения загружена";
+        qCDebug(lcStartup) << "Иконка приложения загружена";
     }
     guiApp.setWindowIcon(appIcon);
 
-    // Устанавливаем единообразную темную тему по умолчанию
     qApp->setStyle(QStyleFactory::create("Fusion"));
 
-    // Создаем темную палитру для единообразного оформления
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, QColor(53, 53, 53));
     darkPalette.setColor(QPalette::WindowText, Qt::white);
@@ -295,39 +237,26 @@ int main(int argc, char *argv[])
     darkPalette.setColor(QPalette::Shadow, QColor(53, 53, 53));
     qApp->setPalette(darkPalette);
 
-    // Локализация загружается в MainWindow по настройкам (язык сохраняется между сессиями)
-    std::cout << "Создание главного окна..." << std::endl;
-    qDebug() << "Создание главного окна...";
-
     try {
+        qCDebug(lcStartup) << "Создание главного окна...";
         MainWindow w;
-        std::cout << "Главное окно создано успешно" << std::endl;
-        qDebug() << "Главное окно создано";
-
-        std::cout << "Показ главного окна..." << std::endl;
-        qDebug() << "Показ главного окна...";
         w.show();
-        w.raise();  // Поднимаем окно наверх
-        w.activateWindow();  // Активируем окно (дает фокус)
+        w.raise();
+        w.activateWindow();
 
-        // Проверяем, что окно действительно видимо
         if (w.isVisible()) {
-            std::cout << "Главное окно видимо, размер: " << w.width() << "x" << w.height() << std::endl;
-            qDebug() << "Главное окно видимо, размер:" << w.size();
+            qCDebug(lcStartup) << "Главное окно видимо, размер:" << w.size();
         } else {
-            std::cout << "ПРЕДУПРЕЖДЕНИЕ: Главное окно не видимо!" << std::endl;
-            qDebug() << "ПРЕДУПРЕЖДЕНИЕ: Главное окно не видимо!";
+            qCWarning(lcStartup) << "Главное окно не видимо после show()";
         }
 
-        std::cout << "Запуск event loop..." << std::endl;
-        qDebug() << "Главное окно показано, запуск event loop...";
-
+        qCDebug(lcStartup) << "Запуск event loop";
         return guiApp.exec();
     } catch (const std::exception& e) {
-        std::cerr << "ОШИБКА при создании главного окна: " << e.what() << std::endl;
+        qCritical() << "Ошибка при создании главного окна:" << e.what();
         return 1;
     } catch (...) {
-        std::cerr << "НЕИЗВЕСТНАЯ ОШИБКА при создании главного окна" << std::endl;
+        qCritical() << "Неизвестная ошибка при создании главного окна";
         return 1;
     }
 }
