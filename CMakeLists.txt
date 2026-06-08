@@ -46,8 +46,8 @@ set(CMAKE_AUTORCC ON)
 # Указываем путь для поиска UI файлов
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 
-# Qt6: на Windows добавляем типовые пути установщика Qt; на Linux/macOS — системный Qt
-# или -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64 (или аналог).
+# Qt6: на Windows — типовые пути установщика Qt; на macOS/Linux — cmake/PlatformQt.cmake
+# и/или -DCMAKE_PREFIX_PATH (Homebrew qt@6, ~/Qt/6.x/macos|gcc_64).
 set(QT_MIN_VERSION "6.8.0")
 if(WIN32)
     if(EXISTS "C:/Qt/6.9.3/msvc2022_64")
@@ -56,6 +56,7 @@ if(WIN32)
         list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.8.3/msvc2022_64")
     endif()
 else()
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/PlatformQt.cmake)
     message(STATUS "Сборка ${CMAKE_SYSTEM_NAME}: поиск Qt6 через CMAKE_PREFIX_PATH и стандартные каталоги.")
 endif()
 
@@ -335,10 +336,15 @@ else()
     )
 endif()
 
-# Set Windows executable properties
+# Платформенные свойства исполняемого файла
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         WIN32_EXECUTABLE TRUE
+        MACOSX_BUNDLE FALSE
+    )
+elseif(APPLE)
+    # Обычный бинарник в build/macos/DONTFLOAT; .app — через tools/macos_build.sh deploy
+    set_target_properties(${PROJECT_NAME} PROPERTIES
         MACOSX_BUNDLE FALSE
     )
 endif()
@@ -621,8 +627,10 @@ if(UNIX AND NOT APPLE)
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 endif()
 
-# macOS (если нужно в будущем)
+# macOS
 if(APPLE)
     set(CPACK_GENERATOR "DragNDrop;TGZ")
     set(CPACK_DMG_VOLUME_NAME "DONTFLOAT")
+    set(CPACK_DMG_FORMAT "UDBZ")
+    set(CPACK_PACKAGE_FILE_NAME "DONTFLOAT-${PROJECT_VERSION}-macOS")
 endif()

@@ -93,36 +93,36 @@ sudo pacman -S base-devel cmake qt6-base qt6-multimedia
 #### 1. Настройка CMake (первый раз)
 
 **Требования**:
-- CMake 3.16 или выше
-- Qt 6.8+ или 6.9+ (установлен через Homebrew или вручную)
-- Компилятор: Xcode Command Line Tools (Clang с поддержкой C++17)
+- macOS 11+ (deployment target задаётся в `CMakePresets.json` и `cmake/PlatformQt.cmake`)
+- CMake 3.16+, Ninja, Qt 6.8+ (модуль Multimedia)
+- Xcode Command Line Tools: `xcode-select --install`
 
-**Установка через Homebrew (рекомендуется)**:
+**Быстрая настройка (рекомендуется)**:
 ```bash
-# Установка Homebrew (если не установлен)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Установка зависимостей
-brew install cmake qt@6
+chmod +x tools/setup_macos.sh tools/macos_build.sh
+bash tools/setup_macos.sh
+source ~/.dontfloat_macos_env.sh   # или добавьте в ~/.zshrc
 ```
 
-**Настройка переменных окружения**:
+Скрипт ставит через Homebrew `cmake`, `ninja`, `qt@6` и пишет `~/.dontfloat_macos_env.sh` с `CMAKE_PREFIX_PATH`.
+
+**Конфигурация через CMake Presets** (каталог сборки `build/macos/`):
 ```bash
-# Добавьте в ~/.zshrc или ~/.bash_profile
-export CMAKE_PREFIX_PATH="/opt/homebrew/opt/qt@6"
-export PATH="/opt/homebrew/opt/qt@6/bin:$PATH"
+cmake --preset macos-debug
+cmake --build --preset macos-debug --parallel
 ```
 
-**Настройка проекта**:
-1. Откройте терминал в VS Code/Cursor (`Ctrl+`` ` или View → Terminal)
-2. Выполните:
-   ```bash
-   cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-   ```
+Или одной командой:
+```bash
+bash tools/macos_build.sh              # Debug
+bash tools/macos_build.sh release test # Release + ctest
+bash tools/macos_build.sh release deploy  # + macdeployqt → DONTFLOAT.app
+```
 
-Или используйте встроенную поддержку CMake Tools:
-- VS Code автоматически определит CMake проект
-- Нажмите на статус-бар "Configure" для настройки
+**VS Code / Cursor**:
+- Задачи: `CMake: Configure (macOS Debug)`, `CMake: Build (macOS Debug)`, `CMake: Run Tests (macOS)`
+- Отладка: конфигурация `🍎 (macOS) CMake Debug` (lldb, бинарник `build/macos/DONTFLOAT`)
+- CMake Tools: выберите preset `macos-debug` или `macos-release` в статус-баре
 
 ### 2. Сборка проекта
 
@@ -223,14 +223,14 @@ cmake --build build
 
 **Вариант A: Через Launch Configuration**
 - Откройте вкладку "Run and Debug" (F5)
-- Выберите "Debug DONTFLOAT (CMake build)"
+- Выберите `🍎 (macOS) CMake Debug`
 - Нажмите F5
 
 **Вариант B: Через командную строку**
 ```bash
-./build/DONTFLOAT.app/Contents/MacOS/DONTFLOAT
-# или если собран как обычный исполняемый файл
-./build/DONTFLOAT
+./build/macos/DONTFLOAT
+# .app bundle — только после deploy:
+# ./build/macos/DONTFLOAT.app/Contents/MacOS/DONTFLOAT
 ```
 
 ## Тестирование
@@ -335,11 +335,12 @@ ctest --test-dir build --output-on-failure
   - `base-devel qt6-base qt6-multimedia` (Arch Linux)
 
 ### macOS
-- **CMake**: 3.16 или выше
-- **Qt**: 6.8+ или 6.9+ (через Homebrew или вручную)
-- **Xcode Command Line Tools**: Установлены через `xcode-select --install`
-- **Компилятор**: Clang с поддержкой C++17
-- **Homebrew**: Рекомендуется для установки зависимостей
+- **ОС**: macOS 11+ (Big Sur и новее)
+- **CMake**: 3.16+, **Ninja** (генератор в presets)
+- **Qt**: 6.8+ (Homebrew `qt@6`, Qt Online Installer `~/Qt/6.x/macos`, или CI)
+- **Xcode Command Line Tools**: `xcode-select --install`
+- **Компилятор**: Apple Clang, C++17
+- **Скрипты**: `tools/setup_macos.sh`, `tools/macos_build.sh`
 
 ## Структура сборки
 
@@ -377,19 +378,29 @@ build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/
 └── Makefile
 ```
 
-### Linux / macOS
+### Linux
 
-После настройки CMake будет создана структура:
+После `cmake --preset linux-debug` (каталог `build/build_cmake/`):
 ```
-build/
-├── DONTFLOAT                   # Основное приложение
-├── bpm_analyzer_test           # Unit тесты
-├── key_analyzer_test
-├── metronome_controller_test
-└── bpm_file_test               # Тест на реальных файлах
+build/build_cmake/
+├── DONTFLOAT
+├── bpm_analyzer_test
+└── ...
 ```
 
-**Примечание для macOS**: Если настроен как bundle, приложение будет в `DONTFLOAT.app/Contents/MacOS/DONTFLOAT`
+### macOS
+
+После `cmake --preset macos-debug` (каталог `build/macos/`):
+```
+build/macos/
+├── DONTFLOAT                   # Основное приложение (не bundle)
+├── marker_testgen
+├── bpm_analyzer_test
+├── pitch_compensation_file_test
+└── DONTFLOAT.app/              # только после tools/macos_build.sh deploy
+```
+
+Поиск Qt: `cmake/PlatformQt.cmake` (Homebrew, `~/Qt/6.x/macos`, `CMAKE_PREFIX_PATH`).
 
 ## Решение проблем
 
@@ -513,25 +524,17 @@ error MSB8052: версия набора инструментов MSVC "14.50.35
 **Проблема**: `Could not find a package configuration file provided by "Qt6"`
 
 **Решение**:
-1. Установите Qt через Homebrew:
+1. Запустите `bash tools/setup_macos.sh` и `source ~/.dontfloat_macos_env.sh`
+2. Или вручную:
    ```bash
-   brew install qt@6
+   brew install cmake ninja qt@6
+   export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
    ```
-2. Установите переменные окружения:
+3. Конфигурация через preset:
    ```bash
-   export CMAKE_PREFIX_PATH="/opt/homebrew/opt/qt@6"
-   export PATH="/opt/homebrew/opt/qt@6/bin:$PATH"
+   cmake --preset macos-debug
    ```
-3. Добавьте в `~/.zshrc` или `~/.bash_profile`:
-   ```bash
-   echo 'export CMAKE_PREFIX_PATH="/opt/homebrew/opt/qt@6"' >> ~/.zshrc
-   echo 'export PATH="/opt/homebrew/opt/qt@6/bin:$PATH"' >> ~/.zshrc
-   source ~/.zshrc
-   ```
-4. Или укажите при конфигурации:
-   ```bash
-   cmake -S . -B build -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt@6 -DCMAKE_BUILD_TYPE=Debug
-   ```
+4. CI: job `macos` в `.github/workflows/ci.yml` (Qt 6.8.3, `QT_QPA_PLATFORM=offscreen`)
 
 ### Ошибка компиляции
 
@@ -651,11 +654,12 @@ error MSB8052: версия набора инструментов MSVC "14.50.35
 
 ### macOS
 
-- **Генератор CMake**: По умолчанию используется "Unix Makefiles"
-- **Пути к библиотекам**: При установке через Homebrew Qt находится в `/opt/homebrew/opt/qt@6/`
-- **Отладчик**: Используйте `lldb` для отладки (входит в Xcode Command Line Tools)
-- **Bundle**: Приложение может быть собрано как `.app` bundle или как обычный исполняемый файл
-- **Запуск приложения**: Может потребоваться установка переменной `DYLD_LIBRARY_PATH` для поиска Qt библиотек
+- **Генератор CMake**: Ninja (`CMakePresets.json`: `macos-debug`, `macos-release`)
+- **Каталог сборки**: `build/macos/` (отдельно от Windows/Linux)
+- **Qt**: Homebrew `/opt/homebrew/opt/qt@6` или `~/Qt/6.x/macos`
+- **Отладчик**: `lldb` — конфигурация `🍎 (macOS) CMake Debug` в `launch.json`
+- **Разработка**: обычный бинарник `build/macos/DONTFLOAT`; `.app` — `bash tools/macos_build.sh release deploy`
+- **Тесты в CI/терминале**: `QT_QPA_PLATFORM=offscreen ctest --test-dir build/macos`
 
 ### Windows
 

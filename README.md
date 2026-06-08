@@ -96,7 +96,7 @@
 ## Требования
 
 ### Системные требования
-- **ОС**: Windows 10+, macOS 10.15+, Linux (Ubuntu 20.04+)
+- **ОС**: Windows 10+, macOS 11+, Linux (Ubuntu 20.04+)
 - **Память**: 4 GB RAM (рекомендуется 8 GB)
 - **Процессор**: x64 архитектура
 
@@ -165,6 +165,26 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug
 cmake --build . --config Debug
 ```
 
+### Сборка macOS
+
+```bash
+# Зависимости (Homebrew) и окружение
+chmod +x tools/setup_macos.sh tools/macos_build.sh
+bash tools/setup_macos.sh
+source ~/.dontfloat_macos_env.sh
+
+# Сборка через CMake Presets (Ninja, каталог build/macos/)
+cmake --preset macos-debug
+cmake --build --preset macos-debug --parallel
+./build/macos/DONTFLOAT
+
+# Или скрипт-обёртка
+bash tools/macos_build.sh release test
+```
+
+Для распространения: `bash tools/macos_build.sh release deploy` (создаёт `DONTFLOAT.app` через `macdeployqt`).
+Подробнее: [BUILD_IN_VSCODE.md](BUILD_IN_VSCODE.md).
+
 ### Сборка Windows installer (NSIS)
 Для создания установщика DONTFLOAT_Setup.exe:
 ```batch
@@ -173,7 +193,8 @@ tools\build_windows_installer.bat
 Требования: CMake, Qt 6.8+, NSIS. Скрипт выполняет Release-сборку, windeployqt и создаёт инсталлер в папке `tools/`. Иконка EXE генерируется из `resources/icons/logo.svg` (Inkscape + Pillow).
 
 ### Скрипты и packaging (папка tools/)
-- `tools/README.md` — скрипты packaging и утилита `marker_testgen`
+- `tools/README.md` — скрипты packaging, macOS/Linux setup и `marker_testgen`
+- `tools/setup_macos.sh`, `tools/macos_build.sh` — окружение и сборка на macOS
 - `tests/source4test/README.md` — тестовые аудио и разметка (`pitch-test_C140BPM.mp3` — тонкомпенсация)
 - `tests/README.md` — Qt Test, в т.ч. `pitch_compensation_file_test` (Rubber Band, проверка f0)
 - `build_windows_installer.bat` + `nsis_installer.nsi` — сборка Windows installer (NSIS)

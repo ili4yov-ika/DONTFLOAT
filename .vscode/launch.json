@@ -151,6 +151,19 @@
                 }
             ],
             "preLaunchTask": "CMake: Build Debug (Linux)"
+        },
+        {
+            "name": "🍎 (macOS) CMake Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/macos/DONTFLOAT",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "preLaunchTask": "CMake: Build (macOS Debug)"
         }
     ]
 }

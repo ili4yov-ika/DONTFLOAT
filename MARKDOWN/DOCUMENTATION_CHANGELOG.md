@@ -1,5 +1,15 @@
 # История изменений документации
 
+## 2026-05-31 (сборка macOS)
+
+### CMake Presets и CI
+- Добавлены пресеты `macos-debug` / `macos-release` (`CMakePresets.json`, Ninja, `build/macos/`).
+- `cmake/PlatformQt.cmake` — поиск Qt на macOS (Homebrew, `~/Qt/6.x/macos`), deployment target 11.0.
+- Скрипты `tools/setup_macos.sh`, `tools/macos_build.sh` (сборка, ctest, macdeployqt).
+- CI: job `macos` в `.github/workflows/ci.yml` (macos-14, Qt 6.8.3, offscreen-тесты).
+- VS Code: задачи и launch `🍎 (macOS) CMake Debug` в `.vscode/tasks.json`, `launch.json`.
+- Обновлены: `BUILD_IN_VSCODE.md`, `README.md`, `tools/README.md`.
+
 ## 2026-05-31 (тест тонкомпенсации на pitch-test)
 
 ### Интеграционный тест `pitch_compensation_file_test`

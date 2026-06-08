@@ -946,6 +946,100 @@
                 "cwd": "${workspaceFolder}"
             },
             "dependsOn": "CMake: Build Tests (Windows MinGW Release)"
+        },
+        {
+            "label": "CMake: Configure (macOS Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "macos-debug"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Configure macOS Debug (CMake Preset + Ninja)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Build (macOS Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "--preset", "macos-debug", "--parallel"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Build macOS Debug",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Configure (macOS Debug)"
+        },
+        {
+            "label": "CMake: Build Release (macOS)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "--preset", "macos-release", "--parallel"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "Build macOS Release",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Configure (macOS Release)"
+        },
+        {
+            "label": "CMake: Configure (macOS Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "macos-release"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Configure macOS Release",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "CMake: Run Tests (macOS)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--test-dir",
+                "${workspaceFolder}/build/macos",
+                "--output-on-failure"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "Run CTest on macOS build",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "QT_QPA_PLATFORM": "offscreen"
+                }
+            },
+            "dependsOn": "CMake: Build (macOS Debug)"
         }
     ]
 }

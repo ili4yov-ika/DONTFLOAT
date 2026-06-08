@@ -1,1 +1,3 @@
 *.sh text eol=lf
+tools/setup_macos.sh linguist-language=Shell
+tools/macos_build.sh linguist-language=Shell

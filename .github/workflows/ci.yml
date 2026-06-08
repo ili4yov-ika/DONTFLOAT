@@ -96,3 +96,43 @@ jobs:
       - name: Test
         working-directory: build
         run: ctest --output-on-failure --build-config Release
+
+  macos:
+    name: macOS (Qt ${{ matrix.qt }}, Clang)
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        qt: ['6.8.3']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        id: qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ matrix.qt }}
+          host: mac
+          target: desktop
+          arch: clang_64
+          modules: qtmultimedia
+          cache: true
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Configure
+        run: cmake --preset macos-release
+        env:
+          CMAKE_PREFIX_PATH: ${{ steps.qt.outputs.QT_ROOT_DIR }}
+
+      - name: Build
+        run: cmake --build --preset macos-release --parallel
+
+      - name: Test
+        working-directory: build/macos
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --output-on-failure

@@ -14,6 +14,22 @@ cmake --build build --config Release --target marker_testgen
 
 Подробный workflow: [tests/source4test/README.md](../tests/source4test/README.md)
 
+## macOS
+
+```bash
+chmod +x tools/setup_macos.sh tools/macos_build.sh
+bash tools/setup_macos.sh          # Homebrew: cmake, ninja, qt@6 → ~/.dontfloat_macos_env.sh
+source ~/.dontfloat_macos_env.sh
+
+bash tools/macos_build.sh              # Debug (preset macos-debug)
+bash tools/macos_build.sh release      # Release
+bash tools/macos_build.sh release test # + ctest (QT_QPA_PLATFORM=offscreen)
+bash tools/macos_build.sh release deploy  # + macdeployqt → build/macos/DONTFLOAT.app
+```
+
+Требуется: macOS 11+, Xcode CLT, Homebrew. CMake Presets: `macos-debug`, `macos-release` (`CMakePresets.json`).
+Поиск Qt: `cmake/PlatformQt.cmake` (Homebrew, `~/Qt/6.x/macos`).
+
 ## Структура (установщики)
 
 - `build_windows_installer.bat` — сборка Windows installer (NSIS)
@@ -72,4 +88,7 @@ cpack -G NSIS
 
 # Linux
 cpack -G DEB  # или -G RPM
+
+# macOS (после Release-сборки в build/macos)
+cpack -G DragNDrop
 ```
