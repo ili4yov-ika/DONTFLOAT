@@ -51,7 +51,25 @@ tests/
 - Независимость от внешних файлов
 - Быстрое выполнение
 
-### 3. UI тесты
+### 3. Тесты тонкомпенсации (Time Stretch)
+
+#### timestretchprocessor_test.cpp
+- Юнит-тесты `TimeStretchProcessor`: длина выхода, `calculateStretchFactor`, синтетические сигналы
+
+#### pitch_compensation_file_test.cpp
+- Интеграционный тест на `tests/source4test/pitch-test_C140BPM.mp3` (одна нота ~165 Hz)
+- `applyMarkerStretch()` с Rubber Band: сжатие/растяжение метками (×0.5 … ×2.0), проверка f0 автокорреляцией (±6%)
+- Контроль без тонкомпенсации (ожидаемый сдвиг f0)
+- Локально (~35–40 с); в CI — `QSKIP`
+
+```powershell
+cmake --build build/Debug --config Debug --target pitch_compensation_file_test
+.\build\Debug\Debug\pitch_compensation_file_test.exe -v2
+```
+
+Подробнее: [tests/README.md](../tests/README.md), [TIMESTRETCH_FEATURE.md](TIMESTRETCH_FEATURE.md).
+
+### 4. UI тесты
 
 #### ui_diagnostic_test.bat
 - Диагностика проблем с интерфейсом
@@ -65,7 +83,7 @@ tests/
 - Тестирование флагов окна
 - Проверка темной палитры
 
-### 4. Цветовые тесты
+### 5. Цветовые тесты
 
 #### color_fix_test.bat
 - Тест исправления цветового оформления

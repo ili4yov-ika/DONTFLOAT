@@ -28,7 +28,6 @@
 #include <functional>
 #include "waveformview.h"
 #include "spectrogramsettingsdialog.h"
-#include "reverbsettingsdialog.h"
 #include "reverbsc_engine.h"
 #include "pitchshiftsettingsdialog.h"
 #include "granularpitchshifter_engine.h"
@@ -93,6 +92,7 @@ private slots:
     void toggleBeatWaveform();
     void applyTimeStretch();
     void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
+    void onUndoStackChanged();
     void createOnsetMarkersAuto();        // Авто-метки по транзиентам (Onset detection)
     void snapAllMarkersToGrid();          // Привязать все метки к тактовой сетке
     void shiftBeatGridBackward();         // Сдвинуть тактовую сетку на один удар назад
@@ -156,6 +156,7 @@ private:
     // и возврат пути к нему. Используется для того, чтобы
     // QMediaPlayer воспроизводил уже обработанное аудио.
     QString saveProcessedAudioToTempWav(const QVector<QVector<float>> &data, int sampleRate) const;
+    void syncPlaybackWithWaveform();
 
     // UI components
     Ui::MainWindow *ui;
@@ -197,8 +198,7 @@ private:
     QAction *waveformSpectrogramAct;
     QAction *spectrogramSettingsAct;
     SpectrogramSettingsDialog* spectrogramSettingsDialog;
-    QAction *reverbSettingsAct;
-    ReverbSettingsDialog* reverbSettingsDialog;
+    QAction *reverbAct;
     ReverbEngine::ReverbParams reverbParams;
     QAction *pitchShiftSettingsAct;
     PitchShiftSettingsDialog* pitchShiftSettingsDialog;

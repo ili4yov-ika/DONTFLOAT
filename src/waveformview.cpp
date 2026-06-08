@@ -90,6 +90,9 @@ WaveformView::WaveformView(QWidget *parent)
     , zoomLevel(1.0f)
     , isDragging(false)
     , isRightMousePanning(false)
+    , isGridDragging(false)
+    , gridDragAnchorSample(0)
+    , gridDragAnchorMouseX(0.f)
     , loopStartPosition(0)
     , loopEndPosition(0)
     , scrollStep(defaultScrollStep)
@@ -577,6 +580,45 @@ void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
     }
 }
 
+void WaveformView::applyGridStartSample(qint64 newGrid, bool moveMarkers)
+{
+    if (audioData.isEmpty()) {
+        return;
+    }
+
+    const qint64 maxGrid = qMax<qint64>(0, audioData[0].size() - 1);
+    newGrid = qBound<qint64>(0, newGrid, maxGrid);
+    const qint64 delta = newGrid - gridStartSample;
+    if (delta == 0) {
+        return;
+    }
+
+    gridStartSample = newGrid;
+
+    if (moveMarkers) {
+        for (Marker& m : markers) {
+            if (m.isFixed || m.isEndMarker) {
+                continue;
+            }
+            m.position = qBound<qint64>(0, m.position + delta, maxGrid);
+            m.originalPosition = m.position;
+            m.updateTimeFromSamples(sampleRate);
+        }
+        emit markersChanged();
+    }
+
+    emit gridStartChanged(gridStartSample);
+    update();
+}
+
+void WaveformView::shiftGridBySamples(qint64 sampleDelta, bool moveMarkers)
+{
+    if (sampleDelta == 0 || audioData.isEmpty()) {
+        return;
+    }
+    applyGridStartSample(gridStartSample + sampleDelta, moveMarkers);
+}
+
 qint64 WaveformView::snapSampleToGrid(qint64 samplePos) const
 {
     if (audioData.isEmpty() || sampleRate <= 0 || bpm <= 0.0f) {
@@ -888,6 +930,15 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
             return;
         }
 
+        if ((event->modifiers() & Qt::ShiftModifier) && bpm > 0.f && !audioData.isEmpty()) {
+            isGridDragging = true;
+            gridDragAnchorSample = gridStartSample;
+            gridDragAnchorMouseX = event->position().x();
+            lastMousePos = event->pos();
+            setCursor(Qt::SizeHorCursor);
+            return;
+        }
+
         isDragging = false; // Начинаем как не перетаскивание
         lastMousePos = event->pos();
 
@@ -996,6 +1047,20 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
     if (!audioData.isEmpty()) {
         vp = getViewportGeometry(audioData[0].size(), width());
         hasViewport = true;
+    }
+
+    if (isGridDragging && (event->buttons() & Qt::LeftButton)) {
+        if (hasViewport) {
+            const float dx = event->position().x() - gridDragAnchorMouseX;
+            const qint64 deltaSamples = qint64(dx * vp.samplesPerPixel);
+            const qint64 maxGrid = qMax<qint64>(0, audioData[0].size() - 1);
+            const qint64 newGrid = qBound<qint64>(0, gridDragAnchorSample + deltaSamples, maxGrid);
+            if (newGrid != gridStartSample) {
+                applyGridStartSample(newGrid, true);
+            }
+        }
+        lastMousePos = event->pos();
+        return;
     }
 
     // Показываем tooltip с временем при наведении на метку (если не перетаскиваем)
@@ -1284,6 +1349,10 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 newSample = markers[draggingMarkerIndex].position;
             }
 
+            if (event->modifiers() & Qt::ShiftModifier) {
+                newSample = snapSampleToGrid(newSample);
+            }
+
             // Обновляем позицию метки (и, при необходимости, группы выделенных меток)
             if (draggingMarkerIndex >= 0 && draggingMarkerIndex < markers.size()) {
                 // Сохраняем характеристики для поиска после сортировки
@@ -1356,6 +1425,10 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
     if (!(event->buttons() & Qt::LeftButton) && !(event->buttons() & Qt::RightButton)) {
         int markerIndex = getMarkerIndexAt(event->pos());
         if (markerIndex >= 0) {
+            setCursor(Qt::SizeHorCursor);
+            return;
+        }
+        if ((event->modifiers() & Qt::ShiftModifier) && bpm > 0.f && !audioData.isEmpty()) {
             setCursor(Qt::SizeHorCursor);
             return;
         }
@@ -1432,6 +1505,12 @@ void WaveformView::mouseReleaseEvent(QMouseEvent* event)
 
             emit markersChanged();
             scheduleUpdate();
+            return;
+        }
+
+        if (isGridDragging) {
+            isGridDragging = false;
+            setCursor(Qt::OpenHandCursor);
             return;
         }
 
@@ -2271,7 +2350,8 @@ TimeStretchProcessor::StretchResult WaveformView::applyTimeStretch(const QVector
     TimeStretchProcessor::StretchResult result = TimeStretchProcessor::applyMarkerStretch(
         originalAudioData.isEmpty() ? audioData : originalAudioData,
         markerData,
-        sampleRate
+        sampleRate,
+        true
     );
 
     return result;

@@ -9,6 +9,7 @@
 - **bpm_analyzer_test.cpp** - Интеграционный тест анализатора BPM на реальных аудиофайлах из `source4test/`
 - **beat_deviation_test.cpp** - Юнит-тесты для вычисления отклонений долей и поиска неровных долей (новое с 2026-01-12)
 - **ui_responsiveness_test.cpp** - Интеграционный UI-тест: загрузка `example_V80BPM.mp3`, метки выравнивания, перетаскивание меток, `applyTimeStretch`, плавность `QMediaPlayer`
+- **pitch_compensation_file_test.cpp** - Тонкомпенсация на `pitch-test_C140BPM.mp3` (одна нота): сжатие/растяжение метками, проверка высоты тона (автокорреляция)
 
 ## Тестовые данные
 
@@ -16,6 +17,37 @@
 
 - `example_C80BPM.mp3` - Файл с постоянными 80 BPM
 - `example_V80BPM.mp3` - Файл с переменными 80 BPM
+- `pitch-test_C140BPM.mp3` - ~140 BPM, одна устойчивая нота (тест тонкомпенсации)
+
+### pitch_compensation_file_test
+
+Интеграционный тест тонкомпенсации (Rubber Band R3) на реальном MP3. Локально, не в CI по умолчанию (~35–40 с).
+
+**Файл:** `pitch-test_C140BPM.mp3` — эталон **f0 ≈ 165 Hz** (автокорреляция по средней части сигнала).
+
+| Тест | Сценарий меток |
+|------|----------------|
+| `testWholeFileCompressHalf` | Весь файл ×0.5 |
+| `testWholeFileStretchOneAndHalf` | Весь файл ×1.5 |
+| `testWholeFileStretchDouble` | Весь файл ×2.0 |
+| `testFirstHalfCompressSecondUnchanged` | Первая половина ×0.5, вторая ×1 |
+| `testSecondHalfStretchFirstUnchanged` | Первая ×1, вторая ×1.5 |
+| `testWithoutPitchCompensationPitchShifts` | ×0.5 без тонкомпенсации → f0 ×2 (~330 Hz) |
+
+Допуск при тонкомпенсации: **±6%** от исходного f0.
+
+```powershell
+cmake --build build/Debug --config Debug --target pitch_compensation_file_test
+.\build\Debug\Debug\pitch_compensation_file_test.exe -v2
+```
+
+Через CTest:
+
+```powershell
+ctest --test-dir build/Debug -C Debug -R pitch_compensation_file_test --output-on-failure
+```
+
+В CI/GitHub Actions тест пропускается (декодер MP3 и Rubber Band зависят от окружения).
 
 ### ui_responsiveness_test
 

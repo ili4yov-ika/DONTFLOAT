@@ -140,7 +140,7 @@ public:
 ### TimeStretchCommand
 - Реализовано: сжатие/растяжение по меткам (Ctrl+T)
 - Сохранение исходных данных для отмены через QUndoStack
-- Поддержка тонкомпенсации (WSOLA в TimeStretchProcessor)
+- Поддержка тонкомпенсации (Rubber Band R3 через `RubberBandOffline` в `TimeStretchProcessor`)
 - Интеграция с MarkerEngine (MarkerData) и TimeStretchProcessor
 
 ## Консольный режим
@@ -183,9 +183,12 @@ tests/
 
 ### Типы тестов
 - **Функциональные**: Проверка GUI и консольного режима
-- **BPM тесты**: Тестирование анализа BPM
+- **BPM тесты**: `bpm_analyzer_test` на файлах из `source4test/`
+- **Тонкомпенсация**: `timestretchprocessor_test` (юнит), `pitch_compensation_file_test` (MP3 с одной нотой, метки, f0)
 - **Синтетические**: Тестирование с искусственными данными
-- **UI тесты**: Проверка интерфейса и цветовых схем
+- **UI тесты**: `ui_responsiveness_test`, проверка интерфейса и цветовых схем
+
+Актуальный список целей CMake и команд запуска — [tests/README.md](../tests/README.md).
 
 ## Цветовые схемы
 

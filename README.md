@@ -86,7 +86,8 @@
 
 ### ⏱️ Сжатие-разжатие по меткам
 - **Метки**: Клавиша `M` — добавить метку; перетаскивание ромбика (ограничения: мин. сегмент 50 мс, нулевая метка статична)
-- **Применить эффект**: `Ctrl+T` — сжатие/растяжение по текущим меткам с тонкомпенсацией (WSOLA)
+- **Тактовая сетка**: Shift+ЛКМ на волне — тонкая подстройка начала сетки; Shift+◀/▶ — сдвиг сетки вместе с метками
+- **Применить эффект**: `Ctrl+T` — сжатие/растяжение по текущим меткам с тонкомпенсацией (Rubber Band)
 - **Отмена/повтор**: `Ctrl+Z` / `Ctrl+Y` после применения
 
 ### 🎯 Визуализация
@@ -134,6 +135,7 @@ cmake --build . --config Release
    - Qt 6.8+ с модулями: Core, Gui, Widgets, Multimedia
    - CMake 3.16+
    - Компилятор C++17
+   - **Rubber Band** (для тонкомпенсации): `git clone --depth 1 --branch v4.0.0 https://github.com/breakfastquay/rubberband.git thirdparty/rubberband`
 
 2. **Клонируйте репозиторий**:
    ```bash
@@ -171,7 +173,9 @@ tools\build_windows_installer.bat
 Требования: CMake, Qt 6.8+, NSIS. Скрипт выполняет Release-сборку, windeployqt и создаёт инсталлер в папке `tools/`. Иконка EXE генерируется из `resources/icons/logo.svg` (Inkscape + Pillow).
 
 ### Скрипты и packaging (папка tools/)
-- `tools/README.md` — подробное описание всех скриптов и packaging
+- `tools/README.md` — скрипты packaging и утилита `marker_testgen`
+- `tests/source4test/README.md` — тестовые аудио и разметка (`pitch-test_C140BPM.mp3` — тонкомпенсация)
+- `tests/README.md` — Qt Test, в т.ч. `pitch_compensation_file_test` (Rubber Band, проверка f0)
 - `build_windows_installer.bat` + `nsis_installer.nsi` — сборка Windows installer (NSIS)
 - `build_deb.sh` + `debian/` — сборка .deb пакета для Debian/Ubuntu
 - `build_rpm.sh` + `rpm/` — сборка .rpm пакета для Fedora/RHEL
@@ -209,6 +213,6 @@ GNU GPL — см. файл [LICENSE](LICENSE).
 - [Руководство разработчика](MARKDOWN/DEVELOPMENT_GUIDE.md) — стандарты кода и сборка
 - [Проблемы и планы](MARKDOWN/ISSUES_AND_PLANS.md) — баги, отключённые функции, планы
 - [Консольный режим](MARKDOWN/CONSOLE_MODE.md) — запуск из командной строки
-- [Time Stretch](MARKDOWN/TIMESTRETCH_FEATURE.md) — сжатие-растяжение по меткам (WSOLA)
+- [Time Stretch](MARKDOWN/TIMESTRETCH_FEATURE.md) — сжатие-растяжение по меткам (Rubber Band)
 - [Сторонние библиотеки](thirdparty/README.md) — qm-dsp (standalone) и прочие зависимости
 - [Тестирование](MARKDOWN/TESTING_GUIDE.md), [Решение проблем](MARKDOWN/TROUBLESHOOTING.md), [История разработки](MARKDOWN/DEVELOPMENT_HISTORY.md)

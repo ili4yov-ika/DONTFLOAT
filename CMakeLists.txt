@@ -12,6 +12,32 @@ if(MSVC)
     add_compile_definitions(_ITERATOR_DEBUG_LEVEL=0)
 endif()
 
+# VS 2025 может выставить VCToolsVersion=14.50 в окружении; v143 (Qt msvc2022_64) требует 14.3x → MSB8052.
+if(MSVC AND CMAKE_GENERATOR MATCHES "Visual Studio")
+    if(NOT CMAKE_VS_GLOBALS MATCHES "VCToolsVersion=")
+        set(_vs_instance_root "")
+        if(CMAKE_GENERATOR_INSTANCE)
+            set(_vs_instance_root "${CMAKE_GENERATOR_INSTANCE}")
+        elseif(DEFINED ENV{VSINSTALLDIR})
+            file(TO_CMAKE_PATH "$ENV{VSINSTALLDIR}" _vs_instance_root)
+        endif()
+        if(_vs_instance_root)
+            set(_v143_default "${_vs_instance_root}/VC/Auxiliary/Build/Microsoft.VCToolsVersion.v143.default.txt")
+            if(EXISTS "${_v143_default}")
+                file(READ "${_v143_default}" _v143_tools_version)
+                string(STRIP "${_v143_tools_version}" _v143_tools_version)
+                if(_v143_tools_version)
+                    list(APPEND CMAKE_VS_GLOBALS "VCToolsVersion=${_v143_tools_version}")
+                    message(STATUS "MSVC v143: VCToolsVersion=${_v143_tools_version}")
+                endif()
+            endif()
+        endif()
+        unset(_vs_instance_root)
+        unset(_v143_default)
+        unset(_v143_tools_version)
+    endif()
+endif()
+
 # Enable automatic handling of Qt files
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -79,12 +105,12 @@ set(SOURCES
     src/timestretchcommand.cpp
     src/beatvisualizer.cpp
     src/timestretchprocessor.cpp
+    src/rubberband_offline.cpp
     src/timeutils.cpp
     src/wavwriter.cpp
     src/audiofileservice.cpp
     src/keyselectionmenu.cpp
     src/spectrogramsettingsdialog.cpp
-    src/reverbsettingsdialog.cpp
     src/pitchshiftsettingsdialog.cpp
     src/shortcutsdialog.cpp
     # ReverbSC C-sources from LMMS/SoundPipe (GPL-2, original authors: Sean Costello, Paul Batchelor)
@@ -111,6 +137,7 @@ set(HEADERS
     include/timestretchcommand.h
     include/beatvisualizer.h
     include/timestretchprocessor.h
+    include/rubberband_offline.h
     include/timeutils.h
     include/wavwriter.h
     include/audiofileservice.h
@@ -119,7 +146,6 @@ set(HEADERS
     include/spectrogramsettingsdialog.h
     include/fft_engine.h
     include/reverbsc_engine.h
-    include/reverbsettingsdialog.h
     include/granularpitchshifter_engine.h
     include/pitchshiftsettingsdialog.h
     include/shortcutsdialog.h
@@ -152,6 +178,8 @@ if(WIN32)
         message(STATUS "resources/icons/logo.ico not found - EXE will use default Windows icon. Run: python tools/svg_to_ico.py")
     endif()
 endif()
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/RubberBand.cmake)
 
 # Create executable
 add_executable(${PROJECT_NAME}
@@ -186,6 +214,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Multimedia
     Qt6::MultimediaWidgets
 )
+dontfloat_link_rubberband(${PROJECT_NAME})
 
 # Translations: build .qm from .ts (output in build dir; app loads from applicationDirPath())
 find_package(Qt6 REQUIRED COMPONENTS LinguistTools)
@@ -367,6 +396,13 @@ function(add_qt_test test_name)
         target_compile_definitions(${test_name} PRIVATE USE_MIXXX_QM_DSP)
     endif()
 
+    list(FIND ARGN "src/timestretchprocessor.cpp" _dontfloat_ts_idx)
+    if(NOT _dontfloat_ts_idx EQUAL -1)
+        target_sources(${test_name} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/rubberband_offline.cpp)
+        dontfloat_link_rubberband(${test_name})
+    endif()
+
     # CTest: на Windows тесты не видят Qt DLL (0xc0000135), если bin не в PATH — запуск через cmake -P.
     if(WIN32 AND DEFINED QT_ROOT_DIR)
         add_test(NAME ${test_name}
@@ -422,6 +458,21 @@ set_tests_properties(timestretchprocessor_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# Тонкомпенсация на реальном файле с одной нотой (pitch-test_C140BPM.mp3)
+add_qt_test(pitch_compensation_file_test
+    tests/pitch_compensation_file_test.cpp
+    src/timestretchprocessor.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+    src/audiofileservice.cpp
+)
+
+set_tests_properties(pitch_compensation_file_test PROPERTIES
+    LABELS "timestretch;pitch;integration;files"
+    DESCRIPTION "Pitch preservation on pitch-test_C140BPM.mp3 with marker stretch/compress"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 set_tests_properties(beat_deviation_test PROPERTIES
     LABELS "bpm;deviation;unit"
     DESCRIPTION "Unit tests for beat deviation calculation and unaligned beat detection"
@@ -447,6 +498,67 @@ set_tests_properties(ui_responsiveness_test PROPERTIES
     LABELS "ui;integration;audio;timestretch;files"
     DESCRIPTION "UI responsiveness after beat alignment on example_V80BPM.mp3"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# ============================================================================
+# Утилита разметки тестовых файлов (tests/source4test)
+# ============================================================================
+set(MARKER_TESTGEN_SOURCES
+    tools/marker_testgen_main.cpp
+    src/markertestgenwindow.cpp
+    src/markersfile.cpp
+    src/waveformview.cpp
+    src/waveformcolors.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+    src/bpmanalyzer.cpp
+    src/audiofileservice.cpp
+    src/beatvisualizer.cpp
+    src/wavwriter.cpp
+    src/timestretchprocessor.cpp
+    src/rubberband_offline.cpp
+)
+
+set(MARKER_TESTGEN_HEADERS
+    include/markertestgenwindow.h
+    include/waveformview.h
+)
+
+add_executable(marker_testgen ${MARKER_TESTGEN_SOURCES} ${MARKER_TESTGEN_HEADERS})
+
+target_include_directories(marker_testgen PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(marker_testgen PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Multimedia
+)
+
+if(TARGET qm_dsp)
+    target_link_libraries(marker_testgen PRIVATE qm_dsp)
+    target_compile_definitions(marker_testgen PRIVATE USE_MIXXX_QM_DSP)
+endif()
+
+dontfloat_link_rubberband(marker_testgen)
+
+if(WIN32)
+    target_link_options(marker_testgen PRIVATE /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup)
+endif()
+
+add_qt_test(markersfile_test
+    tests/markersfile_test.cpp
+    src/markersfile.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+)
+
+set_tests_properties(markersfile_test PROPERTIES
+    LABELS "unit;markers"
+    DESCRIPTION "Markers file read/write for test fixtures"
 )
 
 # ============================================================================

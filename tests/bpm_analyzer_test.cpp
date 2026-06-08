@@ -62,21 +62,21 @@ QString BPMAnalyzerTest::getTestDataPath(const QString& filename)
     if (QFileInfo::exists(testFilePath)) {
         return QFileInfo(testFilePath).absoluteFilePath();
     }
-    
+
     // Пытаемся найти относительно текущей директории
     QDir currentDir = QDir::current();
     testFilePath = currentDir.absoluteFilePath(QString("tests/source4test/%1").arg(filename));
     if (QFileInfo::exists(testFilePath)) {
         return testFilePath;
     }
-    
+
     // Пытаемся найти в родительской директории
     currentDir.cdUp();
     testFilePath = currentDir.absoluteFilePath(QString("tests/source4test/%1").arg(filename));
     if (QFileInfo::exists(testFilePath)) {
         return testFilePath;
     }
-    
+
     qWarning() << "Тестовый файл не найден:" << filename;
     return QString();
 }
@@ -123,56 +123,56 @@ void BPMAnalyzerTest::testAnalyzeBPMFromSourceFiles()
         "example_C80BPM.mp3",
         "example_V80BPM.mp3"
     };
-    
+
     for (const QString& filename : testFiles) {
         QString testFile = getTestDataPath(filename);
-        
+
         if (testFile.isEmpty()) {
             qWarning() << "Пропуск файла (не найден):" << filename;
             continue;
         }
-        
+
         qDebug() << "\n=== Тестирование файла:" << filename << "===";
-        
+
         // Загружаем аудиофайл
         int sampleRate = 0;
         QVector<QVector<float>> channels = loadAudioFile(testFile, sampleRate);
-        
+
         if (channels.isEmpty() || sampleRate == 0) {
             QSKIP(QString("Не удалось загрузить файл %1, пропускаем тест").arg(filename).toUtf8().constData());
             continue;
         }
-        
+
         // Создаем моно канал для анализа (усредняем стерео)
         QVector<float> monoChannel;
         int minLength = qMin(channels[0].size(), channels.size() > 1 ? channels[1].size() : channels[0].size());
         monoChannel.reserve(minLength);
-        
+
         for (int i = 0; i < minLength; ++i) {
             float left = channels[0][i];
             float right = (channels.size() > 1) ? channels[1][i] : left;
             monoChannel.append((left + right) / 2.0f);
         }
-        
+
         // Тест 1: Анализ с упрощенным алгоритмом
         {
             qDebug() << "\n--- Тест 1: Упрощенный алгоритм ---";
             BPMAnalyzer::AnalysisOptions options;
             options.useMixxxAlgorithm = false;
-            
+
             // Определяем тип файла: C = Constant (постоянный), V = Variable (переменный)
             bool isConstantTempo = filename.contains("_C");
             bool isVariableTempo = filename.contains("_V");
             options.assumeFixedTempo = isConstantTempo;
-            
+
             // Для переменного темпа расширяем диапазон BPM
             if (isVariableTempo) {
                 options.minBPM = 50.0f;
                 options.maxBPM = 250.0f;
             }
-            
+
             BPMAnalyzer::AnalysisResult result = BPMAnalyzer::analyzeBPM(monoChannel, sampleRate, options);
-            
+
             // Если алгоритм не смог определить BPM, пропускаем тест с предупреждением
             if (result.bpm <= 0) {
                 qWarning() << "Алгоритм не смог определить BPM для файла" << filename;
@@ -180,28 +180,28 @@ void BPMAnalyzerTest::testAnalyzeBPMFromSourceFiles()
                 qWarning() << "Пропускаем проверки для этого файла";
                 QSKIP(QString("Алгоритм не смог определить BPM для файла %1").arg(filename).toUtf8().constData());
             }
-            
+
             QVERIFY2(result.bpm < 300, QString("BPM должен быть разумным (< 300) для файла %1, получено %2").arg(filename).arg(result.bpm).toUtf8().constData());
             QVERIFY2(result.beats.size() > 0, QString("Должно быть обнаружено хотя бы несколько битов для файла %1").arg(filename).toUtf8().constData());
-            QVERIFY2(result.confidence >= 0.0f && result.confidence <= 1.0f, 
+            QVERIFY2(result.confidence >= 0.0f && result.confidence <= 1.0f,
                      QString("Уверенность должна быть в диапазоне [0, 1] для файла %1").arg(filename).toUtf8().constData());
-            
+
             qDebug() << "  Обнаруженный BPM:" << result.bpm;
             qDebug() << "  Количество битов:" << result.beats.size();
             qDebug() << "  Уверенность:" << result.confidence;
             qDebug() << "  Переменный темп:" << result.hasIrregularBeats;
-            
+
             // Для файлов с постоянным темпом (C80BPM) проверяем точность
             if (filename.contains("_C80BPM")) {
                 float expectedBPM = 80.0f;
                 float tolerance = expectedBPM * 0.4f; // 40% допуск для упрощенного алгоритма
-                QVERIFY2(qAbs(result.bpm - expectedBPM) <= tolerance || 
+                QVERIFY2(qAbs(result.bpm - expectedBPM) <= tolerance ||
                          qAbs(result.bpm - expectedBPM * 2.0f) <= tolerance || // Может быть обнаружена двойная скорость
                          qAbs(result.bpm - expectedBPM / 2.0f) <= tolerance,  // Или половина скорости
                          QString("BPM для файла с постоянным темпом %1: ожидалось около %2, получено %3")
                          .arg(filename).arg(expectedBPM).arg(result.bpm).toUtf8().constData());
             }
-            
+
             // Для файлов с переменным темпом (V80BPM) проверяем, что BPM в разумных пределах
             if (filename.contains("_V80BPM")) {
                 float expectedBPM = 80.0f;
@@ -211,32 +211,32 @@ void BPMAnalyzerTest::testAnalyzeBPMFromSourceFiles()
                 QVERIFY2(result.bpm >= minBPM && result.bpm <= maxBPM,
                          QString("BPM для файла с переменным темпом %1: ожидалось в диапазоне [%2, %3], получено %4")
                          .arg(filename).arg(minBPM).arg(maxBPM).arg(result.bpm).toUtf8().constData());
-                
+
                 // Для переменного темпа может быть обнаружена нерегулярность
                 qDebug() << "  Примечание: для переменного темпа нерегулярность битов допустима";
             }
         }
-        
+
         // Тест 2: Анализ с алгоритмом Mixxx (если доступен)
         #ifdef USE_MIXXX_QM_DSP
         {
             qDebug() << "\n--- Тест 2: Алгоритм Mixxx ---";
             BPMAnalyzer::AnalysisOptions options;
             options.useMixxxAlgorithm = true;
-            
+
             // Определяем тип файла
             bool isConstantTempo = filename.contains("_C");
             bool isVariableTempo = filename.contains("_V");
             options.assumeFixedTempo = isConstantTempo;
-            
+
             // Для переменного темпа расширяем диапазон BPM
             if (isVariableTempo) {
                 options.minBPM = 50.0f;
                 options.maxBPM = 250.0f;
             }
-            
+
             BPMAnalyzer::AnalysisResult result = BPMAnalyzer::analyzeBPM(monoChannel, sampleRate, options);
-            
+
             // Если алгоритм не смог определить BPM, пропускаем тест с предупреждением
             if (result.bpm <= 0) {
                 qWarning() << "Алгоритм Mixxx не смог определить BPM для файла" << filename;
@@ -244,26 +244,26 @@ void BPMAnalyzerTest::testAnalyzeBPMFromSourceFiles()
                 qDebug() << "  (Mixxx алгоритм недоступен или не справился с анализом)";
                 QSKIP(QString("Алгоритм Mixxx не смог определить BPM для файла %1").arg(filename).toUtf8().constData());
             }
-            
+
             QVERIFY2(result.bpm < 300, QString("BPM должен быть разумным (< 300) (Mixxx) для файла %1, получено %2").arg(filename).arg(result.bpm).toUtf8().constData());
             QVERIFY2(result.beats.size() > 0, QString("Должно быть обнаружено хотя бы несколько битов (Mixxx) для файла %1").arg(filename).toUtf8().constData());
-            
+
             qDebug() << "  Обнаруженный BPM (Mixxx):" << result.bpm;
             qDebug() << "  Количество битов (Mixxx):" << result.beats.size();
             qDebug() << "  Уверенность (Mixxx):" << result.confidence;
             qDebug() << "  Переменный темп (Mixxx):" << result.hasIrregularBeats;
-            
+
             // Для файлов с постоянным темпом проверяем точность
             if (filename.contains("_C80BPM")) {
                 float expectedBPM = 80.0f;
                 float tolerance = expectedBPM * 0.3f; // 30% допуск для Mixxx
-                QVERIFY2(qAbs(result.bpm - expectedBPM) <= tolerance || 
+                QVERIFY2(qAbs(result.bpm - expectedBPM) <= tolerance ||
                          qAbs(result.bpm - expectedBPM * 2.0f) <= tolerance ||
                          qAbs(result.bpm - expectedBPM / 2.0f) <= tolerance,
                          QString("BPM для файла с постоянным темпом %1 (Mixxx): ожидалось около %2, получено %3")
                          .arg(filename).arg(expectedBPM).arg(result.bpm).toUtf8().constData());
             }
-            
+
             // Для файлов с переменным темпом (V80BPM) проверяем, что BPM в разумных пределах
             if (filename.contains("_V80BPM")) {
                 float expectedBPM = 80.0f;

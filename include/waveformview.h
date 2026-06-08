@@ -74,6 +74,8 @@ public:
     QVector<BPMAnalyzer::BeatInfo> getBeatInfo() const { return beats; }
     void setGridStartSample(qint64 sample) { gridStartSample = sample; update(); }
     qint64 getGridStartSample() const { return gridStartSample; }
+    /** Сдвиг начала тактовой сетки; moveMarkers — сдвинуть нефиксированные метки вместе с сеткой */
+    void shiftGridBySamples(qint64 sampleDelta, bool moveMarkers = false);
     void setBPM(float bpm);
     float getBPM() const { return bpm; }
     void setSampleRate(int rate);
@@ -155,6 +157,7 @@ signals:
     void horizontalOffsetChanged(float offset); // Сигнал для обновления горизонтального скроллбара
     void markerDragFinished(); // Сигнал о завершении перетаскивания метки (для обновления воспроизведения)
     void markersChanged(); // Сигнал об изменении набора меток
+    void gridStartChanged(qint64 sample); // Начало тактовой сетки изменено (кнопки или Shift+перетаскивание)
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -197,6 +200,7 @@ private:
     int getMarkerIndexAt(const QPoint& pos) const; // Получить индекс метки под курсором
     void adjustHorizontalOffset(float delta);
     void adjustZoomLevel(float delta);
+    void applyGridStartSample(qint64 newGrid, bool moveMarkers);
     QString getPositionText(qint64 position) const;
     QString getBarText(float beatPosition) const;
     void scheduleUpdate(const QRect& rect = QRect()); // Throttled update для производительности
@@ -218,6 +222,9 @@ private:
     float zoomLevel;
     bool isDragging;
     bool isRightMousePanning;
+    bool isGridDragging;
+    qint64 gridDragAnchorSample;
+    float gridDragAnchorMouseX;
     QPoint lastMousePos;
     QString colorScheme;
     qint64 loopStartPosition;

@@ -32,7 +32,7 @@
 - Основные компоненты:
   - MainWindow, WaveformView, PitchGridWidget (⚠️ отключено по умолчанию)
   - BPMAnalyzer, KeyAnalyzer, BeatVisualizer, WaveformAnalyzer
-  - MarkerEngine, TimeStretchProcessor, TimeStretchCommand, TimeUtils
+  - MarkerEngine, TimeStretchProcessor, RubberBandOffline, TimeStretchCommand, TimeUtils
   - MetronomeController
 - Система команд (Command Pattern)
 - Консольный режим
@@ -123,7 +123,7 @@
 **Система тестирования DONTFLOAT**
 - Обзор системы тестирования
 - Структура тестов
-- Типы тестов (функциональные, BPM, синтетические, UI)
+- Типы тестов (функциональные, BPM, тонкомпенсация, синтетические, UI)
 - Запуск тестов
 - Результаты тестирования
 - Диагностика проблем
@@ -168,7 +168,8 @@
 
 #### [TIMESTRETCH_FEATURE.md](TIMESTRETCH_FEATURE.md)
 **Функция растяжения времени (Time Stretch)**
-- Архитектурные компоненты (MarkerStretchEngine, TimeStretchProcessor, TimeUtils)
+- Архитектурные компоненты (MarkerEngine, TimeStretchProcessor, RubberBandOffline, TimeUtils)
+- Тонкомпенсация: Rubber Band Library v4 (R3 offline)
 - Пользовательский интерфейс
 - Алгоритмы обработки
 - Интеграция с системой команд

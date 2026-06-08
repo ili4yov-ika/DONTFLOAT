@@ -397,17 +397,18 @@ qDebug() << "Using detected BPM:" << analysis.bpm;
 - Реализация `processWithPitchPreservation()` фактически делала ресемплинг окон и не сохраняла высоту тона
 - Визуально метки работали корректно, но звук вел себя как при обычном изменении скорости
 
-**Решение**:
-- Переписан алгоритм тонкомпенсации на WSOLA (Waveform Similarity Overlap-Add)
-- Используется корреляционный поиск в окнах и перекрытие с нормализацией
+**Решение** (обновлено 2026-05-31):
+- Интегрирована **Rubber Band Library v4** (движок R3, офлайн) вместо собственного WSOLA
+- Обёртка `RubberBandOffline::stretchMono()` в `src/rubberband_offline.cpp`
 - Результат сохраняет тембр/высоту тона при изменении длительности
 
 **Файлы**:
-- `src/timestretchprocessor.cpp` — новый алгоритм WSOLA в `processWithPitchPreservation()`
+- `src/timestretchprocessor.cpp` — `processWithPitchPreservation()` вызывает Rubber Band
+- `src/rubberband_offline.cpp`, `cmake/RubberBand.cmake`, `thirdparty/rubberband/`
 
 **Тестирование**:
-- Растяжение и сжатие сегментов (коэффициенты ~0.5–2.0)
-- Проверка высоты тона на слух в воспроизведении и после применения `Ctrl+T`
+- Автоматически: `pitch_compensation_file_test` на `pitch-test_C140BPM.mp3` (f0 ≈ 165 Hz, допуск ±6%, сценарии ×0.5–×2.0)
+- Вручную: растяжение/сжатие на слух после `Ctrl+T`
 
 ## Планы на реализацию
 
@@ -933,7 +934,7 @@ qDebug() << "Starting BPM analysis with" << samples.size() << "samples";
 3. **Mixxx алгоритм** - работает в GUI режиме (BPM: 106.97, 257 битов)
 4. **Миграция MarkerStretchEngine** - ✅ логика перенесена в TimeStretchProcessor (2026-01-12)
 5. **Механизм поиска неровных долей** - ✅ полностью переработан и исправлен (2026-01-12)
-6. **Тонкомпенсация при работе с метками** - ✅ WSOLA в TimeStretchProcessor (2026-01-25)
+6. **Тонкомпенсация при работе с метками** - ✅ Rubber Band R3 в TimeStretchProcessor (2026-05-31; ранее WSOLA 2026-01-25)
 
 ### 🔄 В ПРОЦЕССЕ (0 проблем)
 - Нет проблем в процессе исправления

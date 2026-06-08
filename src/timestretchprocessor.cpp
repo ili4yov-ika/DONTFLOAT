@@ -1,11 +1,39 @@
 #include "../include/timestretchprocessor.h"
+#include "../include/rubberband_offline.h"
 #include <QtCore/QVector>
 #include <QtCore/QtGlobal>
 #include <cmath>
+#include <algorithm>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+namespace {
+
+void appendWithCrossfade(QVector<float>& dst, const QVector<float>& src, int crossfadeSamples)
+{
+    if (src.isEmpty()) {
+        return;
+    }
+    if (dst.isEmpty() || crossfadeSamples <= 0) {
+        dst.append(src);
+        return;
+    }
+
+    const int overlap = qMin(crossfadeSamples, qMin(dst.size(), src.size()));
+    if (overlap <= 1) {
+        dst.append(src);
+        return;
+    }
+
+    const int joinStart = dst.size() - overlap;
+    for (int i = 0; i < overlap; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(overlap - 1);
+        dst[joinStart + i] = dst[joinStart + i] * (1.0f - t) + src[i] * t;
+    }
+    for (int i = overlap; i < src.size(); ++i) {
+        dst.append(src[i]);
+    }
+}
+
+} // namespace
 
 static float computeRMS(const QVector<float>& v)
 {
@@ -15,7 +43,7 @@ static float computeRMS(const QVector<float>& v)
     return static_cast<float>(std::sqrt(sum / v.size()));
 }
 
-QVector<float> TimeStretchProcessor::processSegment(const QVector<float>& input, float stretchFactor, bool preservePitch)
+QVector<float> TimeStretchProcessor::processSegment(const QVector<float>& input, float stretchFactor, bool preservePitch, int sampleRate)
 {
     if (input.isEmpty() || stretchFactor <= 0.0f) {
         return input;
@@ -26,13 +54,12 @@ QVector<float> TimeStretchProcessor::processSegment(const QVector<float>& input,
         return input;
     }
 
+    const int effectiveSampleRate = sampleRate > 0 ? sampleRate : 44100;
+
     QVector<float> output;
     if (preservePitch) {
-        // Растяжение с сохранением высоты тона (WSOLA):
-        // длительность меняется, но тональность остаётся неизменной.
-        output = processWithPitchPreservation(input, stretchFactor);
+        output = processWithPitchPreservation(input, stretchFactor, effectiveSampleRate);
     } else {
-        // Простое растяжение/сжатие интерполяцией — меняет и длительность, и тональность.
         output = processWithSimpleInterpolation(input, stretchFactor);
     }
 
@@ -91,179 +118,18 @@ QVector<float> TimeStretchProcessor::processWithSimpleInterpolation(const QVecto
     return output;
 }
 
-QVector<float> TimeStretchProcessor::processWithPitchPreservation(const QVector<float>& input, float stretchFactor)
+QVector<float> TimeStretchProcessor::processWithPitchPreservation(const QVector<float>& input, float stretchFactor, int sampleRate)
 {
-    // WSOLA с ФИКСИРОВАННЫМ синтез-хопом: на каждом кадре выход продвигается на
-    // постоянный synthesisHop, а вход — на analysisHop = synthesisHop / stretchFactor.
-    // Благодаря этому overlap = windowSize - synthesisHop постоянен при любом коэффициенте,
-    // и высота тона сохраняется и при сжатии, и при сколь угодно сильном растяжении
-    // (старая схема с переменным выходным хопом «вырождалась» в ресемплинг при factor > ~1.9).
-    const int inputSize = input.size();
-    const int targetSize = static_cast<int>(std::lround(double(inputSize) * double(stretchFactor)));
-
-    if (targetSize <= 0) {
-        return QVector<float>();
-    }
-
-    const int windowSize = 2048;
-    const int synthesisHop = windowSize / 4;             // 75% overlap — постоянный
-    const double analysisHop = double(synthesisHop) / double(stretchFactor);
-    const int overlap = windowSize - synthesisHop;
-    const int searchRadius = synthesisHop / 2;
-
-    // Слишком короткий сегмент для WSOLA — мягкий откат на интерполяцию.
-    if (inputSize < windowSize + synthesisHop || analysisHop < 1.0) {
-        return processWithSimpleInterpolation(input, stretchFactor);
-    }
-
-    QVector<float> window(windowSize);
-    for (int i = 0; i < windowSize; ++i) {
-        window[i] = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (windowSize - 1)));
-    }
-
-    const int outputCapacity = targetSize + windowSize;
-    QVector<float> output(outputCapacity, 0.0f);
-    QVector<float> windowSum(outputCapacity, 0.0f);
-
-    auto addWindowedFrame = [&](int inputPos, int outputPos) {
-        for (int i = 0; i < windowSize; ++i) {
-            const int inIdx = inputPos + i;
-            const int outIdx = outputPos + i;
-            if (inIdx >= inputSize || outIdx >= outputCapacity) {
-                break;
-            }
-            if (inIdx < 0) {
-                continue;
-            }
-            const float w = window[i];
-            output[outIdx] += input[inIdx] * w;
-            windowSum[outIdx] += w;
-        }
-    };
-
-    int outputPos = 0;
-    double analysisPos = 0.0;
-
-    // Первый кадр — с начала входа, без поиска.
-    addWindowedFrame(0, 0);
-
-    while (true) {
-        outputPos += synthesisHop;
-        analysisPos += analysisHop;
-        const int idealInPos = static_cast<int>(std::lround(analysisPos));
-
-        if (outputPos + windowSize >= outputCapacity) {
-            break;
-        }
-        if (idealInPos + windowSize >= inputSize) {
-            break;
-        }
-
-        // WSOLA: ищем сдвиг входа в пределах searchRadius, максимизируя кросс-корреляцию
-        // с уже записанным overlap-регионом выхода (избегаем фазовых разрывов).
-        const int searchStart = qMax(0, idealInPos - searchRadius);
-        const int searchEnd = qMin(inputSize - windowSize, idealInPos + searchRadius);
-
-        int bestPos = idealInPos;
-        float bestCorr = -1.0e30f;
-
-        for (int cand = searchStart; cand <= searchEnd; ++cand) {
-            float corr = 0.0f;
-            for (int i = 0; i < overlap; ++i) {
-                corr += output[outputPos + i] * input[cand + i];
-            }
-            if (corr > bestCorr) {
-                bestCorr = corr;
-                bestPos = cand;
-            }
-        }
-
-        addWindowedFrame(bestPos, outputPos);
-    }
-
-    // Нормализация по оконной сумме (компенсация перекрытия окон).
-    for (int i = 0; i < targetSize; ++i) {
-        if (windowSum[i] > 0.0001f) {
-            output[i] /= windowSum[i];
-        }
-    }
-
-    output.resize(targetSize);
-    return output;
+    return RubberBandOffline::stretchMono(input, stretchFactor, sampleRate);
 }
 
-QVector<float> TimeStretchProcessor::resample(const QVector<float>& input, float inputSampleRate, float outputSampleRate)
-{
-    if (input.isEmpty() || inputSampleRate <= 0.0f || outputSampleRate <= 0.0f) {
-        return input;
-    }
-
-    // Если частоты совпадают, возвращаем исходные данные
-    if (qAbs(inputSampleRate - outputSampleRate) < 0.1f) {
-        return input;
-    }
-
-    float ratio = outputSampleRate / inputSampleRate;
-    int outputSize = static_cast<int>(input.size() * ratio);
-
-    if (outputSize <= 0) {
-        return QVector<float>();
-    }
-
-    QVector<float> output;
-    output.reserve(outputSize);
-
-    // Используем кубическую интерполяцию для качественного ресемплинга
-    for (int i = 0; i < outputSize; ++i) {
-        float inputPos = static_cast<float>(i) / ratio;
-        inputPos = qBound(0.0f, inputPos, static_cast<float>(input.size() - 1));
-
-        int index = static_cast<int>(inputPos);
-        float fraction = inputPos - static_cast<float>(index);
-
-        // Кубическая интерполяция
-        int i0 = qMax(0, index - 1);
-        int i1 = index;
-        int i2 = qMin(static_cast<int>(input.size()) - 1, index + 1);
-        int i3 = qMin(static_cast<int>(input.size()) - 1, index + 2);
-
-        float y0 = input[i0];
-        float y1 = input[i1];
-        float y2 = input[i2];
-        float y3 = input[i3];
-
-        float value = cubicInterpolate(y0, y1, y2, y3, fraction);
-        output.append(value);
-    }
-
-    return output;
-}
-
-QVector<float> TimeStretchProcessor::applyPitchShiftByFactor(const QVector<float>& input, float pitchFactor)
-{
-    if (input.isEmpty() || pitchFactor <= 0.0f) {
-        return input;
-    }
-    if (qAbs(pitchFactor - 1.0f) < 0.001f) {
-        return input;
-    }
-
-    // Ресемплинг: input как бы записан при rate pitchFactor, выводим при rate 1
-    // → выход короче в pitchFactor раз (тон выше при factor>1)
-    QVector<float> resampled = resample(input, pitchFactor, 1.0f);
-    if (resampled.isEmpty()) return input;
-
-    // Растягиваем обратно до исходной длины (простая интерполяция, без сохранения тона)
-    return processWithSimpleInterpolation(resampled, pitchFactor);
-}
-
-QVector<QVector<float>> TimeStretchProcessor::processChannels(const QVector<QVector<float>>& input, float stretchFactor, bool preservePitch)
+QVector<QVector<float>> TimeStretchProcessor::processChannels(const QVector<QVector<float>>& input, float stretchFactor, bool preservePitch, int sampleRate)
 {
     QVector<QVector<float>> output;
     output.reserve(input.size());
 
     for (const auto& channel : input) {
-        output.append(processSegment(channel, stretchFactor, preservePitch));
+        output.append(processSegment(channel, stretchFactor, preservePitch, sampleRate));
     }
 
     return output;
@@ -348,15 +214,19 @@ TimeStretchProcessor::StretchResult TimeStretchProcessor::applyMarkerStretch(
         result.audioData.append(QVector<float>());
     }
 
-    qint64 currentOutputPos = 0;
+    QVector<qint64> segmentOutputLengths;
+    segmentOutputLengths.reserve(segments.size());
+
+    const int crossfadeSamples = sampleRate > 0 ? qMax(64, sampleRate / 100) : 441; // ~10 ms
 
     // Обрабатываем каждый сегмент
     for (int i = 0; i < segments.size(); ++i) {
         const StretchSegment& seg = segments[i];
 
-        qint64 segmentLength = seg.endSample - seg.startSample;
+        const qint64 segmentLength = seg.endSample - seg.startSample;
         if (segmentLength <= 0) {
             qDebug() << "Segment" << i << "has zero or negative length, skipping";
+            segmentOutputLengths.append(segmentOutputLengths.isEmpty() ? 0 : segmentOutputLengths.last());
             continue;
         }
 
@@ -364,40 +234,40 @@ TimeStretchProcessor::StretchResult TimeStretchProcessor::applyMarkerStretch(
                  << ", end=" << seg.endSample << ", length=" << segmentLength
                  << ", factor=" << seg.stretchFactor;
 
-        qint64 processedLength = 0;
+        const bool isFirstSegment = segmentOutputLengths.isEmpty();
+        const qint64 lengthBefore = isFirstSegment ? 0 : result.audioData[0].size();
 
         // Обрабатываем каждый канал
         for (int ch = 0; ch < audioData.size(); ++ch) {
-            // Извлекаем сегмент
             QVector<float> segment;
-            segment.reserve(segmentLength);
+            segment.reserve(static_cast<int>(segmentLength));
             for (qint64 j = seg.startSample; j < seg.endSample && j < audioData[ch].size(); ++j) {
                 segment.append(audioData[ch][j]);
             }
 
-            // Применяем time stretching
-            QVector<float> processedSegment = processSegment(
+            const QVector<float> processedSegment = processSegment(
                 segment,
                 seg.stretchFactor,
-                seg.preservePitch
+                seg.preservePitch,
+                sampleRate
             );
 
-            result.audioData[ch].append(processedSegment);
-
-            if (ch == 0) {
-                processedLength = processedSegment.size();
-                qDebug() << "Segment" << i << "processed to" << processedLength << "samples";
+            if (isFirstSegment) {
+                result.audioData[ch].append(processedSegment);
+            } else {
+                appendWithCrossfade(result.audioData[ch], processedSegment, crossfadeSamples);
             }
         }
 
-        currentOutputPos += processedLength;
+        const qint64 lengthAfter = result.audioData.isEmpty() ? 0 : result.audioData[0].size();
+        const qint64 addedLength = lengthAfter - lengthBefore;
+        qDebug() << "Segment" << i << "added" << addedLength << "samples, total" << lengthAfter;
+        segmentOutputLengths.append(lengthAfter);
     }
 
     // Обновляем метки под новые позиции
     result.newMarkers.clear();
     result.newMarkers.reserve(sortedMarkers.size());
-
-    currentOutputPos = 0;
 
     // Первая метка (если есть) в начале
     if (!sortedMarkers.isEmpty() && sortedMarkers.first().originalPosition == 0) {
@@ -408,23 +278,17 @@ TimeStretchProcessor::StretchResult TimeStretchProcessor::applyMarkerStretch(
         result.newMarkers.append(firstMarker);
     }
 
-    // Обновляем позиции остальных меток на основе обработанных сегментов
-    for (int i = 0; i < segments.size() && i < sortedMarkers.size(); ++i) {
-        const StretchSegment& seg = segments[i];
-
-        qint64 segmentLength = seg.endSample - seg.startSample;
-        qint64 processedLength = qint64(segmentLength * seg.stretchFactor);
-
-        currentOutputPos += processedLength;
-
-        // Метка в конце этого сегмента
-        if (i + 1 < sortedMarkers.size()) {
-            MarkerData newMarker = sortedMarkers[i + 1];
-            newMarker.position = currentOutputPos;
-            newMarker.originalPosition = newMarker.position;
-            newMarker.updateTimeFromSamples(sampleRate);
-            result.newMarkers.append(newMarker);
+    // Обновляем позиции остальных меток по фактической длине сегментов
+    for (int i = 0; i < segments.size() && i + 1 < sortedMarkers.size(); ++i) {
+        if (i >= segmentOutputLengths.size()) {
+            break;
         }
+
+        MarkerData newMarker = sortedMarkers[i + 1];
+        newMarker.position = segmentOutputLengths[i];
+        newMarker.originalPosition = newMarker.position;
+        newMarker.updateTimeFromSamples(sampleRate);
+        result.newMarkers.append(newMarker);
     }
 
     qDebug() << "applyMarkerStretch: result audioSize=" << result.audioData[0].size()

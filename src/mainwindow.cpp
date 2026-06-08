@@ -1,7 +1,6 @@
 #include "../include/mainwindow.h"
 #include "../include/uiconstants.h"
 #include "../include/spectrogramsettingsdialog.h"
-#include "../include/reverbsettingsdialog.h"
 #include "../include/pitchshiftsettingsdialog.h"
 #include "../include/beatfixcommand.h"
 #include "../include/timestretchcommand.h"
@@ -37,6 +36,7 @@
 #include <QtCore/QDir>
 #include <QtCore/QtGlobal>
 #include <QtCore/QDebug>
+#include <QtCore/QSignalBlocker>
 #include <QtCore/QEventLoop>
 #include <QtCore/QtMath>
 #include <QtWidgets/QStyleFactory>
@@ -163,8 +163,7 @@ MainWindow::MainWindow(QWidget *parent)
     , waveformSpectrogramAct(nullptr)
     , spectrogramSettingsAct(nullptr)
     , spectrogramSettingsDialog(nullptr)
-    , reverbSettingsAct(nullptr)
-    , reverbSettingsDialog(nullptr)
+    , reverbAct(nullptr)
     , pitchShiftSettingsAct(nullptr)
     , pitchShiftSettingsDialog(nullptr)
     , russianAction(nullptr)
@@ -546,7 +545,10 @@ void MainWindow::retranslateMenus()
     if (waveformPeaksAct) waveformPeaksAct->setText(tr("Звуковые пики"));
     if (waveformSpectrogramAct) waveformSpectrogramAct->setText(tr("Спектрограмма"));
     if (spectrogramSettingsAct) { spectrogramSettingsAct->setText(tr("Настройки отображения спектрограммы...")); spectrogramSettingsAct->setStatusTip(tr("Настроить параметры спектрограммы (размер окна, полосы, цвет)")); }
-    if (reverbSettingsAct) { reverbSettingsAct->setText(tr("Настройки реверберации...")); reverbSettingsAct->setStatusTip(tr("Настроить реверберацию, применяемую после растяжения (Ctrl+T)")); }
+    if (reverbAct) {
+        reverbAct->setText(tr("Реверберация после растяжения"));
+        reverbAct->setStatusTip(tr("Добавить реверберацию при применении растяжения (Ctrl+T)"));
+    }
     if (pitchShiftSettingsAct) { pitchShiftSettingsAct->setText(tr("Настройки питч-шифтера...")); pitchShiftSettingsAct->setStatusTip(tr("Настроить гранулярный питч-шифтер, применяемый после растяжения (Ctrl+T)")); }
 }
 
@@ -602,6 +604,12 @@ void MainWindow::readSettings()
         }
     }
 
+    reverbParams.enabled = settings.value("reverbEnabled", true).toBool();
+    if (reverbAct) {
+        QSignalBlocker blocker(reverbAct);
+        reverbAct->setChecked(reverbParams.enabled);
+    }
+
     applyShortcuts();
 
     // Восстановление состояния сплиттера (только если питч-сетка видима)
@@ -632,6 +640,7 @@ void MainWindow::writeSettings()
     // Сохраняем текущие тональности
     settings.setValue("currentKey", currentKey);
     settings.setValue("currentKey2", currentKey2);
+    settings.setValue("reverbEnabled", reverbParams.enabled);
 
     settings.endGroup();
 }
@@ -730,6 +739,11 @@ void MainWindow::setupConnections()
                 // Обновляем прозрачность скроллбара
                 updateScrollBarTransparency();
             }
+        });
+
+    connect(waveformView, &WaveformView::gridStartChanged, this,
+        [this](qint64) {
+            updateTimeLabel(mediaPlayer ? mediaPlayer->position() : currentPosition);
         });
 
     // Подключаем сигнал изменения позиции от WaveformView
@@ -843,12 +857,14 @@ void MainWindow::setupConnections()
                 this, &MainWindow::snapAllMarkersToGrid);
     }
     if (ui->gridBackButton) {
-        ui->gridBackButton->setToolTip(tr("Сдвинуть тактовую сетку на один удар назад"));
+        ui->gridBackButton->setToolTip(tr("Сдвинуть тактовую сетку на один удар назад (Shift — вместе с метками)\n"
+                                          "Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки"));
         connect(ui->gridBackButton, &QPushButton::clicked,
                 this, &MainWindow::shiftBeatGridBackward);
     }
     if (ui->gridForwardButton) {
-        ui->gridForwardButton->setToolTip(tr("Сдвинуть тактовую сетку на один удар вперёд"));
+        ui->gridForwardButton->setToolTip(tr("Сдвинуть тактовую сетку на один удар вперёд (Shift — вместе с метками)\n"
+                                             "Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки"));
         connect(ui->gridForwardButton, &QPushButton::clicked,
                 this, &MainWindow::shiftBeatGridForward);
     }
@@ -900,6 +916,7 @@ void MainWindow::setupConnections()
     // Подключаем сигналы стека отмены
     connect(undoStack, &QUndoStack::canUndoChanged, undoAct, &QAction::setEnabled);
     connect(undoStack, &QUndoStack::canRedoChanged, redoAct, &QAction::setEnabled);
+    connect(undoStack, &QUndoStack::indexChanged, this, &MainWindow::onUndoStackChanged);
 
     // Подключаем контекстные меню для полей ввода тональности
     ui->keyInput->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -1211,23 +1228,18 @@ void MainWindow::createActions()
     });
     spectrogramSettingsDialog = nullptr;
 
-    // Reverb settings action
-    reverbSettingsAct = new QAction(tr("Настройки реверберации..."), this);
-    reverbSettingsAct->setStatusTip(tr("Настроить реверберацию, применяемую после растяжения (Ctrl+T)"));
-    connect(reverbSettingsAct, &QAction::triggered, this, [this]() {
-        if (!reverbSettingsDialog) {
-            reverbSettingsDialog = new ReverbSettingsDialog(this);
-            connect(reverbSettingsDialog, &ReverbSettingsDialog::paramsChanged,
-                    this, [this](const ReverbEngine::ReverbParams& p) {
-                reverbParams = p;
-            });
-        }
-        reverbSettingsDialog->setParams(reverbParams);
-        reverbSettingsDialog->show();
-        reverbSettingsDialog->raise();
-        reverbSettingsDialog->activateWindow();
+    // Реверберация после растяжения (фиксированные параметры, вкл/выкл в меню)
+    reverbAct = new QAction(tr("Реверберация"), this);
+    reverbAct->setCheckable(true);
+    reverbAct->setChecked(reverbParams.enabled);
+    reverbAct->setStatusTip(tr("Добавить реверберацию при применении растяжения (Ctrl+T)"));
+    connect(reverbAct, &QAction::toggled, this, [this](bool enabled) {
+        reverbParams.enabled = enabled;
+        settings.setValue("reverbEnabled", enabled);
+        statusBar()->showMessage(
+            enabled ? tr("Реверберация включена") : tr("Реверберация выключена"),
+            2000);
     });
-    reverbSettingsDialog = nullptr;
 
     // Pitch shift settings action
     pitchShiftSettingsAct = new QAction(tr("Настройки питч-шифтера..."), this);
@@ -1300,7 +1312,7 @@ void MainWindow::createMenus()
     settingsMenu->addAction(keyboardShortcutsAct);
     settingsMenu->addSeparator();
     settingsMenu->addAction(spectrogramSettingsAct);
-    settingsMenu->addAction(reverbSettingsAct);
+    settingsMenu->addAction(reverbAct);
     settingsMenu->addAction(pitchShiftSettingsAct);
 
     // Language submenu in Settings menu
@@ -1533,6 +1545,10 @@ void MainWindow::resetAudioState()
     // Удаляем старые метки при загрузке нового трека
     if (waveformView) {
         waveformView->clearMarkers();
+    }
+
+    if (undoStack) {
+        undoStack->clear();
     }
 }
 
@@ -2169,8 +2185,9 @@ void MainWindow::shiftBeatGridByBeats(int beatDelta)
     }
 
     const qint64 beatSamples = qMax<qint64>(1, qRound((60.0f * sampleRate) / bpm));
-    const qint64 oldGridStart = waveformView->getGridStartSample();
+    const bool moveMarkers = QApplication::keyboardModifiers() & Qt::ShiftModifier;
     const qint64 maxGridStart = qMax<qint64>(0, data[0].size() - 1);
+    const qint64 oldGridStart = waveformView->getGridStartSample();
     const qint64 newGridStart = qBound<qint64>(
         0,
         oldGridStart + beatDelta * beatSamples,
@@ -2181,13 +2198,13 @@ void MainWindow::shiftBeatGridByBeats(int beatDelta)
         return;
     }
 
-    waveformView->setGridStartSample(newGridStart);
+    waveformView->shiftGridBySamples(newGridStart - oldGridStart, moveMarkers);
     updateTimeLabel(currentPosition);
-    waveformView->update();
 
     const QString direction = beatDelta < 0 ? tr("назад") : tr("вперёд");
+    const QString markersNote = moveMarkers ? tr(" (метки сдвинуты)") : QString();
     statusBar()->showMessage(
-        tr("Тактовая сетка сдвинута на один удар %1").arg(direction),
+        tr("Тактовая сетка сдвинута на один удар %1%2").arg(direction, markersNote),
         3000);
 }
 
@@ -2661,33 +2678,90 @@ void MainWindow::applyTimeStretch()
     // redo() уже обновит originalAudioData через updateOriginalData()
     undoStack->push(command);
 
-    hasUnsavedChanges = true;
-
     // Явно обновляем визуализацию после применения эффекта
     if (waveformView) {
         waveformView->update();
     }
 
-    // Переключаем QMediaPlayer на обработанное аудио:
-    // сохраняем newData во временный WAV-файл и загружаем его.
-    QString tempWavPath = saveProcessedAudioToTempWav(newData, sampleRate);
-    if (!tempWavPath.isEmpty() && mediaPlayer) {
-        mediaPlayer->setSource(QUrl::fromLocalFile(tempWavPath));
-        mediaPlayer->setPosition(0);
+    statusBar()->showMessage(tr("Растяжение применено успешно. Размер: %1 → %2 сэмплов")
+                             .arg(oldData.isEmpty() ? 0 : oldData[0].size())
+                             .arg(newData.isEmpty() ? 0 : newData[0].size()), 5000);
+}
 
-        // Если было воспроизведение, останавливаем и сбрасываем позицию
-        if (isPlaying) {
-            mediaPlayer->stop();
-            isPlaying = false;
-            if (playbackTimer) {
-                playbackTimer->stop();
+void MainWindow::onUndoStackChanged()
+{
+    if (!undoStack) {
+        return;
+    }
+
+    if (undoStack->index() > 0) {
+        syncPlaybackWithWaveform();
+        hasUnsavedChanges = true;
+    } else {
+        hasUnsavedChanges = false;
+        if (!currentFileName.isEmpty() && mediaPlayer) {
+            mediaPlayer->setSource(QUrl::fromLocalFile(currentFileName));
+            mediaPlayer->setPosition(0);
+            currentPosition = 0;
+            if (waveformView) {
+                waveformView->setPlaybackPosition(0);
+            }
+            updateTimeLabel(0);
+            if (isPlaying) {
+                mediaPlayer->stop();
+                isPlaying = false;
+                if (playbackTimer) {
+                    playbackTimer->stop();
+                }
+                if (ui->playButton) {
+                    ui->playButton->setIcon(QIcon(":/icons/resources/icons/play.svg"));
+                }
             }
         }
     }
 
-    statusBar()->showMessage(tr("Растяжение применено успешно. Размер: %1 → %2 сэмплов")
-                             .arg(oldData.isEmpty() ? 0 : oldData[0].size())
-                             .arg(newData.isEmpty() ? 0 : newData[0].size()), 5000);
+    if (waveformView) {
+        waveformView->update();
+    }
+    if (isPitchGridVisible && pitchGridWidget && waveformView) {
+        pitchGridWidget->setAudioData(waveformView->getAudioData());
+        pitchGridWidget->update();
+    }
+}
+
+void MainWindow::syncPlaybackWithWaveform()
+{
+    if (!waveformView || !mediaPlayer) {
+        return;
+    }
+
+    const QVector<QVector<float>>& data = waveformView->getAudioData();
+    if (data.isEmpty() || data[0].isEmpty()) {
+        return;
+    }
+
+    const int sampleRate = waveformView->getSampleRate();
+    const QString tempWavPath = saveProcessedAudioToTempWav(data, sampleRate);
+    if (tempWavPath.isEmpty()) {
+        return;
+    }
+
+    mediaPlayer->setSource(QUrl::fromLocalFile(tempWavPath));
+    mediaPlayer->setPosition(0);
+    currentPosition = 0;
+    waveformView->setPlaybackPosition(0);
+    updateTimeLabel(0);
+
+    if (isPlaying) {
+        mediaPlayer->stop();
+        isPlaying = false;
+        if (playbackTimer) {
+            playbackTimer->stop();
+        }
+        if (ui->playButton) {
+            ui->playButton->setIcon(QIcon(":/icons/resources/icons/play.svg"));
+        }
+    }
 }
 
 void MainWindow::updatePlaybackAfterMarkerDrag()

@@ -73,6 +73,18 @@ exists($$QM_DSP_ROOT) {
     message("Warning: qm-dsp not found at $$QM_DSP_ROOT, using simplified BPM analyzer")
 }
 
+# Rubber Band Library v4 (GPL-2.0-or-later), single-file build
+RUBBERBAND_ROOT = $$PWD/thirdparty/rubberband
+exists($$RUBBERBAND_ROOT/single/RubberBandSingle.cpp) {
+    INCLUDEPATH += $$RUBBERBAND_ROOT
+    SOURCES += $$RUBBERBAND_ROOT/single/RubberBandSingle.cpp
+    DEFINES += RUBBERBAND_STATIC
+    win32-msvc*: DEFINES += _USE_MATH_DEFINES NOMINMAX
+    message("Rubber Band enabled: $$RUBBERBAND_ROOT")
+} else {
+    error("Rubber Band not found. Run: git clone --depth 1 --branch v4.0.0 https://github.com/breakfastquay/rubberband.git thirdparty/rubberband")
+}
+
 # MSVC + qm-dsp: см. CMakeLists.txt — _ITERATOR_DEBUG_LEVEL=0 для всего exe (в т.ч. Qt Creator).
 win32-msvc*:exists($$QM_DSP_ROOT): DEFINES += _ITERATOR_DEBUG_LEVEL=0
 
@@ -93,13 +105,13 @@ SOURCES += \
         src/beatfixcommand.cpp \
         src/timestretchcommand.cpp \
         src/timestretchprocessor.cpp \
+        src/rubberband_offline.cpp \
         src/timeutils.cpp \
         src/wavwriter.cpp \
         src/audiofileservice.cpp \
         src/keyselectionmenu.cpp \
         src/beatvisualizer.cpp \
         src/spectrogramsettingsdialog.cpp \
-        src/reverbsettingsdialog.cpp \
         src/pitchshiftsettingsdialog.cpp \
         src/shortcutsdialog.cpp \
         thirdparty/lmms/plugins/ReverbSC/base.c \
@@ -122,6 +134,7 @@ HEADERS += \
         include/beatfixcommand.h \
         include/timestretchcommand.h \
         include/timestretchprocessor.h \
+        include/rubberband_offline.h \
         include/timeutils.h \
         include/wavwriter.h \
         include/audiofileservice.h \
@@ -129,7 +142,6 @@ HEADERS += \
         include/keyselectionmenu.h \
         include/beatvisualizer.h \
         include/spectrogramsettingsdialog.h \
-        include/reverbsettingsdialog.h \
         include/pitchshiftsettingsdialog.h \
         include/shortcutsdialog.h \
         include/fft_engine.h \

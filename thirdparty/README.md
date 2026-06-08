@@ -11,7 +11,8 @@
 | **Aubio** | GPLv3 | Onset detection, pitch, ритмический анализ |
 | **Audacity** | GPLv2/v3 | Референс обработки и визуализации аудио |
 | **Essentia** | AGPL v3 | Комплексный аудиоанализ, тональность |
-| **SoundTouch** | LGPL | Изменение темпа и тона |
+| **Rubber Band** | GPL-2.0-or-later | Тонкомпенсация (time stretch) — **собирается** (`single/RubberBandSingle.cpp`) |
+| **SoundTouch** | LGPL | Изменение темпа и тона (не используется в сборке) |
 | **Sonic Visualiser** | GPLv2 | Визуализация, Vamp-плагины |
 | **LMMS** | GPLv2 | FFT-алгоритмы, DSP-эффекты, анализ спектра |
 
@@ -93,6 +94,19 @@
 
 ---
 
+## Rubber Band Library
+- **Описание**: Высококачественный time stretch / pitch shift (Particular Programs Ltd.)
+- **GitHub**: https://github.com/breakfastquay/rubberband
+- **Лицензия**: GPL-2.0-or-later (совместима с GPLv3 DONTFLOAT)
+- **Назначение в DONTFLOAT**: тонкомпенсация при растяжении по меткам (`Ctrl+T`, предпросмотр)
+- **Сборка в проекте**: single-file `thirdparty/rubberband/single/RubberBandSingle.cpp` (встроенный FFT/resampler)
+- **Получение исходников**:
+  ```bash
+  git clone --depth 1 --branch v4.0.0 https://github.com/breakfastquay/rubberband.git thirdparty/rubberband
+  ```
+
+---
+
 ## SoundTouch
 - **Описание**: Библиотека для обработки аудиосигналов в реальном времени
 - **GitLab**: https://gitlab.com/soundtouch/soundtouch
@@ -109,7 +123,7 @@
   cmake .
   cmake --build .
   ```
-- **Примечание**: В DONTFLOAT time stretch реализован собственным WSOLA (`TimeStretchProcessor`); SoundTouch — запасной вариант
+- **Примечание**: В DONTFLOAT для тонкомпенсации используется **Rubber Band** (GPL); SoundTouch не подключён
 
 ---
 
@@ -207,7 +221,7 @@ fft_helpers.cpp → include/fft_engine.h:
 |---|---|---|
 | BPM-анализ | qm-dsp (`thirdparty/qm-dsp`) | `src/bpmanalyzer.cpp` |
 | Анализ тональности | qm-dsp (`thirdparty/qm-dsp`) | `src/keyanalyzer.cpp` |
-| Time stretch (WSOLA) | Собственная реализация | `src/timestretchprocessor.cpp` |
+| Time stretch (тонкомпенсация) | Rubber Band Library v4 (GPL, R3 offline) | `src/rubberband_offline.cpp`, `thirdparty/rubberband/single/RubberBandSingle.cpp` |
 | FFT оконные функции | LMMS fft_helpers | `include/fft_engine.h` |
 | Спектрограмма (Cooley-Tukey FFT) | Адаптация из LMMS | `include/fft_engine.h`, `src/waveformview.cpp` |
 

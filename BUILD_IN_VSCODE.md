@@ -200,11 +200,11 @@ cmake --build build
 
 **Через командную строку:**
 ```powershell
-# CMake Debug
-.\build\Debug\DONTFLOAT.exe
+# CMake Debug (VS multi-config: исполняемый файл в подкаталоге конфигурации)
+.\build\Debug\Debug\DONTFLOAT.exe
 
 # CMake Release
-.\build\Release\DONTFLOAT.exe
+.\build\Release\Release\DONTFLOAT.exe
 ```
 
 #### Linux
@@ -345,20 +345,27 @@ ctest --test-dir build --output-on-failure
 
 ### Windows (CMake с Visual Studio 2022)
 
-После настройки CMake будет создана структура:
+В `.vscode/settings.json` задано `cmake.buildDirectory: build/${buildType}` — отдельные каталоги для Debug и Release.
+
+После настройки CMake (мульти-конфигурация VS) исполняемые файлы лежат в подкаталоге конфигурации:
 ```
 build/
 ├── Debug/
-│   ├── DONTFLOAT.exe          # Основное приложение (Debug)
-│   ├── bpm_analyzer_test.exe  # Unit тесты
-│   └── qm_dsp.lib             # Библиотека qm-dsp от Mixxx
+│   ├── Debug/
+│   │   ├── DONTFLOAT.exe          # Основное приложение (Debug)
+│   │   ├── marker_testgen.exe     # Утилита разметки тестовых файлов
+│   │   ├── bpm_analyzer_test.exe  # Unit-тесты
+│   │   └── ...
+│   └── DONTFLOAT.sln
 ├── Release/
-│   ├── DONTFLOAT.exe          # Основное приложение (Release)
-│   └── qm_dsp.lib
-├── DONTFLOAT.sln              # Solution файл Visual Studio
-├── DONTFLOAT.vcxproj          # Проект Visual Studio
-└── [другие файлы сборки CMake]
+│   ├── Release/
+│   │   ├── DONTFLOAT.exe
+│   │   └── marker_testgen.exe
+│   └── ...
+└── [файлы CMake]
 ```
+
+Запуск Debug: `.\build\Debug\Debug\DONTFLOAT.exe` (или F5 в VS Code).
 
 ### Windows (qmake с MSVC)
 
@@ -445,6 +452,22 @@ $env:QT_PLUGIN_PATH = "C:\Qt\6.9.3\msvc2022_64\plugins"
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.9.3/msvc2022_64
 ```
+
+#### ❌ MSB8052: MSVC "14.50.*" несовместим с toolset v143
+
+**Симптом** (часто при сборке Debug через CMake Tools):
+```
+error MSB8052: версия набора инструментов MSVC "14.50.35717" не совместима с набором инструментов платформы "v143"
+```
+
+**Причина:** Установлены VS 2022 и VS 2025; в окружении попадает `VCToolsVersion=14.50`, а Qt `msvc2022_64` требует **v143** (MSVC 14.3x).
+
+**Решение:**
+1. В проекте уже настроено: `CMakeLists.txt` фиксирует v143 toolset, в `.vscode/settings.json` — `"cmake.toolset": "v143"` и `VCToolsVersion` в `cmake.environment`
+2. **CMake: Delete Cache and Reconfigure** для каталога `build/Debug`
+3. Не переключайтесь на v145 — Qt собран под msvc2022_64
+
+Подробнее: [MARKDOWN/TROUBLESHOOTING.md](MARKDOWN/TROUBLESHOOTING.md)
 
 ### CMake не находит Qt
 
@@ -665,6 +688,6 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/
 
 ---
 
-**Версия**: 0.3
+**Версия**: 0.4
 **Дата создания**: 2025-01-27
-**Обновлено**: 2025-01-07 - Упрощены инструкции для Windows, добавлены быстрые команды
+**Обновлено**: 2026-05-31 — MSB8052/v143, структура `build/${buildType}`, `marker_testgen`

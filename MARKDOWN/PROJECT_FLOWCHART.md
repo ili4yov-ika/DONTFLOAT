@@ -307,7 +307,7 @@ flowchart LR
 | **WaveformView** | Волна, метки A/B, метки растяжения, биты, зум, вызов TimeStretchProcessor и визуализации |
 | **PitchGridWidget** | Питч-сетка (Ctrl+G), синхронизация с WaveformView |
 | **MarkerEngine** | MarkerData / Marker — данные и UI меток для растяжения |
-| **TimeStretchProcessor** | Алгоритмы сжатия/растяжения по меткам (в т.ч. WSOLA) |
+| **TimeStretchProcessor** | Алгоритмы сжатия/растяжения по меткам (Rubber Band R3 через `RubberBandOffline`) |
 | **BPMAnalyzer** | BPM, биты, отклонения, fixBeats; опционально qm-dsp |
 | **QUndoStack** | AudioCommand, BeatFixCommand, TimeStretchCommand — отмена/повтор |
 | **LoadFileDialog** | Диалог при открытии файла: анализ и выравнивание долей, создание BeatFixCommand |

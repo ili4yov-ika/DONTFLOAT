@@ -24,7 +24,32 @@ set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES
 
 **Статус**: ✅ Исправлено в CMakeLists.txt
 
-### 2. Ошибка: 'class WaveformAnalyzer' has no member named 'loadAudioFile'
+### 2. Ошибка MSB8052: MSVC toolset несовместим с v143
+
+**Проблема**: При сборке Debug в VS Code / CMake Tools:
+```
+error MSB8052: версия набора инструментов MSVC "14.50.*" не совместима с набором инструментов платформы "v143"
+```
+
+**Причина**: Установлены Visual Studio 2022 и VS 2025; в окружении может выставляться `VCToolsVersion=14.50`, тогда как Qt `msvc2022_64` требует toolset **v143** (MSVC 14.3x).
+
+**Решение** (исправлено в проекте):
+1. `CMakeLists.txt` фиксирует `VCToolsVersion` из `Microsoft.VCToolsVersion.v143.default.txt` (обычно `14.44.35207`)
+2. В `.vscode/settings.json`: `"cmake.toolset": "v143"` и `"VCToolsVersion": "14.44.35207"` в `cmake.environment`
+3. Переконфигурировать кэш: **CMake: Delete Cache and Reconfigure** для `build/Debug`
+
+**Вручную** (если ошибка сохраняется):
+```powershell
+Remove-Item Env:VCToolsVersion -ErrorAction SilentlyContinue
+cmake -S . -B build/Debug -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.9.3/msvc2022_64
+cmake --build build/Debug --config Debug
+```
+
+Не переключайтесь на **v145** — Qt собран под `msvc2022_64`.
+
+**Статус**: ✅ Исправлено в CMakeLists.txt и `.vscode/settings.json`
+
+### 3. Ошибка: 'class WaveformAnalyzer' has no member named 'loadAudioFile'
 
 **Проблема**: Функция `loadAudioFile` не существовала в классе `WaveformAnalyzer`.
 
@@ -40,7 +65,7 @@ bool loadAudioFile(const QString& filePath, QVector<float>& samples, int& sample
 }
 ```
 
-### 3. Предупреждение: unused parameter 'error' [-Wunused-parameter]
+### 4. Предупреждение: unused parameter 'error' [-Wunused-parameter]
 
 **Проблема**: Неиспользуемый параметр в lambda функции.
 
@@ -53,7 +78,7 @@ bool loadAudioFile(const QString& filePath, QVector<float>& samples, int& sample
 });
 ```
 
-### 4. Ошибка: 'connect' was not declared in this scope
+### 5. Ошибка: 'connect' was not declared in this scope
 
 **Проблема**: Отсутствовал заголовок `<QObject>` для макроса `connect`.
 
@@ -104,10 +129,19 @@ setWindowFlags(Qt::Window);  // Стандартные флаги окна
 
 **Причина**: В `TimeStretchProcessor::processWithPitchPreservation()` использовался ресемплинг окон, который не сохранял pitch.
 
-**Решение** (исправлено 2026-01-25):
-- Реализован WSOLA (Waveform Similarity Overlap-Add) с корреляционным выравниванием окон
-- Добавлена нормализация overlap-add для стабильной амплитуды
-- Высота тона сохраняется при растяжении/сжатии
+**Решение** (обновлено 2026-05-31):
+- Тонкомпенсация через **Rubber Band Library v4** (движок R3, `RubberBandOffline::stretchMono()`)
+- Вызывается из `TimeStretchProcessor::processWithPitchPreservation()`
+- Высота тона сохраняется при растяжении/сжатии сегментов
+
+**Проверка автоматически** (локально):
+
+```powershell
+cmake --build build/Debug --config Debug --target pitch_compensation_file_test
+.\build\Debug\Debug\pitch_compensation_file_test.exe -v2
+```
+
+Файл: `tests/source4test/pitch-test_C140BPM.mp3`. Подробнее: [tests/README.md](../tests/README.md).
 
 ## Проблемы цветового оформления
 

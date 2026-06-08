@@ -9,8 +9,8 @@
 /**
  * @brief Процессор для изменения времени аудио с сохранением высоты тона
  *
- * Реализует алгоритм time stretching с pitch correction на основе
- * улучшенного ресемплинга с интерполяцией для сохранения высоты тона.
+ * Реализует time stretching с тонкомпенсацией через Rubber Band Library (GPL v2+),
+ * офлайн-движок R3 (OptionEngineFiner).
  * Также предоставляет высокоуровневые методы для работы с метками.
  */
 class TimeStretchProcessor
@@ -53,7 +53,7 @@ public:
      * @param preservePitch Сохранять ли высоту тона (по умолчанию true)
      * @return Обработанный аудиосегмент
      */
-    static QVector<float> processSegment(const QVector<float>& input, float stretchFactor, bool preservePitch = true);
+    static QVector<float> processSegment(const QVector<float>& input, float stretchFactor, bool preservePitch = true, int sampleRate = 44100);
 
     /**
      * @brief Применяет сжатие-растяжение к многоканальному аудио
@@ -62,7 +62,7 @@ public:
      * @param preservePitch Сохранять ли высоту тона (по умолчанию true)
      * @return Обработанные аудиоканалы
      */
-    static QVector<QVector<float>> processChannels(const QVector<QVector<float>>& input, float stretchFactor, bool preservePitch = true);
+    static QVector<QVector<float>> processChannels(const QVector<QVector<float>>& input, float stretchFactor, bool preservePitch = true, int sampleRate = 44100);
 
     // ========================================================================
     // ВЫСОКОУРОВНЕВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С МЕТКАМИ (новые)
@@ -132,9 +132,9 @@ private:
     static QVector<float> processWithSimpleInterpolation(const QVector<float>& input, float stretchFactor);
 
     /**
-     * @brief Обработка с сохранением pitch через изменение частоты дискретизации
+     * @brief Тонкомпенсация через Rubber Band (офлайн stretch)
      */
-    static QVector<float> processWithPitchPreservation(const QVector<float>& input, float stretchFactor);
+    static QVector<float> processWithPitchPreservation(const QVector<float>& input, float stretchFactor, int sampleRate = 44100);
 
     /**
      * @brief Линейная интерполяция между двумя сэмплами
@@ -146,23 +146,6 @@ private:
      */
     static float cubicInterpolate(float y0, float y1, float y2, float y3, float t);
 
-    /**
-     * @brief Ресемплинг аудио с изменением частоты дискретизации
-     * @param input Входной сигнал
-     * @param inputSampleRate Исходная частота дискретизации
-     * @param outputSampleRate Целевая частота дискретизации
-     * @return Ресемплированный сигнал
-     */
-    static QVector<float> resample(const QVector<float>& input, float inputSampleRate, float outputSampleRate);
-
-    /**
-     * @brief Сдвиг тона на коэффициент без изменения длительности
-     * Ускорен на 60% → тон опущен на 60%; замедлен на 40% → тон повышен на 40%
-     * @param input Входной сигнал
-     * @param pitchFactor Коэффициент сдвига тона (= stretchFactor сегмента)
-     * @return Сигнал той же длины с изменённым тоном
-     */
-    static QVector<float> applyPitchShiftByFactor(const QVector<float>& input, float pitchFactor);
 };
 
 #endif // TIMESTRETCHPROCESSOR_H

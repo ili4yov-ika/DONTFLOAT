@@ -44,10 +44,12 @@
     "cmake.configureSettings": {
         "CMAKE_PREFIX_PATH": "C:/Qt/6.9.3/msvc2022_64"
     },
+    "cmake.toolset": "v143",
     "cmake.additionalKits": [],
     "cmake.environment": {
         "PATH": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins/platforms;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}",
-        "QT_PLUGIN_PATH": "C:/Qt/6.9.3/msvc2022_64/plugins"
+        "QT_PLUGIN_PATH": "C:/Qt/6.9.3/msvc2022_64/plugins",
+        "VCToolsVersion": "14.44.35207"
     },
     "cmake.debugConfig": {
         "environment": [

@@ -1,8 +1,20 @@
-# Инструменты сборки пакетов установки
+# Инструменты проекта DONTFLOAT
 
-Эта папка содержит скрипты и конфигурации для создания установочных пакетов DONTFLOAT.
+Скрипты сборки пакетов, WSL-окружение и утилиты разработки.
 
-## Структура
+## Утилита разметки тестов (`marker_testgen`)
+
+CMake-цель для подготовки эталонных меток в `tests/source4test/`:
+
+```bash
+cmake --build build --config Release --target marker_testgen
+./build/Release/Release/marker_testgen.exe   # VS multi-config
+# или build/Release/marker_testgen.exe — в зависимости от генератора
+```
+
+Подробный workflow: [tests/source4test/README.md](../tests/source4test/README.md)
+
+## Структура (установщики)
 
 - `build_windows_installer.bat` — сборка Windows installer (NSIS)
 - `build_deb.sh` — сборка Debian/Ubuntu пакета (.deb)
