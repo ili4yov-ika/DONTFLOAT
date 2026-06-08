@@ -41,6 +41,12 @@ if(NOT TARGET rubberband_single)
         )
     endif()
 
+    # На macOS Rubber Band по умолчанию использует vDSP из Accelerate (FFT/R3).
+    if(APPLE)
+        find_library(DONTFLOAT_ACCELERATE_FRAMEWORK Accelerate REQUIRED)
+        target_link_libraries(rubberband_single PUBLIC ${DONTFLOAT_ACCELERATE_FRAMEWORK})
+    endif()
+
     message(STATUS "Rubber Band Library enabled: ${DONTFLOAT_RUBBERBAND_ROOT}")
 endif()
 
