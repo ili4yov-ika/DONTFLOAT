@@ -50,10 +50,18 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/ui)
 # и/или -DCMAKE_PREFIX_PATH (Homebrew qt@6, ~/Qt/6.x/macos|gcc_64).
 set(QT_MIN_VERSION "6.8.0")
 if(WIN32)
-    if(EXISTS "C:/Qt/6.9.3/msvc2022_64")
-        list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.9.3/msvc2022_64")
-    elseif(EXISTS "C:/Qt/6.8.3/msvc2022_64")
-        list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.8.3/msvc2022_64")
+    if(MSVC)
+        if(NOT "C:/Qt/6.9.3/msvc2022_64" IN_LIST CMAKE_PREFIX_PATH AND EXISTS "C:/Qt/6.9.3/msvc2022_64")
+            list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.9.3/msvc2022_64")
+        elseif(NOT "C:/Qt/6.8.3/msvc2022_64" IN_LIST CMAKE_PREFIX_PATH AND EXISTS "C:/Qt/6.8.3/msvc2022_64")
+            list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.8.3/msvc2022_64")
+        endif()
+    elseif(MINGW)
+        if(NOT "C:/Qt/6.9.3/mingw_64" IN_LIST CMAKE_PREFIX_PATH AND EXISTS "C:/Qt/6.9.3/mingw_64")
+            list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.9.3/mingw_64")
+        elseif(NOT "C:/Qt/6.8.3/mingw_64" IN_LIST CMAKE_PREFIX_PATH AND EXISTS "C:/Qt/6.8.3/mingw_64")
+            list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.8.3/mingw_64")
+        endif()
     endif()
 else()
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/PlatformQt.cmake)
@@ -72,19 +80,15 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Test
 )
 
-# Каталог Qt для CTest на Windows (PATH к DLL); на Linux не используется.
+# Каталог Qt для CTest на Windows (PATH к DLL); берём из найденного Qt6_DIR (MSVC или MinGW).
 if(WIN32)
-    if(EXISTS "C:/Qt/6.9.3/msvc2022_64")
-        set(QT_ROOT_DIR "C:/Qt/6.9.3/msvc2022_64")
-    elseif(EXISTS "C:/Qt/6.8.3/msvc2022_64")
-        set(QT_ROOT_DIR "C:/Qt/6.8.3/msvc2022_64")
-    else()
-        get_filename_component(_qt6_cmake_parent "${Qt6_DIR}" DIRECTORY)
-        get_filename_component(_qt6_lib "${_qt6_cmake_parent}" DIRECTORY)
-        get_filename_component(QT_ROOT_DIR "${_qt6_lib}" DIRECTORY)
-    endif()
+    get_filename_component(_qt6_cmake_parent "${Qt6_DIR}" DIRECTORY)
+    get_filename_component(_qt6_lib "${_qt6_cmake_parent}" DIRECTORY)
+    get_filename_component(QT_ROOT_DIR "${_qt6_lib}" DIRECTORY)
     set(QT_ROOT_DIR "${QT_ROOT_DIR}" CACHE PATH "Qt6 root (Windows CTest / DLL PATH)" FORCE)
     message(STATUS "Используется Qt: ${QT_ROOT_DIR}")
+    unset(_qt6_cmake_parent)
+    unset(_qt6_lib)
 endif()
 
 # Add source files
@@ -336,12 +340,15 @@ else()
     )
 endif()
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/WinDeployQt.cmake)
+
 # Платформенные свойства исполняемого файла
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         WIN32_EXECUTABLE TRUE
         MACOSX_BUNDLE FALSE
     )
+    dontfloat_deploy_qt(${PROJECT_NAME})
 elseif(APPLE)
     # Обычный бинарник в build/macos/DONTFLOAT; .app — через tools/macos_build.sh deploy
     set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -552,7 +559,11 @@ endif()
 dontfloat_link_rubberband(marker_testgen)
 
 if(WIN32)
-    target_link_options(marker_testgen PRIVATE /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup)
+    set_target_properties(marker_testgen PROPERTIES WIN32_EXECUTABLE TRUE)
+    if(MSVC)
+        target_link_options(marker_testgen PRIVATE /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup)
+    endif()
+    dontfloat_deploy_qt(marker_testgen)
 endif()
 
 add_qt_test(markersfile_test
