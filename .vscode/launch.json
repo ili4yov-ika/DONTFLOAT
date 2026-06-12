@@ -2,49 +2,110 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "▶️ (CMake) Запуск DONTFLOAT - MSVC Debug",
+            "name": "▶️ (CMake) Launch — активный target",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [
+            "cwd": "${command:cmake.launchTargetDirectory}",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "🐛 (CMake) Отладка DONTFLOAT - MinGW Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug/DONTFLOAT.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug",
+            "targetArchitecture": "x64",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/Qt/Tools/mingw1310_64/bin/gdb.exe",
+            "setupCommands": [
                 {
-                    "name": "PATH",
-                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins/platforms;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}"
+                    "description": "Disable pagination",
+                    "text": "-gdb-set pagination off",
+                    "ignoreFailures": true
                 },
                 {
-                    "name": "QT_PLUGIN_PATH",
-                    "value": "C:/Qt/6.9.3/msvc2022_64/plugins"
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
                 }
             ],
+            "preLaunchTask": "CMake: Build (Windows MinGW Debug)"
+        },
+        {
+            "name": "▶️ (CMake) Запуск DONTFLOAT - MinGW Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug/DONTFLOAT.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug",
+            "targetArchitecture": "x64",
+            "environment": [],
+            "externalConsole": true,
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/Qt/Tools/mingw1310_64/bin/gdb.exe",
+            "preLaunchTask": "CMake: Build (Windows MinGW Debug)"
+        },
+        {
+            "name": "▶️ (CMake) Запуск DONTFLOAT - MSVC Debug",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/Debug/DONTFLOAT.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/Debug",
+            "environment": [],
             "console": "externalTerminal",
-            "preLaunchTask": "CMake: Build (Windows)"
+            "preLaunchTask": "CMake: Build (Windows MSVC Debug)"
         },
         {
             "name": "🐛 (CMake) Отладка DONTFLOAT - MSVC Debug",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${command:cmake.launchTargetPath}",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/Debug/DONTFLOAT.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "PATH",
-                    "value": "C:/Qt/6.9.3/msvc2022_64/bin;C:/Qt/6.9.3/msvc2022_64/plugins/platforms;C:/Qt/6.9.3/msvc2022_64/plugins;${env:PATH}"
-                },
-                {
-                    "name": "QT_PLUGIN_PATH",
-                    "value": "C:/Qt/6.9.3/msvc2022_64/plugins"
-                },
-                {
-                    "name": "QT_DEBUG_PLUGINS",
-                    "value": "1"
-                }
-            ],
-            "console": "integratedTerminal"
+            "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/Debug",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build (Windows MSVC Debug)"
+        },
+        {
+            "name": "▶️ (CMake) Запуск DONTFLOAT - MSVC Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release/Release/DONTFLOAT.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release/Release",
+            "environment": [],
+            "console": "externalTerminal",
+            "preLaunchTask": "CMake: Build Release (Windows)"
+        },
+        {
+            "name": "🐛 (CMake) Отладка DONTFLOAT - MSVC Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release/Release/DONTFLOAT.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release/Release",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Release (Windows)"
         },
         {
             "name": "▶️ (qmake) Запуск DONTFLOAT - MinGW Debug",

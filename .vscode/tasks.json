@@ -2,20 +2,10 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "CMake: Configure (Windows)",
+            "label": "CMake: Configure (Windows MSVC2022 Debug)",
             "type": "shell",
             "command": "cmake",
-            "args": [
-                "-S",
-                ".",
-                "-B",
-                "build",
-                "-G",
-                "Visual Studio 17 2022",
-                "-A",
-                "x64",
-                "-DCMAKE_PREFIX_PATH=C:/Qt/6.9.3/msvc2022_64"
-            ],
+            "args": ["--preset", "windows-msvc-debug"],
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -26,54 +16,84 @@
                 "clear": false
             },
             "problemMatcher": [],
-            "detail": "Настройка CMake проекта для Visual Studio 2022",
+            "detail": "CMake configure → build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
             "options": {
                 "cwd": "${workspaceFolder}"
             }
         },
         {
-            "label": "CMake: Build (Windows)",
+            "label": "CMake: Build (Windows MSVC Debug)",
             "type": "shell",
             "command": "cmake",
-            "args": [
-                "--build",
-                "build",
-                "--config",
-                "Debug",
-                "-j"
+            "args": ["--build", "--preset", "windows-msvc-debug", "--parallel"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "problemMatcher": [
+                "$msCompile"
             ],
+            "detail": "CMake build MSVC2022 Debug (Desktop_Qt_6_9_3_MSVC2022_64bit-Debug)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Configure (Windows MSVC2022 Debug)"
+        },
+        {
+            "label": "CMake: Configure (Windows MinGW Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "windows-mingw-debug"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "CMake configure → build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.9.3/mingw_64/bin;${env:PATH}"
+                }
+            }
+        },
+        {
+            "label": "CMake: Build (Windows MinGW Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "--preset", "windows-mingw-debug", "--parallel"],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "presentation": {
-                "echo": true,
                 "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
+                "panel": "shared"
             },
-            "problemMatcher": [
-                "$msCompile"
-            ],
-            "detail": "Сборка проекта через CMake (Debug)",
+            "problemMatcher": ["$gcc"],
+            "detail": "CMake build MinGW Debug (Desktop_Qt_6_9_3_MinGW_64_bit-Debug)",
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.9.3/mingw_64/bin;${env:PATH}"
+                }
             },
-            "dependsOn": []
+            "dependsOn": "CMake: Configure (Windows MinGW Debug)"
         },
         {
             "label": "CMake: Build Release (Windows)",
             "type": "shell",
             "command": "cmake",
-            "args": [
-                "--build",
-                "build",
-                "--config",
-                "Release",
-                "-j"
-            ],
+            "args": ["--build", "--preset", "windows-msvc-release", "--parallel"],
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -86,32 +106,47 @@
             "problemMatcher": [
                 "$msCompile"
             ],
-            "detail": "Сборка проекта через CMake (Release)",
+            "detail": "CMake build MSVC2022 Release",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "CMake: Configure (Windows MSVC2022 Release)"
+        },
+        {
+            "label": "CMake: Configure (Windows MSVC2022 Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--preset", "windows-msvc-release"],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "detail": "CMake configure → build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release",
             "options": {
                 "cwd": "${workspaceFolder}"
             }
         },
         {
-            "label": "CMake: Clean (Windows)",
+            "label": "CMake: Clean (Windows MSVC2022 Debug)",
             "type": "shell",
             "command": "cmake",
             "args": [
                 "--build",
-                "build",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+                "--config",
+                "Debug",
                 "--target",
                 "clean"
             ],
             "group": "build",
             "presentation": {
-                "echo": true,
                 "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
+                "panel": "shared"
             },
             "problemMatcher": [],
-            "detail": "Очистка сборки CMake",
+            "detail": "Очистка CMake-сборки MSVC Debug",
             "options": {
                 "cwd": "${workspaceFolder}"
             }
@@ -122,7 +157,7 @@
             "command": "cmake",
             "args": [
                 "--build",
-                "build",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
                 "--config",
                 "Debug",
                 "--target",
@@ -140,10 +175,11 @@
             "problemMatcher": [
                 "$msCompile"
             ],
-            "detail": "Сборка тестов",
+            "detail": "Сборка тестов (MSVC2022 Debug)",
             "options": {
                 "cwd": "${workspaceFolder}"
-            }
+            },
+            "dependsOn": "CMake: Configure (Windows MSVC2022 Debug)"
         },
         {
             "label": "CMake: Run Tests (Windows)",
@@ -151,7 +187,7 @@
             "command": "ctest",
             "args": [
                 "--test-dir",
-                "build",
+                "${workspaceFolder}/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
                 "-C",
                 "Debug",
                 "--output-on-failure"
@@ -166,19 +202,19 @@
                 "clear": true
             },
             "problemMatcher": [],
-            "detail": "Запуск всех тестов через CTest",
+            "detail": "CTest MSVC2022 Debug",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
             "dependsOn": "CMake: Build Tests (Windows)"
         },
         {
-            "label": "CMake: Full Rebuild (Windows)",
+            "label": "CMake: Full Rebuild (Windows MSVC2022 Debug)",
             "type": "shell",
             "command": "powershell",
             "args": [
                 "-Command",
-                "Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue; cmake -S . -B build -G 'Visual Studio 17 2022' -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.9.3/msvc2022_64; cmake --build build --config Debug -j"
+                "Remove-Item -Recurse -Force 'build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug' -ErrorAction SilentlyContinue; cmake --preset windows-msvc-debug; cmake --build --preset windows-msvc-debug --parallel"
             ],
             "group": "build",
             "presentation": {
@@ -192,7 +228,7 @@
             "problemMatcher": [
                 "$msCompile"
             ],
-            "detail": "Полная пересборка (удаление build и конфигурация заново)",
+            "detail": "Полная пересборка MSVC2022 Debug",
             "options": {
                 "cwd": "${workspaceFolder}"
             }
@@ -510,7 +546,7 @@
             ],
             "group": {
                 "kind": "build",
-                "isDefault": true
+                "isDefault": false
             },
             "presentation": {
                 "echo": true,
@@ -811,8 +847,12 @@
             ],
             "detail": "Build tests for Windows MinGW Debug",
             "options": {
-                "cwd": "${workspaceFolder}"
-            }
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.9.3/mingw_64/bin;${env:PATH}"
+                }
+            },
+            "dependsOn": "CMake: Configure (Windows MinGW Debug)"
         },
         {
             "label": "CMake: Build Tests (Windows MinGW Release)",
