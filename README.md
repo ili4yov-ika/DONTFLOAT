@@ -195,8 +195,9 @@ tools\build_windows_installer.bat
 ### Скрипты и packaging (папка tools/)
 - `tools/README.md` — скрипты packaging, macOS/Linux setup и `marker_testgen`
 - `tools/setup_macos.sh`, `tools/macos_build.sh` — окружение и сборка на macOS
-- `tests/source4test/README.md` — тестовые аудио и разметка (`pitch-test_C140BPM.mp3` — тонкомпенсация)
-- `tests/README.md` — Qt Test, в т.ч. `pitch_compensation_file_test` (Rubber Band, проверка f0)
+- `tests/source4test/README.md` — тестовые аудио (`example_V80BPM.mp3`, `pitch-test_C140BPM.mp3`) и разметка
+- `tests/README.md` — Qt Test: `ui_responsiveness_test` (метки, drag), `pitch_compensation_file_test` (f0)
+- `BUILD_IN_VSCODE.md` — сборка/запуск в VS Code/Cursor, Windows presets MSVC/MinGW
 - `build_windows_installer.bat` + `nsis_installer.nsi` — сборка Windows installer (NSIS)
 - `build_deb.sh` + `debian/` — сборка .deb пакета для Debian/Ubuntu
 - `build_rpm.sh` + `rpm/` — сборка .rpm пакета для Fedora/RHEL

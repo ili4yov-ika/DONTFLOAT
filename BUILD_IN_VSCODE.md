@@ -5,18 +5,18 @@
 Если вы работаете в Windows и только открыли проект:
 
 1. **Откройте проект** в VS Code/Cursor
-2. **Нажмите `Ctrl+Shift+B`** - проект автоматически настроится и соберется
-3. **Нажмите `F5`** - приложение запустится
+2. В статус-баре CMake Tools выберите preset **`windows-msvc-release`** (или `windows-msvc-debug` для отладки)
+3. **Configure** → **Build** (`Ctrl+Shift+B`)
+4. **Нажмите `F5`** — запуск с отладчиком (конфигурации в `.vscode/launch.json`)
 
 Готово! 🎉
 
-### ⚠️ ВАЖНО: Используйте F5, а не кнопку "Launch"
+### ⚠️ ВАЖНО: F5 vs кнопка Play (▶️) CMake Tools
 
-Если вы нажимаете кнопку **"Launch"** (▶️) на нижней панели CMake Tools, программа может не запуститься с окном.
+- **`F5`** — рекомендуется: полный `launch.json` с `PATH`, плагинами Qt и отладчиком.
+- **Play на панели CMake Tools** — запускает активный target; в `.vscode/settings.json` заданы `windows-msvc-release` и `cmake.debugConfig` без `cwd` (иначе переменные CMake Tools не раскрываются и запуск ломается).
 
-**Решение:**
-- Используйте `F5` (рекомендуется)
-- Или перезагрузите VS Code после открытия проекта (для обновления настроек CMake Tools)
+После смены preset или `settings.json` выполните **CMake: Delete Cache and Reconfigure**.
 
 Подробнее: [КАК_ЗАПУСТИТЬ.md](КАК_ЗАПУСТИТЬ.md)
 
@@ -31,25 +31,40 @@
 #### 🚀 Самый простой способ (рекомендуется)
 
 1. **Откройте проект в VS Code/Cursor**
-2. **Нажмите `Ctrl+Shift+B`** (или выберите Terminal → Run Build Task)
-   - Выберите задачу `CMake: Build (Windows)` (по умолчанию)
-   - Это автоматически настроит и соберет проект
-3. **Нажмите `F5`** для запуска
-   - Выберите `▶️ (CMake) Запуск DONTFLOAT - MSVC Debug`
-   - Приложение запустится с отладчиком
+2. Выберите **CMake preset** в статус-баре:
+   - `windows-msvc-release` — повседневный запуск (по умолчанию в `settings.json`)
+   - `windows-msvc-debug` — отладка MSVC
+   - `windows-mingw-debug` / `windows-mingw-release` — MinGW (например, для `ui_responsiveness_test`)
+3. **Configure** и **Build** (`Ctrl+Shift+B` или задача `CMake: Build (Windows)`)
+4. **`F5`** — конфигурация `▶️ (CMake) Launch — активный target` или MSVC Debug/Release из `launch.json`
 
-#### Альтернативный способ: Ручная настройка CMake
+#### CMake Presets (командная строка)
 
-Если хотите настроить CMake вручную:
+```powershell
+# MSVC Release (по умолчанию в IDE)
+cmake --preset windows-msvc-release
+cmake --build --preset windows-msvc-release
 
-1. Откройте терминал в VS Code/Cursor (`Ctrl+`` ` или View → Terminal)
-2. Выполните:
-   ```bash
-   cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.9.3/msvc2022_64
-   ```
+# MSVC Debug
+cmake --preset windows-msvc-debug
+cmake --build --preset windows-msvc-debug
 
-Или используйте задачу:
-- `Ctrl+Shift+P` → `Tasks: Run Task` → `CMake: Configure (Windows)`
+# MinGW Debug (UI-тесты, альтернативная toolchain)
+cmake --preset windows-mingw-debug
+cmake --build --preset windows-mingw-debug --target ui_responsiveness_test
+```
+
+Каталоги сборки задаются в `CMakePresets.json`, например:
+`build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release`, `build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug`.
+
+Post-build **`windeployqt`** копирует Qt DLL рядом с `DONTFLOAT.exe` и `marker_testgen.exe` (`cmake/WinDeployQt.cmake`).
+
+#### Альтернативный способ: ручная настройка CMake
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH=C:/Qt/6.9.3/msvc2022_64
+cmake --build build --config Release
+```
 
 ### Linux
 
@@ -177,34 +192,20 @@ cmake --build build
 **🎯 Самый простой способ:**
 - Нажмите `F5` - приложение автоматически соберется и запустится
 
-**Доступные конфигурации запуска:**
+**Конфигурации в `.vscode/launch.json`:**
 
-1. **▶️ (CMake) Запуск DONTFLOAT - MSVC Debug**
-   - Запуск приложения с отладкой через CMake
-   - Автоматическая сборка перед запуском
-   - Рекомендуется для повседневной разработки
+| Конфигурация | Назначение |
+|--------------|------------|
+| `▶️ (CMake) Launch — активный target` | Запуск target, выбранного в CMake Tools |
+| `▶️ (CMake) DONTFLOAT — MSVC Debug/Release` | Фиксированные пути к `DONTFLOAT.exe` |
+| `▶️ (CMake) DONTFLOAT — MinGW Debug` | MinGW-сборка |
+| `🧪 (CMake) Запуск тестов BPM` | `bpm_analyzer_test` |
 
-2. **🐛 (CMake) Отладка DONTFLOAT - MSVC Debug**
-   - Запуск в интегрированном терминале
-   - Подробный вывод отладочной информации
-
-3. **▶️ (qmake) Запуск DONTFLOAT - MinGW Debug**
-   - Если используете qmake вместо CMake
-   - Требует предварительной сборки через qmake
-
-4. **▶️ (qmake) Запуск DONTFLOAT - MSVC Debug**
-   - Для сборки через qmake с MSVC
-
-5. **🧪 (CMake) Запуск тестов BPM**
-   - Запуск unit-тестов BPM анализатора
-
-**Через командную строку:**
+**Через командную строку (после preset `windows-msvc-release`):**
 ```powershell
-# CMake Debug (VS multi-config: исполняемый файл в подкаталоге конфигурации)
-.\build\Debug\Debug\DONTFLOAT.exe
-
-# CMake Release
-.\build\Release\Release\DONTFLOAT.exe
+.\build\Desktop_Qt_6_9_3_MSVC2022_64bit-Release\Release\DONTFLOAT.exe
+# или Debug:
+.\build\Desktop_Qt_6_9_3_MSVC2022_64bit-Debug\Debug\DONTFLOAT.exe
 ```
 
 #### Linux
@@ -254,14 +255,31 @@ cmake --build build --config Debug --target donfloat_file_test
 build\Debug\donfloat_file_test.exe
 ```
 
+### UI-тест отклика (`ui_responsiveness_test`)
+
+Интеграционный тест на `tests/source4test/example_V80BPM.mp3`: загрузка, доли, метки, перетаскивание, time stretch, воспроизведение. **Не запускается в CI** без `DONTFLOAT_RUN_UI_TEST=1`.
+
+```powershell
+cmake --preset windows-mingw-debug
+cmake --build --preset windows-mingw-debug --target ui_responsiveness_test
+
+$env:DONTFLOAT_RUN_UI_TEST = "1"
+.\build\Desktop_Qt_6_9_3_MinGW_64_bit-Debug\ui_responsiveness_test.exe -v2
+
+# workflow: 2 случайные метки + 3 drag подряд
+.\build\Desktop_Qt_6_9_3_MinGW_64_bit-Debug\ui_responsiveness_test.exe testMarkerDragWorkflowThreeRandom
+```
+
+Подробнее: [tests/README.md](tests/README.md#ui_responsiveness_test).
+
 ### Запуск всех тестов через CTest
 
 **Вариант A: Через Task**
 - `Ctrl+Shift+P` → `Tasks: Run Task` → `CMake: Run All Tests`
 
 **Вариант B: Через командную строку**
-```bash
-ctest --test-dir build --output-on-failure
+```powershell
+ctest --test-dir build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug -C Debug --output-on-failure
 ```
 
 ## Доступные задачи (Tasks)
@@ -344,29 +362,31 @@ ctest --test-dir build --output-on-failure
 
 ## Структура сборки
 
-### Windows (CMake с Visual Studio 2022)
+### Windows (CMake Presets + Visual Studio / MinGW)
 
-В `.vscode/settings.json` задано `cmake.buildDirectory: build/${buildType}` — отдельные каталоги для Debug и Release.
+В `.vscode/settings.json` по умолчанию:
+- `cmake.configurePreset`: `windows-msvc-release`
+- `cmake.buildDirectory`: `build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release`
 
-После настройки CMake (мульти-конфигурация VS) исполняемые файлы лежат в подкаталоге конфигурации:
+Типичная структура после preset:
 ```
 build/
-├── Debug/
-│   ├── Debug/
-│   │   ├── DONTFLOAT.exe          # Основное приложение (Debug)
-│   │   ├── marker_testgen.exe     # Утилита разметки тестовых файлов
-│   │   ├── bpm_analyzer_test.exe  # Unit-тесты
-│   │   └── ...
-│   └── DONTFLOAT.sln
-├── Release/
-│   ├── Release/
-│   │   ├── DONTFLOAT.exe
-│   │   └── marker_testgen.exe
-│   └── ...
-└── [файлы CMake]
+├── Desktop_Qt_6_9_3_MSVC2022_64bit-Release/
+│   └── Release/
+│       ├── DONTFLOAT.exe
+│       ├── marker_testgen.exe
+│       └── [Qt DLL от windeployqt]
+├── Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/
+│   └── Debug/
+│       ├── DONTFLOAT.exe
+│       └── ...
+└── Desktop_Qt_6_9_3_MinGW_64_bit-Debug/
+    ├── DONTFLOAT.exe
+    ├── ui_responsiveness_test.exe
+    └── ...
 ```
 
-Запуск Debug: `.\build\Debug\Debug\DONTFLOAT.exe` (или F5 в VS Code).
+Запуск Release: `.\build\Desktop_Qt_6_9_3_MSVC2022_64bit-Release\Release\DONTFLOAT.exe` (или F5).
 
 ### Windows (qmake с MSVC)
 
@@ -692,6 +712,6 @@ error MSB8052: версия набора инструментов MSVC "14.50.35
 
 ---
 
-**Версия**: 0.4
+**Версия**: 0.5
 **Дата создания**: 2025-01-27
-**Обновлено**: 2026-05-31 — MSB8052/v143, структура `build/${buildType}`, `marker_testgen`
+**Обновлено**: 2026-05-31 — Windows CMake presets (MSVC/MinGW), windeployqt, UI-тест меток, F5 vs Play

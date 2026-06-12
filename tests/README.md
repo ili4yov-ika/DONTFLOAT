@@ -51,27 +51,51 @@ ctest --test-dir build/Debug -C Debug -R pitch_compensation_file_test --output-o
 
 ### ui_responsiveness_test
 
-Интеграционный UI-тест на `example_V80BPM.mp3` (локально, не в CI по умолчанию):
+Интеграционный UI-тест на `example_V80BPM.mp3` (локально, не в CI по умолчанию). Требует `QApplication`, декодер MP3 и (для части сценариев) мультимедиа-плеер. **Рабочая директория — корень репозитория** (`WORKING_DIRECTORY` задан в `CMakeLists.txt`).
 
-1. Загрузка MP3 и анализ BPM (Mixxx)
-2. Создание меток коррекции (как при «Выравнивании» в GUI)
-3. **testMarkerDragUiResponsiveness** — симуляция перетаскивания метки (`QTest`), проверка `markerDragFinished` и времени отклика
-4. **testApplyTimeStretchAfterAlignment** — полное растяжение по меткам, проверка длины и времени
-5. **testProcessedPlaybackSmoothness** — воспроизведение обработанного WAV через `QMediaPlayer`, монотонность позиции
+#### Слоты теста
+
+| Слот | Что проверяет |
+|------|----------------|
+| `testLoadAnalyzeAndCreateMarkers` | Загрузка MP3, BPM/доли (Mixxx), создание меток выравнивания |
+| `testMarkerDragUiResponsiveness` | Одно перетаскивание метки (симуляция мыши), изменение `position`, время отклика |
+| `testMarkerDragWorkflowThreeRandom` | Полный workflow: анализ долей → **2 случайные метки** → **3 последовательных drag** разных меток, суммарное время |
+| `testApplyTimeStretchAfterAlignment` | `applyTimeStretch` по меткам, длина результата и время обработки |
+| `testProcessedPlaybackSmoothness` | Воспроизведение обработанного WAV через `QMediaPlayer`, монотонность позиции |
+
+Симуляция drag использует `QApplication::sendEvent` и hit-test по координатам метки (как в `WaveformView::getMarkerIndexAt`). Успех drag определяется по **изменению `position`**, а не только по сигналу `markerDragFinished` (при невалидной геометрии stretch сигнал может не прийти).
+
+#### Сборка и запуск (Windows)
 
 ```powershell
-cd build
-ctest -C Release -R ui_responsiveness_test --output-on-failure
-# или
-.\Release\ui_responsiveness_test.exe -v2
+# из корня репозитория
+cmake --preset windows-mingw-debug
+cmake --build --preset windows-mingw-debug --target ui_responsiveness_test
+
+$env:DONTFLOAT_RUN_UI_TEST = "1"
+.\build\Desktop_Qt_6_9_3_MinGW_64_bit-Debug\ui_responsiveness_test.exe -v2
+
+# один сценарий
+.\build\Desktop_Qt_6_9_3_MinGW_64_bit-Debug\ui_responsiveness_test.exe testMarkerDragWorkflowThreeRandom
 ```
 
-Переменные окружения (опционально):
+Через CTest (тоже из корня, с переменной окружения):
+
+```powershell
+$env:DONTFLOAT_RUN_UI_TEST = "1"
+ctest --test-dir build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug -R ui_responsiveness_test --output-on-failure
+```
+
+Без `DONTFLOAT_RUN_UI_TEST=1` тест **пропускается** (`QSKIP`), если заданы `CI` или `GITHUB_ACTIONS`.
+
+#### Переменные окружения (опционально)
 
 | Переменная | По умолчанию | Назначение |
 |------------|--------------|------------|
-| `DONTFLOAT_RUN_UI_TEST=1` | — | Запускать в CI (иначе `QSKIP` при `CI`/`GITHUB_ACTIONS`) |
-| `DONTFLOAT_UI_DRAG_MAX_MS` | 8000 | Лимит времени перетаскивания метки |
+| `DONTFLOAT_RUN_UI_TEST` | — | Принудительный запуск (иначе `QSKIP` в CI) |
+| `DONTFLOAT_UI_DRAG_MAX_MS` | 45000 | Лимит времени одного перетаскивания метки |
+| `DONTFLOAT_UI_DRAG_TOTAL_MAX_MS` | 135000 | Лимит суммарного времени трёх drag в workflow-тесте |
+| `DONTFLOAT_UI_DRAG_WAIT_MS` | 300 | Ожидание `markerDragFinished` после отпускания кнопки |
 | `DONTFLOAT_UI_STRETCH_MAX_MS` | 120000 | Лимит `applyTimeStretch` |
 | `DONTFLOAT_UI_MEDIA_LOAD_MS` | 10000 | Таймаут загрузки WAV в плеер |
 

@@ -1,5 +1,18 @@
 # История изменений документации
 
+## 2026-05-31 (Windows presets, UI-тест меток)
+
+### Сборка и запуск в VS Code/Cursor
+- CMake Presets: `windows-msvc-debug/release`, `windows-mingw-debug/release` (`CMakePresets.json`).
+- Post-build `windeployqt` для `DONTFLOAT` и `marker_testgen` (`cmake/WinDeployQt.cmake`).
+- По умолчанию в `.vscode/settings.json`: preset `windows-msvc-release`, каталог `build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release`.
+- Обновлены: `BUILD_IN_VSCODE.md` (presets, F5 vs Play, структура каталогов сборки).
+
+### `ui_responsiveness_test`
+- Документирован сценарий `testMarkerDragWorkflowThreeRandom` (MP3 → доли → 2 случайные метки → 3 drag).
+- Переменные окружения: `DONTFLOAT_RUN_UI_TEST`, лимиты `DONTFLOAT_UI_DRAG_*`.
+- Обновлены: `tests/README.md`, `tests/source4test/README.md`, `MARKDOWN/TESTING_GUIDE.md`.
+
 ## 2026-05-31 (сборка macOS)
 
 ### CMake Presets и CI

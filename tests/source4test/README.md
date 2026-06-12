@@ -62,6 +62,16 @@ cmake --build build --config Release --target marker_testgen
 ### example_V80BPM.mp3
 - Переменный темп ~80 BPM
 - Начало первого такта ≈ 00:00.741
+- Используется в **`ui_responsiveness_test`**: загрузка, поиск долей, метки выравнивания, перетаскивание меток, time stretch, плавность воспроизведения
+
+```powershell
+# из корня репозитория
+cmake --build build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug --target ui_responsiveness_test
+$env:DONTFLOAT_RUN_UI_TEST = "1"
+.\build\Desktop_Qt_6_9_3_MinGW_64_bit-Debug\ui_responsiveness_test.exe testMarkerDragWorkflowThreeRandom
+```
+
+Подробнее: [tests/README.md](../README.md#ui_responsiveness_test).
 
 ### pitch-test_C140BPM.mp3
 - ~140 BPM, постоянный темп, **одна устойчивая нота** (~165 Hz, E3)

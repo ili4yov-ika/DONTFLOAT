@@ -71,13 +71,33 @@ cmake --build build/Debug --config Debug --target pitch_compensation_file_test
 
 ### 4. UI тесты
 
-#### ui_diagnostic_test.bat
+#### ui_responsiveness_test.cpp (Qt Test, рекомендуется)
+
+Интеграционный тест на `tests/source4test/example_V80BPM.mp3`. Запуск **из корня репозитория** с `DONTFLOAT_RUN_UI_TEST=1` (в CI по умолчанию `QSKIP`).
+
+| Слот | Сценарий |
+|------|----------|
+| `testLoadAnalyzeAndCreateMarkers` | MP3 → BPM/доли → метки выравнивания |
+| `testMarkerDragUiResponsiveness` | Одно перетаскивание метки, лимит времени |
+| `testMarkerDragWorkflowThreeRandom` | +2 случайные метки, 3 drag подряд |
+| `testApplyTimeStretchAfterAlignment` | Полный time stretch по меткам |
+| `testProcessedPlaybackSmoothness` | Плавность `QMediaPlayer` после обработки |
+
+```powershell
+cmake --build build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug --target ui_responsiveness_test
+$env:DONTFLOAT_RUN_UI_TEST = "1"
+.\build\Desktop_Qt_6_9_3_MinGW_64_bit-Debug\ui_responsiveness_test.exe -v2
+```
+
+Переменные: `DONTFLOAT_UI_DRAG_MAX_MS` (45000), `DONTFLOAT_UI_DRAG_TOTAL_MAX_MS` (135000). Подробнее: [tests/README.md](../tests/README.md).
+
+#### ui_diagnostic_test.bat (legacy)
 - Диагностика проблем с интерфейсом
 - Проверка реактивности UI
 - Тестирование закрытия программы
 - Проверка работы меню
 
-#### ui_fixes_test.bat
+#### ui_fixes_test.bat (legacy)
 - Тест исправлений UI
 - Проверка блокировки интерфейса
 - Тестирование флагов окна
