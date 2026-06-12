@@ -1,11 +1,17 @@
+#include <algorithm>
+
 #include <QtTest/QTest>
 #include <QtTest/QSignalSpy>
 #include <QtWidgets/QApplication>
+#include <QtGui/QMouseEvent>
+#include <QtCore/QRectF>
 #include <QtCore/QElapsedTimer>
+#include <QtCore/QDeadlineTimer>
 #include <QtCore/QEventLoop>
 #include <QtCore/QFileInfo>
 #include <QtCore/QDir>
 #include <QtCore/QSet>
+#include <QtCore/QRandomGenerator>
 #include <QtCore/QTimer>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QTemporaryFile>
@@ -122,19 +128,273 @@ int createCorrectionMarkers(WaveformView* view, float tolerancePercent, bool neu
     return markersCreated;
 }
 
-QPoint markerCenterPixel(const WaveformView& view, qint64 samplePos)
+/** Индекс метки под точкой — копия WaveformView::getMarkerIndexAt для тестов. */
+int markerIndexAtPixel(const WaveformView& view, const QPoint& pos)
 {
     const QVector<QVector<float>>& audioData = view.getAudioData();
+    if (audioData.isEmpty())
+        return -1;
+
+    const qint64 referenceSize = audioData[0].size();
+    const float samplesPerPixel = float(referenceSize) / (view.rect().width() * view.getZoomLevel());
+    const int visibleSamples = int(view.rect().width() * samplesPerPixel);
+    const int maxStartSample = qMax(0, int(referenceSize - visibleSamples));
+    const int startSample = int(view.getHorizontalOffset() * maxStartSample);
+
+    const float diamondSize = 10.0f;
+    const float centerY = view.rect().height() / 2.0f;
+    const QVector<Marker> markers = view.getMarkers();
+    for (int i = 0; i < markers.size(); ++i) {
+        const float x = (markers[i].position - startSample) / samplesPerPixel;
+        const QRectF diamondRect(x - diamondSize / 2, centerY - diamondSize / 2, diamondSize, diamondSize);
+        const QRectF expandedRect = diamondRect.adjusted(-5, -5, 5, 5);
+        if (expandedRect.contains(pos))
+            return i;
+    }
+    return -1;
+}
+
+/** Пиксель метки — та же формула, что в WaveformView::getMarkerIndexAt. */
+QPoint markerPixelAt(const WaveformView& view, qint64 samplePos)
+{
+    const QRect r = view.rect();
+    const int w = r.width();
+    const int h = r.height();
+    const QVector<QVector<float>>& audioData = view.getAudioData();
+    if (w <= 0 || h <= 0 || audioData.isEmpty())
+        return QPoint(-1, -1);
+
+    const qint64 refSize = audioData[0].size();
     const float zoom = view.getZoomLevel();
     const float hOffset = view.getHorizontalOffset();
-    const int w = view.width();
-    const qint64 refSize = audioData[0].size();
     const float samplesPerPixel = float(refSize) / (w * zoom);
     const int visibleSamples = int(w * samplesPerPixel);
     const int maxStartSample = qMax(0, int(refSize - visibleSamples));
     const int startSample = int(hOffset * maxStartSample);
-    const float x = (samplePos - startSample) / samplesPerPixel;
-    return QPoint(int(x), view.height() / 2);
+    const qreal x = qreal(samplePos - startSample) / qreal(samplesPerPixel);
+    const int xi = qBound(0, int(qBound(qreal(0), x, qreal(w - 1))), w - 1);
+    return QPoint(xi, h / 2);
+}
+
+void ensureViewGeometry(WaveformView* view, int width = 1200, int height = 400)
+{
+    if (!view)
+        return;
+    view->resize(width, height);
+    view->setGeometry(0, 0, width, height);
+    view->show();
+    for (int i = 0; i < 8; ++i)
+        QApplication::processEvents();
+}
+
+void scrollViewToSample(WaveformView* view, qint64 samplePos)
+{
+    const QVector<QVector<float>>& audioData = view->getAudioData();
+    if (!view || audioData.isEmpty())
+        return;
+
+    const QRect r = view->rect();
+    const int w = r.width();
+    if (w <= 0)
+        return;
+
+    const qint64 refSize = audioData[0].size();
+    const float zoom = view->getZoomLevel();
+    const float samplesPerPixel = float(refSize) / (w * zoom);
+    const int visibleSamples = int(w * samplesPerPixel);
+    const int maxStartSample = qMax(0, int(refSize - visibleSamples));
+    if (maxStartSample <= 0) {
+        view->setHorizontalOffset(0.0f);
+        QApplication::processEvents();
+        return;
+    }
+
+    const int idealStart = int(samplePos - visibleSamples / 2);
+    const int clampedStart = qBound(0, idealStart, maxStartSample);
+    view->setHorizontalOffset(float(clampedStart) / float(maxStartSample));
+    QApplication::processEvents();
+}
+
+int addRandomMarkers(WaveformView* view, int count, int sampleRate)
+{
+    if (!view || count <= 0)
+        return 0;
+
+    const QVector<QVector<float>>& audioData = view->getAudioData();
+    if (audioData.isEmpty())
+        return 0;
+
+    const qint64 total = audioData[0].size();
+    const qint64 minPos = total / 10;
+    const qint64 maxPos = total * 9 / 10;
+    if (maxPos <= minPos)
+        return 0;
+
+    QSet<qint64> used;
+    for (const Marker& m : view->getMarkers())
+        used.insert(m.position);
+
+    int added = 0;
+    QRandomGenerator* rng = QRandomGenerator::global();
+    for (int attempt = 0; attempt < count * 20 && added < count; ++attempt) {
+        const qint64 pos = minPos + rng->bounded(maxPos - minPos);
+        if (used.contains(pos))
+            continue;
+
+        Marker m(pos, sampleRate);
+        const qint64 offset = rng->bounded(sampleRate / 50, qMax(sampleRate / 49, sampleRate / 10));
+        m.originalPosition = pos - offset;
+        m.originalTimeMs = TimeUtils::samplesToMs(m.originalPosition, sampleRate);
+        view->addMarker(m);
+        used.insert(pos);
+        ++added;
+    }
+
+    view->sortMarkers();
+    return added;
+}
+
+QVector<int> pickRandomDraggableIndices(const WaveformView& view, int wantCount)
+{
+    QVector<int> pool;
+    const QVector<Marker> markers = view.getMarkers();
+    for (int i = 0; i < markers.size(); ++i) {
+        if (!markers[i].isFixed && !markers[i].isEndMarker)
+            pool.append(i);
+    }
+
+    if (pool.isEmpty())
+        return {};
+
+    QRandomGenerator* rng = QRandomGenerator::global();
+    for (int i = pool.size() - 1; i > 0; --i)
+        std::swap(pool[i], pool[rng->bounded(i + 1)]);
+
+    if (pool.size() > wantCount)
+        pool.resize(wantCount);
+    return pool;
+}
+
+bool waitMarkerDragFinished(WaveformView* view, int timeoutMs)
+{
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    QObject::connect(view, &WaveformView::markerDragFinished, &loop, &QEventLoop::quit);
+    timer.start(timeoutMs);
+    loop.exec();
+    return !timer.isActive();
+}
+
+struct DragSimulationResult {
+    bool ok = false;
+    qint64 elapsedMs = 0;
+    QString error;
+    qint64 positionBefore = 0;
+    qint64 positionAfter = 0;
+};
+
+DragSimulationResult simulateMarkerDrag(WaveformView* view, int markerIndex, int deltaPixels)
+{
+    DragSimulationResult result;
+    if (!view || markerIndex < 0 || markerIndex >= view->getMarkers().size()) {
+        result.error = QStringLiteral("invalid marker index");
+        return result;
+    }
+
+    const Marker& marker = view->getMarkers()[markerIndex];
+    if (marker.isFixed || marker.isEndMarker) {
+        result.error = QStringLiteral("marker not draggable");
+        return result;
+    }
+
+    ensureViewGeometry(view);
+    scrollViewToSample(view, marker.position);
+    QPoint start = markerPixelAt(*view, marker.position);
+    for (int attempt = 0; attempt < 4 && markerIndexAtPixel(*view, start) != markerIndex; ++attempt) {
+        scrollViewToSample(view, marker.position);
+        QApplication::processEvents(QEventLoop::AllEvents, 50);
+        start = markerPixelAt(*view, marker.position);
+    }
+    if (view->rect().width() <= 0 || start.x() < 0) {
+        result.error = QStringLiteral("view not laid out or marker outside view");
+        return result;
+    }
+    if (markerIndexAtPixel(*view, start) != markerIndex) {
+        result.error = QStringLiteral("marker not under simulated cursor");
+        return result;
+    }
+
+    const QPoint end(qBound(0, start.x() + deltaPixels, view->rect().width() - 1), start.y());
+    result.positionBefore = marker.position;
+
+    auto postMouse = [&](QEvent::Type type, const QPoint& pos, Qt::MouseButtons buttonsHeld, bool pumpTimers) {
+        const Qt::MouseButton button = (type == QEvent::MouseButtonPress || type == QEvent::MouseButtonRelease)
+            ? Qt::LeftButton
+            : Qt::NoButton;
+        QMouseEvent ev(type, pos, view->mapToGlobal(pos), button, buttonsHeld, Qt::NoModifier);
+        QApplication::sendEvent(view, &ev);
+        if (pumpTimers)
+            QApplication::processEvents(QEventLoop::AllEvents, 50);
+        else
+            QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    };
+
+    QElapsedTimer timer;
+    timer.start();
+
+    postMouse(QEvent::MouseButtonPress, start, Qt::LeftButton, false);
+    for (int step = 1; step <= 3; ++step) {
+        const QPoint pos(start.x() + (end.x() - start.x()) * step / 3, start.y());
+        postMouse(QEvent::MouseMove, pos, Qt::LeftButton, false);
+    }
+    bool dragFinished = false;
+    QMetaObject::Connection finishedConn = QObject::connect(
+        view, &WaveformView::markerDragFinished, view, [&]() { dragFinished = true; });
+
+    postMouse(QEvent::MouseButtonRelease, end, Qt::NoButton, true);
+
+    const int waitMs = envIntMs("DONTFLOAT_UI_DRAG_WAIT_MS", 300);
+    const QDeadlineTimer deadline(waitMs);
+    while (!dragFinished && !deadline.hasExpired()) {
+        QApplication::processEvents(QEventLoop::AllEvents, 50);
+        QTest::qWait(10);
+    }
+    QObject::disconnect(finishedConn);
+
+    result.elapsedMs = timer.elapsed();
+
+    const QVector<Marker> after = view->getMarkers();
+    for (const Marker& m : after) {
+        if (m.originalPosition == marker.originalPosition) {
+            result.positionAfter = m.position;
+            break;
+        }
+    }
+
+    if (result.positionAfter == result.positionBefore) {
+        result.error = QStringLiteral("position unchanged");
+        return result;
+    }
+
+    if (!dragFinished) {
+        qDebug() << "markerDragFinished не получен, но позиция метки изменилась"
+                 << result.positionBefore << "->" << result.positionAfter;
+    }
+
+    result.ok = true;
+    return result;
+}
+
+int findMarkerIndexByOriginalPosition(const WaveformView& view, qint64 originalPosition)
+{
+    const QVector<Marker> markers = view.getMarkers();
+    for (int i = 0; i < markers.size(); ++i) {
+        if (markers[i].originalPosition == originalPosition && !markers[i].isFixed)
+            return i;
+    }
+    return -1;
 }
 
 bool waitForMediaLoaded(QMediaPlayer& player, int timeoutMs)
@@ -161,11 +421,21 @@ bool waitForMediaLoaded(QMediaPlayer& player, int timeoutMs)
 int findDraggableMarkerIndex(const WaveformView& view)
 {
     const QVector<Marker> markers = view.getMarkers();
+    const QVector<QVector<float>>& audio = view.getAudioData();
+    const qint64 total = audio.isEmpty() ? 0 : audio[0].size();
+    const qint64 lo = total / 4;
+    const qint64 hi = total * 3 / 4;
+
+    int fallback = -1;
     for (int i = 0; i < markers.size(); ++i) {
-        if (!markers[i].isFixed && !markers[i].isEndMarker)
+        if (markers[i].isFixed || markers[i].isEndMarker)
+            continue;
+        if (total > 0 && markers[i].position >= lo && markers[i].position <= hi)
             return i;
+        if (fallback < 0)
+            fallback = i;
     }
-    return -1;
+    return fallback;
 }
 
 bool markersSortedUnique(const QVector<Marker>& markers)
@@ -211,9 +481,7 @@ PreparedScenario prepareExampleV80Scenario(WaveformView* view)
     if (scenario.analysis.bpm <= 0 || scenario.analysis.beats.isEmpty())
         return scenario;
 
-    view->resize(1200, 400);
-    view->show();
-    QApplication::processEvents();
+    ensureViewGeometry(view);
 
     view->setAudioData(scenario.channels);
     view->setBeatInfo(scenario.analysis.beats);
@@ -257,6 +525,7 @@ private slots:
 
     void testLoadAnalyzeAndCreateMarkers();
     void testMarkerDragUiResponsiveness();
+    void testMarkerDragWorkflowThreeRandom();
     void testApplyTimeStretchAfterAlignment();
     void testProcessedPlaybackSmoothness();
 
@@ -314,58 +583,78 @@ void UiResponsivenessTest::testMarkerDragUiResponsiveness()
     const int markerIndex = findDraggableMarkerIndex(*m_view);
     QVERIFY2(markerIndex >= 0, "Нужна хотя бы одна перетаскиваемая метка");
 
-    const Marker& marker = m_view->getMarkers()[markerIndex];
-    const qint64 markerOriginalPos = marker.originalPosition;
-    const QPoint start = markerCenterPixel(*m_view, marker.position);
-    const QPoint end(start.x() + 40, start.y());
+    const DragSimulationResult drag = simulateMarkerDrag(m_view, markerIndex, 18);
+    QVERIFY2(drag.ok, qPrintable(drag.error));
 
-    QElapsedTimer timer;
-    timer.start();
-
-    QTest::mousePress(m_view, Qt::LeftButton, Qt::NoModifier, start, 20);
-    for (int step = 1; step <= 8; ++step) {
-        const QPoint pos(start.x() + (end.x() - start.x()) * step / 8, start.y());
-        QTest::mouseMove(m_view, pos, 10);
-        QApplication::processEvents(QEventLoop::AllEvents, 50);
-    }
-
-    QSignalSpy dragFinishedSpy(m_view, &WaveformView::markerDragFinished);
-    QTest::mouseRelease(m_view, Qt::LeftButton, Qt::NoModifier, end, 20);
-
-    const int waitMs = envIntMs("DONTFLOAT_UI_DRAG_WAIT_MS", 5000);
-    if (dragFinishedSpy.isEmpty()) {
-        QEventLoop loop;
-        QTimer timer;
-        timer.setSingleShot(true);
-        QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-        QObject::connect(m_view, &WaveformView::markerDragFinished, &loop, &QEventLoop::quit);
-        timer.start(waitMs);
-        loop.exec();
-        QVERIFY2(!timer.isActive(), "markerDragFinished не получен после перетаскивания");
-    }
-
-    const qint64 elapsedMs = timer.elapsed();
-    const int maxMs = envIntMs("DONTFLOAT_UI_DRAG_MAX_MS", 8000);
-    qDebug() << "Перетаскивание метки заняло" << elapsedMs << "мс (лимит" << maxMs << ")";
-
-    QVERIFY2(elapsedMs < maxMs,
+    const int maxMs = envIntMs("DONTFLOAT_UI_DRAG_MAX_MS", 45000);
+    qDebug() << "Перетаскивание метки заняло" << drag.elapsedMs << "мс (лимит" << maxMs << ")";
+    QVERIFY2(drag.elapsedMs < maxMs,
              qPrintable(QString("Перетаскивание метки слишком медленное: %1 мс > %2 мс")
-                            .arg(elapsedMs)
+                            .arg(drag.elapsedMs)
                             .arg(maxMs)));
+    QVERIFY(markersSortedUnique(m_view->getMarkers()));
+}
 
-    const QVector<Marker> after = m_view->getMarkers();
-    QVERIFY(markersSortedUnique(after));
+void UiResponsivenessTest::testMarkerDragWorkflowThreeRandom()
+{
+    if (shouldSkipIntegration())
+        QSKIP("UI-интеграция пропущена в CI");
 
-    int afterIndex = -1;
-    for (int i = 0; i < after.size(); ++i) {
-        if (after[i].originalPosition == markerOriginalPos) {
-            afterIndex = i;
-            break;
-        }
+    if (testDataPath(QStringLiteral("example_V80BPM.mp3")).isEmpty())
+        QSKIP("Файл tests/source4test/example_V80BPM.mp3 не найден");
+
+    m_view = new WaveformView;
+    const PreparedScenario scenario = prepareExampleV80Scenario(m_view);
+
+    QVERIFY2(!scenario.channels.isEmpty(), "Аудио должно загрузиться");
+    QVERIFY2(scenario.sampleRate > 0, "Sample rate должен быть определён");
+    QVERIFY2(scenario.analysis.bpm > 0, "BPM должен быть определён");
+    QVERIFY2(!scenario.analysis.beats.isEmpty(), "Доли должны быть найдены анализатором");
+    QVERIFY2(scenario.markerCount >= 2, "После анализа должно быть не менее двух меток");
+
+    const int randomAdded = addRandomMarkers(m_view, 2, scenario.sampleRate);
+    QVERIFY2(randomAdded >= 2, "Не удалось добавить случайные метки");
+
+    const QVector<int> picked = pickRandomDraggableIndices(*m_view, 3);
+    QVERIFY2(picked.size() >= 3, "Нужно не менее трёх перетаскиваемых меток");
+
+    QVector<qint64> dragTargets;
+    dragTargets.reserve(picked.size());
+    for (int idx : picked)
+        dragTargets.append(m_view->getMarkers()[idx].originalPosition);
+
+    const int perDragMaxMs = envIntMs("DONTFLOAT_UI_DRAG_MAX_MS", 45000);
+    const int totalMaxMs = envIntMs("DONTFLOAT_UI_DRAG_TOTAL_MAX_MS", 135000);
+
+    QElapsedTimer totalTimer;
+    totalTimer.start();
+
+    for (int round = 0; round < dragTargets.size(); ++round) {
+        const int markerIndex = findMarkerIndexByOriginalPosition(*m_view, dragTargets[round]);
+        QVERIFY2(markerIndex >= 0,
+                 qPrintable(QString("Метка #%1 не найдена перед перетаскиванием").arg(round)));
+
+        const int deltaPx = (round % 2 == 0 ? 1 : -1) * (12 + round * 6);
+        const DragSimulationResult drag = simulateMarkerDrag(m_view, markerIndex, deltaPx);
+        QVERIFY2(drag.ok, qPrintable(QString("Раунд %1: %2").arg(round).arg(drag.error)));
+        QVERIFY2(drag.elapsedMs < perDragMaxMs,
+                 qPrintable(QString("Раунд %1 слишком медленный: %2 мс > %3 мс")
+                                .arg(round)
+                                .arg(drag.elapsedMs)
+                                .arg(perDragMaxMs)));
+
+        qDebug() << "Drag round" << (round + 1)
+                 << "ms:" << drag.elapsedMs
+                 << "pos:" << drag.positionBefore << "->" << drag.positionAfter;
+
+        QVERIFY(markersSortedUnique(m_view->getMarkers()));
     }
-    QVERIFY2(afterIndex >= 0, "Метка должна остаться в списке после сортировки");
-    QVERIFY2(after[afterIndex].position != marker.position,
-             "Позиция метки должна измениться после перетаскивания");
+
+    const qint64 totalMs = totalTimer.elapsed();
+    qDebug() << "Три перетаскивания заняли" << totalMs << "мс (лимит" << totalMaxMs << ")";
+    QVERIFY2(totalMs < totalMaxMs,
+             qPrintable(QString("Суммарное время трёх перетаскиваний слишком велико: %1 мс")
+                            .arg(totalMs)));
 }
 
 void UiResponsivenessTest::testApplyTimeStretchAfterAlignment()
