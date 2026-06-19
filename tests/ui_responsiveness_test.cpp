@@ -303,28 +303,39 @@ DragSimulationResult simulateMarkerDrag(WaveformView* view, int markerIndex, int
         return result;
     }
 
-    const Marker& marker = view->getMarkers()[markerIndex];
-    if (marker.isFixed || marker.isEndMarker) {
+    if (view->getMarkers()[markerIndex].isFixed || view->getMarkers()[markerIndex].isEndMarker) {
         result.error = QStringLiteral("marker not draggable");
         return result;
     }
 
     ensureViewGeometry(view);
-    scrollViewToSample(view, marker.position);
-    QPoint start = markerPixelAt(*view, marker.position);
+    scrollViewToSample(view, view->getMarkers()[markerIndex].position);
+    QPoint start = markerPixelAt(*view, view->getMarkers()[markerIndex].position);
     for (int attempt = 0; attempt < 4 && markerIndexAtPixel(*view, start) != markerIndex; ++attempt) {
-        scrollViewToSample(view, marker.position);
+        scrollViewToSample(view, view->getMarkers()[markerIndex].position);
         QApplication::processEvents(QEventLoop::AllEvents, 50);
-        start = markerPixelAt(*view, marker.position);
+        start = markerPixelAt(*view, view->getMarkers()[markerIndex].position);
     }
     if (view->rect().width() <= 0 || start.x() < 0) {
         result.error = QStringLiteral("view not laid out or marker outside view");
         return result;
     }
-    if (markerIndexAtPixel(*view, start) != markerIndex) {
-        result.error = QStringLiteral("marker not under simulated cursor");
+
+    // При плотной сетке зона клика (±10 px) соседней метки может перекрывать выбранную —
+    // в этом случае перетаскиваем ту метку, которую реально возьмёт mousePressEvent.
+    const int hitIndex = markerIndexAtPixel(*view, start);
+    if (hitIndex < 0) {
+        result.error = QStringLiteral("no marker under simulated cursor");
         return result;
     }
+    if (hitIndex != markerIndex) {
+        if (view->getMarkers()[hitIndex].isFixed || view->getMarkers()[hitIndex].isEndMarker) {
+            result.error = QStringLiteral("overlapping marker is not draggable");
+            return result;
+        }
+        markerIndex = hitIndex;
+    }
+    const Marker marker = view->getMarkers()[markerIndex];
 
     const QPoint end(qBound(0, start.x() + deltaPixels, view->rect().width() - 1), start.y());
     result.positionBefore = marker.position;
@@ -525,6 +536,7 @@ private slots:
 
     void testLoadAnalyzeAndCreateMarkers();
     void testMarkerDragUiResponsiveness();
+    void testMarkerDragSameMarkerRepeated();
     void testMarkerDragWorkflowThreeRandom();
     void testApplyTimeStretchAfterAlignment();
     void testProcessedPlaybackSmoothness();
@@ -592,6 +604,59 @@ void UiResponsivenessTest::testMarkerDragUiResponsiveness()
              qPrintable(QString("Перетаскивание метки слишком медленное: %1 мс > %2 мс")
                             .arg(drag.elapsedMs)
                             .arg(maxMs)));
+    QVERIFY(markersSortedUnique(m_view->getMarkers()));
+}
+
+void UiResponsivenessTest::testMarkerDragSameMarkerRepeated()
+{
+    if (shouldSkipIntegration())
+        QSKIP("UI-интеграция пропущена в CI");
+
+    if (testDataPath(QStringLiteral("example_V80BPM.mp3")).isEmpty())
+        QSKIP("Файл tests/source4test/example_V80BPM.mp3 не найден");
+
+    m_view = new WaveformView;
+    const PreparedScenario scenario = prepareExampleV80Scenario(m_view);
+    QVERIFY(scenario.markerCount >= 2);
+
+    int markerIndex = findDraggableMarkerIndex(*m_view);
+    QVERIFY2(markerIndex >= 0, "Нужна хотя бы одна перетаскиваемая метка");
+    qint64 trackedOriginal = m_view->getMarkers()[markerIndex].originalPosition;
+
+    // 4 перетаскивания одной и той же метки туда-обратно.
+    // Между попытками прокачиваем цикл событий, чтобы фоновые результаты
+    // превью успевали применяться в разные моменты.
+    const int deltas[] = { 15, -15, 12, -12 };
+    for (int round = 0; round < 4; ++round) {
+        markerIndex = findMarkerIndexByOriginalPosition(*m_view, trackedOriginal);
+        QVERIFY2(markerIndex >= 0,
+                 qPrintable(QString("Раунд %1: метка потеряна").arg(round)));
+
+        const DragSimulationResult drag = simulateMarkerDrag(m_view, markerIndex, deltas[round]);
+        QVERIFY2(drag.ok, qPrintable(QString("Раунд %1: %2").arg(round).arg(drag.error)));
+
+        qDebug() << "Same-marker round" << (round + 1)
+                 << "ms:" << drag.elapsedMs
+                 << "pos:" << drag.positionBefore << "->" << drag.positionAfter;
+
+        QVERIFY2(markersSortedUnique(m_view->getMarkers()),
+                 qPrintable(QString("Раунд %1: метки рассортированы/дублированы").arg(round)));
+
+        const QVector<QVector<float>>& audio = m_view->getAudioData();
+        QVERIFY2(!audio.isEmpty() && !audio[0].isEmpty(),
+                 qPrintable(QString("Раунд %1: audioData пуст").arg(round)));
+
+        // Дожидаемся применения фоновых превью между раундами (разные тайминги)
+        const int settleMs = 80 + round * 120;
+        QDeadlineTimer settle(settleMs);
+        while (!settle.hasExpired()) {
+            QApplication::processEvents(QEventLoop::AllEvents, 20);
+            QTest::qWait(5);
+        }
+    }
+
+    // Финальная проверка: метка на месте, набор меток валиден
+    QVERIFY(findMarkerIndexByOriginalPosition(*m_view, trackedOriginal) >= 0);
     QVERIFY(markersSortedUnique(m_view->getMarkers()));
 }
 

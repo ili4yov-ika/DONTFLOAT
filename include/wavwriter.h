@@ -31,6 +31,11 @@ bool writeFile(const QString& filePath,
                QString* errorMessage = nullptr,
                const WriteOptions& options = {});
 
+/** Пишет float32 WAV во временный каталог (чередует _a/_b — для QMediaPlayer на Windows). */
+QString writeTempProcessedFile(const QVector<QVector<float>>& channels,
+                               int sampleRate,
+                               QString* errorMessage = nullptr);
+
 } // namespace WavWriter
 
 #endif // WAVWRITER_H

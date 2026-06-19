@@ -38,6 +38,7 @@
 #include <QtCore/QDebug>
 #include <QtCore/QSignalBlocker>
 #include <QtCore/QEventLoop>
+#include <QtConcurrent/QtConcurrent>
 #include <QtCore/QtMath>
 #include <QtWidgets/QStyleFactory>
 #include <QtWidgets/QInputDialog>
@@ -109,6 +110,7 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
     , waveformView(nullptr)
     , pitchGridWidget(nullptr)
+    , pitchGridScrollContainer(nullptr)
     , horizontalScrollBar(nullptr)
     , pitchGridVerticalScrollBar(nullptr)
     , mainSplitter(nullptr)
@@ -163,13 +165,16 @@ MainWindow::MainWindow(QWidget *parent)
     , waveformSpectrogramAct(nullptr)
     , spectrogramSettingsAct(nullptr)
     , spectrogramSettingsDialog(nullptr)
-    , reverbAct(nullptr)
     , pitchShiftSettingsAct(nullptr)
     , pitchShiftSettingsDialog(nullptr)
     , russianAction(nullptr)
     , englishAction(nullptr)
     , applyTimeStretchAct(nullptr)
     , markerPreviewTimer(nullptr)
+    , markerPreviewWatcher(nullptr)
+    , previewRestorePosition(0)
+    , previewOldDuration(0)
+    , previewWasPlaying(false)
 {
     undoStack = new QUndoStack(this);
 
@@ -226,6 +231,7 @@ MainWindow::MainWindow(QWidget *parent)
         ui->waveformWidget->setLayout(new QVBoxLayout());
     }
     ui->waveformWidget->layout()->addWidget(waveformView);
+    waveformView->installEventFilter(this);
 
     // Create and setup PitchGridWidget
     pitchGridWidget = new PitchGridWidget(this);
@@ -309,11 +315,20 @@ MainWindow::MainWindow(QWidget *parent)
     horizontalScrollBar->setMaximum(0); // Начинаем с 0 - скроллбар не нужен при масштабе 1.0
     horizontalScrollBar->setSingleStep(10);
     horizontalScrollBar->setPageStep(100);
-    horizontalScrollBar->setFixedHeight(20);
+    horizontalScrollBar->setFixedHeight(UiConstants::kHorizontalScrollBarHeightPx);
     if (!ui->scrollBarWidget->layout()) {
         ui->scrollBarWidget->setLayout(new QHBoxLayout());
     }
-    ui->scrollBarWidget->layout()->addWidget(horizontalScrollBar);
+    auto* scrollBarLayout = qobject_cast<QHBoxLayout*>(ui->scrollBarWidget->layout());
+    scrollBarLayout->setContentsMargins(
+        UiConstants::kHorizontalScrollBarHorizontalMarginPx,
+        UiConstants::kHorizontalScrollBarTopMarginPx,
+        UiConstants::kHorizontalScrollBarHorizontalMarginPx,
+        UiConstants::kHorizontalScrollBarBottomMarginPx);
+    scrollBarLayout->setSpacing(0);
+    scrollBarLayout->addWidget(horizontalScrollBar);
+    ui->scrollBarWidget->setMinimumHeight(UiConstants::kHorizontalScrollBarContainerHeightPx);
+    ui->scrollBarWidget->setMaximumHeight(UiConstants::kHorizontalScrollBarContainerHeightPx);
 
     // Create and setup vertical scrollbar for pitch grid
     pitchGridVerticalScrollBar = new QScrollBar(Qt::Vertical, this);
@@ -322,21 +337,20 @@ MainWindow::MainWindow(QWidget *parent)
     pitchGridVerticalScrollBar->setSingleStep(10);  // Small step
     pitchGridVerticalScrollBar->setPageStep(100);   // Large step (for PageUp/PageDown)
 
-    // Создаем отдельный контейнер для вертикального скроллбара питч-сетки
-    QWidget* pitchGridScrollContainer = new QWidget(this);
-    QHBoxLayout* pitchGridScrollLayout = new QHBoxLayout(pitchGridScrollContainer);
-    pitchGridScrollLayout->setContentsMargins(0, 0, 0, 0);
-    pitchGridScrollLayout->setSpacing(0);
-    pitchGridScrollLayout->addWidget(pitchGridWidget);
-    pitchGridScrollLayout->addWidget(pitchGridVerticalScrollBar);
+    // Контейнер: питч-сетка на всю область, вертикальный скролл поверх слева
+    pitchGridScrollContainer = new QWidget(this);
+    pitchGridWidget->setParent(pitchGridScrollContainer);
+    pitchGridVerticalScrollBar->setParent(pitchGridScrollContainer);
+    pitchGridScrollContainer->installEventFilter(this);
+    pitchGridVerticalScrollBar->raise();
 
-    // Заменяем содержимое pitchGridWidget
     QLayout* oldPitchLayout = ui->pitchGridWidget->layout();
     delete oldPitchLayout;
     ui->pitchGridWidget->setLayout(new QVBoxLayout());
     ui->pitchGridWidget->layout()->addWidget(pitchGridScrollContainer);
 
     pitchGridVerticalScrollBar->setFixedWidth(UiConstants::kScrollBarWidthPx);
+    layoutPitchGridScrollOverlay();
 
     // Стили скроллбаров применяются ниже (после readSettings) единым вызовом applyScrollBarStyles().
 
@@ -375,6 +389,11 @@ MainWindow::MainWindow(QWidget *parent)
         updatePlaybackAfterMarkerDrag();
     });
 
+    // Фоновый пересчёт аудио (time stretch + WAV) после перетаскивания меток
+    markerPreviewWatcher = new QFutureWatcher<QPair<QString, QVector<QVector<float>>>>(this);
+    connect(markerPreviewWatcher, &QFutureWatcher<QPair<QString, QVector<QVector<float>>>>::finished,
+            this, &MainWindow::onMarkerPreviewStretchFinished);
+
     // Initial window title
     updateWindowTitle();
 
@@ -392,18 +411,53 @@ MainWindow::MainWindow(QWidget *parent)
 
 }
 
+void MainWindow::prepareShutdown()
+{
+    if (isShuttingDown) {
+        return;
+    }
+    isShuttingDown = true;
+
+    if (markerPreviewTimer) {
+        markerPreviewTimer->stop();
+    }
+    if (playbackTimer) {
+        playbackTimer->stop();
+    }
+
+    if (markerPreviewWatcher) {
+        disconnect(markerPreviewWatcher, nullptr, this, nullptr);
+        if (markerPreviewWatcher->isRunning()) {
+            markerPreviewWatcher->waitForFinished();
+        }
+    }
+
+    if (waveformView) {
+        disconnect(waveformView, nullptr, this, nullptr);
+    }
+    if (pitchGridWidget) {
+        disconnect(pitchGridWidget, nullptr, this, nullptr);
+    }
+
+    if (mediaPlayer) {
+        mediaPlayer->blockSignals(true);
+        disconnect(mediaPlayer, nullptr, this, nullptr);
+        mediaPlayer->stop();
+    }
+}
+
 MainWindow::~MainWindow()
 {
-    // Освобождаем UI
+    prepareShutdown();
+
     delete ui;
+    ui = nullptr;
 
     // Освобождаем таймеры
     if (playbackTimer) {
-        playbackTimer->stop();
         delete playbackTimer;
     }
     if (markerPreviewTimer) {
-        markerPreviewTimer->stop();
         delete markerPreviewTimer;
     }
     if (metronomeController) {
@@ -412,7 +466,6 @@ MainWindow::~MainWindow()
 
     // Освобождаем аудио компоненты
     if (mediaPlayer) {
-        mediaPlayer->stop();
         delete mediaPlayer;
     }
     if (audioOutput) {
@@ -444,6 +497,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     if (maybeSave()) {
         writeSettings();
+        prepareShutdown();
         event->accept();
     } else {
         event->ignore();
@@ -466,6 +520,8 @@ void MainWindow::showEvent(QShowEvent *event)
         }
 
         updatePitchGridLayout();
+        layoutPitchGridScrollOverlay();
+        updateScrollBarTransparency();
     });
 }
 
@@ -485,6 +541,8 @@ void MainWindow::resizeEvent(QResizeEvent *event)
         }
 
         updatePitchGridLayout();
+        layoutPitchGridScrollOverlay();
+        updateScrollBarTransparency();
     });
 }
 
@@ -503,6 +561,8 @@ void MainWindow::updatePitchGridLayout()
             sizes << static_cast<int>(totalHeight * 0.75) << static_cast<int>(totalHeight * 0.25);
             mainSplitter->setSizes(sizes);
         }
+        layoutPitchGridScrollOverlay();
+        updateScrollBarTransparency();
     } else {
         pitchGridContainer->setVisible(false);
         mainSplitter->setChildrenCollapsible(true);
@@ -510,6 +570,34 @@ void MainWindow::updatePitchGridLayout()
         sizes << mainSplitter->height() << 0;
         mainSplitter->setSizes(sizes);
     }
+}
+
+void MainWindow::syncPitchGridTimelineWidth()
+{
+    if (!pitchGridWidget || !waveformView) {
+        return;
+    }
+
+    pitchGridWidget->setTimelineReferenceWidth(waveformView->width());
+    pitchGridWidget->setTimelineSampleCount(waveformView->displaySampleCount());
+    pitchGridWidget->setCursorPosition(waveformView->getCursorXPosition());
+}
+
+void MainWindow::syncPitchGridFromWaveform()
+{
+    if (!pitchGridWidget || !waveformView) {
+        return;
+    }
+
+    pitchGridWidget->setAudioData(waveformView->getAudioData());
+    pitchGridWidget->setSampleRate(waveformView->getSampleRate());
+    pitchGridWidget->setBPM(waveformView->getBPM());
+    pitchGridWidget->setBeatsPerBar(waveformView->getBeatsPerBar());
+    pitchGridWidget->setGridStartSample(waveformView->getGridStartSample());
+    pitchGridWidget->setZoomLevel(waveformView->getZoomLevel());
+    pitchGridWidget->setHorizontalOffset(waveformView->getHorizontalOffset());
+    syncPitchGridTimelineWidth();
+    pitchGridWidget->update();
 }
 
 void MainWindow::retranslateMenus()
@@ -545,10 +633,6 @@ void MainWindow::retranslateMenus()
     if (waveformPeaksAct) waveformPeaksAct->setText(tr("Звуковые пики"));
     if (waveformSpectrogramAct) waveformSpectrogramAct->setText(tr("Спектрограмма"));
     if (spectrogramSettingsAct) { spectrogramSettingsAct->setText(tr("Настройки отображения спектрограммы...")); spectrogramSettingsAct->setStatusTip(tr("Настроить параметры спектрограммы (размер окна, полосы, цвет)")); }
-    if (reverbAct) {
-        reverbAct->setText(tr("Реверберация после растяжения"));
-        reverbAct->setStatusTip(tr("Добавить реверберацию при применении растяжения (Ctrl+T)"));
-    }
     if (pitchShiftSettingsAct) { pitchShiftSettingsAct->setText(tr("Настройки питч-шифтера...")); pitchShiftSettingsAct->setStatusTip(tr("Настроить гранулярный питч-шифтер, применяемый после растяжения (Ctrl+T)")); }
 }
 
@@ -593,21 +677,14 @@ void MainWindow::readSettings()
 
     updatePitchGridLayout();
 
-    // Обновляем текст действия и состояние (заблокирован/разблокирован)
     if (togglePitchGridAct) {
-        if (isPitchGridVisible) {
-            togglePitchGridAct->setText(tr("Убрать питч-сетку"));
-            togglePitchGridAct->setEnabled(true); // Разблокируем, если видима
-        } else {
-            togglePitchGridAct->setText(tr("Показать питч-сетку"));
-            togglePitchGridAct->setEnabled(false); // Блокируем, если скрыта
-        }
+        togglePitchGridAct->setText(isPitchGridVisible
+            ? tr("Убрать питч-сетку")
+            : tr("Показать питч-сетку"));
     }
 
-    reverbParams.enabled = settings.value("reverbEnabled", true).toBool();
-    if (reverbAct) {
-        QSignalBlocker blocker(reverbAct);
-        reverbAct->setChecked(reverbParams.enabled);
+    if (isPitchGridVisible) {
+        syncPitchGridFromWaveform();
     }
 
     applyShortcuts();
@@ -640,7 +717,6 @@ void MainWindow::writeSettings()
     // Сохраняем текущие тональности
     settings.setValue("currentKey", currentKey);
     settings.setValue("currentKey2", currentKey2);
-    settings.setValue("reverbEnabled", reverbParams.enabled);
 
     settings.endGroup();
 }
@@ -719,11 +795,9 @@ void MainWindow::setupConnections()
     connect(waveformView, &WaveformView::zoomChanged, this,
         [this](float zoom) {
             updateHorizontalScrollBar(zoom);
-            // Обновляем позицию каретки в PitchGridWidget при изменении масштаба
             if (pitchGridWidget) {
-                float cursorX = waveformView->getCursorXPosition();
-                pitchGridWidget->setCursorPosition(cursorX);
-                // Обновляем прозрачность скроллбара
+                pitchGridWidget->setZoomLevel(zoom);
+                syncPitchGridTimelineWidth();
                 updateScrollBarTransparency();
             }
         });
@@ -732,17 +806,18 @@ void MainWindow::setupConnections()
     connect(waveformView, &WaveformView::horizontalOffsetChanged, this,
         [this](float offset) {
             updateHorizontalScrollBarFromOffset(offset);
-            // Обновляем позицию каретки в PitchGridWidget при изменении смещения
             if (pitchGridWidget) {
-                float cursorX = waveformView->getCursorXPosition();
-                pitchGridWidget->setCursorPosition(cursorX);
-                // Обновляем прозрачность скроллбара
+                pitchGridWidget->setHorizontalOffset(offset);
+                syncPitchGridTimelineWidth();
                 updateScrollBarTransparency();
             }
         });
 
     connect(waveformView, &WaveformView::gridStartChanged, this,
-        [this](qint64) {
+        [this](qint64 sample) {
+            if (pitchGridWidget) {
+                pitchGridWidget->setGridStartSample(sample);
+            }
             updateTimeLabel(mediaPlayer ? mediaPlayer->position() : currentPosition);
         });
 
@@ -775,6 +850,34 @@ void MainWindow::setupConnections()
                 }
             });
 
+        connect(pitchGridWidget, &PitchGridWidget::horizontalOffsetChanged, this,
+            [this](float offset) {
+                if (waveformView && !qFuzzyCompare(waveformView->getHorizontalOffset(), offset)) {
+                    waveformView->setHorizontalOffset(offset);
+                }
+            });
+
+        connect(pitchGridWidget, &PitchGridWidget::verticalOffsetChanged, this,
+            [this](float offset) {
+                if (!pitchGridVerticalScrollBar) {
+                    return;
+                }
+                const int maxValue = pitchGridVerticalScrollBar->maximum();
+                if (maxValue <= 0) {
+                    return;
+                }
+                pitchGridVerticalScrollBar->blockSignals(true);
+                pitchGridVerticalScrollBar->setValue(qBound(0, int(offset * maxValue), maxValue));
+                pitchGridVerticalScrollBar->blockSignals(false);
+            });
+
+        connect(pitchGridWidget, &PitchGridWidget::timelineZoomRequested, this,
+            [this](int angleDeltaY, float timelinePixelX) {
+                if (waveformView) {
+                    waveformView->zoomAtPixelX(angleDeltaY, timelinePixelX);
+                }
+            });
+
         // Синхронизация с WaveformView
         connect(waveformView, &WaveformView::positionChanged, this,
             [this](qint64 msPosition) {
@@ -787,19 +890,6 @@ void MainWindow::setupConnections()
             });
 
         // Синхронизация масштаба и смещения
-        connect(waveformView, &WaveformView::zoomChanged, this,
-            [this](float zoom) {
-                if (pitchGridWidget) {
-                    pitchGridWidget->setZoomLevel(zoom);
-                    // Обновляем позицию каретки при изменении масштаба
-                    float cursorX = waveformView->getCursorXPosition();
-                    pitchGridWidget->setCursorPosition(cursorX);
-                    // Обновляем прозрачность скроллбара
-                    updateScrollBarTransparency();
-                }
-            });
-
-        // Обновление воспроизведения при завершении перетаскивания метки (с debounce)
         connect(waveformView, &WaveformView::markerDragFinished, this,
             [this]() {
                 if (markerPreviewTimer) {
@@ -811,6 +901,9 @@ void MainWindow::setupConnections()
     connect(waveformView, &WaveformView::markersChanged, this,
         [this]() {
             hasUnsavedChanges = true;
+            if (pitchGridWidget && waveformView) {
+                pitchGridWidget->setTimelineSampleCount(waveformView->displaySampleCount());
+            }
         });
 
         // Синхронизация горизонтального смещения
@@ -986,10 +1079,11 @@ void MainWindow::stopAudio()
 
 void MainWindow::updateTime()
 {
-    if (isPlaying) {
-        currentPosition = mediaPlayer->position();
-        ui->timeLabel->setText(formatTimeAndBars(currentPosition));
+    if (isShuttingDown || !ui || !isPlaying) {
+        return;
     }
+    currentPosition = mediaPlayer->position();
+    ui->timeLabel->setText(formatTimeAndBars(currentPosition));
 }
 
 void MainWindow::updateBPM()
@@ -1046,6 +1140,9 @@ void MainWindow::decreaseBPM()
 
 void MainWindow::updateTimeLabel(qint64 msPosition)
 {
+    if (isShuttingDown || !ui) {
+        return;
+    }
     ui->timeLabel->setText(formatTimeAndBars(msPosition));
 
     // Показываем информацию о цикле в статусной строке
@@ -1059,6 +1156,9 @@ void MainWindow::updateTimeLabel(qint64 msPosition)
 
 void MainWindow::updatePlaybackPosition(qint64 position)
 {
+    if (isShuttingDown || !ui) {
+        return;
+    }
     if (waveformView) {
         // Передаем позицию в миллисекундах, как ожидает WaveformView
         waveformView->setPlaybackPosition(position);
@@ -1151,11 +1251,10 @@ void MainWindow::createActions()
     loopEndAct->setShortcut(QKeySequence(Qt::Key_B));
     connect(loopEndAct, &QAction::triggered, this, &MainWindow::setLoopEnd);
 
-    // Pitch grid toggle action (по умолчанию заблокирован и показывает "Показать питч-сетку")
+    // Pitch grid toggle (Ctrl+G)
     togglePitchGridAct = new QAction(tr("Показать питч-сетку"), this);
     togglePitchGridAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
     togglePitchGridAct->setStatusTip(tr("Переключить видимость питч-сетки"));
-    togglePitchGridAct->setEnabled(false); // Заблокирован по умолчанию
     connect(togglePitchGridAct, &QAction::triggered, this, &MainWindow::togglePitchGrid);
 
     // Beat deviations toggle action
@@ -1228,19 +1327,6 @@ void MainWindow::createActions()
     });
     spectrogramSettingsDialog = nullptr;
 
-    // Реверберация после растяжения (фиксированные параметры, вкл/выкл в меню)
-    reverbAct = new QAction(tr("Реверберация"), this);
-    reverbAct->setCheckable(true);
-    reverbAct->setChecked(reverbParams.enabled);
-    reverbAct->setStatusTip(tr("Добавить реверберацию при применении растяжения (Ctrl+T)"));
-    connect(reverbAct, &QAction::toggled, this, [this](bool enabled) {
-        reverbParams.enabled = enabled;
-        settings.setValue("reverbEnabled", enabled);
-        statusBar()->showMessage(
-            enabled ? tr("Реверберация включена") : tr("Реверберация выключена"),
-            2000);
-    });
-
     // Pitch shift settings action
     pitchShiftSettingsAct = new QAction(tr("Настройки питч-шифтера..."), this);
     pitchShiftSettingsAct->setStatusTip(tr("Настроить гранулярный питч-шифтер, применяемый после растяжения (Ctrl+T)"));
@@ -1312,7 +1398,6 @@ void MainWindow::createMenus()
     settingsMenu->addAction(keyboardShortcutsAct);
     settingsMenu->addSeparator();
     settingsMenu->addAction(spectrogramSettingsAct);
-    settingsMenu->addAction(reverbAct);
     settingsMenu->addAction(pitchShiftSettingsAct);
 
     // Language submenu in Settings menu
@@ -1816,6 +1901,14 @@ void MainWindow::dropEvent(QDropEvent *event)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == waveformView && event->type() == QEvent::Resize) {
+        syncPitchGridTimelineWidth();
+    }
+
+    if (watched == pitchGridScrollContainer && event->type() == QEvent::Resize) {
+        layoutPitchGridScrollOverlay();
+    }
+
     if (watched == centralWidget()) {
         if (event->type() == QEvent::DragEnter) {
             dragEnterEvent(static_cast<QDragEnterEvent*>(event));
@@ -1948,8 +2041,12 @@ void MainWindow::applyScrollBarStyles(const QString& scheme)
         qss = loadStyleSheet(QStringLiteral(":/styles/resources/styles/scrollbars_dark.qss"));
     }
 
-    if (horizontalScrollBar)        horizontalScrollBar->setStyleSheet(qss);
-    if (pitchGridVerticalScrollBar) pitchGridVerticalScrollBar->setStyleSheet(qss);
+    if (horizontalScrollBar) {
+        horizontalScrollBar->setStyleSheet(qss);
+    }
+    if (pitchGridVerticalScrollBar) {
+        updateScrollBarTransparency();
+    }
 }
 
 void MainWindow::setTheme(const QString& theme)
@@ -2293,6 +2390,9 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
 
 QString MainWindow::formatTimeAndBars(qint64 msPosition)
 {
+    if (isShuttingDown || !ui) {
+        return TimeUtils::formatTime(msPosition);
+    }
     float bpm = ui->bpmEdit->text().toFloat();
     int bpb = 4;
     if (waveformView) {
@@ -2314,16 +2414,16 @@ void MainWindow::togglePitchGrid()
     isPitchGridVisible = !isPitchGridVisible;
     updatePitchGridLayout();
 
-    // Обновляем текст действия и состояние (заблокирован/разблокирован)
-    if (isPitchGridVisible) {
-        togglePitchGridAct->setText(tr("Убрать питч-сетку"));
-        togglePitchGridAct->setEnabled(true); // Разблокируем, если видима
-    } else {
-        togglePitchGridAct->setText(tr("Показать питч-сетку"));
-        togglePitchGridAct->setEnabled(false); // Блокируем, если скрыта
+    if (togglePitchGridAct) {
+        togglePitchGridAct->setText(isPitchGridVisible
+            ? tr("Убрать питч-сетку")
+            : tr("Показать питч-сетку"));
     }
 
-    // Сохраняем настройку
+    if (isPitchGridVisible) {
+        syncPitchGridFromWaveform();
+    }
+
     settings.setValue("pitchGridVisible", isPitchGridVisible);
 }
 
@@ -2441,38 +2541,35 @@ void MainWindow::setKey2(const QString& key)
     settings.setValue("currentKey2", currentKey2);
 }
 
-void MainWindow::updateScrollBarTransparency()
+void MainWindow::layoutPitchGridScrollOverlay()
 {
-    if (!pitchGridVerticalScrollBar || !waveformView) return;
-
-    // Получаем позицию каретки воспроизведения
-    qint64 playbackPos = waveformView->getPlaybackPosition();
-    if (playbackPos < 0) return;
-
-    // Вычисляем позицию каретки в пикселях относительно скроллбара
-    // QRect scrollBarRect = pitchGridVerticalScrollBar->geometry(); // Не используется
-    QRect pitchGridRect = pitchGridWidget->geometry();
-
-    // Используем позицию каретки напрямую от WaveformView
-    float cursorX = waveformView->getCursorXPosition();
-
-    // Вычисляем расстояние от каретки до скроллбара
-    float distanceToScrollBar = qAbs(cursorX - pitchGridRect.width());
-
-    // Определяем прозрачность на основе расстояния
-    int alpha = UiConstants::kScrollBarAlphaBase;
-
-    if (distanceToScrollBar < UiConstants::kScrollBarNearCursorDistancePx) {
-        alpha = UiConstants::kScrollBarAlphaNear;
-    } else if (distanceToScrollBar < UiConstants::kScrollBarMediumCursorDistancePx) {
-        alpha = UiConstants::kScrollBarAlphaMedium;
+    if (!pitchGridScrollContainer || !pitchGridWidget || !pitchGridVerticalScrollBar) {
+        return;
     }
 
-    // Применяем новую прозрачность к скроллбару
-    QString currentScheme = settings.value("colorScheme", "dark").toString();
+    const QRect area = pitchGridScrollContainer->rect();
+    pitchGridWidget->setGeometry(area);
+    pitchGridVerticalScrollBar->setGeometry(
+        0, 0, UiConstants::kScrollBarWidthPx, area.height());
+    pitchGridVerticalScrollBar->raise();
+}
+
+void MainWindow::applyPitchGridVerticalScrollBarAlpha(int alpha)
+{
+    if (!pitchGridVerticalScrollBar) {
+        return;
+    }
+
+    alpha = qBound(UiConstants::kPitchGridScrollBarMinAlpha, alpha,
+                   UiConstants::kPitchGridScrollBarIdleAlpha);
+    const int handleAlpha = qMin(255, alpha + 50);
+    const int hoverAlpha = qMin(255, alpha + 70);
+
+    const QString currentScheme = settings.value("colorScheme", "dark").toString();
     if (currentScheme == "dark") {
         pitchGridVerticalScrollBar->setStyleSheet(
-            QString("QScrollBar:vertical {"
+            QStringLiteral(
+                "QScrollBar:vertical {"
                 "    background: rgba(64, 64, 64, %1);"
                 "    width: %4px;"
                 "    border: none;"
@@ -2498,14 +2595,14 @@ void MainWindow::updateScrollBarTransparency()
                 "    background: none;"
                 "    border: none;"
                 "}")
-            .arg(alpha)
-            .arg(qMin(255, alpha + 50))
-            .arg(qMin(255, alpha + 70))
-            .arg(UiConstants::kScrollBarWidthPx)
-        );
+                .arg(alpha)
+                .arg(handleAlpha)
+                .arg(hoverAlpha)
+                .arg(UiConstants::kScrollBarWidthPx));
     } else {
         pitchGridVerticalScrollBar->setStyleSheet(
-            QString("QScrollBar:vertical {"
+            QStringLiteral(
+                "QScrollBar:vertical {"
                 "    background: rgba(224, 224, 224, %1);"
                 "    width: %4px;"
                 "    border: none;"
@@ -2531,12 +2628,34 @@ void MainWindow::updateScrollBarTransparency()
                 "    background: none;"
                 "    border: none;"
                 "}")
-            .arg(alpha)
-            .arg(qMin(255, alpha + 50))
-            .arg(qMin(255, alpha + 70))
-            .arg(UiConstants::kScrollBarWidthPx)
-        );
+                .arg(alpha)
+                .arg(handleAlpha)
+                .arg(hoverAlpha)
+                .arg(UiConstants::kScrollBarWidthPx));
     }
+}
+
+void MainWindow::updateScrollBarTransparency()
+{
+    if (!pitchGridVerticalScrollBar || !pitchGridWidget) {
+        return;
+    }
+
+    const float cursorContentX = pitchGridWidget->playbackCursorContentX();
+    const float distanceRightOfScrollBar =
+        cursorContentX - float(UiConstants::kScrollBarWidthPx);
+
+    int alpha = UiConstants::kPitchGridScrollBarIdleAlpha;
+    if (distanceRightOfScrollBar <= 0.0f) {
+        alpha = UiConstants::kPitchGridScrollBarMinAlpha;
+    } else if (distanceRightOfScrollBar < float(UiConstants::kPitchGridScrollBarFadeRangePx)) {
+        const float t = distanceRightOfScrollBar / float(UiConstants::kPitchGridScrollBarFadeRangePx);
+        alpha = UiConstants::kPitchGridScrollBarMinAlpha
+            + int(t * float(UiConstants::kPitchGridScrollBarIdleAlpha
+                             - UiConstants::kPitchGridScrollBarMinAlpha));
+    }
+
+    applyPitchGridVerticalScrollBarAlpha(alpha);
 }
 
 void MainWindow::setRussianLanguage()
@@ -2620,21 +2739,8 @@ void MainWindow::applyTimeStretch()
         newData = GranularEngine::applyPitchShiftQt(newData, waveformView->getSampleRate(), pitchShiftParams);
     }
 
-    // Применяем реверберацию (если включена в настройках)
-    if (reverbParams.enabled && !newData.isEmpty()) {
-        newData = ReverbEngine::applyReverbQt(newData, waveformView->getSampleRate(), reverbParams);
-    }
-
     // Конвертируем MarkerData → Marker для WaveformView
-    QVector<Marker> newMarkers;
-    newMarkers.reserve(stretchResult.newMarkers.size());
-    for (const MarkerData& md : stretchResult.newMarkers) {
-        Marker m;
-        // Копируем data-поля
-        static_cast<MarkerData&>(m) = md;
-        // UI-поля остаются по умолчанию (isDragging=false, dragStartSample=0)
-        newMarkers.append(m);
-    }
+    QVector<Marker> newMarkers = MarkerUtils::toMarkers(stretchResult.newMarkers);
 
     if (newData.isEmpty() || newData[0].isEmpty()) {
         statusBar()->showMessage(tr("Ошибка при обработке аудио"), 3000);
@@ -2723,9 +2829,8 @@ void MainWindow::onUndoStackChanged()
     if (waveformView) {
         waveformView->update();
     }
-    if (isPitchGridVisible && pitchGridWidget && waveformView) {
-        pitchGridWidget->setAudioData(waveformView->getAudioData());
-        pitchGridWidget->update();
+    if (isPitchGridVisible) {
+        syncPitchGridFromWaveform();
     }
 }
 
@@ -2741,7 +2846,7 @@ void MainWindow::syncPlaybackWithWaveform()
     }
 
     const int sampleRate = waveformView->getSampleRate();
-    const QString tempWavPath = saveProcessedAudioToTempWav(data, sampleRate);
+    const QString tempWavPath = WavWriter::writeTempProcessedFile(data, sampleRate);
     if (tempWavPath.isEmpty()) {
         return;
     }
@@ -2766,66 +2871,53 @@ void MainWindow::syncPlaybackWithWaveform()
 
 void MainWindow::updatePlaybackAfterMarkerDrag()
 {
-    if (!waveformView || !mediaPlayer) {
+    if (isShuttingDown || !waveformView || !mediaPlayer) {
         return;
     }
 
-    // Пересчитываем аудио по меткам с тонкомпенсацией для воспроизведения
-    QVector<Marker> currentMarkers = waveformView->getMarkers();
-    TimeStretchProcessor::StretchResult stretchResult = waveformView->applyTimeStretch(currentMarkers);
-    const QVector<QVector<float>>& processedData = stretchResult.audioData;
-
-    if (processedData.isEmpty() || processedData[0].isEmpty()) {
+    // Предыдущий пересчёт ещё идёт — повторим после паузы (debounce-таймер)
+    if (markerPreviewWatcher && markerPreviewWatcher->isRunning()) {
+        if (markerPreviewTimer) {
+            markerPreviewTimer->start();
+        }
         return;
     }
 
-    int sampleRate = waveformView->getSampleRate();
+    // Снимаем состояние в UI-потоке (копии Qt-контейнеров implicit-shared и дёшевы)
+    const QVector<MarkerData> markerData = MarkerUtils::toMarkerData(waveformView->getMarkers());
+
+    const QVector<QVector<float>> sourceData = waveformView->getSourceAudioData();
+    const int sampleRate = waveformView->getSampleRate();
+
+    if (sourceData.isEmpty() || sourceData[0].isEmpty() || markerData.size() < 2) {
+        return;
+    }
 
     // Сохраняем текущую позицию воспроизведения ДО обновления источника
-    qint64 currentPosition = mediaPlayer->position();
-    qint64 oldDuration = mediaPlayer->duration(); // Старая длительность
-    bool wasPlaying = (mediaPlayer->playbackState() == QMediaPlayer::PlayingState);
+    previewRestorePosition = mediaPlayer->position();
+    previewOldDuration = mediaPlayer->duration();
+    previewWasPlaying = (mediaPlayer->playbackState() == QMediaPlayer::PlayingState);
 
-    // Сохраняем обработанные данные во временный WAV файл
-    QString tempWavPath = saveProcessedAudioToTempWav(processedData, sampleRate);
-    if (tempWavPath.isEmpty()) {
-        qWarning() << "updatePlaybackAfterMarkerDrag: failed to save processed audio";
-        return;
-    }
+    // Тяжёлая часть — time stretch (Rubber Band) и запись WAV — в фоновом потоке.
+    // Лямбда не захватывает this: задача безопасно переживёт закрытие окна.
+    markerPreviewWatcher->setFuture(QtConcurrent::run(
+        [sourceData, markerData, sampleRate]() -> QPair<QString, QVector<QVector<float>>> {
+            const TimeStretchProcessor::StretchResult result =
+                TimeStretchProcessor::applyMarkerStretch(sourceData, markerData, sampleRate, true);
 
-    // Обновляем источник воспроизведения
-    mediaPlayer->setSource(QUrl::fromLocalFile(tempWavPath));
+            if (result.audioData.isEmpty() || result.audioData[0].isEmpty()) {
+                return {};
+            }
 
-    // Ждем загрузки нового файла перед восстановлением позиции
-    // Используем одноразовый таймер для ожидания готовности медиаплеера
-    QTimer::singleShot(100, this, [this, currentPosition, oldDuration, wasPlaying]() {
-        if (!mediaPlayer) return;
+            const QString path = WavWriter::writeTempProcessedFile(result.audioData, sampleRate);
+            if (path.isEmpty()) {
+                qWarning() << "updatePlaybackAfterMarkerDrag: failed to save processed audio";
+            }
+            return qMakePair(path, result.audioData);
+        }));
 
-        qint64 newDuration = mediaPlayer->duration();
-
-        // Восстанавливаем позицию воспроизведения (с учетом новой длины файла)
-        if (newDuration > 0 && oldDuration > 0 && currentPosition > 0) {
-            // Масштабируем позицию пропорционально новой длине
-            // Это приблизительное решение, более точное потребует пересчета позиции по меткам
-            float ratio = float(newDuration) / float(oldDuration);
-            qint64 newPosition = qint64(currentPosition * ratio);
-            newPosition = qBound(qint64(0), newPosition, newDuration);
-            mediaPlayer->setPosition(newPosition);
-        } else if (newDuration > 0 && currentPosition > 0) {
-            // Если старой длительности нет, просто ограничиваем текущую позицию
-            mediaPlayer->setPosition(qBound(qint64(0), currentPosition, newDuration));
-        } else {
-            mediaPlayer->setPosition(0);
-        }
-
-        // Если было воспроизведение, продолжаем его
-        if (wasPlaying) {
-            mediaPlayer->play();
-        }
-    });
-
-    qDebug() << "updatePlaybackAfterMarkerDrag: updated playback to processed audio, size:"
-             << processedData[0].size() << "samples";
+    qDebug() << "updatePlaybackAfterMarkerDrag: background stretch started,"
+             << sourceData[0].size() << "samples," << markerData.size() << "markers";
 }
 
 void MainWindow::createOnsetMarkersAuto()
@@ -2984,6 +3076,7 @@ void MainWindow::updateUIAfterAnalysis(const QVector<QVector<float>>& audioData,
         pitchGridWidget->setSampleRate(waveformView->getSampleRate());
         pitchGridWidget->setBPM(analysis.bpm);
         pitchGridWidget->setBeatsPerBar(beatsPerBar);
+        pitchGridWidget->setGridStartSample(analysis.gridStartSample);
         pitchGridWidget->update();
     }
 
@@ -3014,6 +3107,7 @@ void MainWindow::updateUIAfterBeatFix(const QVector<QVector<float>>& fixedData,
         pitchGridWidget->setSampleRate(waveformView->getSampleRate());
         pitchGridWidget->setBPM(analysis.bpm);
         pitchGridWidget->setBeatsPerBar(beatsPerBar);
+        pitchGridWidget->setGridStartSample(analysis.gridStartSample);
         pitchGridWidget->update();
     }
 
@@ -3032,6 +3126,13 @@ void MainWindow::updateUIAfterBeatFix(const QVector<QVector<float>>& fixedData,
     waveformView->setHorizontalOffset(offset);
     updateHorizontalScrollBar(waveformView->getZoomLevel());
     waveformView->update();
+
+    if (pitchGridWidget) {
+        pitchGridWidget->setZoomLevel(waveformView->getZoomLevel());
+        pitchGridWidget->setHorizontalOffset(waveformView->getHorizontalOffset());
+        syncPitchGridTimelineWidth();
+        pitchGridWidget->update();
+    }
 }
 
 QVector<Marker> MainWindow::createAlignedBeatMarkers(const QVector<BPMAnalyzer::BeatInfo>& alignedBeats,
@@ -3133,31 +3234,45 @@ void MainWindow::applyBeatFixToWaveform(const QVector<QVector<float>>& originalD
     updateUIAfterBeatFix(fixedData, analysis, beatsPerBar);
 }
 
-QString MainWindow::saveProcessedAudioToTempWav(const QVector<QVector<float>> &data, int sampleRate) const
+void MainWindow::onMarkerPreviewStretchFinished()
 {
-    QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-    if (tempDir.isEmpty()) {
-        tempDir = QDir::currentPath();
+    if (isShuttingDown || !ui || !markerPreviewWatcher || !mediaPlayer) {
+        return;
     }
 
-    QDir dir(tempDir);
-    if (!dir.exists()) {
-        dir.mkpath(tempDir);
+    const QPair<QString, QVector<QVector<float>>> preview = markerPreviewWatcher->result();
+    if (!preview.second.isEmpty() && waveformView) {
+        waveformView->applyStretchedPreview(preview.second);
     }
 
-    const QString filePath = dir.filePath("dontfloat_processed.wav");
-
-    WavWriter::WriteOptions writeOptions;
-    writeOptions.format = WavWriter::SampleFormat::Float32;
-    writeOptions.dither = false;
-
-    QString error;
-    if (!WavWriter::writeFile(filePath, data, sampleRate, &error, writeOptions)) {
-        qWarning() << "saveProcessedAudioToTempWav:" << error;
-        return QString();
+    if (preview.first.isEmpty()) {
+        return;
     }
 
-    qDebug() << "saveProcessedAudioToTempWav: written" << (data.isEmpty() ? 0 : data[0].size())
-             << "frames to" << filePath;
-    return filePath;
+    mediaPlayer->setSource(QUrl::fromLocalFile(preview.first));
+    QTimer::singleShot(100, this, &MainWindow::restorePlaybackPositionAfterSourceChange);
+}
+
+void MainWindow::restorePlaybackPositionAfterSourceChange()
+{
+    if (isShuttingDown || !mediaPlayer) {
+        return;
+    }
+
+    const qint64 newDuration = mediaPlayer->duration();
+
+    if (newDuration > 0 && previewOldDuration > 0 && previewRestorePosition > 0) {
+        const float ratio = float(newDuration) / float(previewOldDuration);
+        qint64 newPosition = qint64(previewRestorePosition * ratio);
+        newPosition = qBound(qint64(0), newPosition, newDuration);
+        mediaPlayer->setPosition(newPosition);
+    } else if (newDuration > 0 && previewRestorePosition > 0) {
+        mediaPlayer->setPosition(qBound(qint64(0), previewRestorePosition, newDuration));
+    } else {
+        mediaPlayer->setPosition(0);
+    }
+
+    if (previewWasPlaying) {
+        mediaPlayer->play();
+    }
 }

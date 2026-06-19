@@ -77,6 +77,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Widgets
     Multimedia
     MultimediaWidgets
+    Concurrent
     Test
 )
 
@@ -98,6 +99,7 @@ set(SOURCES
     src/waveformview.cpp
     src/markerengine.cpp
     src/pitchgridwidget.cpp
+    src/giada_pitchgrid_engine.cpp
     src/waveformcolors.cpp
     src/bpmanalyzer.cpp
     src/keyanalyzer.cpp
@@ -118,10 +120,6 @@ set(SOURCES
     src/spectrogramsettingsdialog.cpp
     src/pitchshiftsettingsdialog.cpp
     src/shortcutsdialog.cpp
-    # ReverbSC C-sources from LMMS/SoundPipe (GPL-2, original authors: Sean Costello, Paul Batchelor)
-    thirdparty/lmms/plugins/ReverbSC/base.c
-    thirdparty/lmms/plugins/ReverbSC/revsc.c
-    thirdparty/lmms/plugins/ReverbSC/dcblock.c
 )
 
 # Add header files
@@ -130,6 +128,7 @@ set(HEADERS
     include/waveformview.h
     include/markerengine.h
     include/pitchgridwidget.h
+    include/giada_pitchgrid_engine.h
     include/waveformcolors.h
     include/bpmanalyzer.h
     include/keyanalyzer.h
@@ -150,7 +149,6 @@ set(HEADERS
     include/keyselectionmenu.h
     include/spectrogramsettingsdialog.h
     include/fft_engine.h
-    include/reverbsc_engine.h
     include/granularpitchshifter_engine.h
     include/pitchshiftsettingsdialog.h
     include/shortcutsdialog.h
@@ -218,6 +216,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::Multimedia
     Qt6::MultimediaWidgets
+    Qt6::Concurrent
 )
 dontfloat_link_rubberband(${PROJECT_NAME})
 
@@ -325,21 +324,6 @@ else()
     message(STATUS "Building with simplified BPM analyzer (qm-dsp not found)")
 endif()
 
-# Third-party ReverbSC C sources: suppress external unused-parameter warnings
-if(MSVC)
-    set_source_files_properties(
-        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lmms/plugins/ReverbSC/dcblock.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lmms/plugins/ReverbSC/revsc.c
-        PROPERTIES COMPILE_OPTIONS "/wd4100"
-    )
-else()
-    set_source_files_properties(
-        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lmms/plugins/ReverbSC/dcblock.c
-        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lmms/plugins/ReverbSC/revsc.c
-        PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter"
-    )
-endif()
-
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/WinDeployQt.cmake)
 
 # Платформенные свойства исполняемого файла
@@ -394,6 +378,7 @@ function(add_qt_test test_name)
         Qt6::Widgets
         Qt6::Multimedia
         Qt6::MultimediaWidgets
+        Qt6::Concurrent
         Qt6::Test
     )
 
@@ -549,6 +534,7 @@ target_link_libraries(marker_testgen PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::Multimedia
+    Qt6::Concurrent
 )
 
 if(TARGET qm_dsp)

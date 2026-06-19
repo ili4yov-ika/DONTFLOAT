@@ -551,13 +551,13 @@
                                                 <number>0</number>
                                             </property>
                                             <property name="leftMargin">
-                                                <number>0</number>
+                                                <number>2</number>
                                             </property>
                                             <property name="topMargin">
                                                 <number>0</number>
                                             </property>
                                             <property name="rightMargin">
-                                                <number>0</number>
+                                                <number>2</number>
                                             </property>
                                             <property name="bottomMargin">
                                                 <number>4</number>
@@ -595,9 +595,6 @@
                                                             <width>16777215</width>
                                                             <height>25</height>
                                                         </size>
-                                                    </property>
-                                                    <property name="styleSheet">
-                                                        <string>QWidget { padding: 0px; }</string>
                                                     </property>
                                                 </widget>
                                             </item>

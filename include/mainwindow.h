@@ -25,10 +25,11 @@
 #include <QUndoStack>
 #include <QUrl>
 #include <QTranslator>
+#include <QFutureWatcher>
+#include <QPair>
 #include <functional>
 #include "waveformview.h"
 #include "spectrogramsettingsdialog.h"
-#include "reverbsc_engine.h"
 #include "pitchshiftsettingsdialog.h"
 #include "granularpitchshifter_engine.h"
 #include "pitchgridwidget.h"
@@ -92,6 +93,8 @@ private slots:
     void toggleBeatWaveform();
     void applyTimeStretch();
     void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
+    void onMarkerPreviewStretchFinished();
+    void restorePlaybackPositionAfterSourceChange();
     void onUndoStackChanged();
     void createOnsetMarkersAuto();        // Авто-метки по транзиентам (Onset detection)
     void snapAllMarkersToGrid();          // Привязать все метки к тактовой сетке
@@ -102,6 +105,10 @@ private:
     void createMenus();
     void createActions();
     void updatePitchGridLayout();
+    void syncPitchGridFromWaveform();
+    void syncPitchGridTimelineWidth();
+    void layoutPitchGridScrollOverlay();
+    void applyPitchGridVerticalScrollBarAlpha(int alpha);
     void updateWindowTitle();
     void setupConnections();
     // Применение цветовой схемы: фон виджетов и стили скроллбаров (см. :/styles/*.qss).
@@ -152,16 +159,14 @@ private:
                                 const BPMAnalyzer::AnalysisResult& analysis,
                                 int beatsPerBar);
 
-    // Сохранение обработанного аудио во временный WAV-файл
-    // и возврат пути к нему. Используется для того, чтобы
-    // QMediaPlayer воспроизводил уже обработанное аудио.
-    QString saveProcessedAudioToTempWav(const QVector<QVector<float>> &data, int sampleRate) const;
     void syncPlaybackWithWaveform();
+    void prepareShutdown();
 
     // UI components
     Ui::MainWindow *ui;
     WaveformView *waveformView;
     PitchGridWidget *pitchGridWidget;
+    QWidget *pitchGridScrollContainer;
     QScrollBar *horizontalScrollBar;
     QScrollBar *pitchGridVerticalScrollBar;
     QSplitter *mainSplitter;
@@ -198,8 +203,6 @@ private:
     QAction *waveformSpectrogramAct;
     QAction *spectrogramSettingsAct;
     SpectrogramSettingsDialog* spectrogramSettingsDialog;
-    QAction *reverbAct;
-    ReverbEngine::ReverbParams reverbParams;
     QAction *pitchShiftSettingsAct;
     PitchShiftSettingsDialog* pitchShiftSettingsDialog;
     GranularEngine::Params pitchShiftParams;
@@ -210,6 +213,7 @@ private:
     // File management
     QString currentFileName;
     bool hasUnsavedChanges;
+    bool isShuttingDown = false;
 
     // Playback components
     bool isPlaying;
@@ -218,6 +222,14 @@ private:
     QMediaPlayer *mediaPlayer;
     QAudioOutput *audioOutput;
     QTimer *markerPreviewTimer; // debounce для обновления воспроизведения после перетаскивания меток
+
+    // Фоновый пересчёт аудио для воспроизведения после перетаскивания меток.
+    // Time stretch (Rubber Band) и запись WAV выполняются в пуле потоков,
+    // UI-поток только переключает источник QMediaPlayer на готовый файл.
+    QFutureWatcher<QPair<QString, QVector<QVector<float>>>>* markerPreviewWatcher;
+    qint64 previewRestorePosition;  // Позиция воспроизведения до пересчёта
+    qint64 previewOldDuration;      // Длительность до пересчёта (для масштабирования позиции)
+    bool previewWasPlaying;         // Продолжить воспроизведение после переключения источника
 
     // Settings
     QSettings settings;

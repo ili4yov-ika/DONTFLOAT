@@ -8,7 +8,8 @@ QScrollBar:horizontal {
 QScrollBar::handle:horizontal {
     background: #606060;
     min-width: 20px;
-    border-radius: 0px;
+    border-radius: 2px;
+    margin: 2px 0px;
 }
 QScrollBar::handle:horizontal:hover {
     background: #707070;

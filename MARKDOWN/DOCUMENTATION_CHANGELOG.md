@@ -1,5 +1,20 @@
 # История изменений документации
 
+## 2026-06-14 (питч-сетка: актуализация документации)
+
+- Питч-сетка **не заморожена**: работает через `PitchGridWidget` + `GiadaPitchGridEngine`, по умолчанию **скрыта** (`Ctrl+G`, `QSettings` → `pitchGridVisible`).
+- Задокументированы: синхронизация с `WaveformView` (zoom, offset, каретка, `displaySampleCount()`), таймлайн на полную ширину под подписями нот, overlay-скроллбар слева, ввод мышью и колёсиком.
+- Удалены устаревшие формулировки «заморожена / пункт меню заблокирован».
+- Обновлены: `docs/features.md`, `docs/architecture.md`, `docs/shortcuts.md`, `README.md`, `MARKDOWN/ARCHITECTURE.md`, `MARKDOWN/INIT.MD`, `MARKDOWN/README.md`, `MARKDOWN/PROJECT_FLOWCHART.md`, `MARKDOWN/SHORTCUTS.md`, `thirdparty/README.md`.
+
+## 2026-06-13 (удаление реверберации после растяжения)
+
+- Удалён эффект «Реверберация после растяжения»: с переходом тонкомпенсации на
+  Rubber Band R3 маскировка артефактов не нужна, эффект только окрашивал звук.
+- Удалены: пункт меню «Настройки → Реверберация», настройка `reverbEnabled`,
+  `include/reverbsc_engine.h` (из репозитория, `CMakeLists.txt` и `DONTFLOAT.pro`).
+- Переводы синхронизированы (`lupdate -no-obsolete`), оба языка полные.
+
 ## 2026-05-31 (Windows presets, UI-тест меток)
 
 ### Сборка и запуск в VS Code/Cursor

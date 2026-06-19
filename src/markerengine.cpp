@@ -86,3 +86,58 @@ Marker::Marker(qint64 pos, bool fixed, bool endMarker, int sampleRate)
     , isSelected(false)
     , dragStartSample(0)
 {}
+
+// ============================================================================
+// MarkerUtils
+// ============================================================================
+
+namespace MarkerUtils {
+
+QVector<MarkerData> toMarkerData(const QVector<Marker>& markers)
+{
+    QVector<MarkerData> out;
+    out.reserve(markers.size());
+    for (const Marker& m : markers) {
+        out.append(static_cast<const MarkerData&>(m));
+    }
+    return out;
+}
+
+QVector<Marker> toMarkers(const QVector<MarkerData>& markerData)
+{
+    QVector<Marker> out;
+    out.reserve(markerData.size());
+    for (const MarkerData& md : markerData) {
+        Marker m;
+        static_cast<MarkerData&>(m) = md;
+        out.append(m);
+    }
+    return out;
+}
+
+bool positionsMatch(const QVector<Marker>& current, const QVector<MarkerData>& snapshot)
+{
+    if (current.size() != snapshot.size()) {
+        return false;
+    }
+    for (const MarkerData& snap : snapshot) {
+        bool found = false;
+        for (const Marker& m : current) {
+            if (m.originalPosition == snap.originalPosition
+                && m.isEndMarker == snap.isEndMarker
+                && m.isFixed == snap.isFixed) {
+                if (m.position != snap.position) {
+                    return false;
+                }
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace MarkerUtils

@@ -414,6 +414,14 @@ bool TimeStretchProcessor::validateMarkers(
     return true;
 }
 
+qint64 TimeStretchProcessor::maxRealtimePreviewSamples(int sampleRate)
+{
+    if (sampleRate <= 0) {
+        return 0;
+    }
+    return 5ll * sampleRate * 60ll;
+}
+
 float TimeStretchProcessor::calculateStretchFactor(
     const MarkerData& startMarker,
     const MarkerData& endMarker)

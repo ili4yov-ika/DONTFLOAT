@@ -2,6 +2,7 @@
 #define MARKERENGINE_H
 
 #include <QtCore/QPoint>
+#include <QtCore/QVector>
 #include <QtCore/QtGlobal>
 #include "timeutils.h"
 
@@ -48,5 +49,18 @@ struct Marker : public MarkerData {
     Marker(qint64 pos, bool fixed, int sampleRate = 44100);
     Marker(qint64 pos, bool fixed, bool endMarker, int sampleRate = 44100);
 };
+
+namespace MarkerUtils {
+
+/** Копирует data-поля Marker → MarkerData (без UI-состояния). */
+QVector<MarkerData> toMarkerData(const QVector<Marker>& markers);
+
+/** Создаёт Marker из MarkerData с UI-полями по умолчанию. */
+QVector<Marker> toMarkers(const QVector<MarkerData>& markerData);
+
+/** Совпадают ли position/originalPosition у пар меток (для проверки актуальности фонового превью). */
+bool positionsMatch(const QVector<Marker>& current, const QVector<MarkerData>& snapshot);
+
+} // namespace MarkerUtils
 
 #endif // MARKERENGINE_H
