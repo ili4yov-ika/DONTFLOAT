@@ -186,7 +186,7 @@ tests/
 - **BPM тесты**: `bpm_analyzer_test` на файлах из `source4test/`
 - **Тонкомпенсация**: `timestretchprocessor_test` (юнит), `pitch_compensation_file_test` (MP3 с одной нотой, метки, f0)
 - **Синтетические**: Тестирование с искусственными данными
-- **UI тесты**: `ui_responsiveness_test`, проверка интерфейса и цветовых схем
+- **UI тесты**: `ui_responsiveness_test` — загрузка `example_V80BPM.mp3`, доли, drag меток, time stretch, воспроизведение (`DONTFLOAT_RUN_UI_TEST=1`); batch-скрипты `ui_diagnostic_test.bat` и др. — legacy
 
 Актуальный список целей CMake и команд запуска — [tests/README.md](../tests/README.md).
 

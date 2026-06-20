@@ -1,3 +1,5 @@
+CompilationDatabase: build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug
+
 CompileFlags:
   Add:
     - -std=c++17

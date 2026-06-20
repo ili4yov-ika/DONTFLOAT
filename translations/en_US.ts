@@ -1,6 +1,51 @@
 <?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="en_US">
-    <!-- Language submenu and autonyms policy: see MARKDOWN/INIT.MD (Localization, language selection). Per-message notes in translatorcomment. -->
+<context>
+    <name>AudioFileService</name>
+    <message>
+        <location filename="../src/audiofileservice.cpp" line="69" />
+        <source>файл не найден или недоступен</source>
+        <translation>file not found or inaccessible</translation>
+    </message>
+    <message>
+        <location filename="../src/audiofileservice.cpp" line="71" />
+        <source>неподдерживаемый формат</source>
+        <translation>unsupported format</translation>
+    </message>
+    <message>
+        <location filename="../src/audiofileservice.cpp" line="73" />
+        <source>нет доступа к файлу</source>
+        <translation>no file access</translation>
+    </message>
+    <message>
+        <location filename="../src/audiofileservice.cpp" line="75" />
+        <source>неизвестная ошибка</source>
+        <translation>unknown error</translation>
+    </message>
+    <message>
+        <location filename="../src/audiofileservice.cpp" line="164" />
+        <source>не удалось декодировать аудиоданные</source>
+        <translation>failed to decode audio data</translation>
+    </message>
+</context>
+<context>
+    <name>KeySelectionMenu</name>
+    <message>
+        <location filename="../src/keyselectionmenu.cpp" line="30" />
+        <source>Мажорные</source>
+        <translation>Major</translation>
+    </message>
+    <message>
+        <location filename="../src/keyselectionmenu.cpp" line="31" />
+        <source>Минорные</source>
+        <translation>Minor</translation>
+    </message>
+    <message>
+        <location filename="../src/keyselectionmenu.cpp" line="34" />
+        <source>Не определена</source>
+        <translation>Undefined</translation>
+    </message>
+</context>
 <context>
     <name>LoadFileDialog</name>
     <message>
@@ -243,8 +288,8 @@
     <name>MainWindow</name>
     <message>
         <location filename="../ui/mainwindow.ui" line="14" />
-        <location filename="../src/mainwindow.cpp" line="1643" />
-        <location filename="../src/mainwindow.cpp" line="1992" />
+        <location filename="../src/mainwindow.cpp" line="1579" />
+        <location filename="../src/mainwindow.cpp" line="1811" />
         <source>DONTFLOAT</source>
         <translation>DONTFLOAT</translation>
     </message>
@@ -325,59 +370,68 @@
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="267" />
-        <location filename="../src/mainwindow.cpp" line="3279" />
-        <location filename="../src/mainwindow.cpp" line="3287" />
-        <location filename="../src/mainwindow.cpp" line="3295" />
-        <location filename="../src/mainwindow.cpp" line="3303" />
-        <location filename="../src/mainwindow.cpp" line="3314" />
-        <location filename="../src/mainwindow.cpp" line="3330" />
-        <source>Авто-метки по тактовой сетке</source>
-        <translation>Auto markers on beat grid</translation>
+        <source>Сдвинуть тактовую сетку на один удар назад</source>
+        <translation>Shift beat grid one beat back</translation>
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="270" />
+        <source>&lt;</source>
+        <translation>&lt;</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="289" />
+        <source>Привязать все метки к тактовой сетке BPM</source>
+        <translation>Snap all markers to BPM grid</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="292" />
         <source>BG</source>
         <translation>BG</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="338" />
-        <location filename="../src/mainwindow.cpp" line="700" />
-        <location filename="../src/mainwindow.cpp" line="1275" />
+        <location filename="../ui/mainwindow.ui" line="311" />
+        <source>Сдвинуть тактовую сетку на один удар вперёд</source>
+        <translation>Shift beat grid one beat forward</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="314" />
+        <source>&gt;</source>
+        <translation>&gt;</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="382" />
+        <location filename="../src/mainwindow.cpp" line="622" />
+        <location filename="../src/mainwindow.cpp" line="1240" />
         <source>Метроном</source>
         <translation>Metronome</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="374" />
+        <location filename="../ui/mainwindow.ui" line="418" />
         <source>Установить точку A (начало цикла)</source>
         <translation>Set loop start A</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="377" />
+        <location filename="../ui/mainwindow.ui" line="421" />
         <source>A</source>
         <translation>A</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="402" />
+        <location filename="../ui/mainwindow.ui" line="446" />
         <source>Установить точку B (конец цикла)</source>
         <translation>Set loop end B</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="405" />
+        <location filename="../ui/mainwindow.ui" line="449" />
         <source>B</source>
         <translation>B</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="430" />
+        <location filename="../ui/mainwindow.ui" line="474" />
         <source>Включить/выключить цикл</source>
         <translation>Toggle loop</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="556" />
-        <source>QWidget { padding: 0px; }</source>
-        <translation>QWidget { padding: 0px; }</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindow.ui" line="643" />
+        <location filename="../ui/mainwindow.ui" line="684" />
         <source>QWidget {
                                                                         background-color: #1a1a1a;
                                                                         border-bottom: 1px solid
@@ -390,7 +444,7 @@
                                                                         }</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="671" />
+        <location filename="../ui/mainwindow.ui" line="712" />
         <source>color: #ccc;
                                                                                     font-size: 11px;
                                                                                     font-weight:
@@ -401,13 +455,13 @@
                                                                                     bold;</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="677" />
+        <location filename="../ui/mainwindow.ui" line="718" />
         <source>Тональность:</source>
         <translation>Key:</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="686" />
-        <location filename="../ui/mainwindow.ui" line="728" />
+        <location filename="../ui/mainwindow.ui" line="727" />
+        <location filename="../ui/mainwindow.ui" line="769" />
         <source>QLineEdit {
                                                                                     background-color:
                                                                                     #2b2b2b;
@@ -460,20 +514,20 @@
                                                                                     }</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="718" />
+        <location filename="../ui/mainwindow.ui" line="759" />
         <source>Не
                                                                                     определена</source>
         <translation>Not
                                                                                     defined</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="760" />
-        <location filename="../src/mainwindow.cpp" line="2802" />
+        <location filename="../ui/mainwindow.ui" line="801" />
+        <location filename="../src/mainwindow.cpp" line="2511" />
         <source>Модуляция</source>
         <translation>Modulation</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="798" />
+        <location filename="../ui/mainwindow.ui" line="839" />
         <source>QWidget {
                                                                         background-color: #2b2b2b;
                                                                         }</source>
@@ -482,306 +536,288 @@
                                                                         }</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="826" />
+        <location filename="../ui/mainwindow.ui" line="867" />
         <source>background-color: rgb(33, 33, 33);
                     color: rgb(255, 255, 255);</source>
         <translation>background-color: rgb(33, 33, 33);
                     color: rgb(255, 255, 255);</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="683" />
-        <location filename="../src/mainwindow.cpp" line="1412" />
+        <location filename="../src/mainwindow.cpp" line="605" />
+        <location filename="../src/mainwindow.cpp" line="1358" />
         <source>&amp;Файл</source>
         <translation>&amp;File</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="684" />
-        <location filename="../src/mainwindow.cpp" line="1419" />
+        <location filename="../src/mainwindow.cpp" line="606" />
+        <location filename="../src/mainwindow.cpp" line="1365" />
         <source>&amp;Правка</source>
         <translation>&amp;Edit</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="685" />
-        <location filename="../src/mainwindow.cpp" line="1427" />
+        <location filename="../src/mainwindow.cpp" line="607" />
+        <location filename="../src/mainwindow.cpp" line="1373" />
         <source>&amp;Вид</source>
         <translation>&amp;View</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="686" />
-        <location filename="../src/mainwindow.cpp" line="1430" />
+        <location filename="../src/mainwindow.cpp" line="608" />
+        <location filename="../src/mainwindow.cpp" line="1376" />
         <source>Темы</source>
         <translation>Themes</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="687" />
-        <location filename="../src/mainwindow.cpp" line="1434" />
+        <location filename="../src/mainwindow.cpp" line="609" />
+        <location filename="../src/mainwindow.cpp" line="1380" />
         <source>&amp;Цветовая схема</source>
         <translation>&amp;Color Scheme</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="688" />
-        <location filename="../src/mainwindow.cpp" line="1450" />
+        <location filename="../src/mainwindow.cpp" line="610" />
+        <location filename="../src/mainwindow.cpp" line="1396" />
         <source>&amp;Настройки</source>
         <translation>&amp;Settings</translation>
     </message>
     <message>
-        <translatorcomment>DONTFLOAT policy: submenu title stays the literal string «Language» in every locale (do not translate to «Язык», etc.).</translatorcomment>
-        <location filename="../src/mainwindow.cpp" line="689" />
-        <location filename="../src/mainwindow.cpp" line="1459" />
+        <location filename="../src/mainwindow.cpp" line="611" />
+        <location filename="../src/mainwindow.cpp" line="1404" />
         <source>Language</source>
+        <translatorcomment>DONTFLOAT policy: submenu title stays the literal string «Language» in every locale (do not translate to «Язык», etc.).</translatorcomment>
         <translation>Language</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="690" />
-        <location filename="../src/mainwindow.cpp" line="1230" />
+        <location filename="../src/mainwindow.cpp" line="612" />
+        <location filename="../src/mainwindow.cpp" line="1195" />
         <source>&amp;Открыть...</source>
         <translation>&amp;Open...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="691" />
-        <location filename="../src/mainwindow.cpp" line="1234" />
+        <location filename="../src/mainwindow.cpp" line="613" />
+        <location filename="../src/mainwindow.cpp" line="1199" />
         <source>&amp;Сохранить</source>
         <translation>&amp;Save</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="692" />
-        <location filename="../src/mainwindow.cpp" line="1238" />
+        <location filename="../src/mainwindow.cpp" line="614" />
+        <location filename="../src/mainwindow.cpp" line="1203" />
         <source>&amp;Выход</source>
         <translation>&amp;Exit</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="693" />
-        <location filename="../src/mainwindow.cpp" line="1243" />
+        <location filename="../src/mainwindow.cpp" line="615" />
+        <location filename="../src/mainwindow.cpp" line="1208" />
         <source>По умолчанию</source>
         <translation>Default</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="693" />
-        <location filename="../src/mainwindow.cpp" line="1244" />
+        <location filename="../src/mainwindow.cpp" line="615" />
+        <location filename="../src/mainwindow.cpp" line="1209" />
         <source>Использовать тему по умолчанию</source>
         <translation>Use default theme</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="694" />
-        <location filename="../src/mainwindow.cpp" line="1248" />
+        <location filename="../src/mainwindow.cpp" line="616" />
+        <location filename="../src/mainwindow.cpp" line="1213" />
         <source>Тёмная</source>
         <translation>Dark</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="694" />
-        <location filename="../src/mainwindow.cpp" line="1249" />
+        <location filename="../src/mainwindow.cpp" line="616" />
+        <location filename="../src/mainwindow.cpp" line="1214" />
         <source>Использовать тёмную тему</source>
         <translation>Use dark theme</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="695" />
-        <location filename="../src/mainwindow.cpp" line="1252" />
+        <location filename="../src/mainwindow.cpp" line="617" />
+        <location filename="../src/mainwindow.cpp" line="1217" />
         <source>Светлая</source>
         <translation>Light</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="695" />
-        <location filename="../src/mainwindow.cpp" line="1253" />
+        <location filename="../src/mainwindow.cpp" line="617" />
+        <location filename="../src/mainwindow.cpp" line="1218" />
         <source>Использовать светлую тему</source>
         <translation>Use light theme</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="696" />
-        <location filename="../src/mainwindow.cpp" line="1257" />
+        <location filename="../src/mainwindow.cpp" line="618" />
+        <location filename="../src/mainwindow.cpp" line="1222" />
         <source>Настройки &amp;метронома...</source>
         <translation>&amp;Metronome Settings...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="696" />
-        <location filename="../src/mainwindow.cpp" line="1258" />
+        <location filename="../src/mainwindow.cpp" line="618" />
+        <location filename="../src/mainwindow.cpp" line="1223" />
         <source>Настройки метронома</source>
         <translation>Metronome Settings</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="697" />
-        <location filename="../src/mainwindow.cpp" line="1261" />
+        <location filename="../src/mainwindow.cpp" line="619" />
+        <location filename="../src/mainwindow.cpp" line="1226" />
         <source>&amp;Горячие клавиши...</source>
         <translation>&amp;Hotkeys...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="697" />
-        <location filename="../src/mainwindow.cpp" line="1262" />
-        <location filename="../src/mainwindow.cpp" line="1514" />
+        <location filename="../src/mainwindow.cpp" line="619" />
+        <location filename="../src/mainwindow.cpp" line="1227" />
         <source>Настройка горячих клавиш</source>
         <translation>Configure hotkeys</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="698" />
-        <location filename="../src/mainwindow.cpp" line="1266" />
+        <location filename="../src/mainwindow.cpp" line="620" />
+        <location filename="../src/mainwindow.cpp" line="1231" />
         <source>Воспроизведение/Пауза</source>
         <translation>Play/Pause</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="699" />
-        <location filename="../src/mainwindow.cpp" line="1270" />
+        <location filename="../src/mainwindow.cpp" line="621" />
+        <location filename="../src/mainwindow.cpp" line="1235" />
         <source>Стоп</source>
         <translation>Stop</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="701" />
-        <location filename="../src/mainwindow.cpp" line="1281" />
+        <location filename="../src/mainwindow.cpp" line="623" />
+        <location filename="../src/mainwindow.cpp" line="1246" />
         <source>Установить начало цикла</source>
         <translation>Set loop start</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="702" />
-        <location filename="../src/mainwindow.cpp" line="1285" />
+        <location filename="../src/mainwindow.cpp" line="624" />
+        <location filename="../src/mainwindow.cpp" line="1250" />
         <source>Установить конец цикла</source>
         <translation>Set loop end</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="703" />
-        <location filename="../src/mainwindow.cpp" line="1292" />
+        <location filename="../src/mainwindow.cpp" line="625" />
+        <location filename="../src/mainwindow.cpp" line="1257" />
         <source>Переключить видимость питч-сетки</source>
         <translation>Toggle pitch grid visibility</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="703" />
-        <location filename="../src/mainwindow.cpp" line="762" />
-        <location filename="../src/mainwindow.cpp" line="2654" />
+        <location filename="../src/mainwindow.cpp" line="625" />
+        <location filename="../src/mainwindow.cpp" line="682" />
+        <location filename="../src/mainwindow.cpp" line="2419" />
         <source>Убрать питч-сетку</source>
         <translation>Hide Pitch Grid</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="703" />
-        <location filename="../src/mainwindow.cpp" line="765" />
-        <location filename="../src/mainwindow.cpp" line="1290" />
-        <location filename="../src/mainwindow.cpp" line="2657" />
+        <location filename="../src/mainwindow.cpp" line="625" />
+        <location filename="../src/mainwindow.cpp" line="683" />
+        <location filename="../src/mainwindow.cpp" line="1255" />
+        <location filename="../src/mainwindow.cpp" line="2420" />
         <source>Показать питч-сетку</source>
         <translation>Show Pitch Grid</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="704" />
-        <location filename="../src/mainwindow.cpp" line="1297" />
+        <location filename="../src/mainwindow.cpp" line="626" />
+        <location filename="../src/mainwindow.cpp" line="1261" />
         <source>Силуэт ударных</source>
         <translation>Beat Waveform</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="704" />
-        <location filename="../src/mainwindow.cpp" line="1300" />
+        <location filename="../src/mainwindow.cpp" line="626" />
+        <location filename="../src/mainwindow.cpp" line="1264" />
         <source>Переключить отображение силуэта ударных поверх волны</source>
         <translation>Toggle beat waveform overlay</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="705" />
-        <location filename="../src/mainwindow.cpp" line="1327" />
+        <location filename="../src/mainwindow.cpp" line="627" />
+        <location filename="../src/mainwindow.cpp" line="1291" />
         <source>&amp;Отменить</source>
         <translation>&amp;Undo</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="706" />
-        <location filename="../src/mainwindow.cpp" line="1331" />
+        <location filename="../src/mainwindow.cpp" line="628" />
+        <location filename="../src/mainwindow.cpp" line="1295" />
         <source>&amp;Повторить</source>
         <translation>&amp;Redo</translation>
     </message>
     <message>
-        <translatorcomment>Language name autonym: keep Cyrillic «Русский» in the English .ts as well (do not use «Russian» here).</translatorcomment>
-        <location filename="../src/mainwindow.cpp" line="707" />
-        <location filename="../src/mainwindow.cpp" line="1335" />
+        <location filename="../src/mainwindow.cpp" line="629" />
+        <location filename="../src/mainwindow.cpp" line="1299" />
         <source>Русский</source>
+        <translatorcomment>Language name autonym: keep Cyrillic «Русский» in the English .ts as well (do not use «Russian» here).</translatorcomment>
         <translation>Русский</translation>
     </message>
     <message>
-        <translatorcomment>Language name autonym: keep «English» (do not translate to localized demonyms).</translatorcomment>
-        <location filename="../src/mainwindow.cpp" line="731" />
-        <location filename="../src/mainwindow.cpp" line="1366" />
+        <location filename="../src/mainwindow.cpp" line="630" />
+        <location filename="../src/mainwindow.cpp" line="1304" />
         <source>English</source>
+        <translatorcomment>Language name autonym: keep «English» (do not translate to localized demonyms).</translatorcomment>
         <translation>English</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="709" />
-        <location filename="../src/mainwindow.cpp" line="1403" />
-        <location filename="../src/mainwindow.cpp" line="3063" />
+        <location filename="../src/mainwindow.cpp" line="631" />
+        <location filename="../src/mainwindow.cpp" line="1349" />
+        <location filename="../src/mainwindow.cpp" line="2780" />
         <source>Применить сжатие-растяжение</source>
         <translation>Apply time stretch</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="709" />
-        <location filename="../src/mainwindow.cpp" line="1405" />
+        <location filename="../src/mainwindow.cpp" line="631" />
+        <location filename="../src/mainwindow.cpp" line="1351" />
         <source>Применить сжатие-растяжение аудио по меткам с тонкомпенсацией</source>
         <translation>Apply time stretch with pitch compensation</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="710" />
-        <location filename="../src/mainwindow.cpp" line="1439" />
+        <location filename="../src/mainwindow.cpp" line="632" />
+        <location filename="../src/mainwindow.cpp" line="1385" />
         <source>Вид звуковой волны</source>
         <translation>Waveform view</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="711" />
-        <location filename="../src/mainwindow.cpp" line="1304" />
+        <location filename="../src/mainwindow.cpp" line="633" />
+        <location filename="../src/mainwindow.cpp" line="1268" />
         <source>Звуковые пики</source>
         <translation>Wave peaks</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="712" />
-        <location filename="../src/mainwindow.cpp" line="1315" />
+        <location filename="../src/mainwindow.cpp" line="634" />
+        <location filename="../src/mainwindow.cpp" line="1279" />
         <source>Спектрограмма</source>
         <translation>Spectrogram</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="713" />
-        <location filename="../src/mainwindow.cpp" line="1345" />
+        <location filename="../src/mainwindow.cpp" line="635" />
+        <location filename="../src/mainwindow.cpp" line="1309" />
         <source>Настройки отображения спектрограммы...</source>
         <translation>Spectrogram display settings...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="713" />
-        <location filename="../src/mainwindow.cpp" line="1346" />
+        <location filename="../src/mainwindow.cpp" line="635" />
+        <location filename="../src/mainwindow.cpp" line="1310" />
         <source>Настроить параметры спектрограммы (размер окна, полосы, цвет)</source>
         <translation>Spectrogram options (window, bands, color)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="714" />
-        <location filename="../src/mainwindow.cpp" line="1367" />
-        <source>Настройки реверберации...</source>
-        <translation>Reverb settings...</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="714" />
-        <location filename="../src/mainwindow.cpp" line="1368" />
-        <source>Настроить реверберацию, применяемую после растяжения (Ctrl+T)</source>
-        <translation>Reverb after time stretch (Ctrl+T)</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="715" />
-        <location filename="../src/mainwindow.cpp" line="1385" />
+        <location filename="../src/mainwindow.cpp" line="636" />
+        <location filename="../src/mainwindow.cpp" line="1331" />
         <source>Настройки питч-шифтера...</source>
         <translation>Pitch shift settings...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="715" />
-        <location filename="../src/mainwindow.cpp" line="1386" />
+        <location filename="../src/mainwindow.cpp" line="636" />
+        <location filename="../src/mainwindow.cpp" line="1332" />
         <source>Настроить гранулярный питч-шифтер, применяемый после растяжения (Ctrl+T)</source>
         <translation>Granular pitch shift after stretch (Ctrl+T)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="821" />
+        <location filename="../src/mainwindow.cpp" line="743" />
         <source>Размер такта изменен на %1</source>
         <translation>Time signature set to %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="841" />
+        <location filename="../src/mainwindow.cpp" line="763" />
         <source>Воспроизведение завершено</source>
         <translation>Playback completed</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="996" />
+        <location filename="../src/mainwindow.cpp" line="940" />
         <source>Автоматически создать метки по транзиентам (Onset detection из LMMS)</source>
         <translation>Auto-place markers from transients (LMMS onset detection)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1003" />
-        <source>Автоматически создать метки по тактовой сетке</source>
-        <translation>Auto-place markers on beat grid</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1021" />
+        <location filename="../src/mainwindow.cpp" line="978" />
         <source>ЛКМ: Установить точку A (начало цикла)
 ПКМ: Удалить точку A
 A: Установить точку A
@@ -792,7 +828,7 @@ A: Set point A
 Shift+A: Remove point A</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1022" />
+        <location filename="../src/mainwindow.cpp" line="979" />
         <source>ЛКМ: Установить точку B (конец цикла)
 ПКМ: Удалить точку B
 B: Установить точку B
@@ -803,453 +839,453 @@ B: Set point B
 Shift+B: Remove point B</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1026" />
+        <location filename="../src/mainwindow.cpp" line="983" />
         <source>Точка A: %1</source>
         <translation>Point A: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1032" />
+        <location filename="../src/mainwindow.cpp" line="989" />
         <source>Точка B: %1</source>
         <translation>Point B: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1086" />
+        <location filename="../src/mainwindow.cpp" line="1044" />
         <source>Воспроизведение...</source>
         <translation>Playing...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1097" />
+        <location filename="../src/mainwindow.cpp" line="1055" />
         <source>Пауза</source>
         <translation>Paused</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1119" />
+        <location filename="../src/mainwindow.cpp" line="1077" />
         <source>Остановлено</source>
         <translation>Stopped</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1149" />
+        <location filename="../src/mainwindow.cpp" line="1108" />
         <source>BPM установлен: %1</source>
         <translation>BPM set to: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1152" />
+        <location filename="../src/mainwindow.cpp" line="1111" />
         <source>Неверное значение BPM (допустимый диапазон: 0.01 - 9999.99)</source>
         <translation>Invalid BPM value (valid range: 0.01 - 9999.99)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1188" />
-        <location filename="../src/mainwindow.cpp" line="2167" />
+        <location filename="../src/mainwindow.cpp" line="1150" />
+        <location filename="../src/mainwindow.cpp" line="1985" />
         <source>Цикл: %1 - %2</source>
         <translation>Loop: %1 - %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1207" />
+        <location filename="../src/mainwindow.cpp" line="1172" />
         <source>Сегмент: %1 - %2 | Коэффициент: %3</source>
         <translation>Segment: %1 - %2 | Ratio: %3</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1496" />
-        <location filename="../src/mainwindow.cpp" line="2048" />
+        <location filename="../src/mainwindow.cpp" line="1431" />
         <source>Метка добавлена</source>
         <translation>Marker added</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1520" />
-        <source>&lt;h3&gt;Горячие клавиши&lt;/h3&gt;&lt;p&gt;&lt;b&gt;Пробел или P&lt;/b&gt; - Воспроизведение/Пауза&lt;/p&gt;&lt;p&gt;&lt;b&gt;S&lt;/b&gt; - Стоп&lt;/p&gt;&lt;p&gt;&lt;b&gt;T&lt;/b&gt; - Включить/выключить метроном&lt;/p&gt;&lt;p&gt;&lt;b&gt;A&lt;/b&gt; - Установить точку A (начало цикла)&lt;/p&gt;&lt;p&gt;&lt;b&gt;B&lt;/b&gt; - Установить точку B (конец цикла)&lt;/p&gt;&lt;p&gt;&lt;b&gt;Shift+A&lt;/b&gt; - Удалить точку A&lt;/p&gt;&lt;p&gt;&lt;b&gt;Shift+B&lt;/b&gt; - Удалить точку B&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt; - Отменить&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+Y&lt;/b&gt; - Повторить&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+O&lt;/b&gt; - Открыть файл&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+S&lt;/b&gt; - Сохранить файл&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+G&lt;/b&gt; - Переключить питч-сетку&lt;/p&gt;&lt;p&gt;&lt;b&gt;M&lt;/b&gt; - Добавить метку в текущей позиции&lt;/p&gt;</source>
-        <translation>&lt;h3&gt;Shortcuts&lt;/h3&gt;&lt;p&gt;&lt;b&gt;Space or P&lt;/b&gt; - Play/Pause&lt;/p&gt;&lt;p&gt;&lt;b&gt;S&lt;/b&gt; - Stop&lt;/p&gt;&lt;p&gt;&lt;b&gt;T&lt;/b&gt; - Metronome on/off&lt;/p&gt;&lt;p&gt;&lt;b&gt;A&lt;/b&gt; - Set loop start A&lt;/p&gt;&lt;p&gt;&lt;b&gt;B&lt;/b&gt; - Set loop end B&lt;/p&gt;&lt;p&gt;&lt;b&gt;Shift+A&lt;/b&gt; - Clear A&lt;/p&gt;&lt;p&gt;&lt;b&gt;Shift+B&lt;/b&gt; - Clear B&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+Z&lt;/b&gt; - Undo&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+Y&lt;/b&gt; - Redo&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+O&lt;/b&gt; - Open&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+S&lt;/b&gt; - Save&lt;/p&gt;&lt;p&gt;&lt;b&gt;Ctrl+G&lt;/b&gt; - Pitch grid&lt;/p&gt;&lt;p&gt;&lt;b&gt;M&lt;/b&gt; - Add marker&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1555" />
+        <location filename="../src/mainwindow.cpp" line="1491" />
         <source>Установлена точка A (начало цикла): %1</source>
         <translation>Point A (loop start) set: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1559" />
-        <location filename="../src/mainwindow.cpp" line="1584" />
+        <location filename="../src/mainwindow.cpp" line="1495" />
+        <location filename="../src/mainwindow.cpp" line="1520" />
         <source>Цикл готов! Нажмите кнопку Цикл для включения.</source>
         <translation>Loop ready! Press Loop button to enable.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1572" />
+        <location filename="../src/mainwindow.cpp" line="1508" />
         <source>Ошибка: Точка B должна быть больше точки A!</source>
         <translation>Error: Point B must be greater than point A!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1580" />
+        <location filename="../src/mainwindow.cpp" line="1516" />
         <source>Установлена точка B (конец цикла): %1</source>
         <translation>Point B (loop end) set: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1606" />
+        <location filename="../src/mainwindow.cpp" line="1542" />
         <source>Точка A (начало цикла) удалена</source>
         <translation>Point A (loop start) removed</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1630" />
+        <location filename="../src/mainwindow.cpp" line="1566" />
         <source>Точка B (конец цикла) удалена</source>
         <translation>Point B (loop end) removed</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1644" />
+        <location filename="../src/mainwindow.cpp" line="1580" />
         <source>В аудиофайле есть несохраненные изменения.
 Хотите сохранить изменения?</source>
         <translation>The audio has unsaved changes.
 Save before closing?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1647" />
+        <location filename="../src/mainwindow.cpp" line="1583" />
         <source>Сохранить</source>
         <translation>Save</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1648" />
+        <location filename="../src/mainwindow.cpp" line="1584" />
         <source>Не сохранять</source>
         <translation>Don't save</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1649" />
+        <location filename="../src/mainwindow.cpp" line="1585" />
         <source>Отмена</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1707" />
+        <location filename="../src/mainwindow.cpp" line="1647" />
         <source>Открыть аудиофайл</source>
         <translation>Open Audio File</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1708" />
+        <location filename="../src/mainwindow.cpp" line="1648" />
         <source>Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)</source>
         <translation>Audio Files (*.wav *.mp3 *.flac);;All Files (*)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1726" />
-        <location filename="../src/mainwindow.cpp" line="2089" />
+        <location filename="../src/mainwindow.cpp" line="1666" />
+        <location filename="../src/mainwindow.cpp" line="1899" />
         <source>Файл загружен: %1</source>
         <translation>File loaded: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1738" />
+        <location filename="../src/mainwindow.cpp" line="1676" />
         <source>Анализ и выравнивание долей</source>
         <translation>Analysis and Beat Alignment</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1740" />
+        <location filename="../src/mainwindow.cpp" line="1678" />
+        <location filename="../src/mainwindow.cpp" line="1688" />
         <source>Загрузка аудиофайла...</source>
         <translation>Loading audio...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1760" />
+        <location filename="../src/mainwindow.cpp" line="1700" />
         <source>Анализ аудио...</source>
         <translation>Audio analysis...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1763" />
+        <location filename="../src/mainwindow.cpp" line="1704" />
         <source>Анализ завершён.</source>
         <translation>Analysis completed.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1827" />
+        <location filename="../src/mainwindow.cpp" line="1693" />
         <source>Ошибка загрузки файла</source>
         <translation>File load error</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1847" />
-        <source>Ошибка: неподдерживаемый формат аудио</source>
-        <translation>Error: unsupported audio format</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1858" />
-        <source>Ошибка декодирования: </source>
-        <translation>Decode error:</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1861" />
-        <source>файл не найден или недоступен</source>
-        <translation>file not found or inaccessible</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1864" />
-        <source>неподдерживаемый формат</source>
-        <translation>unsupported format</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1867" />
-        <source>нет доступа к файлу</source>
-        <translation>no file access</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1870" />
-        <source>неизвестная ошибка</source>
-        <translation>unknown error</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1880" />
-        <source>Ошибка: некорректные данные в буфере</source>
-        <translation>Error: invalid buffer data</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1885" />
-        <source>Ошибка: неподдерживаемый формат данных</source>
-        <translation>Error: unsupported data format</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="1929" />
+        <location filename="../src/mainwindow.cpp" line="1783" />
         <source>Сохранить аудиофайл</source>
         <translation>Save Audio File</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1670" />
+        <location filename="../src/mainwindow.cpp" line="1772" />
         <source>WAV 32-bit float (*.wav)</source>
         <translation>WAV 32-bit float (*.wav)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1671" />
+        <location filename="../src/mainwindow.cpp" line="1773" />
         <source>WAV 24-bit PCM (*.wav)</source>
         <translation>WAV 24-bit PCM (*.wav)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1672" />
+        <location filename="../src/mainwindow.cpp" line="1774" />
         <source>WAV 16-bit PCM (*.wav)</source>
         <translation>WAV 16-bit PCM (*.wav)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1673" />
+        <location filename="../src/mainwindow.cpp" line="1775" />
         <source>Все файлы (*)</source>
         <translation>All files (*)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1985" />
+        <location filename="../src/mainwindow.cpp" line="1818" />
         <source>Файл сохранен: %1</source>
         <translation>Saved: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1988" />
+        <location filename="../src/mainwindow.cpp" line="1796" />
         <source>Ошибка: нет данных для сохранения</source>
         <translation>Error: nothing to save</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1993" />
+        <location filename="../src/mainwindow.cpp" line="948" />
+        <source>Привязать все метки к тактовой сетке BPM (подразделения такта)</source>
+        <translation>Snap all markers to BPM grid (bar subdivisions)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="953" />
+        <source>Сдвинуть тактовую сетку на один удар назад (Shift — вместе с метками)
+Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки</source>
+        <translation>Shift beat grid one beat back (Shift — move markers too)
+Shift + LMB drag on waveform — fine grid adjustment</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="959" />
+        <source>Сдвинуть тактовую сетку на один удар вперёд (Shift — вместе с метками)
+Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки</source>
+        <translation>Shift beat grid one beat forward (Shift — move markers too)
+Shift + LMB drag on waveform — fine grid adjustment</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1752" />
+        <source>Ошибка декодирования: %1</source>
+        <translation>Decode error: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1812" />
         <source>Не удалось сохранить файл %1:
 %2.</source>
         <translation>Could not save %1:
 %2.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2121" />
+        <location filename="../src/mainwindow.cpp" line="1939" />
         <source>Метроном включен</source>
         <translation>Metronome on</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2123" />
+        <location filename="../src/mainwindow.cpp" line="1941" />
         <source>Метроном выключен</source>
         <translation>Metronome off</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2131" />
+        <location filename="../src/mainwindow.cpp" line="1949" />
         <source>Ошибка: Сначала установите точки A и B для цикла!</source>
         <translation>Error: Set loop points A and B first!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2142" />
+        <location filename="../src/mainwindow.cpp" line="1960" />
         <source>Цикл включен: %1 - %2</source>
         <translation>Loop on: %1 - %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2146" />
+        <location filename="../src/mainwindow.cpp" line="1964" />
         <source>Цикл выключен</source>
         <translation>Loop off</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2180" />
+        <location filename="../src/mainwindow.cpp" line="1998" />
         <source>Настройки метронома обновлены</source>
         <translation>Metronome settings updated</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2243" />
+        <location filename="../src/mainwindow.cpp" line="2085" />
         <source>Тема изменена: %1</source>
         <translation>Theme: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2484" />
+        <location filename="../src/mainwindow.cpp" line="2143" />
         <source>Цветовая схема изменена: %1</source>
         <translation>Color scheme: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2555" />
+        <location filename="../src/mainwindow.cpp" line="2220" />
+        <source>Нет тактовой сетки для привязки (BPM или доли не определены).</source>
+        <translation>No beat grid to snap to (BPM or beats not detected).</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2226" />
+        <source>Нет меток для привязки к тактовой сетке.</source>
+        <translation>No markers to snap to the grid.</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2232" />
+        <source>Не удалось привязать метки к тактовой сетке.</source>
+        <translation>Could not snap markers to the grid.</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2247" />
+        <source>Метки привязаны к тактовой сетке (%1 шт.)</source>
+        <translation>Markers snapped to the grid (%1)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2250" />
+        <source>Все метки уже на тактовой сетке.</source>
+        <translation>All markers are already on the grid.</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2280" />
+        <source>Нет тактовой сетки для сдвига (BPM не определён).</source>
+        <translation>No beat grid to shift (BPM not detected).</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2294" />
+        <source>Тактовая сетка уже на границе аудиофайла.</source>
+        <translation>Beat grid is already at the file boundary.</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2301" />
+        <source>назад</source>
+        <translation>back</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2301" />
+        <source>вперёд</source>
+        <translation>forward</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2302" />
+        <source> (метки сдвинуты)</source>
+        <translation> (markers moved)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2304" />
+        <source>Тактовая сетка сдвинута на один удар %1%2</source>
+        <translation>Beat grid shifted one beat %1%2</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="2317" />
         <source>Информация о долях отсутствует</source>
         <translation>No beat information</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2564" />
+        <location filename="../src/mainwindow.cpp" line="2326" />
         <source>Некорректные параметры BPM или sampleRate</source>
         <translation>Invalid BPM or sample rate</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2576" />
+        <location filename="../src/mainwindow.cpp" line="2338" />
         <source>Неровные доли не найдены</source>
         <translation>No irregular beats found</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2621" />
+        <location filename="../src/mainwindow.cpp" line="2383" />
         <source>Создано %1 меток коррекции для %2 неровных долей</source>
         <translation>Created %1 correction markers for %2 irregular beats</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2688" />
-        <source>Мажорные</source>
-        <translation>Major</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="2699" />
-        <source>Минорные</source>
-        <translation>Minor</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="2711" />
-        <location filename="../src/mainwindow.cpp" line="2768" />
+        <location filename="../src/mainwindow.cpp" line="2477" />
         <source>Не определена</source>
         <translation>Undefined</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2722" />
+        <location filename="../src/mainwindow.cpp" line="2433" />
         <source>Сначала загрузите аудиофайл</source>
         <translation>Load an audio file first</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2729" />
+        <location filename="../src/mainwindow.cpp" line="2440" />
         <source>Нет аудиоданных для анализа</source>
         <translation>No audio to analyze</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2738" />
+        <location filename="../src/mainwindow.cpp" line="2449" />
         <source>Анализ тональности...</source>
         <translation>Key analysis...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2747" />
+        <location filename="../src/mainwindow.cpp" line="2458" />
         <source>Тональность определена: %1</source>
         <translation>Key: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2924" />
-        <location filename="../src/mainwindow.cpp" line="2947" />
+        <location filename="../src/mainwindow.cpp" line="2672" />
+        <location filename="../src/mainwindow.cpp" line="2695" />
         <source>Ошибка загрузки перевода</source>
         <translation>Translation load error</translation>
     </message>
     <message>
-        <translatorcomment>Status after switching UI to Russian: English UI may show a short English gloss; keep clear wording. Autonym policy applies to menu items, not necessarily this status string.</translatorcomment>
-        <location filename="../src/mainwindow.cpp" line="2933" />
+        <location filename="../src/mainwindow.cpp" line="2681" />
         <source>Язык: Русский</source>
+        <translatorcomment>Status after switching UI to Russian: English UI may show a short English gloss; keep clear wording. Autonym policy applies to menu items, not necessarily this status string.</translatorcomment>
         <translation>Language: Russian</translation>
     </message>
     <message>
-        <translatorcomment>Status after switching UI to English: keep the same English wording as the source string.</translatorcomment>
-        <location filename="../src/mainwindow.cpp" line="2956" />
+        <location filename="../src/mainwindow.cpp" line="2704" />
         <source>Language: English</source>
+        <translatorcomment>Status after switching UI to English: keep the same English wording as the source string.</translatorcomment>
         <translation>Language: English</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2962" />
+        <location filename="../src/mainwindow.cpp" line="2710" />
         <source>Ошибка: WaveformView не инициализирован</source>
         <translation>Error: WaveformView not initialized</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2989" />
+        <location filename="../src/mainwindow.cpp" line="2719" />
         <source>Недостаточно меток</source>
         <translation>Not enough markers</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2990" />
+        <location filename="../src/mainwindow.cpp" line="2720" />
         <source>Для применения растяжения необходимо минимум 2 метки.
 Используйте клавишу M для добавления меток.</source>
         <translation>Time stretch needs at least 2 markers.
 Press M to add markers.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2999" />
+        <location filename="../src/mainwindow.cpp" line="2729" />
         <source>Ошибка: нет загруженного аудио</source>
         <translation>Error: no audio loaded</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3029" />
+        <location filename="../src/mainwindow.cpp" line="2746" />
         <source>Ошибка при обработке аудио</source>
         <translation>Audio processing error</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3094" />
+        <location filename="../src/mainwindow.cpp" line="2792" />
         <source>Растяжение применено успешно. Размер: %1 → %2 сэмплов</source>
         <translation>Stretch applied. Length: %1 → %2 samples</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3167" />
-        <location filename="../src/mainwindow.cpp" line="3175" />
-        <location filename="../src/mainwindow.cpp" line="3183" />
-        <location filename="../src/mainwindow.cpp" line="3225" />
-        <location filename="../src/mainwindow.cpp" line="3254" />
+        <location filename="../src/mainwindow.cpp" line="2925" />
         <source>Авто-метки по транзиентам</source>
         <translation>Auto markers on transients</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3168" />
-        <location filename="../src/mainwindow.cpp" line="3280" />
+        <location filename="../src/mainwindow.cpp" line="2208" />
+        <location filename="../src/mainwindow.cpp" line="2267" />
+        <location filename="../src/mainwindow.cpp" line="2928" />
         <source>Волновая форма не инициализирована.</source>
         <translation>Waveform not initialized.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3176" />
-        <location filename="../src/mainwindow.cpp" line="3288" />
+        <location filename="../src/mainwindow.cpp" line="2214" />
+        <location filename="../src/mainwindow.cpp" line="2273" />
+        <location filename="../src/mainwindow.cpp" line="2934" />
         <source>Аудиоданные не загружены.</source>
         <translation>No audio loaded.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3184" />
-        <location filename="../src/mainwindow.cpp" line="3296" />
+        <location filename="../src/mainwindow.cpp" line="2940" />
         <source>Некорректная частота дискретизации.</source>
         <translation>Invalid sample rate.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3226" />
+        <location filename="../src/mainwindow.cpp" line="2981" />
         <source>Не удалось обнаружить транзиенты в аудиофайле.</source>
         <translation>No transients found.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3255" />
+        <location filename="../src/mainwindow.cpp" line="3008" />
         <source>Подходящих транзиентов не найдено.</source>
         <translation>No suitable transients found.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3271" />
+        <location filename="../src/mainwindow.cpp" line="3024" />
         <source>Создано %1 авто-меток по транзиентам</source>
         <translation>Created %1 transient markers</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3304" />
-        <source>Некорректное значение BPM.</source>
-        <translation>Invalid BPM.</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="3315" />
-        <source>Точка начала сетки выходит за пределы аудиофайла.</source>
-        <translation>Grid start is outside the file.</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="3331" />
-        <source>Подходящих позиций для тактовой сетки не найдено.</source>
-        <translation>No grid positions found.</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="3346" />
-        <source>Создано %1 авто-меток по тактовой сетке</source>
-        <translation>Created %1 grid markers</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="3358" />
+        <location filename="../src/mainwindow.cpp" line="3036" />
         <source>Силуэт ударных включен</source>
         <translation>Beat waveform enabled</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3360" />
+        <location filename="../src/mainwindow.cpp" line="3038" />
         <source>Силуэт ударных отключен</source>
         <translation>Beat waveform disabled</translation>
     </message>
@@ -1349,6 +1385,139 @@ Press M to add markers.</translation>
     </message>
 </context>
 <context>
+    <name>PitchShiftSettingsDialog</name>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="15" />
+        <source>Настройки питч-шифтера</source>
+        <translation>Pitch shift settings</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="24" />
+        <source>Применять питч-шифт после растяжения</source>
+        <translation>Apply pitch shift after time stretch</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="29" />
+        <source>Параметры</source>
+        <translation>Parameters</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="37" />
+        <source>Сдвиг высоты тона в полутонах (−24..+24).</source>
+        <translation>Pitch in semitones (−24..+24).</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="38" />
+        <source>0 пт</source>
+        <translation>0 st</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="43" />
+        <source>Питч (пт):</source>
+        <translation>Pitch (st):</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="51" />
+        <source>Частота генерации гран (Гц).
+Меньше = крупные граны, мягче. Больше = мелкие граны, чище.</source>
+        <translation>Grain rate (Hz). Lower = larger grains; higher = smaller, cleaner.</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="52" />
+        <source>8.0 Гц</source>
+        <translation>8.0 Hz</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="57" />
+        <source>Частота гран (Гц):</source>
+        <translation>Grain rate (Hz):</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="64" />
+        <source>Форма огибающей гранулы.
+0 = equal-gain (ровнее), 100 = equal-power (плотнее).</source>
+        <translation>Grain envelope. 0 = equal-gain; 100 = equal-power.</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="65" />
+        <source>50%</source>
+        <translation>50%</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="70" />
+        <source>Форма огибающей:</source>
+        <translation>Envelope:</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="77" />
+        <source>Разброс питча гран (0..1 октавы).
+Добавляет хорусный/ансамблевый эффект.</source>
+        <translation>Pitch spread (0..1 octave). Chorus-like.</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="78" />
+        <source>0%</source>
+        <translation>0%</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="83" />
+        <source>Разброс питча:</source>
+        <translation>Pitch spread:</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="90" />
+        <source>Уровень обработанного сигнала (wet/dry).</source>
+        <translation>Wet/dry level.</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="91" />
+        <source>100%</source>
+        <translation>100%</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="96" />
+        <source>Уровень (wet):</source>
+        <translation>Wet level:</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="100" />
+        <source>Предфильтр (убирает алиасинг при сдвиге вверх)</source>
+        <translation>Prefilter (reduces aliasing when shifting up)</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="107" />
+        <source>&lt;small&gt;&lt;i&gt;Питч-шифт применяется к аудио при нажатии Ctrl+T.&lt;/i&gt;&lt;/small&gt;</source>
+        <translation>&lt;small&gt;&lt;i&gt;Pitch shift applies on Ctrl+T.&lt;/i&gt;&lt;/small&gt;</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="114" />
+        <source>Закрыть</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="130" />
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="175" />
+        <source>%1 пт</source>
+        <translation>%1 st</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="134" />
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="181" />
+        <source>%1 Гц</source>
+        <translation>%1 Hz</translation>
+    </message>
+    <message>
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="138" />
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="142" />
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="146" />
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="184" />
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="187" />
+        <location filename="../src/pitchshiftsettingsdialog.cpp" line="190" />
+        <source>%1%</source>
+        <translation>%1%</translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
         <location filename="../src/beatfixcommand.cpp" line="20" />
@@ -1357,29 +1526,295 @@ Press M to add markers.</translation>
     </message>
 </context>
 <context>
+    <name>ShortcutsDialog</name>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="17" />
+        <source>Горячие клавиши</source>
+        <translation>Hotkeys</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="43" />
+        <source>Действие</source>
+        <translation>Action</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="43" />
+        <source>Сочетание клавиш</source>
+        <translation>Shortcut</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="53" />
+        <source>По умолчанию</source>
+        <translation>Reset to default</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="54" />
+        <source>Восстановить все сочетания по умолчанию</source>
+        <translation>Restore all default shortcuts</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="22" />
+        <source>Открыть файл</source>
+        <translation>Open file</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="23" />
+        <source>Сохранить файл</source>
+        <translation>Save file</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="24" />
+        <source>Выход</source>
+        <translation>Exit</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="25" />
+        <source>Воспроизведение/Пауза</source>
+        <translation>Play/Pause</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="26" />
+        <source>Стоп</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="27" />
+        <source>Метроном</source>
+        <translation>Metronome</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="28" />
+        <source>Установить начало цикла (A)</source>
+        <translation>Set loop start (A)</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="29" />
+        <source>Установить конец цикла (B)</source>
+        <translation>Set loop end (B)</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="30" />
+        <source>Удалить точку A</source>
+        <translation>Clear point A</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="31" />
+        <source>Удалить точку B</source>
+        <translation>Clear point B</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="32" />
+        <source>Отменить</source>
+        <translation>Undo</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="33" />
+        <source>Повторить</source>
+        <translation>Redo</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="34" />
+        <source>Переключить питч-сетку</source>
+        <translation>Toggle pitch grid</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="35" />
+        <source>Добавить метку</source>
+        <translation>Add marker</translation>
+    </message>
+    <message>
+        <location filename="../src/shortcutsdialog.cpp" line="36" />
+        <source>Применить сжатие-растяжение</source>
+        <translation>Apply time stretch</translation>
+    </message>
+</context>
+<context>
+    <name>SpectrogramSettingsDialog</name>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="16" />
+        <source>Настройки спектрограммы</source>
+        <translation>Spectrogram settings</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="33" />
+        <source>Размер FFT-окна. Больше — выше разрешение по частоте, ниже по времени.</source>
+        <translation>FFT window. Larger = better frequency resolution, lower time resolution.</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="34" />
+        <source>Размер FFT-окна:</source>
+        <translation>FFT window:</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="38" />
+        <source>Прямоугольная</source>
+        <translation>Rectangular</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="39" />
+        <source>Blackman-Harris</source>
+        <translation>Blackman-Harris</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="40" />
+        <source>Hamming</source>
+        <translation>Hamming</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="41" />
+        <source>Hanning</source>
+        <translation>Hanning</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="43" />
+        <source>Оконная функция влияет на подавление боковых лепестков.
+Blackman-Harris — лучший выбор для спектрограмм.</source>
+        <translation>Window function; Blackman-Harris is a good default.</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="44" />
+        <source>Оконная функция:</source>
+        <translation>Window function:</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="52" />
+        <source>Количество временных кадров. Больше — детальнее по времени, медленнее генерация.</source>
+        <translation>Time frames; more = finer time resolution, slower render.</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="53" />
+        <source>512 кадров</source>
+        <translation>512 frames</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="58" />
+        <source>Временное разрешение:</source>
+        <translation>Time resolution:</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="67" />
+        <source>Число отображаемых частотных полос.</source>
+        <translation>Number of frequency bands.</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="68" />
+        <source>256 полос</source>
+        <translation>256 bands</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="73" />
+        <source>Частотные полосы:</source>
+        <translation>Frequency bands:</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="78" />
+        <source>Тепловая карта</source>
+        <translation>Heat map</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="79" />
+        <source>Оттенки серого</source>
+        <translation>Grayscale</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="80" />
+        <source>Холодная (cyan)</source>
+        <translation>Cool (cyan)</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="81" />
+        <source>Цветовая схема:</source>
+        <translation>Color scheme:</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="86" />
+        <source>Шкалы</source>
+        <translation>Scales</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="89" />
+        <source>Логарифмическая шкала частот</source>
+        <translation>Log frequency scale</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="91" />
+        <source>Логарифмическая шкала частот (рекомендуется для музыки).
+Линейная показывает равные частотные интервалы.</source>
+        <translation>Log scale (good for music). Linear = equal spacing.</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="94" />
+        <source>Амплитуда в дБ</source>
+        <translation>Amplitude (dB)</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="96" />
+        <source>Отображение амплитуды в логарифмическом (дБ) масштабе.
+Лучше показывает слабые детали.</source>
+        <translation>dB amplitude scale; better for quiet detail.</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="103" />
+        <source> дБ</source>
+        <translation> dB</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="104" />
+        <source>Нижняя граница шкалы дБ. Более отрицательное значение — больше деталей в тихих частях.</source>
+        <translation>dB floor; more negative = more quiet detail.</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="105" />
+        <source>Нижний порог дБ:</source>
+        <translation>Floor (dB):</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="111" />
+        <source>&lt;small&gt;&lt;i&gt;Изменения применяются сразу, если включён режим «Спектрограмма».&lt;/i&gt;&lt;/small&gt;</source>
+        <translation>&lt;small&gt;&lt;i&gt;Applies when Spectrogram mode is on.&lt;/i&gt;&lt;/small&gt;</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="118" />
+        <source>Закрыть</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="129" />
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="170" />
+        <source>%1 кадров</source>
+        <translation>%1 frames</translation>
+    </message>
+    <message>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="133" />
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="173" />
+        <source>%1 полос</source>
+        <translation>%1 bands</translation>
+    </message>
+</context>
+<context>
     <name>WaveformView</name>
     <message>
-        <location filename="../src/waveformview.cpp" line="928" />
+        <location filename="../src/waveformview.cpp" line="1235" />
         <source>Переместить выделенные метки на тактовую сетку</source>
         <translation>Snap selected markers to grid</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="929" />
+        <location filename="../src/waveformview.cpp" line="1236" />
         <source>Переместить метку на тактовую сетку</source>
         <translation>Snap marker to grid</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="932" />
+        <location filename="../src/waveformview.cpp" line="1239" />
         <source>Удалить выделенные метки</source>
         <translation>Delete selected markers</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="933" />
+        <location filename="../src/waveformview.cpp" line="1240" />
         <source>Удалить метку</source>
         <translation>Delete marker</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1022" />
+        <location filename="../src/waveformview.cpp" line="1343" />
         <source>Конец таймлайна
 Время: %1
 Позиция: %2 сэмплов</source>
@@ -1388,7 +1823,7 @@ Time: %1
 Position: %2 samples</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1026" />
+        <location filename="../src/waveformview.cpp" line="1347" />
         <source>Начало таймлайна
 Время: %1
 Позиция: %2 сэмплов</source>
@@ -1397,13 +1832,13 @@ Time: %1
 Position: %2 samples</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1046" />
+        <location filename="../src/waveformview.cpp" line="1367" />
         <source>
 Коэффициент: %1</source>
         <translation>Ratio: %1</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1050" />
+        <location filename="../src/waveformview.cpp" line="1371" />
         <source>Метка
 Время: %1
 Позиция: %2 сэмплов%3</source>
@@ -1412,467 +1847,16 @@ Time: %1
 Position: %2 samples%3</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1064" />
+        <location filename="../src/waveformview.cpp" line="1385" />
         <source>Позиция: %1
 Время: %2</source>
         <translation>Position: %1
 Time: %2</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="2189" />
+        <location filename="../src/waveformview.cpp" line="2530" />
         <source>Конец таймлайна</source>
         <translation>Timeline end</translation>
-    </message>
-</context>
-<context>
-    <name>PitchShiftSettingsDialog</name>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="15"/>
-        <source>Настройки питч-шифтера</source>
-        <translation>Pitch shift settings</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="24"/>
-        <source>Применять питч-шифт после растяжения</source>
-        <translation>Apply pitch shift after time stretch</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="28"/>
-        <location filename="../src/reverbsettingsdialog.cpp" line="30"/>
-        <source>Параметры</source>
-        <translation>Parameters</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="36"/>
-        <source>Сдвиг высоты тона в полутонах (−24..+24).</source>
-        <translation>Pitch in semitones (−24..+24).</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="37"/>
-        <source>0 пт</source>
-        <translation>0 st</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="42"/>
-        <source>Питч (пт):</source>
-        <translation>Pitch (st):</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="50"/>
-        <source>Частота генерации гран (Гц).
-Меньше = крупные граны, мягче. Больше = мелкие граны, чище.</source>
-        <translation>Grain rate (Hz). Lower = larger grains; higher = smaller, cleaner.</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="51"/>
-        <source>8.0 Гц</source>
-        <translation>8.0 Hz</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="56"/>
-        <source>Частота гран (Гц):</source>
-        <translation>Grain rate (Hz):</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="63"/>
-        <source>Форма огибающей гранулы.
-0 = equal-gain (ровнее), 100 = equal-power (плотнее).</source>
-        <translation>Grain envelope. 0 = equal-gain; 100 = equal-power.</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="64"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="183"/>
-        <source>50%</source>
-        <translation>50%</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="69"/>
-        <source>Форма огибающей:</source>
-        <translation>Envelope:</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="76"/>
-        <source>Разброс питча гран (0..1 октавы).
-Добавляет хорусный/ансамблевый эффект.</source>
-        <translation>Pitch spread (0..1 octave). Chorus-like.</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="77"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="186"/>
-        <source>0%</source>
-        <translation>0%</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="82"/>
-        <source>Разброс питча:</source>
-        <translation>Pitch spread:</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="89"/>
-        <source>Уровень обработанного сигнала (wet/dry).</source>
-        <translation>Wet/dry level.</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="90"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="189"/>
-        <source>100%</source>
-        <translation>100%</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="95"/>
-        <source>Уровень (wet):</source>
-        <translation>Wet level:</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="99"/>
-        <source>Предфильтр (убирает алиасинг при сдвиге вверх)</source>
-        <translation>Prefilter (reduces aliasing when shifting up)</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="106"/>
-        <source>&lt;small&gt;&lt;i&gt;Питч-шифт применяется к аудио при нажатии Ctrl+T.&lt;/i&gt;&lt;/small&gt;</source>
-        <translation>&lt;small&gt;&lt;i&gt;Pitch shift applies on Ctrl+T.&lt;/i&gt;&lt;/small&gt;</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="113"/>
-        <location filename="../src/reverbsettingsdialog.cpp" line="85"/>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="118"/>
-        <source>Закрыть</source>
-        <translation>Close</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="129"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="174"/>
-        <source>%1 пт</source>
-        <translation>%1 st</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="133"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="180"/>
-        <location filename="../src/reverbsettingsdialog.cpp" line="102"/>
-        <location filename="../src/reverbsettingsdialog.cpp" line="133"/>
-        <source>%1 Гц</source>
-        <translation>%1 Hz</translation>
-    </message>
-    <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="137"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="141"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="145"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="186"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="189"/>
-        <location filename="../src/reverbsettingsdialog.cpp" line="106"/>
-        <location filename="../src/reverbsettingsdialog.cpp" line="135"/>
-        <source>%1%</source>
-        <translation>%1%</translation>
-    </message>
-</context>
-<context>
-    <name>ReverbSettingsDialog</name>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="15"/>
-        <source>Настройки реверберации</source>
-        <translation>Reverb settings</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="25"/>
-        <source>Применять реверберацию после растяжения</source>
-        <translation>Apply reverb after time stretch</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="37"/>
-        <source>Время реверберации (распад). Больше — дольше хвост.</source>
-        <translation>Decay time; higher = longer tail.</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="38"/>
-        <source>0.92</source>
-        <translation>0.92</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="43"/>
-        <source>Затухание (feedback):</source>
-        <translation>Feedback:</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="52"/>
-        <source>Частота среза LP-фильтра в реверберации. Ниже — темнее, выше — ярче.</source>
-        <translation>LP cutoff; lower = darker.</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="53"/>
-        <source>8000 Гц</source>
-        <translation>8000 Hz</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="58"/>
-        <source>LP-фильтр (Гц):</source>
-        <translation>LP filter (Hz):</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="65"/>
-        <source>Доля обработанного сигнала в финальном миксе (wet/dry).</source>
-        <translation>Wet level in the mix.</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="66"/>
-        <source>25%</source>
-        <translation>25%</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="71"/>
-        <source>Уровень (wet mix):</source>
-        <translation>Wet mix:</translation>
-    </message>
-    <message>
-        <location filename="../src/reverbsettingsdialog.cpp" line="78"/>
-        <source>&lt;small&gt;&lt;i&gt;Реверберация применяется к аудио при нажатии Ctrl+T.&lt;/i&gt;&lt;/small&gt;</source>
-        <translation>&lt;small&gt;&lt;i&gt;Reverb applies on Ctrl+T.&lt;/i&gt;&lt;/small&gt;</translation>
-    </message>
-</context>
-<context>
-    <name>SpectrogramSettingsDialog</name>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="16"/>
-        <source>Настройки спектрограммы</source>
-        <translation>Spectrogram settings</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="33"/>
-        <source>Размер FFT-окна. Больше — выше разрешение по частоте, ниже по времени.</source>
-        <translation>FFT window. Larger = better frequency resolution, lower time resolution.</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="34"/>
-        <source>Размер FFT-окна:</source>
-        <translation>FFT window:</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="38"/>
-        <source>Прямоугольная</source>
-        <translation>Rectangular</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="43"/>
-        <source>Оконная функция влияет на подавление боковых лепестков.
-Blackman-Harris — лучший выбор для спектрограмм.</source>
-        <translation>Window function; Blackman-Harris is a good default.</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="44"/>
-        <source>Оконная функция:</source>
-        <translation>Window function:</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="52"/>
-        <source>Количество временных кадров. Больше — детальнее по времени, медленнее генерация.</source>
-        <translation>Time frames; more = finer time resolution, slower render.</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="53"/>
-        <source>512 кадров</source>
-        <translation>512 frames</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="58"/>
-        <source>Временное разрешение:</source>
-        <translation>Time resolution:</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="67"/>
-        <source>Число отображаемых частотных полос.</source>
-        <translation>Number of frequency bands.</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="68"/>
-        <source>256 полос</source>
-        <translation>256 bands</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="73"/>
-        <source>Частотные полосы:</source>
-        <translation>Frequency bands:</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="78"/>
-        <source>Тепловая карта</source>
-        <translation>Heat map</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="79"/>
-        <source>Оттенки серого</source>
-        <translation>Grayscale</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="80"/>
-        <source>Холодная (cyan)</source>
-        <translation>Cool (cyan)</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="81"/>
-        <source>Цветовая схема:</source>
-        <translation>Color scheme:</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="86"/>
-        <source>Шкалы</source>
-        <translation>Scales</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="89"/>
-        <source>Логарифмическая шкала частот</source>
-        <translation>Log frequency scale</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="91"/>
-        <source>Логарифмическая шкала частот (рекомендуется для музыки).
-Линейная показывает равные частотные интервалы.</source>
-        <translation>Log scale (good for music). Linear = equal spacing.</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="94"/>
-        <source>Амплитуда в дБ</source>
-        <translation>Amplitude (dB)</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="96"/>
-        <source>Отображение амплитуды в логарифмическом (дБ) масштабе.
-Лучше показывает слабые детали.</source>
-        <translation>dB amplitude scale; better for quiet detail.</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="103"/>
-        <source> дБ</source>
-        <translation> dB</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="104"/>
-        <source>Нижняя граница шкалы дБ. Более отрицательное значение — больше деталей в тихих частях.</source>
-        <translation>dB floor; more negative = more quiet detail.</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="105"/>
-        <source>Нижний порог дБ:</source>
-        <translation>Floor (dB):</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="111"/>
-        <source>&lt;small&gt;&lt;i&gt;Изменения применяются сразу, если включён режим «Спектрограмма».&lt;/i&gt;&lt;/small&gt;</source>
-        <translation>&lt;small&gt;&lt;i&gt;Applies when Spectrogram mode is on.&lt;/i&gt;&lt;/small&gt;</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="129"/>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="170"/>
-        <source>%1 кадров</source>
-        <translation>%1 frames</translation>
-    </message>
-    <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="133"/>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="173"/>
-        <source>%1 полос</source>
-        <translation>%1 bands</translation>
-    </message>
-</context>
-<context>
-    <name>ShortcutsDialog</name>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="19"/>
-        <source>Горячие клавиши</source>
-        <translation>Hotkeys</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="44"/>
-        <source>Действие</source>
-        <translation>Action</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="44"/>
-        <source>Сочетание клавиш</source>
-        <translation>Shortcut</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="54"/>
-        <source>По умолчанию</source>
-        <translation>Reset to default</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="55"/>
-        <source>Восстановить все сочетания по умолчанию</source>
-        <translation>Restore all default shortcuts</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="23"/>
-        <source>Открыть файл</source>
-        <translation>Open file</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="24"/>
-        <source>Сохранить файл</source>
-        <translation>Save file</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="25"/>
-        <source>Выход</source>
-        <translation>Exit</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="26"/>
-        <source>Воспроизведение/Пауза</source>
-        <translation>Play/Pause</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="27"/>
-        <source>Стоп</source>
-        <translation>Stop</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="28"/>
-        <source>Метроном</source>
-        <translation>Metronome</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="29"/>
-        <source>Установить начало цикла (A)</source>
-        <translation>Set loop start (A)</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="30"/>
-        <source>Установить конец цикла (B)</source>
-        <translation>Set loop end (B)</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="31"/>
-        <source>Удалить точку A</source>
-        <translation>Clear point A</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="32"/>
-        <source>Удалить точку B</source>
-        <translation>Clear point B</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="33"/>
-        <source>Отменить</source>
-        <translation>Undo</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="34"/>
-        <source>Повторить</source>
-        <translation>Redo</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="35"/>
-        <source>Переключить питч-сетку</source>
-        <translation>Toggle pitch grid</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="36"/>
-        <source>Добавить метку</source>
-        <translation>Add marker</translation>
-    </message>
-    <message>
-        <location filename="../src/shortcutsdialog.cpp" line="37"/>
-        <source>Применить сжатие-растяжение</source>
-        <translation>Apply time stretch</translation>
     </message>
 </context>
 </TS>

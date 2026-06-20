@@ -30,7 +30,7 @@
 **Архитектура проекта DONTFLOAT**
 - Обзор системы
 - Основные компоненты:
-  - MainWindow, WaveformView, PitchGridWidget (⚠️ отключено по умолчанию)
+  - MainWindow, WaveformView, PitchGridWidget + GiadaPitchGridEngine (скрыта по умолчанию, Ctrl+G)
   - BPMAnalyzer, KeyAnalyzer, BeatVisualizer, WaveformAnalyzer
   - MarkerEngine, TimeStretchProcessor, RubberBandOffline, TimeStretchCommand, TimeUtils
   - MetronomeController

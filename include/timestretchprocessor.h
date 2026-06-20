@@ -114,6 +114,9 @@ public:
         qint64 audioSize,
         QString* errorMsg = nullptr);
 
+    /** ~5 мин на канал — выше порога realtime-превью волны отключается */
+    static qint64 maxRealtimePreviewSamples(int sampleRate);
+
     /**
      * @brief Вычисляет коэффициент растяжения между двумя метками
      *

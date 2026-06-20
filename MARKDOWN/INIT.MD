@@ -80,10 +80,10 @@ DONTFLOAT/
 - Синхронизация с позицией воспроизведения
 
 ### PitchGridWidget
-- Отображение сетки высот (питч-сетка)
-- Синхронизация с WaveformView
-- Отображение меток нот
-- Адаптивное масштабирование
+- Piano roll, пики волны, тактовая сетка (`GiadaPitchGridEngine`)
+- Синхронизация с WaveformView (zoom, offset, каретка, `displaySampleCount()`)
+- По умолчанию скрыта; `Ctrl+G`; состояние в QSettings
+- Подписи нот — overlay; таймлайн на всю ширину виджета
 
 ### BPMAnalyzer
 - Анализ BPM с использованием алгоритмов Mixxx

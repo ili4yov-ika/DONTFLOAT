@@ -5,6 +5,8 @@
 #include <QtCore/QVector>
 #include <QtCore/QTimer>
 #include <QtCore/QRect>
+#include <QtCore/QPointer>
+#include <atomic>
 #include <QtGui/QPainter>
 #include <QtGui/QWheelEvent>
 #include <QtGui/QMouseEvent>
@@ -26,6 +28,7 @@ class WaveformView : public QWidget
 
 public:
     explicit WaveformView(QWidget *parent = nullptr);
+    ~WaveformView() override;
 
     enum class WaveformRenderMode {
         Peaks,
@@ -87,10 +90,19 @@ public:
     void setVerticalOffset(float offset);
     void setZoomLevel(float zoom);
     float getZoomLevel() const { return zoomLevel; }
+    /** Масштаб относительно pixelX (как колёсико мыши на волне). */
+    void zoomAtPixelX(int angleDeltaY, float pixelX);
     float getHorizontalOffset() const { return horizontalOffset; }
     float getVerticalOffset() const { return verticalOffset; }
     void setColorScheme(const QString& scheme);
     const QVector<QVector<float>>& getAudioData() const { return audioData; }
+    /** Исходные данные для time stretch (если есть), иначе текущие. Для фоновой обработки снаружи. */
+    const QVector<QVector<float>>& getSourceAudioData() const {
+        return originalAudioData.isEmpty() ? audioData : originalAudioData;
+    }
+    bool isRealtimeStretchRunning() const;
+    /** Дожидается фонового превью (для тестов и корректного завершения). */
+    void drainPendingRealtimeStretch(int timeoutMs = 60000);
     void setLoopStart(qint64 position);
     void setLoopEnd(qint64 position);
     void setTimeDisplayMode(bool showTime);
@@ -142,6 +154,9 @@ public:
     // Метод для обновления исходных данных (используется TimeStretchCommand)
     void updateOriginalData(const QVector<QVector<float>>& newData);
 
+    // Обновляет отображаемую волну после фонового превью-растяжения (originalAudioData не трогаем)
+    void applyStretchedPreview(const QVector<QVector<float>>& channels);
+
     // Методы для применения растяжения
     // Возвращает структуру с обработанными данными и новыми позициями меток
     // Теперь использует TimeStretchProcessor::StretchResult
@@ -150,6 +165,9 @@ public:
     void setBeatVisualizationSettings(const BeatVisualizer::VisualizationSettings& settings);
     BeatVisualizer::VisualizationSettings getBeatVisualizationSettings() const { return beatVisualizationSettings; }
     void analyzeBeats();
+
+    /** Длина отображаемого таймлайна (с учётом растянутого хвоста после меток). */
+    qint64 displaySampleCount() const;
 
 signals:
     void positionChanged(qint64 position); // Сигнал для обновления позиции воспроизведения (в миллисекундах)
@@ -180,6 +198,8 @@ protected:
 
 private:
     void drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
+    void drawWarpedWaveformPreview(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
+    bool needsWarpedWaveformPreview() const;
     void drawWaveformChannel(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
     void drawGrid(QPainter& painter, const QRect& rect);
     void drawBeatLines(QPainter& painter, const QRect& rect);
@@ -205,9 +225,9 @@ private:
     QString getBarText(float beatPosition) const;
     void scheduleUpdate(const QRect& rect = QRect()); // Throttled update для производительности
 
-    // Методы для обработки в реальном времени
-    void processRealtimeStretch(); // Обработка аудио в реальном времени при перетаскивании меток
-    void scheduleRealtimeProcess(); // Планирование обработки с throttling
+    // Методы для обработки в реальном времени (фоновый поток, UI не блокируется)
+    void scheduleRealtimeProcess(); // Пометить превью устаревшим и запустить фоновый пересчёт
+    void startRealtimeStretchJob(); // Запуск фоновой задачи, если она не выполняется
 
     QVector<QVector<float>> audioData;        // Текущие данные для визуализации
     QVector<QVector<float>> originalAudioData; // Исходные данные для пересчета в реальном времени
@@ -243,8 +263,14 @@ private:
     bool pendingUpdate; // Флаг ожидающего обновления
     QRect pendingUpdateRect; // Область ожидающего обновления
 
-    // Throttling для обработки в реальном времени
-    bool realtimeProcessPending; // Флаг ожидания обработки в реальном времени
+    // Фоновая обработка превью при перетаскивании меток (std::thread + доставка в UI-поток).
+    bool realtimeStretchDirty;        // Метки изменились с момента запуска последней задачи
+    bool realtimeStretchJobActive;    // Сейчас выполняется фоновая задача
+    bool realtimeStretchShuttingDown;
+    std::atomic<int> realtimeStretchJobsRunning;
+    quint64 audioSourceGeneration;    // Инкремент при каждой загрузке/замене аудиоданных
+    quint64 realtimeJobGeneration;    // Поколение данных, с которым запущена текущая задача
+    QVector<MarkerData> realtimeJobMarkers; // Метки, с которыми запущена текущая задача
 
     // Кеширование для tooltip
     QPoint lastTooltipPos; // Последняя позиция мыши для tooltip

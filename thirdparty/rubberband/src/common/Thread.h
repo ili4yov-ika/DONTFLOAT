@@ -139,13 +139,13 @@ class Condition
 public:
     Condition(std::string name);
     ~Condition();
-    
+
     void lock();
     void unlock();
     void wait(int us = 0);
 
     void signal();
-    
+
 private:
 
 #ifdef _WIN32
@@ -183,7 +183,7 @@ public:
 
     Id id() { return 0; }
 
-    void start() { } 
+    void start() { }
     void wait() { }
 
     static bool threadingAvailable() { return false; }
@@ -217,7 +217,7 @@ class Condition
 public:
     Condition(std::string) { }
     ~Condition() { }
-    
+
     void lock() { }
     void unlock() { }
     void wait(int us = 0) { }

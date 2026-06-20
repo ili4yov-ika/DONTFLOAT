@@ -1,22 +1,40 @@
 # Сторонние библиотеки и компоненты
 
-В данной папке содержатся исходные коды сторонних программ и библиотек, используемых в проекте DONTFLOAT.
+В данной папке содержатся исходные коды сторонних программ и библиотек, используемых или хранимых как референс в проекте DONTFLOAT.
 
 ## Обзор
 
 | Библиотека | Лицензия | Назначение |
 |---|---|---|
 | **qm-dsp** (standalone) | GPLv2 | BPM-анализ, детектирование битов, тональность — **собирается** |
+| **Rubber Band** | GPL-2.0-or-later | Тонкомпенсация (time stretch) — **собирается** (`single/RubberBandSingle.cpp`) |
 | **Mixxx** | GPLv2 | Референс алгоритмов beat tracking (полное дерево, опционально) |
+| **LMMS** | GPLv2 | FFT, гранулярный питч-шифт, DSP — референс и адаптация |
+| **Giada** | GPLv3 | Loop machine, sample editor — референс UI/воркфлоу |
 | **Aubio** | GPLv3 | Onset detection, pitch, ритмический анализ |
 | **Audacity** | GPLv2/v3 | Референс обработки и визуализации аудио |
 | **Essentia** | AGPL v3 | Комплексный аудиоанализ, тональность |
-| **Rubber Band** | GPL-2.0-or-later | Тонкомпенсация (time stretch) — **собирается** (`single/RubberBandSingle.cpp`) |
 | **SoundTouch** | LGPL | Изменение темпа и тона (не используется в сборке) |
 | **Sonic Visualiser** | GPLv2 | Визуализация, Vamp-плагины |
-| **LMMS** | GPLv2 | FFT-алгоритмы, DSP-эффекты, анализ спектра |
 
-> **Сборка**: единственный сторонний код, который реально компилируется в DONTFLOAT, — это `thirdparty/qm-dsp` (отдельная копия qm-dsp) и три C-файла `thirdparty/lmms/plugins/ReverbSC`. Остальные каталоги (`mixxx`, `aubio`, `audacity`, `essentia`, `soundtouch`, `sonic-visualiser`) хранятся как референс и для будущей интеграции, в текущей сборке не участвуют.
+> **Сборка**: в DONTFLOAT реально компилируются только `thirdparty/qm-dsp` и `thirdparty/rubberband` (см. `CMakeLists.txt`, `cmake/RubberBand.cmake`, `DONTFLOAT.pro`). Остальные каталоги (`mixxx`, `lmms`, `giada`, `aubio`, `audacity`, `essentia`, `soundtouch`, `sonic-visualiser`) хранятся как референс и для будущей интеграции.
+
+---
+
+## Что интегрировано в DONTFLOAT
+
+| Технология | Источник | Файл в проекте | Режим использования |
+|---|---|---|---|
+| BPM-анализ | qm-dsp | `src/bpmanalyzer.cpp` | offline, при загрузке/анализе |
+| Анализ тональности | qm-dsp | `src/keyanalyzer.cpp` | offline |
+| Time stretch с тонкомпенсацией | Rubber Band v4 (R3 offline) | `src/rubberband_offline.cpp`, `src/timestretchprocessor.cpp` | `preservePitch=true`: метки, `Ctrl+T`, фоновое превью воспроизведения |
+| Быстрое превью волны при drag меток | собственный код (кубическая интерполяция) | `src/timestretchprocessor.cpp` | `preservePitch=false`: только визуализация, без Rubber Band |
+| Гранулярный питч-шифт | адаптация LMMS GranularPitchShifter | `include/granularpitchshifter_engine.h` | опционально после `Ctrl+T` |
+| Питч-сетка (viewport, пики, beat grid) | адаптация Giada `geWaveform` | `include/giada_pitchgrid_engine.h`, `src/pitchgridwidget.cpp` | UI: скрыта по умолчанию, `Ctrl+G` |
+| FFT / оконные функции | адаптация LMMS `fft_helpers` | `include/fft_engine.h` | спектрограмма |
+| Спектрограмма (Cooley-Tukey FFT) | адаптация из LMMS | `include/fft_engine.h`, `src/waveformview.cpp` | визуализация |
+
+CMake подключает Rubber Band через `dontfloat_link_rubberband()`; qm-dsp — макрос `USE_MIXXX_QM_DSP` и переменная `QM_DSP_ROOT=thirdparty/qm-dsp`.
 
 ---
 
@@ -27,30 +45,85 @@
 - **GitHub**: https://github.com/mixxxdj/mixxx
 - **Версия C++**: C++20 (Visual Studio 2022+)
 - **Лицензия**: GPLv2
-- **Назначение в DONTFLOAT**: Основа BPM-анализа, детектирование битов
-- **Что используется**:
-  - Алгоритм детектирования битов (beat tracking)
-  - Определение BPM с уверенностью (confidence)
-  - Вычисление отклонений долей от сетки (deviation)
-  - Генерация меток `BeatInfo` для визуализации
+- **Назначение в DONTFLOAT**: Референс BPM-анализа, детектирование битов
+- **Примечание**: для сборки DONTFLOAT **не требуется** — используется отдельная копия `thirdparty/qm-dsp`
 
 ### QM-DSP (Queen Mary Digital Signal Processing)
 - **Описание**: Библиотека для цифровой обработки сигналов и музыкальной информатики
 - **Разработчик**: Centre for Digital Music, Queen Mary University of London
 - **Лицензия**: GPLv2
-- **Расположение**: `thirdparty/qm-dsp` — **отдельная** копия библиотеки. Ранее
-  бралась из дерева Mixxx (`thirdparty/mixxx/lib/qm-dsp`); теперь сборка
-  (`DONTFLOAT.pro` и `CMakeLists.txt`, переменная `QM_DSP_ROOT`) ссылается
-  напрямую на `thirdparty/qm-dsp`, поэтому полное дерево Mixxx для сборки
-  **не требуется** и может быть удалено.
-- **Назначение в DONTFLOAT**: Анализ тональности, ритмический анализ
+- **Расположение**: `thirdparty/qm-dsp` — отдельная копия. Ранее бралась из `thirdparty/mixxx/lib/qm-dsp`; сборка (`DONTFLOAT.pro`, `CMakeLists.txt`) ссылается напрямую на `thirdparty/qm-dsp`
+- **Назначение в DONTFLOAT**: BPM, beat grid, анализ тональности
 - **Что делает**:
-  - Анализ хроматограмм (хроматический вектор)
-  - Определение тональности (KeyAnalyzer)
-  - Onset detection (обнаружение начала звуков)
-  - Фазовый вокодер
-  - Вейвлет-преобразования
-  - Анализ MFCC
+  - TempoTrack / TempoTrackV2, onset detection
+  - Хроматограммы, KeyAnalyzer
+  - Phase vocoder, MFCC, вейвлеты
+
+---
+
+## Rubber Band Library
+- **Описание**: Высококачественный time stretch / pitch shift (Particular Programs Ltd.)
+- **GitHub**: https://github.com/breakfastquay/rubberband
+- **Лицензия**: GPL-2.0-or-later (совместима с GPLv3 DONTFLOAT)
+- **Версия в проекте**: v4.0.0 (тег `v4.0.0`)
+- **Сборка**: single-file `thirdparty/rubberband/single/RubberBandSingle.cpp`, статическая библиотека `rubberband_single` (`cmake/RubberBand.cmake`)
+- **Движок в DONTFLOAT**: R3 offline, `OptionEngineFiner`, `OptionThreadingNever` (`src/rubberband_offline.cpp`)
+
+**Где вызывается:**
+- `TimeStretchProcessor::applyMarkerStretch(..., preservePitch=true)` — финальное растяжение по меткам (`Ctrl+T`), фоновый пересчёт для `QMediaPlayer` после drag
+- `preservePitch=false` — **не** Rubber Band, а быстрая кубическая интерполяция для превью волны во время перетаскивания меток
+
+**Получение исходников:**
+```bash
+git clone --depth 1 --branch v4.0.0 https://github.com/breakfastquay/rubberband.git thirdparty/rubberband
+```
+
+---
+
+## LMMS
+- **Описание**: Linux MultiMedia Studio — полнофункциональная DAW с открытым исходным кодом
+- **GitHub**: https://github.com/LMMS/lmms
+- **Лицензия**: GPLv2
+- **Назначение в DONTFLOAT**: FFT и DSP как референс; часть алгоритмов адаптирована в `include/`
+
+### FFT / спектральный анализ
+| Файл LMMS | Что адаптировано |
+|---|---|
+| `include/fft_helpers.h`, `src/core/fft_helpers.cpp` | Оконные функции → `include/fft_engine.h` |
+| `plugins/SpectrumAnalyzer/` | Архитектура per-channel FFT, waterfall |
+
+### Гранулярный питч-шифт (интегрирован)
+| Файл LMMS | Адаптация в DONTFLOAT |
+|---|---|
+| `plugins/GranularPitchShifter/` | `include/granularpitchshifter_engine.h` (`GranularEngine::applyPitchShiftQt`) |
+
+### Другие DSP-компоненты (только референс)
+| Компонент | Файлы | Статус в DONTFLOAT |
+|---|---|---|
+| Фильтры | `include/BasicFilters.h` | не подключён |
+| Компрессор | `plugins/Compressor/` | не подключён |
+| ReverbSC | `plugins/ReverbSC/revsc.h` | **удалён** из приложения (ранее `reverbsc_engine.h`); в `thirdparty` только как референс |
+| Onset (SlicerT) | `plugins/SlicerT/` | не подключён (есть собственный onset в `MainWindow`) |
+| EQ | `plugins/Eq/` | не подключён |
+
+---
+
+## Giada
+- **Описание**: Минималистичная loop machine для live performance
+- **GitHub**: https://github.com/monocasual/giada
+- **Сайт**: https://www.giadamusic.com
+- **Лицензия**: GPLv3
+- **Назначение в DONTFLOAT**: Референс sample editor, waveform tools, loop-воркфлоу
+- **Сборка**: не участвует в сборке DONTFLOAT
+
+### Питч-сетка (интегрировано)
+| Источник Giada | Адаптация в DONTFLOAT |
+|---|---|
+| `geWaveform` (пики, viewport) | `include/giada_pitchgrid_engine.h`, `src/giada_pitchgrid_engine.cpp` |
+| Вертикальная сетка / snap | `GiadaPitchGridEngine::visibleBeatLines`, `snapToBeatGrid` |
+| UI piano roll | `src/pitchgridwidget.cpp` (`PitchGridWidget`) |
+
+Полное дерево `thirdparty/giada` — только референс; в билд входят адаптированные файлы в корне проекта.
 
 ---
 
@@ -58,14 +131,8 @@
 - **Описание**: Библиотека для извлечения музыкальных характеристик из аудиосигналов
 - **GitHub**: https://github.com/aubio/aubio
 - **Лицензия**: GPLv3
-- **Язык**: C/C++
-- **Назначение**: BPM, onset detection, анализ тона
-- **Что делает**:
-  - Алгоритмы определения темпа (BPM)
-  - Обнаружение начала нот (onset detection)
-  - Анализ высоты тона (pitch detection)
-  - Спектральные характеристики
-- **Сборка**:
+- **Назначение**: BPM, onset detection, pitch — референс
+- **Сборка** (отдельно, не в DONTFLOAT):
   ```bash
   cd thirdparty/aubio
   ./waf configure
@@ -75,161 +142,73 @@
 ---
 
 ## Essentia
-- **Описание**: Библиотека для анализа аудиосигналов от MTG (Universitat Pompeu Fabra)
+- **Описание**: Библиотека анализа аудио от MTG (Universitat Pompeu Fabra)
 - **GitHub**: https://github.com/MTG/essentia
 - **Лицензия**: Affero GPL v3
-- **Язык**: C++/Python
-- **Назначение**: Комплексный анализ аудио, тональность, BPM
-- **Что делает**:
-  - Определение темпа и ритма
-  - Анализ тональности и гармонии
-  - Низкоуровневые аудиохарактеристики (MFCC, спектр, огибающая)
-  - Классификация жанров
-- **Сборка**:
-  ```bash
-  cd thirdparty/essentia
-  ./waf configure
-  ./waf build
-  ```
-
----
-
-## Rubber Band Library
-- **Описание**: Высококачественный time stretch / pitch shift (Particular Programs Ltd.)
-- **GitHub**: https://github.com/breakfastquay/rubberband
-- **Лицензия**: GPL-2.0-or-later (совместима с GPLv3 DONTFLOAT)
-- **Назначение в DONTFLOAT**: тонкомпенсация при растяжении по меткам (`Ctrl+T`, предпросмотр)
-- **Сборка в проекте**: single-file `thirdparty/rubberband/single/RubberBandSingle.cpp` (встроенный FFT/resampler)
-- **Получение исходников**:
-  ```bash
-  git clone --depth 1 --branch v4.0.0 https://github.com/breakfastquay/rubberband.git thirdparty/rubberband
-  ```
+- **Назначение**: Комплексный анализ, тональность, BPM — референс
 
 ---
 
 ## SoundTouch
-- **Описание**: Библиотека для обработки аудиосигналов в реальном времени
+- **Описание**: Time stretch / pitch shift в реальном времени
 - **GitLab**: https://gitlab.com/soundtouch/soundtouch
-- **Лицензия**: LGPL (совместима с GPL)
-- **Язык**: C++
-- **Назначение**: Изменение темпа и высоты звука без деградации качества
-- **Что делает**:
-  - Изменение темпа без изменения высоты (time stretch)
-  - Изменение высоты без изменения темпа (pitch shift)
-  - Реальное время, низкая латентность
-- **Сборка**:
-  ```bash
-  cd thirdparty/soundtouch
-  cmake .
-  cmake --build .
-  ```
-- **Примечание**: В DONTFLOAT для тонкомпенсации используется **Rubber Band** (GPL); SoundTouch не подключён
+- **Лицензия**: LGPL
+- **Примечание**: В DONTFLOAT для тонкомпенсации используется **Rubber Band**; SoundTouch не подключён
 
 ---
 
 ## Sonic Visualiser
-- **Описание**: Приложение для визуализации и анализа аудиосигналов
+- **Описание**: Визуализация и анализ аудиосигналов
 - **GitHub**: https://github.com/sonic-visualiser/sonic-visualiser
 - **Лицензия**: GPLv2
-- **Язык**: C++, Qt
-- **Назначение**: Референсная реализация для визуализации волн и спектрограмм
-- **Что используется**:
-  - Идеи визуализации спектрограмм
-  - Алгоритмы масштабирования и прокрутки временной оси
-  - Поддержка плагинов Vamp для анализа BPM
+- **Назначение**: Референс спектрограмм, масштабирования таймлайна, Vamp-плагинов
 
 ---
 
-## LMMS
-- **Описание**: Linux MultiMedia Studio — полнофункциональная DAW с открытым исходным кодом
-- **GitHub**: https://github.com/LMMS/lmms
-- **Лицензия**: GPLv2
-- **Язык**: C++17, Qt
-- **Назначение в DONTFLOAT**: FFT-алгоритмы и DSP-компоненты для спектрограммы
-- **Что используется**:
+## Audacity
+- **Описание**: Аудиоредактор с открытым исходным кодом
+- **Лицензия**: GPLv2/v3
+- **Назначение**: Референс обработки и UI-паттернов
 
-### FFT / Спектральный анализ
-| Файл | Что адаптировано |
-|------|-----------------|
-| `include/fft_helpers.h`, `src/core/fft_helpers.cpp` | Оконные функции (Blackman-Harris, Hamming, Hanning, Rectangular) — адаптированы в `include/fft_engine.h` |
-| `plugins/SpectrumAnalyzer/SaProcessor.h/.cpp` | Архитектура per-channel FFT-анализатора — использована как референс |
-| `plugins/SpectrumAnalyzer/SaWaterfallView.h/.cpp` | Идея waterfall-спектрограммы с историей |
+---
 
-### Алгоритм Cooley-Tukey FFT
-Из исходников LMMS адаптированы оконные функции:
-```
-fft_helpers.cpp → include/fft_engine.h:
-  - precomputeWindow() — Blackman-Harris, Hamming, Hanning, Rectangular
-  - Нормировка амплитуды (gain correction)
-  - Логарифмическая компрессия бинов (compressbands concept)
-```
+## Встроенные библиотеки Mixxx (в дереве `thirdparty/mixxx`)
 
-### Другие DSP-компоненты (доступны для будущей интеграции)
-| Компонент | Файлы | Описание |
+Присутствуют только если каталог Mixxx не удалён; для сборки DONTFLOAT не нужны.
+
+| Компонент | Лицензия | Назначение |
 |---|---|---|
-| **Фильтры** | `include/BasicFilters.h` | Header-only: LowPass, HighPass, BandPass, Notch, Moog, SV-фильтры |
-| **Гранулярный питч-шифтер** | `plugins/GranularPitchShifter/` | Grain-based с Hermite-интерполяцией, ring buffer |
-| **Компрессор** | `plugins/Compressor/` | Lookahead, RMS/peak, auto-makeup, stereo link |
-| **Реверберация (ReverbSC)** | `plugins/ReverbSC/revsc.h` | Алгоритм SoundPipe sp_revsc (C, 2 параметра) |
-| **Onset detection (SlicerT)** | `plugins/SlicerT/SlicerT.cpp` | FFT spectral flux → автоматическое создание меток |
-| **Параметрический EQ** | `plugins/Eq/` | BiQuad с плавной интерполяцией + визуализация кривой |
-| **Параметрический EQ** | `include/BasicFilters.h` | Header-only, 15+ типов фильтров |
-
-- **Сборка**: Исходники LMMS используются только как reference/адаптация — отдельная сборка не требуется
+| PortAudio | MIT | Низкоуровневый доступ к аудиоустройствам |
+| HIDAPI | BSD/GPL | USB HID, DJ-контроллеры |
+| SPSCQueue (rigtorp) | MIT | Lock-free очередь между потоками |
+| Kaitai Struct | MIT | Парсинг бинарных метаданных |
+| ReplayGain | GPLv2 | Нормализация громкости |
 
 ---
 
-## Встроенные библиотеки Mixxx
+## Коммерческие альтернативы (не в `thirdparty`)
 
-### PortAudio
-- **Лицензия**: MIT License
-- **Назначение**: Низкоуровневый доступ к аудиоустройствам (встроена в Mixxx)
+| Продукт | Поставщик | Назначение | Статус |
+|---|---|---|---|
+| **élastique Pro** (SDK 3.x) | [zplane.development](https://licensing.zplane.de/technology) | Time stretch / pitch shift, realtime, formant shift для полифонии | **не интегрирован**; лицензия по запросу (royalty) |
 
-### HIDAPI
-- **GitHub**: https://github.com/libusb/hidapi
-- **Лицензия**: BSD/GPL
-- **Назначение**: Поддержка USB HID устройств, DJ-контроллеры (встроена в Mixxx)
-
-### SPSCQueue (rigtorp)
-- **GitHub**: https://github.com/rigtorp/SPSCQueue
-- **Лицензия**: MIT License
-- **Назначение**: Lock-free очередь для передачи аудиоданных между потоками (header-only)
-
-### Kaitai Struct
-- **GitHub**: https://github.com/kaitai-io/kaitai_struct
-- **Лицензия**: MIT License
-- **Назначение**: Парсинг бинарных форматов метаданных аудиофайлов
-
-### ReplayGain
-- **Лицензия**: GPLv2
-- **Назначение**: Нормализация громкости аудио (встроена в Mixxx)
+В DONTFLOAT вместо élastique используется **Rubber Band** (GPL, open source). élastique применяется в Ableton Live (Complex Pro), DJ.Studio, Pro Tools (élastiqueAAX) и др.
 
 ---
 
 ## Системные требования
 
-- **C++**: C++17 (проект DONTFLOAT), C++20 (Mixxx)
-- **Компилятор**: Visual Studio 2022+ (Windows), GCC 11+ / Clang 12+ (Linux/macOS)
+- **C++**: C++17 (DONTFLOAT), C++20 (Mixxx)
+- **Компилятор**: MSVC 2022+ / MinGW (Windows), GCC 11+ / Clang 12+ (Linux/macOS)
 - **CMake**: 3.16+
-- **Qt**: 6.8+
-
----
-
-## Что интегрировано в DONTFLOAT
-
-| Технология | Источник | Файл в проекте |
-|---|---|---|
-| BPM-анализ | qm-dsp (`thirdparty/qm-dsp`) | `src/bpmanalyzer.cpp` |
-| Анализ тональности | qm-dsp (`thirdparty/qm-dsp`) | `src/keyanalyzer.cpp` |
-| Time stretch (тонкомпенсация) | Rubber Band Library v4 (GPL, R3 offline) | `src/rubberband_offline.cpp`, `thirdparty/rubberband/single/RubberBandSingle.cpp` |
-| FFT оконные функции | LMMS fft_helpers | `include/fft_engine.h` |
-| Спектрограмма (Cooley-Tukey FFT) | Адаптация из LMMS | `include/fft_engine.h`, `src/waveformview.cpp` |
+- **Qt**: 6.8+ (в проекте: 6.9.3), компоненты Core, Gui, Widgets, Multimedia, Concurrent
 
 ---
 
 ## Лицензионные замечания
 
-- Все включённые библиотеки совместимы с GPL и между собой
-- При коммерческом использовании необходимо проверить лицензионные условия AGPL (Essentia) и LGPL (SoundTouch) отдельно
-- Компоненты LMMS используются как **reference/inspiration** с адаптацией (не копированием кода под GPL): `fft_engine.h` — самостоятельная реализация алгоритма с оконными функциями по образцу LMMS `fft_helpers`
-- При интеграции новых библиотек убедитесь в совместимости лицензий
+- Собираемые библиотеки (qm-dsp, Rubber Band) совместимы с GPL DONTFLOAT
+- При коммерческом использовании отдельно проверьте AGPL (Essentia) и LGPL (SoundTouch)
+- Адаптации из LMMS (`fft_engine.h`, `granularpitchshifter_engine.h`) — самостоятельные реализации по образцу LMMS, не прямое копирование плагинов
+- **élastique** и другие коммерческие SDK требуют отдельного лицензионного соглашения с zplane
+- При добавлении новых библиотек проверяйте совместимость лицензий

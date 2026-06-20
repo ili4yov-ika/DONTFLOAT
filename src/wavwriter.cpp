@@ -1,7 +1,10 @@
 #include "../include/wavwriter.h"
 
+#include <QtCore/QAtomicInt>
+#include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QRandomGenerator>
+#include <QtCore/QStandardPaths>
 #include <QtCore/QtGlobal>
 #include <cmath>
 #include <cstring>
@@ -174,6 +177,36 @@ bool writeFile(const QString& filePath,
 
     file.close();
     return true;
+}
+
+QString writeTempProcessedFile(const QVector<QVector<float>>& channels,
+                               int sampleRate,
+                               QString* errorMessage)
+{
+    QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    if (tempDir.isEmpty()) {
+        tempDir = QDir::currentPath();
+    }
+
+    QDir dir(tempDir);
+    if (!dir.exists()) {
+        dir.mkpath(tempDir);
+    }
+
+    static QAtomicInt tempWavToggle(0);
+    const int slot = tempWavToggle.fetchAndAddOrdered(1) % 2;
+    const QString filePath = dir.filePath(
+        slot == 0 ? QStringLiteral("dontfloat_processed_a.wav")
+                  : QStringLiteral("dontfloat_processed_b.wav"));
+
+    WriteOptions options;
+    options.format = SampleFormat::Float32;
+    options.dither = false;
+
+    if (!writeFile(filePath, channels, sampleRate, errorMessage, options)) {
+        return QString();
+    }
+    return filePath;
 }
 
 } // namespace WavWriter

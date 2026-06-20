@@ -6,8 +6,7 @@
 #include <QtGui/QPainter>
 #include <QtGui/QMouseEvent>
 #include <QtGui/QWheelEvent>
-#include <QtCore/QTimer>
-#include <QtMultimedia/QAudioBuffer>
+#include "giada_pitchgrid_engine.h"
 
 class PitchGridWidget : public QWidget
 {
@@ -18,64 +17,101 @@ public:
 
     void setAudioData(const QVector<QVector<float>>& data);
     void setSampleRate(int rate);
-    void setPlaybackPosition(qint64 position); // position в миллисекундах
-    void setCursorPosition(float xPosition); // Позиция каретки в пикселях от WaveformView
+    void setPlaybackPosition(qint64 position);
+    void setCursorPosition(float xPosition);
     void setHorizontalOffset(float offset);
     void setVerticalOffset(float offset);
     void setZoomLevel(float zoom);
+    void setTimelineReferenceWidth(int widthPx);
+    void setTimelineSampleCount(qint64 samples);
+    float playbackCursorContentX() const;
     void setBPM(float bpm);
     void setBeatsPerBar(int beatsPerBar);
+    void setGridStartSample(qint64 sample);
     void setPitchRange(int minPitch, int maxPitch);
     void setColorScheme(const QString& scheme);
+    void setBeatGridSnapEnabled(bool enabled);
 
 signals:
-    void positionChanged(qint64 position); // Сигнал для обновления позиции воспроизведения
-    void pitchChanged(int pitch); // Сигнал для изменения выбранного питча
+    void positionChanged(qint64 position);
+    void pitchChanged(int pitch);
+    void horizontalOffsetChanged(float offset);
+    void verticalOffsetChanged(float offset);
+    void timelineZoomRequested(int angleDeltaY, float timelinePixelX);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private:
-    void drawPitchGrid(QPainter& painter, const QRect& rect);
-    void drawPlaybackCursor(QPainter& painter, const QRect& rect);
-    void drawPitchLabels(QPainter& painter, const QRect& rect);
-    QPointF sampleToPoint(int sampleIndex, int pitch, const QRectF& rect) const;
+    void rebuildPeaksIfNeeded();
+    void drawPianoRollBackground(QPainter& painter, const QRect& rect) const;
+    void drawBeatGrid(QPainter& painter, const QRect& rect) const;
+    void drawWaveformPeaks(QPainter& painter, const QRect& rect) const;
+    void drawPitchLabels(QPainter& painter, const QRect& rect) const;
+    void drawPlaybackCursor(QPainter& painter, const QRect& rect) const;
+    void drawSelectedPitchRow(QPainter& painter, const QRect& rect) const;
+
     QString getPitchName(int midiNote) const;
     int getPitchFromY(int y, const QRect& rect) const;
     qint64 getPositionFromX(int x, const QRect& rect) const;
+    GiadaPitchGridEngine::Viewport currentViewport() const;
+    void adjustHorizontalOffset(float delta);
+    void adjustVerticalOffset(float delta);
+    int pitchContentHeightPx() const;
+    int maxVerticalScrollPx() const;
+    int verticalScrollPixels() const;
+    int timelineContentWidthPx() const;
+    int timelineReferenceWidth() const;
+    float timelineToContentX(float timelineX) const;
+    float contentToTimelineX(float contentX) const;
+    qint64 effectiveTimelineSamples() const;
 
     QVector<QVector<float>> audioData;
+    GiadaPitchGridEngine::WaveformPeaks waveformPeaks;
+    int peaksBuildWidth = 0;
+    int peaksBuildHeight = 0;
+
     int sampleRate;
     qint64 playbackPosition;
-    float cursorXPosition; // Позиция каретки в пикселях от WaveformView
+    qint64 gridStartSample;
+    float cursorXPosition;
     float horizontalOffset;
     float verticalOffset;
     float zoomLevel;
+    int timelineReferenceWidthPx;
+    qint64 timelineSampleCount;
     float bpm;
     int beatsPerBar;
     int minPitch;
     int maxPitch;
     bool isDragging;
+    bool isRightMousePanning;
+    bool beatGridSnap;
     QPoint lastMousePos;
     QString colorScheme;
     int selectedPitch;
-    
-    // Цвета
+
     QColor backgroundColor;
+    QColor whiteKeyColor;
+    QColor blackKeyColor;
     QColor gridColor;
+    QColor beatGridColor;
+    QColor barLineColor;
+    QColor waveformColor;
     QColor cursorColor;
     QColor pitchLabelColor;
-    QColor timeLabelColor;
     QColor selectionColor;
 
-    static const int pitchHeight = 20; // Высота одной ноты в пикселях
-    static const int timeGridSpacing = 100; // Расстояние между временными метками в пикселях
-    static const int minPitchDefault = 21; // A0
-    static const int maxPitchDefault = 108; // C8
+    static const int pitchHeight = 16;
+    static const int kPitchLabelColumnWidthPx = 36;
+    static const int minVisiblePitchRows = 4;
+    static const int minPitchDefault = 36;  // C2
+    static const int maxPitchDefault = 84;  // C6
 };
 
-#endif // PITCHGRIDWIDGET_H 
+#endif // PITCHGRIDWIDGET_H

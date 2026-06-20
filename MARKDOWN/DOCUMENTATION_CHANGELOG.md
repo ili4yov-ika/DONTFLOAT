@@ -1,5 +1,33 @@
 # История изменений документации
 
+## 2026-06-14 (питч-сетка: актуализация документации)
+
+- Питч-сетка **не заморожена**: работает через `PitchGridWidget` + `GiadaPitchGridEngine`, по умолчанию **скрыта** (`Ctrl+G`, `QSettings` → `pitchGridVisible`).
+- Задокументированы: синхронизация с `WaveformView` (zoom, offset, каретка, `displaySampleCount()`), таймлайн на полную ширину под подписями нот, overlay-скроллбар слева, ввод мышью и колёсиком.
+- Удалены устаревшие формулировки «заморожена / пункт меню заблокирован».
+- Обновлены: `docs/features.md`, `docs/architecture.md`, `docs/shortcuts.md`, `README.md`, `MARKDOWN/ARCHITECTURE.md`, `MARKDOWN/INIT.MD`, `MARKDOWN/README.md`, `MARKDOWN/PROJECT_FLOWCHART.md`, `MARKDOWN/SHORTCUTS.md`, `thirdparty/README.md`.
+
+## 2026-06-13 (удаление реверберации после растяжения)
+
+- Удалён эффект «Реверберация после растяжения»: с переходом тонкомпенсации на
+  Rubber Band R3 маскировка артефактов не нужна, эффект только окрашивал звук.
+- Удалены: пункт меню «Настройки → Реверберация», настройка `reverbEnabled`,
+  `include/reverbsc_engine.h` (из репозитория, `CMakeLists.txt` и `DONTFLOAT.pro`).
+- Переводы синхронизированы (`lupdate -no-obsolete`), оба языка полные.
+
+## 2026-05-31 (Windows presets, UI-тест меток)
+
+### Сборка и запуск в VS Code/Cursor
+- CMake Presets: `windows-msvc-debug/release`, `windows-mingw-debug/release` (`CMakePresets.json`).
+- Post-build `windeployqt` для `DONTFLOAT` и `marker_testgen` (`cmake/WinDeployQt.cmake`).
+- По умолчанию в `.vscode/settings.json`: preset `windows-msvc-release`, каталог `build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release`.
+- Обновлены: `BUILD_IN_VSCODE.md` (presets, F5 vs Play, структура каталогов сборки).
+
+### `ui_responsiveness_test`
+- Документирован сценарий `testMarkerDragWorkflowThreeRandom` (MP3 → доли → 2 случайные метки → 3 drag).
+- Переменные окружения: `DONTFLOAT_RUN_UI_TEST`, лимиты `DONTFLOAT_UI_DRAG_*`.
+- Обновлены: `tests/README.md`, `tests/source4test/README.md`, `MARKDOWN/TESTING_GUIDE.md`.
+
 ## 2026-05-31 (сборка macOS)
 
 ### CMake Presets и CI

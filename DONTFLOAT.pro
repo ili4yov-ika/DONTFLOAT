@@ -1,4 +1,4 @@
-QT       += core gui multimedia
+QT       += core gui multimedia concurrent
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -94,6 +94,7 @@ SOURCES += \
         src/waveformview.cpp \
         src/markerengine.cpp \
         src/pitchgridwidget.cpp \
+        src/giada_pitchgrid_engine.cpp \
         src/waveformcolors.cpp \
         src/bpmanalyzer.cpp \
         src/keyanalyzer.cpp \
@@ -113,16 +114,14 @@ SOURCES += \
         src/beatvisualizer.cpp \
         src/spectrogramsettingsdialog.cpp \
         src/pitchshiftsettingsdialog.cpp \
-        src/shortcutsdialog.cpp \
-        thirdparty/lmms/plugins/ReverbSC/base.c \
-        thirdparty/lmms/plugins/ReverbSC/revsc.c \
-        thirdparty/lmms/plugins/ReverbSC/dcblock.c
+        src/shortcutsdialog.cpp
 
 HEADERS += \
         include/mainwindow.h \
         include/waveformview.h \
         include/markerengine.h \
         include/pitchgridwidget.h \
+        include/giada_pitchgrid_engine.h \
         include/waveformcolors.h \
         include/bpmanalyzer.h \
         include/keyanalyzer.h \
@@ -145,7 +144,6 @@ HEADERS += \
         include/pitchshiftsettingsdialog.h \
         include/shortcutsdialog.h \
         include/fft_engine.h \
-        include/reverbsc_engine.h \
         include/granularpitchshifter_engine.h
 
 FORMS += \

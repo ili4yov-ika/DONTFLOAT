@@ -90,22 +90,57 @@ EN = {
     "неподдерживаемый формат": "unsupported format",
     "нет доступа к файлу": "no file access",
     "файл не найден или недоступен": "file not found or inaccessible",
+    "не удалось декодировать аудиоданные": "failed to decode audio data",
+    "Мажорные": "Major",
+    "Минорные": "Minor",
+    "Не определена": "Undefined",
+    "Сдвинуть тактовую сетку на один удар назад": "Shift beat grid one beat back",
+    "<": "<",
+    ">": ">",
+    "Привязать все метки к тактовой сетке BPM": "Snap all markers to BPM grid",
+    "Сдвинуть тактовую сетку на один удар вперёд": "Shift beat grid one beat forward",
+    "Привязать все метки к тактовой сетке BPM (подразделения такта)": "Snap all markers to BPM grid (bar subdivisions)",
+    "Сдвинуть тактовую сетку на один удар назад (Shift — вместе с метками)\nShift + перетаскивание ЛКМ на волне — тонкая подстройка сетки": "Shift beat grid one beat back (Shift — move markers too)\nShift + LMB drag on waveform — fine grid adjustment",
+    "Сдвинуть тактовую сетку на один удар вперёд (Shift — вместе с метками)\nShift + перетаскивание ЛКМ на волне — тонкая подстройка сетки": "Shift beat grid one beat forward (Shift — move markers too)\nShift + LMB drag on waveform — fine grid adjustment",
+    "Ошибка декодирования: %1": "Decode error: %1",
+    "Нет тактовой сетки для привязки (BPM или доли не определены).": "No beat grid to snap to (BPM or beats not detected).",
+    "Нет меток для привязки к тактовой сетке.": "No markers to snap to the grid.",
+    "Не удалось привязать метки к тактовой сетке.": "Could not snap markers to the grid.",
+    "Метки привязаны к тактовой сетке (%1 шт.)": "Markers snapped to the grid (%1)",
+    "Все метки уже на тактовой сетке.": "All markers are already on the grid.",
+    "Нет тактовой сетки для сдвига (BPM не определён).": "No beat grid to shift (BPM not detected).",
+    "Тактовая сетка уже на границе аудиофайла.": "Beat grid is already at the file boundary.",
+    "назад": "back",
+    "вперёд": "forward",
+    " (метки сдвинуты)": " (markers moved)",
+    "Тактовая сетка сдвинута на один удар %1%2": "Beat grid shifted one beat %1%2",
+    "Blackman-Harris": "Blackman-Harris",
+    "Hamming": "Hamming",
+    "Hanning": "Hanning",
+    "Закрыть": "Close",
 }
 
 path = ROOT / "translations" / "en_US.ts"
-tree = ET.parse(path)
-root = tree.getroot()
-n = 0
-for msg in root.iter("message"):
-    tr = msg.find("translation")
-    src_el = msg.find("source")
-    if tr is None or src_el is None or tr.get("type") == "vanished":
-        continue
-    src = (src_el.text or "").strip()
-    if src not in EN:
-        continue
-    tr.text = EN[src]
-    tr.attrib.pop("type", None)
-    n += 1
-tree.write(path, encoding="utf-8", xml_declaration=True)
-print("Applied", n)
+
+
+def apply_en_translations() -> int:
+    tree = ET.parse(path)
+    root = tree.getroot()
+    n = 0
+    for msg in root.iter("message"):
+        tr = msg.find("translation")
+        src_el = msg.find("source")
+        if tr is None or src_el is None or tr.get("type") == "vanished":
+            continue
+        src = "".join(src_el.itertext())
+        if src not in EN:
+            continue
+        tr.text = EN[src]
+        tr.attrib.pop("type", None)
+        n += 1
+    tree.write(path, encoding="utf-8", xml_declaration=True)
+    return n
+
+
+if __name__ == "__main__":
+    print("Applied", apply_en_translations())

@@ -14,6 +14,10 @@
 #include <QtWidgets/QMenu>
 #include <QtCore/QTime>
 #include <QtCore/QDebug>
+#include <QtCore/QDeadlineTimer>
+#include <QtCore/QCoreApplication>
+#include <QtWidgets/QApplication>
+#include <thread>
 #include <cmath>
 #include <algorithm>
 
@@ -79,6 +83,109 @@ static qint64 mapOriginalSampleToDisplay(qint64 originalPos,
     return originalPos;
 }
 
+static bool markersChangeTimeline(const QVector<Marker>& markers)
+{
+    for (const Marker& m : markers) {
+        if (m.position != m.originalPosition) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static qint64 estimateStretchedLength(const QVector<Marker>& markers, qint64 originalSize)
+{
+    if (markers.size() < 2 || originalSize <= 0) {
+        return originalSize;
+    }
+
+    QVector<Marker> sorted = markers;
+    std::sort(sorted.begin(), sorted.end(), [](const Marker& a, const Marker& b) {
+        return a.originalPosition < b.originalPosition;
+    });
+
+    qint64 displayLen = sorted.last().position;
+    const qint64 origTail = originalSize - sorted.last().originalPosition;
+    if (origTail > 0 && sorted.size() >= 2) {
+        const Marker& m0 = sorted[sorted.size() - 2];
+        const Marker& m1 = sorted.last();
+        const qint64 origSeg = m1.originalPosition - m0.originalPosition;
+        const qint64 dispSeg = m1.position - m0.position;
+        if (origSeg > 0 && dispSeg > 0) {
+            const float tailFactor = qMax(0.1f, float(dispSeg) / float(origSeg));
+            displayLen += qint64(origTail * tailFactor);
+        } else {
+            displayLen += origTail;
+        }
+    } else if (origTail > 0) {
+        displayLen += origTail;
+    }
+
+    return qMax(displayLen, qint64(1));
+}
+
+static qint64 mapDisplaySampleToOriginal(qint64 displayPos,
+                                         const QVector<Marker>& markers,
+                                         qint64 totalOriginalSamples)
+{
+    if (markers.size() < 2 || totalOriginalSamples <= 0) {
+        return qBound(qint64(0), displayPos, totalOriginalSamples - 1);
+    }
+
+    QVector<Marker> sorted = markers;
+    std::sort(sorted.begin(), sorted.end(), [](const Marker& a, const Marker& b) {
+        return a.originalPosition < b.originalPosition;
+    });
+
+    if (displayPos <= sorted.first().position) {
+        const Marker& m1 = sorted.first();
+        if (m1.position <= 0) {
+            return qBound(qint64(0), displayPos, totalOriginalSamples - 1);
+        }
+        const double t = double(displayPos) / double(m1.position);
+        return qBound(qint64(0), qint64(t * m1.originalPosition), totalOriginalSamples - 1);
+    }
+
+    const qint64 displayTailStart = sorted.last().position;
+    const qint64 displayTotal = estimateStretchedLength(markers, totalOriginalSamples);
+    if (displayPos >= displayTailStart) {
+        if (sorted.size() < 2) {
+            return qBound(qint64(0), displayPos, totalOriginalSamples - 1);
+        }
+        const Marker& m0 = sorted[sorted.size() - 2];
+        const Marker& m1 = sorted.last();
+        const qint64 origLen = m1.originalPosition - m0.originalPosition;
+        const qint64 dispLen = m1.position - m0.position;
+        const qint64 origTail = totalOriginalSamples - m1.originalPosition;
+        const qint64 dispTail = qMax<qint64>(1, displayTotal - displayTailStart);
+        if (origLen > 0 && dispLen > 0 && origTail > 0) {
+            const double t = double(displayPos - displayTailStart) / double(dispTail);
+            return qBound(qint64(0),
+                          m1.originalPosition + qint64(t * origTail),
+                          totalOriginalSamples - 1);
+        }
+        return qBound(qint64(0), m1.originalPosition, totalOriginalSamples - 1);
+    }
+
+    for (int i = 0; i < sorted.size() - 1; ++i) {
+        const Marker& m0 = sorted[i];
+        const Marker& m1 = sorted[i + 1];
+        if (displayPos >= m0.position && displayPos < m1.position) {
+            const qint64 origLen = m1.originalPosition - m0.originalPosition;
+            const qint64 dispLen = m1.position - m0.position;
+            if (origLen <= 0 || dispLen <= 0) {
+                return qBound(qint64(0), displayPos, totalOriginalSamples - 1);
+            }
+            const double t = double(displayPos - m0.position) / double(dispLen);
+            return qBound(qint64(0),
+                          m0.originalPosition + qint64(t * origLen),
+                          totalOriginalSamples - 1);
+        }
+    }
+
+    return qBound(qint64(0), displayPos, totalOriginalSamples - 1);
+}
+
 WaveformView::WaveformView(QWidget *parent)
     : QWidget(parent)
     , bpm(120.0f)
@@ -103,7 +210,12 @@ WaveformView::WaveformView(QWidget *parent)
     , draggingMarkerIndex(-1)
     , updateTimer(nullptr)
     , pendingUpdate(false)
-    , realtimeProcessPending(false)
+    , realtimeStretchDirty(false)
+    , realtimeStretchJobActive(false)
+    , realtimeStretchShuttingDown(false)
+    , realtimeStretchJobsRunning(0)
+    , audioSourceGeneration(0)
+    , realtimeJobGeneration(0)
     , lastTooltipMarkerIndex(-1)
     , renderMode(WaveformRenderMode::Peaks)
     , spectrogramDirty(true)
@@ -128,6 +240,34 @@ WaveformView::WaveformView(QWidget *parent)
             pendingUpdateRect = QRect();
         }
     });
+}
+
+WaveformView::~WaveformView()
+{
+    realtimeStretchShuttingDown = true;
+    ++audioSourceGeneration;
+
+    QDeadlineTimer deadline(60000);
+    while (realtimeStretchJobsRunning.load() > 0 && !deadline.hasExpired()) {
+        QApplication::processEvents(QEventLoop::AllEvents, 50);
+    }
+}
+
+bool WaveformView::isRealtimeStretchRunning() const
+{
+    return realtimeStretchJobActive || realtimeStretchJobsRunning.load() > 0;
+}
+
+void WaveformView::drainPendingRealtimeStretch(int timeoutMs)
+{
+    if (!isRealtimeStretchRunning()) {
+        return;
+    }
+
+    QDeadlineTimer deadline(timeoutMs);
+    while (isRealtimeStretchRunning() && !deadline.hasExpired()) {
+        QApplication::processEvents(QEventLoop::AllEvents, 50);
+    }
 }
 
 void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
@@ -170,6 +310,8 @@ void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
 
     // Сохраняем исходные данные для пересчета в реальном времени
     originalAudioData = audioData;
+    ++audioSourceGeneration; // Результаты фоновых задач со старыми данными будут отброшены
+    realtimeStretchDirty = false;
 
     // Сброс кеша спектрограммы
     spectrogramImages.clear();
@@ -206,6 +348,54 @@ void WaveformView::setZoomLevel(float zoom)
         emit zoomChanged(zoomLevel);
         update();
     }
+}
+
+void WaveformView::zoomAtPixelX(int angleDeltaY, float pixelX)
+{
+    if (audioData.isEmpty()) {
+        return;
+    }
+
+    float delta = angleDeltaY / 120.f;
+    float oldZoom = zoomLevel;
+    float newZoom = oldZoom;
+
+    if (delta > 0) {
+        newZoom *= zoomStep;
+    } else if (delta < 0) {
+        newZoom /= zoomStep;
+    } else {
+        return;
+    }
+
+    newZoom = qBound(float(minZoom), newZoom, float(maxZoom));
+    if (qFuzzyCompare(newZoom, oldZoom)) {
+        return;
+    }
+
+    const float mouseX = qBound(0.0f, pixelX, float(width()));
+    float samplesPerPixel = float(audioData[0].size()) / (width() * oldZoom);
+    int visibleSamples = int(width() * samplesPerPixel);
+    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
+    int startSample = int(horizontalOffset * maxStartSample);
+    qint64 mouseSample = startSample + qint64(mouseX * samplesPerPixel);
+
+    zoomLevel = newZoom;
+
+    float newSamplesPerPixel = float(audioData[0].size()) / (width() * newZoom);
+    int newVisibleSamples = int(width() * newSamplesPerPixel);
+    int newMaxStartSample = qMax(0, audioData[0].size() - newVisibleSamples);
+
+    float newOffset = 0.0f;
+    if (newMaxStartSample > 0) {
+        newOffset = float(mouseSample - mouseX * newSamplesPerPixel) / newMaxStartSample;
+        newOffset = qBound(0.0f, newOffset, 1.0f);
+    }
+
+    horizontalOffset = newOffset;
+    emit zoomChanged(zoomLevel);
+    emit horizontalOffsetChanged(horizontalOffset);
+    update();
 }
 
 void WaveformView::setSampleRate(int rate)
@@ -255,7 +445,7 @@ void WaveformView::paintEvent(QPaintEvent* event)
     // Режим отображения: пики или спектрограмма
     if (!audioData.isEmpty()) {
         // Геометрия текущего окна по сэмплам
-        ViewportGeometry vp = getViewportGeometry(audioData[0].size(), width());
+        ViewportGeometry vp = getViewportGeometry(displaySampleCount(), width());
 
         if (renderMode == WaveformRenderMode::Spectrogram) {
             // ---- Ленивая генерация спектрограммы (FFT Cooley-Tukey) ----
@@ -429,7 +619,19 @@ void WaveformView::paintEvent(QPaintEvent* event)
 
             for (int i = 0; i < audioData.size(); ++i) {
                 QRectF channelRect(0, i * channelHeight, width(), channelHeight);
-                drawWaveform(painter, audioData[i], channelRect);
+                if (needsWarpedWaveformPreview() && i >= originalAudioData.size()) {
+                    continue;
+                }
+                const QVector<float>& sourceSamples =
+                    needsWarpedWaveformPreview() ? originalAudioData[i] : audioData[i];
+                if (sourceSamples.isEmpty()) {
+                    continue;
+                }
+                if (needsWarpedWaveformPreview()) {
+                    drawWarpedWaveformPreview(painter, sourceSamples, channelRect);
+                } else {
+                    drawWaveform(painter, sourceSamples, channelRect);
+                }
 
                 // Рисуем силуэт ударных поверх основной волны через BeatVisualizer
                 if (beatVisualizationSettings.showBeatWaveform && !beats.isEmpty()) {
@@ -440,7 +642,7 @@ void WaveformView::paintEvent(QPaintEvent* event)
                             b.position = mapOriginalSampleToDisplay(b.position, markers, refSize);
                         }
                     }
-                    BeatVisualizer::drawBeatWaveform(painter, audioData[i], displayBeats,
+                    BeatVisualizer::drawBeatWaveform(painter, sourceSamples, displayBeats,
                                                      channelRect, sampleRate,
                                                      vp.samplesPerPixel, vp.startSample,
                                                      beatVisualizationSettings);
@@ -528,6 +730,103 @@ void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples
     }
 }
 
+bool WaveformView::needsWarpedWaveformPreview() const
+{
+    if (originalAudioData.isEmpty() || audioData.isEmpty() || markers.size() < 2) {
+        return false;
+    }
+    if (originalAudioData[0].isEmpty() || audioData[0].isEmpty()) {
+        return false;
+    }
+    if (originalAudioData.size() != audioData.size()) {
+        return false;
+    }
+    if (!markersChangeTimeline(markers)) {
+        return false;
+    }
+    // Полноценное превью уже применено — рисуем готовые сэмплы
+    if (audioData[0].size() != originalAudioData[0].size()) {
+        return false;
+    }
+    return true;
+}
+
+qint64 WaveformView::displaySampleCount() const
+{
+    if (audioData.isEmpty() || audioData[0].isEmpty()) {
+        return 0;
+    }
+    const qint64 originalSize =
+        originalAudioData.isEmpty() ? audioData[0].size() : originalAudioData[0].size();
+    if (needsWarpedWaveformPreview()) {
+        return estimateStretchedLength(markers, originalSize);
+    }
+    return audioData[0].size();
+}
+
+void WaveformView::drawWarpedWaveformPreview(QPainter& painter,
+                                             const QVector<float>& samples,
+                                             const QRectF& rect)
+{
+    if (samples.isEmpty()) {
+        return;
+    }
+
+    const qint64 displayLength = estimateStretchedLength(markers, samples.size());
+    float samplesPerPixel = float(displayLength) / (rect.width() * zoomLevel);
+    int visibleSamples = int(rect.width() * samplesPerPixel);
+    int maxStartSample = qMax(0, int(displayLength) - visibleSamples);
+    int startDisplaySample = int(horizontalOffset * maxStartSample);
+
+    QRectF adjustedRect = rect;
+    adjustedRect.translate(0, -verticalOffset * rect.height());
+
+    const float centerY = adjustedRect.center().y();
+    const float halfHeight = adjustedRect.height() * 0.5f;
+
+    for (int x = 0; x < int(rect.width()); ++x) {
+        const qint64 displayStart = startDisplaySample + qint64(x * samplesPerPixel);
+        const qint64 displayEnd = startDisplaySample + qint64((x + 1) * samplesPerPixel);
+
+        const qint64 origStart = mapDisplaySampleToOriginal(displayStart, markers, samples.size());
+        const qint64 origEnd = mapDisplaySampleToOriginal(qMax(displayStart, displayEnd - 1),
+                                                          markers,
+                                                          samples.size());
+
+        float minValue = 0.0f;
+        float maxValue = 0.0f;
+        const qint64 from = qBound(qint64(0), qMin(origStart, origEnd), qint64(samples.size() - 1));
+        const qint64 to = qBound(qint64(0), qMax(origStart, origEnd), qint64(samples.size() - 1));
+        const qint64 span = qMax<qint64>(1, to - from + 1);
+        const qint64 step = qMax<qint64>(1, span / 200);
+
+        for (qint64 s = from; s <= to; s += step) {
+            const int idx = int(s);
+            if (idx < 0 || idx >= samples.size()) {
+                continue;
+            }
+            minValue = qMin(minValue, samples[idx]);
+            maxValue = qMax(maxValue, samples[idx]);
+        }
+
+        const float frequency = qAbs(maxValue - minValue);
+        QColor waveColor;
+        if (frequency < 0.3f) {
+            waveColor = colors.getLowColor();
+        } else if (frequency < 0.6f) {
+            waveColor = colors.getMidColor();
+        } else {
+            waveColor = colors.getHighColor();
+        }
+
+        painter.setPen(waveColor);
+        const float topY = centerY - (maxValue * halfHeight);
+        const float bottomY = centerY - (minValue * halfHeight);
+        painter.drawLine(QPointF(adjustedRect.x() + x, topY),
+                         QPointF(adjustedRect.x() + x, bottomY));
+    }
+}
+
 void WaveformView::drawGrid(QPainter& painter, const QRect& rect)
 {
     // Горизонтальные линии для разделения каналов
@@ -551,7 +850,7 @@ void WaveformView::drawBeatLines(QPainter& painter, const QRect& rect)
     int subdivisionsPerBar = (beatsPerBar == 6 || beatsPerBar == 12) ? 8 : 4;
     float samplesPerSubdivision = samplesPerBar / float(subdivisionsPerBar);
 
-    ViewportGeometry vp = getViewportGeometry(audioData[0].size(), rect.width());
+    ViewportGeometry vp = getViewportGeometry(displaySampleCount(), rect.width());
 
     int firstSubdivision = 0;
     if (gridStartSample > 0) {
@@ -678,7 +977,7 @@ void WaveformView::drawPlaybackCursor(QPainter& painter, const QRect& rect)
     // Ограничиваем позицию каретки границами аудио
     cursorSample = qBound(qint64(0), cursorSample, qint64(audioData[0].size() - 1));
 
-    ViewportGeometry vp = getViewportGeometry(audioData[0].size(), rect.width());
+    ViewportGeometry vp = getViewportGeometry(displaySampleCount(), rect.width());
     float cursorX = (cursorSample - vp.startSample) / vp.samplesPerPixel;
 
 
@@ -801,20 +1100,11 @@ float WaveformView::getCursorXPosition() const
 {
     if (audioData.isEmpty()) return 0.0f;
 
-    // playbackPosition уже в миллисекундах, конвертируем в сэмплы
     qint64 cursorSample = (playbackPosition * sampleRate) / 1000;
-
-    // Ограничиваем позицию каретки границами аудио
     cursorSample = qBound(qint64(0), cursorSample, qint64(audioData[0].size() - 1));
 
-    // Используем ту же логику, что и в drawPlaybackCursor
-    float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
-    int visibleSamples = int(width() * samplesPerPixel);
-    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-    int startSample = int(horizontalOffset * maxStartSample);
-
-    // Вычисляем позицию каретки в пикселях
-    return (cursorSample - startSample) / samplesPerPixel;
+    ViewportGeometry vp = getViewportGeometry(displaySampleCount(), width());
+    return (cursorSample - vp.startSample) / vp.samplesPerPixel;
 }
 
 
@@ -833,56 +1123,7 @@ void WaveformView::wheelEvent(QWheelEvent* event)
         return;
     }
 
-    float delta = event->angleDelta().y() / 120.f;
-    float oldZoom = zoomLevel;
-    float newZoom = oldZoom;
-
-    if (delta > 0) {
-        newZoom *= zoomStep;
-    } else {
-        newZoom /= zoomStep;
-    }
-
-    // Ограничиваем масштаб
-    newZoom = qBound(float(minZoom), newZoom, float(maxZoom));
-
-    if (qFuzzyCompare(newZoom, oldZoom)) {
-        event->accept();
-        return;
-    }
-
-    // Получаем позицию мыши относительно виджета
-    QPoint mousePos = event->position().toPoint();
-
-    // Вычисляем текущую позицию в сэмплах под курсором мыши
-    float samplesPerPixel = float(audioData[0].size()) / (width() * oldZoom);
-    int visibleSamples = int(width() * samplesPerPixel);
-    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-    int startSample = int(horizontalOffset * maxStartSample);
-    qint64 mouseSample = startSample + qint64(mousePos.x() * samplesPerPixel);
-
-    // Обновляем масштаб
-    zoomLevel = newZoom;
-
-    // Вычисляем новую позицию, чтобы курсор мыши остался над тем же сэмплом
-    float newSamplesPerPixel = float(audioData[0].size()) / (width() * newZoom);
-    int newVisibleSamples = int(width() * newSamplesPerPixel);
-    int newMaxStartSample = qMax(0, audioData[0].size() - newVisibleSamples);
-
-    // Вычисляем новое смещение
-    float newOffset = 0.0f;
-    if (newMaxStartSample > 0) {
-        newOffset = float(mouseSample - mousePos.x() * newSamplesPerPixel) / newMaxStartSample;
-        newOffset = qBound(0.0f, newOffset, 1.0f);
-    }
-
-    horizontalOffset = newOffset;
-
-    // Эмитируем сигналы для обновления скроллбара
-    emit zoomChanged(zoomLevel);
-    emit horizontalOffsetChanged(horizontalOffset);
-    update();
-
+    zoomAtPixelX(event->angleDelta().y(), event->position().x());
     event->accept();
 }
 
@@ -1045,7 +1286,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
     ViewportGeometry vp;
     bool hasViewport = false;
     if (!audioData.isEmpty()) {
-        vp = getViewportGeometry(audioData[0].size(), width());
+        vp = getViewportGeometry(displaySampleCount(), width());
         hasViewport = true;
     }
 
@@ -1152,6 +1393,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
     // Обработка перетаскивания метки
     if (draggingMarkerIndex >= 0 && (event->buttons() & Qt::LeftButton)) {
         if (hasViewport) {
+            const qint64 timelineSize = displaySampleCount();
             // Вычисляем новую позицию метки
             qint64 newSample = vp.startSample + qint64(event->pos().x() * vp.samplesPerPixel);
 
@@ -1179,7 +1421,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                     qint64 overflowSamples = qint64(overflowPixels * vp.samplesPerPixel);
 
                     // Позиция = правая граница аудио + переполнение
-                    qint64 audioEndSample = audioData[0].size();
+                    qint64 audioEndSample = timelineSize;
                     newSample = audioEndSample + overflowSamples;
 
                     // Изменяем курсор для индикации возможности перетаскивания за границу
@@ -1192,7 +1434,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 }
             } else {
                 // Обычная метка: ограничиваем позицию границами аудио
-            newSample = qBound(qint64(0), newSample, qint64(audioData[0].size() - 1));
+            newSample = qBound(qint64(0), newSample, qint64(timelineSize - 1));
             }
 
             // Ограничиваем позицию соседними метками, чтобы метки не перелезали друг через друга
@@ -1244,7 +1486,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
 
                 // Минимальный сегмент 50 мс — метки не перескакивают и не сближаются ближе 50 мс
                 const qint64 minSegSamples = (sampleRate * MIN_MARKER_SEGMENT_MS) / 1000;
-                qint64 maxSamples = audioData[0].size() - 1;
+                qint64 maxSamples = timelineSize - 1;
                 qint64 minAllowedPos = (prevMarkerPos >= 0) ? (prevMarkerPos + minSegSamples) : qint64(0);
                 qint64 maxAllowedPos = (nextMarkerPos >= 0) ? (nextMarkerPos - minSegSamples) : maxSamples;
 
@@ -1276,7 +1518,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
 
                 // Финальная проверка валидности границ аудио (для обычных меток)
                 if (!isLastMarkerDragging) {
-                newSample = qBound(qint64(0), newSample, qint64(audioData[0].size() - 1));
+                newSample = qBound(qint64(0), newSample, qint64(timelineSize - 1));
                 }
             }
 
@@ -1373,7 +1615,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                         Marker& m = markers[j];
                         if (m.isSelected && !m.isFixed) {
                             qint64 targetPos = m.dragStartSample + groupDelta;
-                            targetPos = qBound(qint64(0), targetPos, qint64(audioData[0].size() - 1));
+                            targetPos = qBound(qint64(0), targetPos, qint64(timelineSize - 1));
                             m.position = targetPos;
                             m.updateTimeFromSamples(sampleRate);
                         }
@@ -1492,15 +1734,13 @@ void WaveformView::mouseReleaseEvent(QMouseEvent* event)
 
             // Если были изменения в реальном времени, отправляем сигнал для обновления воспроизведения
             if (!originalAudioData.isEmpty() && markers.size() >= 2) {
-                // Убеждаемся, что обработка завершена
-                if (realtimeProcessPending) {
-                    // Если обработка еще идет, ждем её завершения
-                    QTimer::singleShot(100, this, [this]() {
-                        emit markerDragFinished();
-                    });
-                } else {
-                    emit markerDragFinished();
-                }
+                // Финальный пересчёт превью с актуальными позициями — в фоне
+                realtimeStretchDirty = true;
+                startRealtimeStretchJob();
+
+                // Сигнал отправляем сразу: MainWindow делает debounce и сам
+                // пересчитывает аудио для воспроизведения в фоновом потоке
+                emit markerDragFinished();
             }
 
             emit markersChanged();
@@ -2125,8 +2365,8 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
     // Отладочный вывод (можно закомментировать после проверки)
     // qDebug() << "drawMarkers: drawing" << markers.size() << "markers, rect:" << rect.width() << "x" << rect.height();
 
-    // Используем текущие данные для позиций меток
-    qint64 referenceSize = audioData[0].size();
+    // Используем длину отображаемого таймлайна (с учётом растяжения меток)
+    const qint64 referenceSize = displaySampleCount();
 
     // Вычисляем позицию в сэмплах для видимой области
     float samplesPerPixel = float(referenceSize) / (rect.width() * zoomLevel);
@@ -2337,13 +2577,7 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
 
 TimeStretchProcessor::StretchResult WaveformView::applyTimeStretch(const QVector<Marker>& markers) const
 {
-    // Конвертируем Marker → MarkerData для передачи в процессор
-    QVector<MarkerData> markerData;
-    markerData.reserve(markers.size());
-    for (const Marker& m : markers) {
-        // Копируем только data-поля (без UI)
-        markerData.append(static_cast<const MarkerData&>(m));
-    }
+    const QVector<MarkerData> markerData = MarkerUtils::toMarkerData(markers);
 
     // Вызываем новый API TimeStretchProcessor
     // Используем originalAudioData если есть, иначе audioData
@@ -2459,65 +2693,108 @@ void WaveformView::scheduleUpdate(const QRect& rect)
 
 void WaveformView::scheduleRealtimeProcess()
 {
-    if (!realtimeProcessPending) {
-        realtimeProcessPending = true;
-        // Используем QTimer::singleShot для throttling (50ms)
-        QTimer::singleShot(50, this, [this]() {
-            if (realtimeProcessPending) {
-                realtimeProcessPending = false;
-                processRealtimeStretch();
-                scheduleUpdate(); // Используем существующий throttled update
-            }
-        });
-    }
+    realtimeStretchDirty = true;
+    startRealtimeStretchJob();
 }
 
-void WaveformView::processRealtimeStretch()
+void WaveformView::startRealtimeStretchJob()
 {
+    if (!realtimeStretchDirty || realtimeStretchShuttingDown) {
+        return;
+    }
+    if (realtimeStretchJobActive) {
+        return;
+    }
     if (originalAudioData.isEmpty() || markers.size() < 2) {
+        realtimeStretchDirty = false;
         return;
     }
 
-    // Для очень длинных файлов realtime-пересчет всей волны может быть слишком дорогим.
-    // В этом случае пропускаем предпросмотр и оставляем только визуальное смещение меток.
-    const qint64 maxRealtimeSamples = 5ll * sampleRate * 60ll; // ~5 минут на канал
-    if (!originalAudioData.isEmpty() && originalAudioData[0].size() > maxRealtimeSamples) {
+    if (originalAudioData[0].size() > TimeStretchProcessor::maxRealtimePreviewSamples(sampleRate)) {
+        realtimeStretchDirty = false;
         return;
     }
 
-    // Конвертируем Marker → MarkerData
-    QVector<MarkerData> markerData;
-    markerData.reserve(markers.size());
-    for (const Marker& m : markers) {
-        markerData.append(static_cast<const MarkerData&>(m));
-    }
+    realtimeStretchDirty = false;
+    realtimeStretchJobActive = true;
+    realtimeJobGeneration = audioSourceGeneration;
 
-    // Применяем обработку к исходным данным
-    TimeStretchProcessor::StretchResult result = TimeStretchProcessor::applyMarkerStretch(
-        originalAudioData,  // Всегда используем исходные данные
-        markerData,         // Текущие метки с их position и originalPosition
-        sampleRate,
-        true                // Тонкомпенсация (WSOLA) — чтобы превью звучало без сдвига высоты
-    );
+    const QVector<MarkerData> markerData = MarkerUtils::toMarkerData(markers);
+    realtimeJobMarkers = markerData;
 
-    // Обновляем только audioData для визуализации
-    audioData = result.audioData;
+    const QVector<QVector<float>> input = originalAudioData;
+    const int rate = sampleRate;
+    const quint64 jobGen = realtimeJobGeneration;
+    const quint64 audioGen = audioSourceGeneration;
 
-    // Если включена спектрограмма — пересчитываем её при следующей перерисовке
-    if (renderMode == WaveformRenderMode::Spectrogram) {
-        spectrogramImages.clear();
-        spectrogramDirty = true;
-    }
+    QPointer<WaveformView> self(this);
+    std::atomic<int>* jobsCounter = &realtimeStretchJobsRunning;
+    jobsCounter->fetch_add(1);
 
-    // НЕ обновляем метки - сохраняем текущие position и originalPosition
-    // Они управляются пользователем и отражают исходную геометрию
+    std::thread([self, jobsCounter, input, markerData, rate, jobGen, audioGen]() {
+        QVector<QVector<float>> audio;
+        if (self && !self->realtimeStretchShuttingDown) {
+            audio = TimeStretchProcessor::applyMarkerStretch(input, markerData, rate, false).audioData;
+        }
+
+        jobsCounter->fetch_sub(1);
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [self, audio = std::move(audio), jobGen, audioGen, markerData]() {
+            if (!self || self->realtimeStretchShuttingDown) {
+                return;
+            }
+
+            self->realtimeStretchJobActive = false;
+
+            const bool fresh = (jobGen == self->audioSourceGeneration)
+                               && (audioGen == self->audioSourceGeneration)
+                               && MarkerUtils::positionsMatch(self->markers, markerData);
+
+            if (fresh && !audio.isEmpty() && !audio[0].isEmpty()) {
+                self->audioData = audio;
+
+                if (self->renderMode == WaveformRenderMode::Spectrogram) {
+                    self->spectrogramImages.clear();
+                    self->spectrogramDirty = true;
+                }
+                self->scheduleUpdate();
+            } else {
+                self->realtimeStretchDirty = true;
+            }
+
+            if (self->realtimeStretchDirty) {
+                QTimer::singleShot(0, self.data(), &WaveformView::startRealtimeStretchJob);
+            }
+        }, Qt::QueuedConnection);
+    }).detach();
 }
 
 void WaveformView::updateOriginalData(const QVector<QVector<float>>& newData)
 {
     originalAudioData = newData;
+    ++audioSourceGeneration; // Результаты фоновых задач со старыми данными будут отброшены
+    realtimeStretchDirty = false;
     spectrogramImages.clear();
     spectrogramDirty = true;
+}
+
+void WaveformView::applyStretchedPreview(const QVector<QVector<float>>& channels)
+{
+    if (channels.isEmpty() || channels[0].isEmpty()) {
+        return;
+    }
+    if (!originalAudioData.isEmpty() && channels.size() != originalAudioData.size()) {
+        qWarning() << "applyStretchedPreview: channel count mismatch"
+                   << channels.size() << "vs" << originalAudioData.size();
+        return;
+    }
+
+    audioData = channels;
+    if (renderMode == WaveformRenderMode::Spectrogram) {
+        spectrogramImages.clear();
+        spectrogramDirty = true;
+    }
+    scheduleUpdate();
 }
 
 // ============================================================================
