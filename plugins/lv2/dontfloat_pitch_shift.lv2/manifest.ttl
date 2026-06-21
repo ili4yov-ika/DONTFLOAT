@@ -1,0 +1,7 @@
+@prefix lv2: <http://lv2plug.in/ns/lv2core#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<https://github.com/ili4yov-ika/DONTFLOAT/plugins/pitch-shift>
+    a lv2:Plugin ;
+    lv2:binary <dontfloat_pitch_shift@LV2_BINARY_EXT@> ;
+    rdfs:seeAlso <dontfloat_pitch_shift.ttl> .

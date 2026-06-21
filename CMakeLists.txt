@@ -71,6 +71,13 @@ endif()
 # Генерируем compile_commands.json для IntelliSense
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(DONTFLOAT_BUILD_PLUGINS "Build DAW plugin targets" OFF)
+option(DONTFLOAT_BUILD_CLAP "Build CLAP plugin target when plugins are enabled" ON)
+option(DONTFLOAT_BUILD_LV2 "Build LV2 plugin target when plugins are enabled" ON)
+option(DONTFLOAT_BUILD_VST3 "Build VST3 plugin target when SDK is available" OFF)
+set(DONTFLOAT_CLAP_SDK_ROOT "" CACHE PATH "Optional path to official CLAP SDK")
+set(DONTFLOAT_VST3_SDK_ROOT "" CACHE PATH "Optional path to VST3 SDK")
+
 find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Core
     Gui
@@ -220,6 +227,158 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 dontfloat_link_rubberband(${PROJECT_NAME})
 
+if(DONTFLOAT_BUILD_PLUGINS)
+    add_library(dontfloat_plugin_core STATIC
+        plugins/core/dontfloat_plugin_core.cpp
+        plugins/core/dontfloat_plugin_core.h
+    )
+    target_compile_features(dontfloat_plugin_core PUBLIC cxx_std_17)
+    target_include_directories(dontfloat_plugin_core PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+
+    if(DONTFLOAT_BUILD_CLAP)
+        add_library(dontfloat_pitch_shift_clap MODULE
+            plugins/clap/dontfloat_clap_pitch_shift.cpp
+            plugins/clap/clap_minimal.h
+        )
+        target_compile_features(dontfloat_pitch_shift_clap PRIVATE cxx_std_17)
+        target_link_libraries(dontfloat_pitch_shift_clap PRIVATE dontfloat_plugin_core)
+        target_include_directories(dontfloat_pitch_shift_clap PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/clap
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        )
+        set_target_properties(dontfloat_pitch_shift_clap PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "dontfloat_pitch_shift"
+            SUFFIX ".clap"
+        )
+
+        add_executable(clap_pitch_shift_smoke_test
+            plugins/clap/tests/clap_pitch_shift_smoke_test.cpp
+            plugins/clap/dontfloat_clap_pitch_shift.cpp
+        )
+        target_compile_features(clap_pitch_shift_smoke_test PRIVATE cxx_std_17)
+        target_link_libraries(clap_pitch_shift_smoke_test PRIVATE dontfloat_plugin_core)
+        target_include_directories(clap_pitch_shift_smoke_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/clap
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        )
+        add_test(NAME clap_pitch_shift_smoke_test COMMAND clap_pitch_shift_smoke_test)
+        set_tests_properties(clap_pitch_shift_smoke_test PROPERTIES
+            LABELS "plugins;clap;pitch"
+            DESCRIPTION "Smoke test for DONTFLOAT CLAP pitch shift factory and process path"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+
+        install(TARGETS dontfloat_pitch_shift_clap
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/clap
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/clap
+            OPTIONAL
+        )
+    endif()
+
+    if(DONTFLOAT_BUILD_LV2)
+        add_library(dontfloat_pitch_shift_lv2 MODULE
+            plugins/lv2/dontfloat_lv2_pitch_shift.cpp
+            plugins/lv2/lv2_minimal.h
+        )
+        target_compile_features(dontfloat_pitch_shift_lv2 PRIVATE cxx_std_17)
+        target_link_libraries(dontfloat_pitch_shift_lv2 PRIVATE dontfloat_plugin_core)
+        target_include_directories(dontfloat_pitch_shift_lv2 PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        )
+        set_target_properties(dontfloat_pitch_shift_lv2 PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "dontfloat_pitch_shift"
+            ARCHIVE_OUTPUT_NAME "dontfloat_pitch_shift_lv2_import"
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+            RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2"
+        )
+
+        if(WIN32)
+            set(_dontfloat_lv2_binary_ext ".dll")
+        elseif(APPLE)
+            set(_dontfloat_lv2_binary_ext ".dylib")
+        else()
+            set(_dontfloat_lv2_binary_ext ".so")
+        endif()
+        set(LV2_BINARY_EXT "${_dontfloat_lv2_binary_ext}")
+        configure_file(
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2/manifest.ttl
+            ${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2/manifest.ttl
+            @ONLY
+        )
+        configure_file(
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2/dontfloat_pitch_shift.ttl
+            ${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2/dontfloat_pitch_shift.ttl
+            COPYONLY
+        )
+
+        add_executable(lv2_pitch_shift_smoke_test
+            plugins/lv2/tests/lv2_pitch_shift_smoke_test.cpp
+            plugins/lv2/dontfloat_lv2_pitch_shift.cpp
+        )
+        target_compile_features(lv2_pitch_shift_smoke_test PRIVATE cxx_std_17)
+        target_link_libraries(lv2_pitch_shift_smoke_test PRIVATE dontfloat_plugin_core)
+        target_include_directories(lv2_pitch_shift_smoke_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        )
+        add_test(NAME lv2_pitch_shift_smoke_test COMMAND lv2_pitch_shift_smoke_test)
+        set_tests_properties(lv2_pitch_shift_smoke_test PROPERTIES
+            LABELS "plugins;lv2;pitch"
+            DESCRIPTION "Smoke test for DONTFLOAT LV2 pitch shift descriptor and run path"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+
+        install(TARGETS dontfloat_pitch_shift_lv2
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/dontfloat_pitch_shift.lv2
+            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/dontfloat_pitch_shift.lv2
+            OPTIONAL
+        )
+        install(FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2/manifest.ttl
+            ${CMAKE_CURRENT_BINARY_DIR}/plugins/lv2/dontfloat_pitch_shift.lv2/dontfloat_pitch_shift.ttl
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/dontfloat_pitch_shift.lv2
+            OPTIONAL
+        )
+    endif()
+
+    if(DONTFLOAT_BUILD_VST3)
+        if(DONTFLOAT_VST3_SDK_ROOT AND EXISTS "${DONTFLOAT_VST3_SDK_ROOT}/CMakeLists.txt")
+            message(STATUS "VST3 SDK found: ${DONTFLOAT_VST3_SDK_ROOT}")
+            add_library(dontfloat_pitch_shift_vst3 MODULE
+                plugins/vst3/dontfloat_vst3_pitch_shift.cpp
+            )
+            target_compile_features(dontfloat_pitch_shift_vst3 PRIVATE cxx_std_17)
+            target_compile_definitions(dontfloat_pitch_shift_vst3 PRIVATE DONTFLOAT_HAS_VST3_SDK)
+            target_link_libraries(dontfloat_pitch_shift_vst3 PRIVATE dontfloat_plugin_core)
+            target_include_directories(dontfloat_pitch_shift_vst3 PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+                ${DONTFLOAT_VST3_SDK_ROOT}
+            )
+            set_target_properties(dontfloat_pitch_shift_vst3 PROPERTIES
+                PREFIX ""
+                OUTPUT_NAME "DONTFLOAT Pitch Shift"
+                SUFFIX ".vst3"
+            )
+        else()
+            message(WARNING "DONTFLOAT_BUILD_VST3=ON, but DONTFLOAT_VST3_SDK_ROOT does not point to a VST3 SDK. Skipping VST3 target.")
+        endif()
+    endif()
+endif()
+
 # Translations: build .qm from .ts (output in build dir; app loads from applicationDirPath())
 find_package(Qt6 REQUIRED COMPONENTS LinguistTools)
 qt_add_lrelease(DONTFLOAT_lrelease
@@ -357,6 +516,22 @@ endif()
 
 # Enable testing
 enable_testing()
+
+if(DONTFLOAT_BUILD_PLUGINS)
+    add_executable(plugin_core_pitch_shift_test
+        plugins/core/tests/plugin_core_pitch_shift_test.cpp
+    )
+    target_link_libraries(plugin_core_pitch_shift_test PRIVATE dontfloat_plugin_core)
+    target_include_directories(plugin_core_pitch_shift_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+    )
+    add_test(NAME plugin_core_pitch_shift_test COMMAND plugin_core_pitch_shift_test)
+    set_tests_properties(plugin_core_pitch_shift_test PROPERTIES
+        LABELS "plugins;core;pitch"
+        DESCRIPTION "Smoke tests for DONTFLOAT plugin core pitch shift"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+endif()
 
 # Функция для создания тестового исполняемого файла
 function(add_qt_test test_name)
