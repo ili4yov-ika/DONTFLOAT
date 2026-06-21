@@ -108,8 +108,24 @@ ctest --test-dir build/plugins -R plugin_core_pitch_shift_test --output-on-failu
 
 Установка:
 
-- CLAP: `${CMAKE_INSTALL_LIBDIR}/clap` или `${CMAKE_INSTALL_BINDIR}/clap` на Windows.
+- CLAP: `${CMAKE_INSTALL_LIBDIR}/clap`.
 - LV2: `${CMAKE_INSTALL_LIBDIR}/lv2/dontfloat_pitch_shift.lv2`.
+- VST3: `${CMAKE_INSTALL_LIBDIR}/vst3`, если доступен `DONTFLOAT_VST3_SDK_ROOT`.
+
+### Windows NSIS
+
+`tools/build_windows_installer.bat` включает `DONTFLOAT_BUILD_PLUGINS=ON`,
+`DONTFLOAT_BUILD_CLAP=ON`, `DONTFLOAT_BUILD_LV2=ON` и
+`DONTFLOAT_BUILD_VST3=ON`. Если переменная окружения `DONTFLOAT_VST3_SDK_ROOT`
+не задана, VST3 target пропускается, а CLAP/LV2 продолжают собираться.
+
+`tools/nsis_installer.nsi` показывает страницу компонентов. Основное приложение
+устанавливается обязательно, а группа `DAW plugins` содержит опциональные
+секции:
+
+- `CLAP plugin` → `%CommonProgramFiles%\CLAP\dontfloat_pitch_shift.clap`;
+- `LV2 plugin` → `%CommonProgramFiles%\LV2\dontfloat_pitch_shift.lv2`;
+- `VST3 plugin` → `%CommonProgramFiles%\VST3`.
 
 ## Первые кандидаты для плагинов
 
@@ -136,12 +152,14 @@ ctest --test-dir build/plugins -R plugin_core_pitch_shift_test --output-on-failu
 ## Как это должно работать
 
 ### Windows
-- Установщик кладёт общую библиотеку ядра рядом с приложением или плагином.
-- `.vst3`/`.clap` хранит относительный путь к этой библиотеке либо линкуется с
-  ядром статически.
-- Для DAW плагин должен быть самодостаточным: если приложение DONTFLOAT не
-  установлено, плагин всё равно должен корректно сообщить об ошибке или иметь
-  всё необходимое внутри bundle.
+- Windows installer собирает plugin targets и предлагает отдельную группу
+  `DAW plugins` для CLAP/LV2/VST3.
+- CLAP устанавливается в `%CommonProgramFiles%\CLAP`, LV2 — в
+  `%CommonProgramFiles%\LV2`, VST3 — в `%CommonProgramFiles%\VST3`.
+- Текущий `plugins/core` линкуется в плагины статически, поэтому CLAP/LV2 не
+  требуют отдельной общей DLL рядом с приложением.
+- VST3 остаётся SDK-gated: без `DONTFLOAT_VST3_SDK_ROOT` секция будет в
+  установщике, но артефакт не попадёт в staging.
 
 ### Linux / macOS
 - CLAP/LV2/VST3 bundle содержит shared library (`.so`/`.dylib`) и manifest.
@@ -163,9 +181,7 @@ ctest --test-dir build/plugins -R plugin_core_pitch_shift_test --output-on-failu
 
 ## План интеграции
 
-1. Выделить `plugins/core` и перенести туда независимые DSP-обёртки.
-2. Добавить CMake option, например `DONTFLOAT_BUILD_PLUGINS`.
-3. Сделать минимальный CLAP или VST3 proof-of-concept для pitch shift.
-4. Добавить тесты на совпадение результата plugin core с текущими функциями
-   приложения.
-5. После стабилизации добавить installer layout для Windows/macOS/Linux.
+1. Расширить VST3 target до полноценного bundle по официальному SDK.
+2. Проверить CLAP/LV2/VST3 в реальных hosts и validators.
+3. Добавить state/preset serialization и automation regression tests.
+4. Подготовить installer layout для macOS/Linux packaging.

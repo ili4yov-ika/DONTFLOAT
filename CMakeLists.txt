@@ -4,6 +4,7 @@ project(DONTFLOAT VERSION 0.0.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+include(GNUInstallDirs)
 
 # MSVC: в qm-dsp (TempoTrackV2::calculateBeatPeriod) std::copy(df.begin()+(i+k), …);
 # проверяемые итераторы в Debug дают assert _Verify_offset. Задаём явно для всех CONFIG,
@@ -373,6 +374,12 @@ if(DONTFLOAT_BUILD_PLUGINS)
                 OUTPUT_NAME "DONTFLOAT Pitch Shift"
                 SUFFIX ".vst3"
             )
+
+            install(TARGETS dontfloat_pitch_shift_vst3
+                LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/vst3
+                RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/vst3
+                OPTIONAL
+            )
         else()
             message(WARNING "DONTFLOAT_BUILD_VST3=ON, but DONTFLOAT_VST3_SDK_ROOT does not point to a VST3 SDK. Skipping VST3 target.")
         endif()
@@ -500,7 +507,6 @@ elseif(APPLE)
 endif()
 
 # Install rules
-include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME}
     BUNDLE DESTINATION .
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

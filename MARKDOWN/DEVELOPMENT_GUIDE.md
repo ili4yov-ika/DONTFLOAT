@@ -107,6 +107,11 @@ tools\build_windows_installer.bat
 ```
 Скрипт выполняет: CMake Release, install, windeployqt, NSIS. Результат: `tools/DONTFLOAT_Setup.exe`. Требуется NSIS.
 
+Installer build включает `DONTFLOAT_BUILD_PLUGINS=ON`: CLAP и LV2 собираются и
+попадают в staging, VST3 собирается только при заданном
+`DONTFLOAT_VST3_SDK_ROOT`. В NSIS есть страница компонентов с обязательной
+секцией приложения и опциональной группой `DAW plugins`.
+
 #### Иконка EXE (Windows)
 - **resources/app.rc** — ресурс иконки для EXE
 - **resources/icons/logo.ico** — генерируется из logo.svg

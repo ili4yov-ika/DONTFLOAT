@@ -193,7 +193,12 @@ bash tools/macos_build.sh release test
 ```batch
 tools\build_windows_installer.bat
 ```
-Требования: CMake, Qt 6.8+, NSIS. Скрипт выполняет Release-сборку, windeployqt и создаёт инсталлер в папке `tools/`. Иконка EXE генерируется из `resources/icons/logo.svg` (Inkscape + Pillow).
+Требования: CMake, Qt 6.8+, NSIS. Скрипт выполняет Release-сборку, install, windeployqt и создаёт инсталлер в папке `tools/`. Иконка EXE генерируется из `resources/icons/logo.svg` (Inkscape + Pillow).
+
+Установщик показывает страницу компонентов: приложение DONTFLOAT обязательно,
+а группа `DAW plugins` позволяет опционально установить CLAP, LV2 и VST3.
+CLAP/LV2 собираются вместе с installer build. VST3 собирается только при
+заданной переменной окружения `DONTFLOAT_VST3_SDK_ROOT`.
 
 ### Скрипты и packaging (папка tools/)
 - `tools/README.md` — скрипты packaging, macOS/Linux setup и `marker_testgen`

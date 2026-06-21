@@ -32,10 +32,12 @@ bash tools/macos_build.sh release deploy  # + macdeployqt → build/macos/DONTFL
 
 ## Структура (установщики)
 
-- `build_windows_installer.bat` — сборка Windows installer (NSIS)
+- `build_windows_installer.bat` — сборка Windows installer (NSIS) вместе с
+  CLAP/LV2 plugin targets
 - `build_deb.sh` — сборка Debian/Ubuntu пакета (.deb)
 - `build_rpm.sh` — сборка Fedora/RHEL пакета (.rpm)
-- `nsis_installer.nsi` — скрипт NSIS для Windows installer
+- `nsis_installer.nsi` — скрипт NSIS для Windows installer и опциональных
+  секций DAW-плагинов
 - `debian/` — файлы для сборки .deb пакета
 - `rpm/` — файлы для сборки .rpm пакета
 
@@ -51,6 +53,16 @@ tools\build_windows_installer.bat
 - CMake
 - Qt6 (MSVC 2022 64-bit)
 - NSIS (Nullsoft Scriptable Install System)
+
+Windows installer включает страницу компонентов. Основная секция приложения
+обязательная, группа `DAW plugins` опционально ставит:
+
+- CLAP: `%CommonProgramFiles%\CLAP\dontfloat_pitch_shift.clap`
+- LV2: `%CommonProgramFiles%\LV2\dontfloat_pitch_shift.lv2`
+- VST3: `%CommonProgramFiles%\VST3` при наличии собранного VST3 artifact
+
+Для VST3 перед запуском задайте `DONTFLOAT_VST3_SDK_ROOT`; без SDK этот target
+пропускается, а CLAP/LV2 продолжают собираться.
 
 ### Linux (Debian/Ubuntu)
 

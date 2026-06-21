@@ -9,6 +9,9 @@ Unicode true
 !define PRODUCT_VERSION "0.0.0.1"
 !define PRODUCT_PUBLISHER "DONTFLOAT Project"
 !define PRODUCT_WEB_SITE "https://github.com/ili4yov-ika/DONTFLOAT"
+!define CLAP_INSTALL_DIR "$COMMONFILES64\CLAP"
+!define LV2_INSTALL_DIR "$COMMONFILES64\LV2"
+!define VST3_INSTALL_DIR "$COMMONFILES64\VST3"
 
 ; Общие настройки
 Name "${PRODUCT_NAME}"
@@ -23,6 +26,7 @@ RequestExecutionLevel admin
 ; Страницы
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "..\LICENSE"
+!insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -34,7 +38,9 @@ RequestExecutionLevel admin
 !insertmacro MUI_LANGUAGE "English"
 
 ; Секция установки
-Section "MainSection" SEC01
+Section "DONTFLOAT application" SEC_APP
+  SectionIn RO
+
   SetOutPath "$INSTDIR"
 
   ; Копируем bin (exe и dll)
@@ -65,6 +71,23 @@ Section "MainSection" SEC01
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall ${PRODUCT_NAME}.lnk" "$INSTDIR\Uninstall.exe"
 SectionEnd
 
+SectionGroup /e "DAW plugins" SEC_PLUGINS
+  Section /o "CLAP plugin" SEC_CLAP
+    SetOutPath "${CLAP_INSTALL_DIR}"
+    File /nonfatal "${BUILD_DIR}\lib\clap\dontfloat_pitch_shift.clap"
+  SectionEnd
+
+  Section /o "LV2 plugin" SEC_LV2
+    SetOutPath "${LV2_INSTALL_DIR}\dontfloat_pitch_shift.lv2"
+    File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat_pitch_shift.lv2\*.*"
+  SectionEnd
+
+  Section /o "VST3 plugin" SEC_VST3
+    SetOutPath "${VST3_INSTALL_DIR}"
+    File /nonfatal /r "${BUILD_DIR}\lib\vst3\*.*"
+  SectionEnd
+SectionGroupEnd
+
 ; Секция деинсталляции
 Section "Uninstall"
   ; Удаляем файлы и подкаталоги
@@ -72,9 +95,16 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\platforms"
   RMDir /r "$INSTDIR\styles"
   RMDir /r "$INSTDIR\plugins"
+  RMDir /r "$INSTDIR\clap"
   Delete "$INSTDIR\DONTFLOAT.exe"
   Delete "$INSTDIR\Uninstall.exe"
   Delete "$INSTDIR\*.dll"
+
+  ; Удаляем DAW-плагины, установленные опциональными секциями
+  Delete "${CLAP_INSTALL_DIR}\dontfloat_pitch_shift.clap"
+  RMDir /r "${LV2_INSTALL_DIR}\dontfloat_pitch_shift.lv2"
+  Delete "${VST3_INSTALL_DIR}\DONTFLOAT Pitch Shift.vst3"
+  RMDir /r "${VST3_INSTALL_DIR}\DONTFLOAT Pitch Shift.vst3"
 
   RMDir "$INSTDIR"
 
