@@ -1,5 +1,19 @@
 # История изменений документации
 
+## 2026-06-21 (Windows NSIS: секции DAW-плагинов)
+
+- Задокументирована новая страница компонентов в `tools/nsis_installer.nsi`:
+  обязательная установка приложения и опциональная группа `DAW plugins`.
+- Описаны пути установки CLAP/LV2/VST3 на Windows:
+  `%CommonProgramFiles%\CLAP`, `%CommonProgramFiles%\LV2`,
+  `%CommonProgramFiles%\VST3`.
+- Зафиксировано поведение `tools/build_windows_installer.bat`: installer build
+  включает `DONTFLOAT_BUILD_PLUGINS=ON`, CLAP/LV2 собираются по умолчанию, VST3
+  зависит от `DONTFLOAT_VST3_SDK_ROOT`.
+- Обновлены: `README.md`, `tools/README.md`, `MARKDOWN/DEVELOPMENT_GUIDE.md`,
+  `plugins/README.md`, `plugins/clap/README.md`, `plugins/lv2/README.md`,
+  `plugins/vst3/README.md`.
+
 ## 2026-06-14 (питч-сетка: актуализация документации)
 
 - Питч-сетка **не заморожена**: работает через `PitchGridWidget` + `GiadaPitchGridEngine`, по умолчанию **скрыта** (`Ctrl+G`, `QSettings` → `pitchGridVisible`).

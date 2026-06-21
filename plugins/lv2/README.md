@@ -81,6 +81,11 @@ plugins/lv2/dontfloat_pitch_shift.lv2/
 CMake install rule кладёт bundle в
 `${CMAKE_INSTALL_LIBDIR}/lv2/dontfloat_pitch_shift.lv2`.
 
+Windows NSIS installer тоже умеет установить LV2 bundle: опциональная секция
+`DAW plugins / LV2 plugin` копирует его в
+`%CommonProgramFiles%\LV2\dontfloat_pitch_shift.lv2`. Это полезно для Windows
+hosts с LV2 support, хотя основной целевой сценарий формата остаётся Linux.
+
 ## Проверка
 
 1. Проверить `.ttl` через `lv2_validate`, если доступен.

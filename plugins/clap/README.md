@@ -76,8 +76,10 @@ cmake --build build/plugins --target dontfloat_pitch_shift_clap clap_pitch_shift
 ctest --test-dir build/plugins -R clap_pitch_shift_smoke_test --output-on-failure
 ```
 
-Install rule кладёт CLAP module в `${CMAKE_INSTALL_LIBDIR}/clap` или
-`${CMAKE_INSTALL_BINDIR}/clap` на Windows.
+Install rule кладёт CLAP module в `${CMAKE_INSTALL_LIBDIR}/clap`.
+Windows NSIS installer копирует его из staging в
+`%CommonProgramFiles%\CLAP\dontfloat_pitch_shift.clap` через опциональную
+секцию `DAW plugins / CLAP plugin`.
 
 ## Проверка
 

@@ -58,6 +58,12 @@ cmake --build build/plugins --target dontfloat_pitch_shift_vst3
 
 Текущий файл реализации: `dontfloat_vst3_pitch_shift.cpp`.
 
+CMake install rule кладёт VST3 artifact в `${CMAKE_INSTALL_LIBDIR}/vst3`.
+Windows installer включает опциональную секцию `DAW plugins / VST3 plugin`,
+которая копирует staging-содержимое в `%CommonProgramFiles%\VST3`. Если
+`DONTFLOAT_VST3_SDK_ROOT` не задан или SDK не найден, target не создаётся и
+VST3 artifact не попадает в staging.
+
 ## Ограничения
 
 - Не тянуть `MainWindow`, `.ui` файлы и `QApplication` в плагин.
