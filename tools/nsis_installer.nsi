@@ -72,19 +72,27 @@ Section "DONTFLOAT application" SEC_APP
 SectionEnd
 
 SectionGroup /e "DAW plugins" SEC_PLUGINS
-  Section /o "CLAP plugin" SEC_CLAP
+  Section "CLAP plugins (DONTFLOAT, Scratch, Pitcher)" SEC_CLAP
     SetOutPath "${CLAP_INSTALL_DIR}"
-    File /nonfatal "${BUILD_DIR}\lib\clap\dontfloat_pitch_shift.clap"
+    File /nonfatal "${BUILD_DIR}\lib\clap\dontfloat.clap"
+    File /nonfatal "${BUILD_DIR}\lib\clap\dontfloat_scratch.clap"
+    File /nonfatal "${BUILD_DIR}\lib\clap\dontfloat_pitcher.clap"
   SectionEnd
 
-  Section /o "LV2 plugin" SEC_LV2
-    SetOutPath "${LV2_INSTALL_DIR}\dontfloat_pitch_shift.lv2"
-    File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat_pitch_shift.lv2\*.*"
+  Section "LV2 plugins (DONTFLOAT, Scratch, Pitcher)" SEC_LV2
+    SetOutPath "${LV2_INSTALL_DIR}\dontfloat.lv2"
+    File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat.lv2\*.*"
+    SetOutPath "${LV2_INSTALL_DIR}\dontfloat_scratch.lv2"
+    File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat_scratch.lv2\*.*"
+    SetOutPath "${LV2_INSTALL_DIR}\dontfloat_pitcher.lv2"
+    File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat_pitcher.lv2\*.*"
   SectionEnd
 
-  Section /o "VST3 plugin" SEC_VST3
+  Section "VST3 plugins (DONTFLOAT, Scratch, Pitcher)" SEC_VST3
     SetOutPath "${VST3_INSTALL_DIR}"
-    File /nonfatal /r "${BUILD_DIR}\lib\vst3\*.*"
+    File /nonfatal "${BUILD_DIR}\lib\vst3\DONTFLOAT.vst3"
+    File /nonfatal "${BUILD_DIR}\lib\vst3\DONTFLOAT Scratch.vst3"
+    File /nonfatal "${BUILD_DIR}\lib\vst3\DONTFLOAT Pitcher.vst3"
   SectionEnd
 SectionGroupEnd
 
@@ -101,10 +109,15 @@ Section "Uninstall"
   Delete "$INSTDIR\*.dll"
 
   ; Удаляем DAW-плагины, установленные опциональными секциями
-  Delete "${CLAP_INSTALL_DIR}\dontfloat_pitch_shift.clap"
-  RMDir /r "${LV2_INSTALL_DIR}\dontfloat_pitch_shift.lv2"
-  Delete "${VST3_INSTALL_DIR}\DONTFLOAT Pitch Shift.vst3"
-  RMDir /r "${VST3_INSTALL_DIR}\DONTFLOAT Pitch Shift.vst3"
+  Delete "${CLAP_INSTALL_DIR}\dontfloat.clap"
+  Delete "${CLAP_INSTALL_DIR}\dontfloat_scratch.clap"
+  Delete "${CLAP_INSTALL_DIR}\dontfloat_pitcher.clap"
+  RMDir /r "${LV2_INSTALL_DIR}\dontfloat.lv2"
+  RMDir /r "${LV2_INSTALL_DIR}\dontfloat_scratch.lv2"
+  RMDir /r "${LV2_INSTALL_DIR}\dontfloat_pitcher.lv2"
+  Delete "${VST3_INSTALL_DIR}\DONTFLOAT.vst3"
+  Delete "${VST3_INSTALL_DIR}\DONTFLOAT Scratch.vst3"
+  Delete "${VST3_INSTALL_DIR}\DONTFLOAT Pitcher.vst3"
 
   RMDir "$INSTDIR"
 

@@ -99,7 +99,7 @@ flowchart TB
 
 - **MainWindow** — центр приложения: создаёт и держит все виджеты, плеер, таймер, стек отмены, метроном, читает/пишет QSettings.
 - **WaveformView** — основная область: волна, метки A/B, метки растяжения, синхронизация с позицией воспроизведения.
-- **PitchGridWidget** — питч-сетка (скрыта по умолчанию, `Ctrl+G`); `GiadaPitchGridEngine`; синхронизация zoom/offset/каретки с WaveformView; таймлайн на полную ширину, подписи нот поверх.
+- **PitchGridWidget** — питч-сетка (скрыта по умолчанию, `Ctrl+G`); `PianoRollEngine`; синхронизация zoom/offset/каретки с WaveformView; легенда нот справа, плашка «Анализировать».
 
 ---
 
@@ -305,7 +305,7 @@ flowchart LR
 | **main.cpp** | Точка входа: парсинг аргументов, GUI или консоль, создание MainWindow / runConsoleMode |
 | **MainWindow** | Окно, меню, виджеты, плеер, таймер, QSettings, QUndoStack, MetronomeController |
 | **WaveformView** | Волна, метки A/B, метки растяжения, биты, зум, вызов TimeStretchProcessor и визуализации |
-| **PitchGridWidget** | Piano roll (скрыта по умолчанию, Ctrl+G), GiadaPitchGridEngine, синхронизация с WaveformView |
+| **PitchGridWidget** | Piano roll (скрыта по умолчанию, Ctrl+G), PianoRollEngine, синхронизация с WaveformView |
 | **MarkerEngine** | MarkerData / Marker — данные и UI меток для растяжения |
 | **TimeStretchProcessor** | Алгоритмы сжатия/растяжения по меткам (Rubber Band R3 через `RubberBandOffline`) |
 | **BPMAnalyzer** | BPM, биты, отклонения, fixBeats; опционально qm-dsp |

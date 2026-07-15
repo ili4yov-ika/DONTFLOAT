@@ -17,24 +17,70 @@ PitchGridWidget::PitchGridWidget(QWidget *parent)
     , timelineSampleCount(0)
     , bpm(120.0f)
     , beatsPerBar(4)
-    , minPitch(minPitchDefault)
-    , maxPitch(maxPitchDefault)
+    , minPitch(kMinPitchDefault)
+    , maxPitch(kMaxPitchDefault)
     , isDragging(false)
     , isRightMousePanning(false)
-    , beatGridSnap(true)
+    , beatGridSnap(false)
     , selectedPitch(-1)
-    , colorScheme(QStringLiteral("dark"))
+    , selectedNoteIndex(-1)
+    , isNoteDragging(false)
+    , noteDragStartPitch(0)
 {
-    setMinimumHeight(minVisiblePitchRows * pitchHeight);
+    primaryKey = PianoRollEngine::KeySignature::fromString(QStringLiteral("C Major"));
+    setMinimumHeight(kMinVisiblePitchRows * kPitchRowHeightPx);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
-    setColorScheme(colorScheme);
+    applyTheme(QStringLiteral("dark"));
+}
+
+void PitchGridWidget::applyTheme(const QString& scheme)
+{
+    if (scheme == QStringLiteral("light")) {
+        theme.background = QColor(245, 245, 245);
+        theme.whiteKey = QColor(255, 255, 255);
+        theme.blackKey = QColor(210, 210, 210);
+        theme.outOfKeyKey = QColor(200, 200, 200);
+        theme.gridLine = QColor(200, 200, 200);
+        theme.beatLine = QColor(180, 180, 200);
+        theme.barLine = QColor(120, 120, 180);
+        theme.cursor = QColor(220, 60, 60);
+        theme.labelText = QColor(40, 40, 40);
+        theme.outOfKeyLegendText = QColor(170, 170, 170);
+        theme.labelBackground = QColor(235, 235, 235, kLegendBackgroundAlpha);
+        theme.selection = QColor(100, 150, 255, 80);
+        theme.octaveAccent = QColor(180, 200, 255, 90);
+        theme.legendBorder = QColor(180, 180, 180);
+        theme.noteFill = QColor(90, 160, 235, 190);
+        theme.noteEditedFill = QColor(240, 160, 60, 200);
+        theme.noteBorder = QColor(40, 90, 160);
+        theme.noteSelectedBorder = QColor(255, 255, 255);
+    } else {
+        theme.background = QColor(32, 32, 32);
+        theme.whiteKey = QColor(48, 48, 48);
+        theme.blackKey = QColor(24, 24, 24);
+        theme.outOfKeyKey = QColor(52, 52, 52);
+        theme.gridLine = QColor(70, 70, 70);
+        theme.beatLine = QColor(90, 90, 110);
+        theme.barLine = QColor(130, 130, 170);
+        theme.cursor = QColor(255, 100, 100);
+        theme.labelText = QColor(220, 220, 220);
+        theme.outOfKeyLegendText = QColor(110, 110, 110);
+        theme.labelBackground = QColor(28, 28, 28, kLegendBackgroundAlpha);
+        theme.selection = QColor(100, 150, 255, 70);
+        theme.octaveAccent = QColor(80, 110, 180, 60);
+        theme.legendBorder = QColor(60, 60, 60);
+        theme.noteFill = QColor(80, 150, 230, 190);
+        theme.noteEditedFill = QColor(235, 150, 50, 200);
+        theme.noteBorder = QColor(150, 200, 255);
+        theme.noteSelectedBorder = QColor(255, 255, 255);
+    }
+    update();
 }
 
 void PitchGridWidget::setAudioData(const QVector<QVector<float>>& data)
 {
     audioData = data;
-    rebuildPeaksIfNeeded();
     update();
 }
 
@@ -47,6 +93,11 @@ void PitchGridWidget::setSampleRate(int rate)
 void PitchGridWidget::setPlaybackPosition(qint64 position)
 {
     playbackPosition = position;
+    if (sampleRate > 0) {
+        const qint64 cursorSample = (position * sampleRate) / 1000;
+        const qint64 maxSample = qMax<qint64>(0, effectiveTimelineSamples() - 1);
+        cursorXPosition = currentViewport().sampleToPixelX(qBound(qint64(0), cursorSample, maxSample));
+    }
     update();
 }
 
@@ -95,7 +146,7 @@ void PitchGridWidget::adjustVerticalOffset(float delta)
 
 int PitchGridWidget::pitchContentHeightPx() const
 {
-    return (maxPitch - minPitch + 1) * pitchHeight;
+    return (maxPitch - minPitch + 1) * kPitchRowHeightPx;
 }
 
 int PitchGridWidget::maxVerticalScrollPx() const
@@ -111,8 +162,6 @@ int PitchGridWidget::verticalScrollPixels() const
 void PitchGridWidget::setZoomLevel(float zoom)
 {
     zoomLevel = qMax(0.01f, zoom);
-    peaksBuildWidth = 0;
-    rebuildPeaksIfNeeded();
     update();
 }
 
@@ -123,7 +172,6 @@ void PitchGridWidget::setTimelineReferenceWidth(int widthPx)
         return;
     }
     timelineReferenceWidthPx = nextWidth;
-    peaksBuildWidth = 0;
     update();
 }
 
@@ -148,36 +196,45 @@ qint64 PitchGridWidget::effectiveTimelineSamples() const
 
 int PitchGridWidget::timelineContentWidthPx() const
 {
-    return qMax(1, width());
+    return qMax(1, width() - kLegendColumnWidthPx);
 }
 
 int PitchGridWidget::timelineReferenceWidth() const
 {
-    return timelineReferenceWidthPx > 0 ? timelineReferenceWidthPx : timelineContentWidthPx();
+    return timelineReferenceWidthPx > 0 ? timelineReferenceWidthPx : qMax(1, width());
 }
 
 float PitchGridWidget::timelineToContentX(float timelineX) const
 {
     const int refW = timelineReferenceWidth();
-    const int contentW = timelineContentWidthPx();
-    if (refW <= 0 || contentW <= 0) {
+    if (refW <= 0 || width() <= 0) {
         return timelineX;
     }
-    return timelineX * float(contentW) / float(refW);
+    // Каретка и сетка используют те же X, что и WaveformView (легенда — overlay справа).
+    return timelineX * float(width()) / float(refW);
 }
 
 float PitchGridWidget::contentToTimelineX(float contentX) const
 {
-    const int contentW = timelineContentWidthPx();
-    if (contentW <= 0) {
+    if (width() <= 0) {
         return contentX;
     }
-    return contentX * float(timelineReferenceWidth()) / float(contentW);
+    return contentX * float(timelineReferenceWidth()) / float(width());
 }
 
 float PitchGridWidget::playbackCursorContentX() const
 {
     return timelineToContentX(cursorXPosition);
+}
+
+QRect PitchGridWidget::legendRect() const
+{
+    return QRect(width() - kLegendColumnWidthPx, 0, kLegendColumnWidthPx, height());
+}
+
+bool PitchGridWidget::isInLegendArea(int x) const
+{
+    return x >= width() - kLegendColumnWidthPx;
 }
 
 void PitchGridWidget::setBPM(float newBpm)
@@ -202,7 +259,7 @@ void PitchGridWidget::setPitchRange(int min, int max)
 {
     minPitch = min;
     maxPitch = max;
-    setMinimumHeight(minVisiblePitchRows * pitchHeight);
+    setMinimumHeight(kMinVisiblePitchRows * kPitchRowHeightPx);
     update();
 }
 
@@ -211,68 +268,92 @@ void PitchGridWidget::setBeatGridSnapEnabled(bool enabled)
     beatGridSnap = enabled;
 }
 
-void PitchGridWidget::setColorScheme(const QString& scheme)
+void PitchGridWidget::setPrimaryKey(const QString& keyText)
 {
-    colorScheme = scheme;
-
-    if (scheme == QStringLiteral("light")) {
-        backgroundColor = QColor(245, 245, 245);
-        whiteKeyColor = QColor(255, 255, 255);
-        blackKeyColor = QColor(210, 210, 210);
-        gridColor = QColor(200, 200, 200);
-        beatGridColor = QColor(180, 180, 200);
-        barLineColor = QColor(120, 120, 180);
-        waveformColor = QColor(30, 30, 30);
-        cursorColor = QColor(220, 60, 60);
-        pitchLabelColor = QColor(40, 40, 40, UiConstants::kPitchLabelAlpha);
-        selectionColor = QColor(100, 150, 255, 80);
-    } else {
-        backgroundColor = QColor(32, 32, 32);
-        whiteKeyColor = QColor(48, 48, 48);
-        blackKeyColor = QColor(24, 24, 24);
-        gridColor = QColor(70, 70, 70);
-        beatGridColor = QColor(90, 90, 110);
-        barLineColor = QColor(130, 130, 170);
-        waveformColor = QColor(210, 210, 210);
-        cursorColor = QColor(255, 100, 100);
-        pitchLabelColor = QColor(220, 220, 220, UiConstants::kPitchLabelAlpha);
-        selectionColor = QColor(100, 150, 255, 70);
-    }
-
+    primaryKey = PianoRollEngine::KeySignature::fromString(keyText);
     update();
 }
 
-void PitchGridWidget::rebuildPeaksIfNeeded()
+void PitchGridWidget::setSecondaryKey(const QString& keyText)
 {
-    const int w = timelineContentWidthPx();
-    const int h = height();
-    if (w <= 0 || h <= 2 || audioData.isEmpty()) {
-        waveformPeaks = {};
-        peaksBuildWidth = 0;
-        peaksBuildHeight = 0;
-        return;
-    }
-
-    if (w == peaksBuildWidth && h == peaksBuildHeight && !waveformPeaks.isEmpty()) {
-        return;
-    }
-
-    waveformPeaks = GiadaPitchGridEngine::buildWaveformPeaks(audioData, w, h);
-    peaksBuildWidth = w;
-    peaksBuildHeight = h;
+    secondaryKey = PianoRollEngine::KeySignature::fromString(keyText);
+    update();
 }
 
-GiadaPitchGridEngine::Viewport PitchGridWidget::currentViewport() const
+void PitchGridWidget::setColorScheme(const QString& scheme)
 {
-    return GiadaPitchGridEngine::Viewport::compute(
+    applyTheme(scheme);
+}
+
+void PitchGridWidget::setNotes(const QVector<PitchDetector::PitchNote>& newNotes)
+{
+    pitchNotes = newNotes;
+    if (selectedNoteIndex >= pitchNotes.size()) {
+        selectedNoteIndex = -1;
+    }
+    update();
+}
+
+void PitchGridWidget::clearNotes()
+{
+    pitchNotes.clear();
+    selectedNoteIndex = -1;
+    isNoteDragging = false;
+    update();
+}
+
+void PitchGridWidget::setNotePitch(int noteIndex, int midiPitch)
+{
+    if (noteIndex < 0 || noteIndex >= pitchNotes.size()) {
+        return;
+    }
+    pitchNotes[noteIndex].midiPitch = qBound(0, midiPitch, 127);
+    update();
+}
+
+PianoRollEngine::Viewport PitchGridWidget::currentViewport() const
+{
+    return PianoRollEngine::Viewport::compute(
         effectiveTimelineSamples(), timelineReferenceWidth(), zoomLevel, horizontalOffset);
+}
+
+QColor PitchGridWidget::rowColorForPitch(int midiNote) const
+{
+    if (!PianoRollEngine::isPitchInKeys(midiNote, primaryKey, secondaryKey)) {
+        return theme.outOfKeyKey;
+    }
+    return PianoRollEngine::isBlackKey(midiNote) ? theme.blackKey : theme.whiteKey;
+}
+
+QColor PitchGridWidget::legendKeyColor(int midiNote) const
+{
+    const bool inKey = PianoRollEngine::isPitchInKeys(midiNote, primaryKey, secondaryKey);
+    const bool hasActiveKey = primaryKey.isValid() || secondaryKey.isValid();
+
+    QColor keyColor;
+    if (hasActiveKey && !inKey) {
+        keyColor = theme.outOfKeyKey;
+    } else if (PianoRollEngine::isBlackKey(midiNote)) {
+        keyColor = theme.labelBackground.darker(115);
+    } else {
+        keyColor = theme.labelBackground.lighter(108);
+    }
+    keyColor.setAlpha(kLegendBackgroundAlpha);
+    return keyColor;
+}
+
+QColor PitchGridWidget::legendTextColor(int midiNote) const
+{
+    const bool hasActiveKey = primaryKey.isValid() || secondaryKey.isValid();
+    if (hasActiveKey && !PianoRollEngine::isPitchInKeys(midiNote, primaryKey, secondaryKey)) {
+        return theme.outOfKeyLegendText;
+    }
+    return theme.labelText;
 }
 
 void PitchGridWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
-    peaksBuildWidth = 0;
-    rebuildPeaksIfNeeded();
 
     const float clamped = maxVerticalScrollPx() > 0 ? qBound(0.0f, verticalOffset, 1.0f) : 0.0f;
     if (!qFuzzyCompare(clamped, verticalOffset)) {
@@ -283,19 +364,17 @@ void PitchGridWidget::resizeEvent(QResizeEvent* event)
 
 void PitchGridWidget::paintEvent(QPaintEvent*)
 {
-    rebuildPeaksIfNeeded();
-
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
     const QRect area = rect();
-    painter.fillRect(area, backgroundColor);
+    painter.fillRect(area, theme.background);
 
     drawPianoRollBackground(painter, area);
-    drawPitchLabels(painter, area);
     drawBeatGrid(painter, area);
-    drawWaveformPeaks(painter, area);
     drawSelectedPitchRow(painter, area);
+    drawNoteBlocks(painter, area);
+    drawLegendColumn(painter, legendRect());
     drawPlaybackCursor(painter, area);
 }
 
@@ -304,18 +383,62 @@ void PitchGridWidget::drawPianoRollBackground(QPainter& painter, const QRect& re
     const int verticalOffsetPixels = verticalScrollPixels();
 
     for (int pitch = minPitch; pitch <= maxPitch; ++pitch) {
-        const int yTop = (maxPitch - pitch) * pitchHeight - verticalOffsetPixels;
-        const int yBottom = yTop + pitchHeight;
+        const int yTop = (maxPitch - pitch) * kPitchRowHeightPx - verticalOffsetPixels;
+        const int yBottom = yTop + kPitchRowHeightPx;
         if (yBottom < 0 || yTop > rect.bottom()) {
             continue;
         }
 
-        const QColor keyColor = GiadaPitchGridEngine::isBlackKey(pitch) ? blackKeyColor : whiteKeyColor;
-        painter.fillRect(QRect(rect.left(), yTop, rect.width(), pitchHeight), keyColor);
+        painter.fillRect(QRect(rect.left(), yTop, rect.width(), kPitchRowHeightPx),
+                         rowColorForPitch(pitch));
 
-        painter.setPen(gridColor);
+        if (pitch % 12 == 0) {
+            painter.fillRect(QRect(rect.left(), yTop, rect.width(), kPitchRowHeightPx),
+                             theme.octaveAccent);
+        }
+
+        painter.setPen(theme.gridLine);
         painter.drawLine(rect.left(), yBottom, rect.right(), yBottom);
     }
+}
+
+void PitchGridWidget::drawLegendColumn(QPainter& painter, const QRect& rect) const
+{
+    if (rect.width() <= 0) {
+        return;
+    }
+
+    painter.fillRect(rect, theme.labelBackground);
+
+    const int verticalOffsetPixels = verticalScrollPixels();
+    painter.setFont(QFont(QStringLiteral("Arial"), 8));
+
+    for (int pitch = minPitch; pitch <= maxPitch; ++pitch) {
+        const int yTop = (maxPitch - pitch) * kPitchRowHeightPx - verticalOffsetPixels;
+        const int yBottom = yTop + kPitchRowHeightPx;
+        if (yBottom < 0 || yTop > rect.bottom()) {
+            continue;
+        }
+
+        const QRect rowRect(rect.left(), yTop, rect.width(), kPitchRowHeightPx);
+        painter.fillRect(rowRect, legendKeyColor(pitch));
+
+        if (selectedPitch == pitch) {
+            painter.fillRect(rowRect, theme.selection);
+        }
+
+        painter.setPen(theme.gridLine);
+        painter.drawLine(rect.left(), yBottom, rect.right(), yBottom);
+
+        painter.setPen(legendTextColor(pitch));
+        const QString label = PianoRollEngine::midiNoteName(pitch);
+        const QRect textRect(rowRect.adjusted(2, 0, -1, 0));
+        painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, label);
+    }
+
+    painter.setPen(theme.legendBorder);
+    painter.drawLine(rect.topLeft(), rect.bottomLeft());
+    painter.drawLine(rect.topRight(), rect.bottomRight());
 }
 
 void PitchGridWidget::drawBeatGrid(QPainter& painter, const QRect& rect) const
@@ -326,50 +449,18 @@ void PitchGridWidget::drawBeatGrid(QPainter& painter, const QRect& rect) const
 
     const auto viewport = currentViewport();
     const int refWidth = timelineReferenceWidth();
-    const QVector<GiadaPitchGridEngine::BeatLine> lines =
-        GiadaPitchGridEngine::visibleBeatLines(viewport, bpm, beatsPerBar, sampleRate,
-                                               gridStartSample, refWidth);
+    const QVector<PianoRollEngine::GridLine> lines =
+        PianoRollEngine::visibleGridLines(viewport, bpm, beatsPerBar, sampleRate,
+                                          gridStartSample, refWidth);
 
-    for (const GiadaPitchGridEngine::BeatLine& line : lines) {
-        const float x = timelineToContentX(line.x);
+    for (const PianoRollEngine::GridLine& line : lines) {
+        const float x = rect.left() + timelineToContentX(line.x);
         if (line.isBarLine) {
-            painter.setPen(QPen(barLineColor, 2.0));
+            painter.setPen(QPen(theme.barLine, 2.0));
         } else {
-            QPen dashedPen(beatGridColor, 1.0, Qt::DashLine);
-            painter.setPen(dashedPen);
+            painter.setPen(QPen(theme.beatLine, 1.0, Qt::DashLine));
         }
-        painter.drawLine(QPointF(rect.left() + x, rect.top()),
-                         QPointF(rect.left() + x, rect.bottom()));
-    }
-}
-
-void PitchGridWidget::drawWaveformPeaks(QPainter& painter, const QRect& rect) const
-{
-    if (waveformPeaks.isEmpty()) {
-        return;
-    }
-
-    const auto viewport = currentViewport();
-    painter.setPen(waveformColor);
-    const int centerY = rect.height() / 2;
-    const int timelineWidth = timelineContentWidthPx();
-    const qint64 audioSamples = audioData.isEmpty() ? 0 : audioData[0].size();
-
-    for (int x = 0; x < timelineWidth; ++x) {
-        const qint64 sample = viewport.pixelToSample(int(contentToTimelineX(float(x))));
-        if (sample >= audioSamples) {
-            painter.drawLine(QPointF(rect.left() + x, centerY),
-                             QPointF(rect.left() + x, centerY));
-            continue;
-        }
-        const int peakIndex = int(sample / waveformPeaks.ratio);
-        if (peakIndex < 0 || peakIndex >= waveformPeaks.pixelWidth) {
-            continue;
-        }
-        painter.drawLine(QPointF(rect.left() + x, centerY),
-                         QPointF(rect.left() + x, waveformPeaks.upper[peakIndex]));
-        painter.drawLine(QPointF(rect.left() + x, centerY),
-                         QPointF(rect.left() + x, waveformPeaks.lower[peakIndex]));
+        painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
     }
 }
 
@@ -380,68 +471,111 @@ void PitchGridWidget::drawSelectedPitchRow(QPainter& painter, const QRect& rect)
     }
 
     const int verticalOffsetPixels = verticalScrollPixels();
-    const int yTop = (maxPitch - selectedPitch) * pitchHeight - verticalOffsetPixels;
+    const int yTop = (maxPitch - selectedPitch) * kPitchRowHeightPx - verticalOffsetPixels;
 
-    painter.fillRect(QRect(rect.left(), yTop, rect.width(), pitchHeight), selectionColor);
+    const int legendLeft = width() - kLegendColumnWidthPx;
+    painter.fillRect(QRect(rect.left(), yTop, legendLeft, kPitchRowHeightPx), theme.selection);
 }
 
-void PitchGridWidget::drawPitchLabels(QPainter& painter, const QRect& rect) const
+QRectF PitchGridWidget::noteRect(const PitchDetector::PitchNote& note) const
 {
-    painter.setPen(pitchLabelColor);
-    painter.setFont(QFont(QStringLiteral("Arial"), 8));
+    const auto viewport = currentViewport();
+    const float x1 = timelineToContentX(viewport.sampleToPixelX(note.startSample));
+    const float x2 = timelineToContentX(viewport.sampleToPixelX(note.endSample));
+    const int yTop = (maxPitch - note.midiPitch) * kPitchRowHeightPx - verticalScrollPixels();
+    return QRectF(x1, yTop + 1, qMax(2.0f, x2 - x1), kPitchRowHeightPx - 2);
+}
 
-    const int verticalOffsetPixels = verticalScrollPixels();
-    const int labelX = rect.right() - 34;
+void PitchGridWidget::drawNoteBlocks(QPainter& painter, const QRect& rect) const
+{
+    if (pitchNotes.isEmpty()) {
+        return;
+    }
 
-    for (int pitch = minPitch; pitch <= maxPitch; ++pitch) {
-        const int y = (maxPitch - pitch) * pitchHeight + pitchHeight / 2 - verticalOffsetPixels + 4;
-        if (y < 0 || y > rect.bottom()) {
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    for (int i = 0; i < pitchNotes.size(); ++i) {
+        const PitchDetector::PitchNote& note = pitchNotes[i];
+        const QRectF r = noteRect(note);
+        if (r.right() < rect.left() || r.left() > rect.right()
+            || r.bottom() < rect.top() || r.top() > rect.bottom()) {
             continue;
         }
-        painter.drawText(QPointF(labelX, y), getPitchName(pitch));
+
+        const bool edited = note.midiPitch != note.detectedPitch;
+        QColor fill = edited ? theme.noteEditedFill : theme.noteFill;
+        // Слабые (неуверенные) ноты — полупрозрачнее
+        if (note.confidence < 0.5f) {
+            fill.setAlpha(int(fill.alpha() * 0.6f));
+        }
+
+        painter.setBrush(fill);
+        if (i == selectedNoteIndex) {
+            painter.setPen(QPen(theme.noteSelectedBorder, 1.5));
+        } else {
+            painter.setPen(QPen(theme.noteBorder, 1.0));
+        }
+        painter.drawRoundedRect(r, 2.0, 2.0);
     }
+
+    painter.restore();
+}
+
+int PitchGridWidget::noteIndexAt(const QPoint& pos) const
+{
+    // Сверху вниз по z-порядку: последняя отрисованная нота проверяется первой
+    for (int i = pitchNotes.size() - 1; i >= 0; --i) {
+        if (noteRect(pitchNotes[i]).adjusted(-1, -1, 1, 1).contains(pos)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void PitchGridWidget::changeSelectedNotePitch(int semitoneDelta)
+{
+    if (selectedNoteIndex < 0 || selectedNoteIndex >= pitchNotes.size()) {
+        return;
+    }
+    PitchDetector::PitchNote& note = pitchNotes[selectedNoteIndex];
+    const int oldPitch = note.midiPitch;
+    const int newPitch = qBound(0, oldPitch + semitoneDelta, 127);
+    if (newPitch == oldPitch) {
+        return;
+    }
+    note.midiPitch = newPitch;
+    update();
+    emit notePitchEdited(selectedNoteIndex, oldPitch, newPitch);
 }
 
 void PitchGridWidget::drawPlaybackCursor(QPainter& painter, const QRect& rect) const
 {
-    const float cursorX = timelineToContentX(cursorXPosition);
+    const float cursorX = rect.left() + timelineToContentX(cursorXPosition);
     if (cursorX < -10.0f || cursorX > rect.width() + 10.0f) {
         return;
     }
 
-    painter.setPen(QPen(cursorColor, 2));
-    painter.drawLine(QPointF(rect.left() + cursorX, rect.top()),
-                     QPointF(rect.left() + cursorX, rect.bottom()));
+    painter.setPen(QPen(theme.cursor, 2));
+    painter.drawLine(QPointF(cursorX, rect.top()), QPointF(cursorX, rect.bottom()));
 
     QPolygonF triangle;
-    triangle << QPointF(rect.left() + cursorX - 5, rect.top() + 5)
-             << QPointF(rect.left() + cursorX + 5, rect.top() + 5)
-             << QPointF(rect.left() + cursorX, rect.top() + 15);
-    painter.setBrush(cursorColor);
+    triangle << QPointF(cursorX - 5, rect.top() + 5)
+             << QPointF(cursorX + 5, rect.top() + 5)
+             << QPointF(cursorX, rect.top() + 15);
+    painter.setBrush(theme.cursor);
     painter.drawPolygon(triangle);
 }
 
-QString PitchGridWidget::getPitchName(int midiNote) const
-{
-    static const QString noteNames[] = {
-        QStringLiteral("C"), QStringLiteral("C#"), QStringLiteral("D"), QStringLiteral("D#"),
-        QStringLiteral("E"), QStringLiteral("F"), QStringLiteral("F#"), QStringLiteral("G"),
-        QStringLiteral("G#"), QStringLiteral("A"), QStringLiteral("A#"), QStringLiteral("B")
-    };
-    const int octave = (midiNote / 12) - 1;
-    const int note = midiNote % 12;
-    return QStringLiteral("%1%2").arg(noteNames[note]).arg(octave);
-}
-
-int PitchGridWidget::getPitchFromY(int y, const QRect& rect) const
+int PitchGridWidget::getPitchFromY(int y) const
 {
     const int verticalOffsetPixels = verticalScrollPixels();
     const int adjustedY = y + verticalOffsetPixels;
-    const int pitch = maxPitch - (adjustedY / pitchHeight);
+    const int pitch = maxPitch - (adjustedY / kPitchRowHeightPx);
     return qBound(minPitch, pitch, maxPitch);
 }
 
-qint64 PitchGridWidget::getPositionFromX(int x, const QRect& rect) const
+qint64 PitchGridWidget::getPositionFromX(int x) const
 {
     if (audioData.isEmpty() || sampleRate <= 0) {
         return 0;
@@ -449,8 +583,8 @@ qint64 PitchGridWidget::getPositionFromX(int x, const QRect& rect) const
 
     const auto viewport = currentViewport();
     qint64 sample = viewport.pixelToSample(int(contentToTimelineX(float(x))));
-    sample = GiadaPitchGridEngine::snapToBeatGrid(sample, bpm, beatsPerBar, sampleRate,
-                                                  gridStartSample, beatGridSnap);
+    sample = PianoRollEngine::snapToGrid(sample, bpm, beatsPerBar, sampleRate,
+                                         gridStartSample, beatGridSnap);
     const qint64 maxSample = qMax<qint64>(0, effectiveTimelineSamples() - 1);
     sample = qBound(qint64(0), sample, maxSample);
     return (sample * 1000) / sampleRate;
@@ -459,12 +593,34 @@ qint64 PitchGridWidget::getPositionFromX(int x, const QRect& rect) const
 void PitchGridWidget::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
-        isDragging = true;
+        setFocus(Qt::MouseFocusReason);
         lastMousePos = event->pos();
 
-        selectedPitch = getPitchFromY(event->pos().y(), rect());
+        // Сначала пробуем захватить ноту: drag по вертикали меняет её высоту
+        const int noteIndex = noteIndexAt(event->pos());
+        if (noteIndex >= 0) {
+            selectedNoteIndex = noteIndex;
+            isNoteDragging = true;
+            noteDragStartPitch = pitchNotes[noteIndex].midiPitch;
+            setCursor(Qt::SizeVerCursor);
+            update();
+            emit notePreviewRequested(noteIndex);
+            return;
+        }
+
+        if (selectedNoteIndex >= 0) {
+            selectedNoteIndex = -1;
+            update();
+        }
+
+        isDragging = true;
+
+        selectedPitch = getPitchFromY(event->pos().y());
         emit pitchChanged(selectedPitch);
-        emit positionChanged(getPositionFromX(event->pos().x(), rect()));
+
+        cursorXPosition = contentToTimelineX(float(event->pos().x()));
+        update();
+        emit positionChanged(getPositionFromX(event->pos().x()));
     } else if (event->button() == Qt::RightButton) {
         isRightMousePanning = true;
         lastMousePos = event->pos();
@@ -482,27 +638,74 @@ void PitchGridWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
+    if (isNoteDragging && (event->buttons() & Qt::LeftButton)) {
+        if (selectedNoteIndex >= 0 && selectedNoteIndex < pitchNotes.size()) {
+            const int targetPitch = getPitchFromY(event->pos().y());
+            if (targetPitch != pitchNotes[selectedNoteIndex].midiPitch) {
+                pitchNotes[selectedNoteIndex].midiPitch = targetPitch;
+                update();
+                emit notePreviewPitchChanged(selectedNoteIndex, targetPitch);
+            }
+        }
+        return;
+    }
+
     if (isDragging && (event->buttons() & Qt::LeftButton)) {
-        selectedPitch = getPitchFromY(event->pos().y(), rect());
+        selectedPitch = getPitchFromY(event->pos().y());
         emit pitchChanged(selectedPitch);
-        emit positionChanged(getPositionFromX(event->pos().x(), rect()));
+
+        cursorXPosition = contentToTimelineX(float(event->pos().x()));
+        update();
+        emit positionChanged(getPositionFromX(event->pos().x()));
         lastMousePos = event->pos();
         return;
     }
 
     if (!(event->buttons() & Qt::LeftButton) && !(event->buttons() & Qt::RightButton)) {
-        setCursor(Qt::OpenHandCursor);
+        setCursor(noteIndexAt(event->pos()) >= 0 ? Qt::SizeVerCursor
+                                                 : Qt::OpenHandCursor);
     }
 }
 
 void PitchGridWidget::mouseReleaseEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
+        if (isNoteDragging) {
+            isNoteDragging = false;
+            setCursor(Qt::ArrowCursor);
+            emit notePreviewStopped();
+            if (selectedNoteIndex >= 0 && selectedNoteIndex < pitchNotes.size()) {
+                const int newPitch = pitchNotes[selectedNoteIndex].midiPitch;
+                if (newPitch != noteDragStartPitch) {
+                    emit notePitchEdited(selectedNoteIndex, noteDragStartPitch, newPitch);
+                }
+            }
+        }
         isDragging = false;
     } else if (event->button() == Qt::RightButton) {
         isRightMousePanning = false;
         setCursor(Qt::ArrowCursor);
     }
+}
+
+void PitchGridWidget::keyPressEvent(QKeyEvent *event)
+{
+    if (selectedNoteIndex >= 0
+        && (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down)) {
+        const int step = (event->modifiers() & Qt::ShiftModifier) ? 12 : 1;
+        changeSelectedNotePitch(event->key() == Qt::Key_Up ? step : -step);
+        event->accept();
+        return;
+    }
+
+    if (selectedNoteIndex >= 0 && event->key() == Qt::Key_Escape) {
+        selectedNoteIndex = -1;
+        update();
+        event->accept();
+        return;
+    }
+
+    QWidget::keyPressEvent(event);
 }
 
 void PitchGridWidget::wheelEvent(QWheelEvent *event)
@@ -518,7 +721,7 @@ void PitchGridWidget::wheelEvent(QWheelEvent *event)
     const int maxScroll = maxVerticalScrollPx();
     if (wheelDelta != 0 && maxScroll > 0) {
         constexpr float kRowsPerWheelStep = 3.0f;
-        const float pixelDelta = -(wheelDelta / 120.0f) * kRowsPerWheelStep * float(pitchHeight);
+        const float pixelDelta = -(wheelDelta / 120.0f) * kRowsPerWheelStep * float(kPitchRowHeightPx);
         adjustVerticalOffset(pixelDelta / float(maxScroll));
     }
     event->accept();

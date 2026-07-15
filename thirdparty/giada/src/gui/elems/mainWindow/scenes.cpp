@@ -1,0 +1,108 @@
+/* -----------------------------------------------------------------------------
+ *
+ * Giada - Your Hardcore Loopmachine
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * Copyright (C) 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories
+ *
+ * This file is part of Giada - Your Hardcore Loopmachine.
+ *
+ * Giada - Your Hardcore Loopmachine is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Giada - Your Hardcore Loopmachine is distributed in the hope that it
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Giada - Your Hardcore Loopmachine. If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * -------------------------------------------------------------------------- */
+
+#include "src/gui/elems/mainWindow/scenes.h"
+#include "src/deps/mcl-utils/src/container.hpp"
+#include "src/glue/main.h"
+#include "src/gui/const.h"
+#include "src/gui/elems/basics/flex.h"
+#include "src/gui/elems/playButton.h"
+#include "src/gui/ui.h"
+#include <fmt/core.h>
+
+extern giada::v::Ui* g_ui;
+
+namespace giada::v
+{
+geScenes::geScenes()
+: geFlex(Direction::VERTICAL, G_GUI_INNER_MARGIN)
+{
+	geFlex* row1 = new geFlex(Direction::HORIZONTAL, G_GUI_INNER_MARGIN);
+	{
+		row1->addWidget(makeButton(Scene{0}), G_GUI_UNIT);
+		row1->addWidget(makeButton(Scene{1}), G_GUI_UNIT);
+		row1->addWidget(makeButton(Scene{2}), G_GUI_UNIT);
+		row1->addWidget(makeButton(Scene{3}), G_GUI_UNIT);
+		row1->end();
+	}
+
+	geFlex* row2 = new geFlex(Direction::HORIZONTAL, G_GUI_INNER_MARGIN);
+	{
+		row2->addWidget(makeButton(Scene{4}), G_GUI_UNIT);
+		row2->addWidget(makeButton(Scene{5}), G_GUI_UNIT);
+		row2->addWidget(makeButton(Scene{6}), G_GUI_UNIT);
+		row2->addWidget(makeButton(Scene{7}), G_GUI_UNIT);
+		row2->end();
+	}
+
+	addWidget(row1);
+	addWidget(row2);
+
+	rebuild();
+}
+
+/* -------------------------------------------------------------------------- */
+
+void geScenes::rebuild()
+{
+	m_scenes = c::main::getScenes();
+}
+
+/* -------------------------------------------------------------------------- */
+
+void geScenes::refresh()
+{
+	for (const auto [index, button] : mcl::utils::container::enumerate(m_buttons))
+		button->setDefaultState(m_scenes.activeScenes[index] ? G_COLOR_LIGHT_2 : G_COLOR_GREY_4);
+
+	if (m_scenes.getStatus() == SceneStatus::CHANGING)
+	{
+		m_buttons[m_scenes.getCurrentScene().getIndex()]->setEndingState();
+		m_buttons[m_scenes.getNextScene().getIndex()]->blink(g_ui->shouldBlink());
+	}
+	else
+		m_buttons[m_scenes.getCurrentScene().getIndex()]->setPlayState();
+
+	for (gePlayButton* button : m_buttons)
+		button->redraw();
+}
+
+/* -------------------------------------------------------------------------- */
+
+gePlayButton* geScenes::makeButton(Scene scene)
+{
+	const std::string sceneStr = std::to_string(scene.getIndex() + 1);
+	gePlayButton*     button   = new gePlayButton(sceneStr);
+	button->setPadding(0);
+	button->copy_tooltip(fmt::format("{} {}", g_ui->getI18Text(LangMap::COMMON_SCENE), sceneStr).c_str());
+	button->onClick = [scene]()
+	{ c::main::setScene(scene, /*forced=*/Fl::event_shift()); };
+
+	m_buttons[scene.getIndex()] = button;
+
+	return button;
+}
+} // namespace giada::v

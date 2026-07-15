@@ -94,7 +94,10 @@ SOURCES += \
         src/waveformview.cpp \
         src/markerengine.cpp \
         src/pitchgridwidget.cpp \
-        src/giada_pitchgrid_engine.cpp \
+        src/pianoroll_engine.cpp \
+        src/pitchdetector.cpp \
+        src/pitchcorrection.cpp \
+        src/notepreviewplayer.cpp \
         src/waveformcolors.cpp \
         src/bpmanalyzer.cpp \
         src/keyanalyzer.cpp \
@@ -121,7 +124,11 @@ HEADERS += \
         include/waveformview.h \
         include/markerengine.h \
         include/pitchgridwidget.h \
-        include/giada_pitchgrid_engine.h \
+        include/pianoroll_engine.h \
+        include/pitchdetector.h \
+        include/pitchcorrection.h \
+        include/pitchnoteeditcommand.h \
+        include/notepreviewplayer.h \
         include/waveformcolors.h \
         include/bpmanalyzer.h \
         include/keyanalyzer.h \

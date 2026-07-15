@@ -17,6 +17,8 @@
 #include <QtCore/QDeadlineTimer>
 #include <QtCore/QCoreApplication>
 #include <QtWidgets/QApplication>
+#include <QtConcurrent/QtConcurrent>
+#include <QtGui/QResizeEvent>
 #include <thread>
 #include <cmath>
 #include <algorithm>
@@ -29,6 +31,144 @@ const int WaveformView::markerSpacing = 60;  // Минимальное расс�
 
 // Минимальный сегмент между метками: 50 мс (в таком сегменте нельзя создавать новые метки)
 static const qint64 MIN_MARKER_SEGMENT_MS = 50;
+
+namespace {
+
+QRgb spectrogramColorForValue(float v, WaveformView::SpectrogramColorScheme scheme)
+{
+    v = std::clamp(v, 0.f, 1.f);
+    int r = 0;
+    int g = 0;
+    int b = 0;
+    switch (scheme) {
+    case WaveformView::SpectrogramColorScheme::HeatMap:
+        if (v < 0.25f) {
+            b = int(v * 4.f * 255.f);
+        } else if (v < 0.5f) {
+            const float t = (v - 0.25f) * 4.f;
+            r = int(t * 255.f);
+            b = int((1.f - t) * 255.f);
+        } else if (v < 0.75f) {
+            const float t = (v - 0.5f) * 4.f;
+            r = 255;
+            g = int(t * 255.f);
+        } else {
+            const float t = (v - 0.75f) * 4.f;
+            r = 255;
+            g = 255;
+            b = int(t * 255.f);
+        }
+        break;
+    case WaveformView::SpectrogramColorScheme::Grayscale:
+        r = g = b = int(v * 255.f);
+        break;
+    case WaveformView::SpectrogramColorScheme::Cool:
+        r = int(v * v * 255.f);
+        g = int(v * 180.f);
+        b = 255;
+        break;
+    }
+    return qRgb(r, g, b);
+}
+
+QVector<QImage> computeSpectrogramImages(const QVector<QVector<float>>& audioDataCopy,
+                                         int sampleRateCopy,
+                                         const WaveformView::SpectrogramSettings& settingsCopy)
+{
+    QVector<QImage> result;
+    result.resize(audioDataCopy.size());
+
+    const int windowSize = settingsCopy.windowSize;
+    const int maxFrames = settingsCopy.maxFrames;
+    const int freqBins = settingsCopy.freqBins;
+    const int zeroPadFactor = qMax(1, settingsCopy.zeroPadFactor);
+    const bool logScale = settingsCopy.logFreqScale;
+    const bool useDb = settingsCopy.dbAmplitude;
+    const float floorDb = settingsCopy.floorDb;
+
+    DFEngine::WindowFunction winType = DFEngine::WindowFunction::BlackmanHarris;
+    switch (settingsCopy.windowFunction) {
+    case WaveformView::SpectrogramWindowFunction::Rectangular:
+        winType = DFEngine::WindowFunction::Rectangular;
+        break;
+    case WaveformView::SpectrogramWindowFunction::BlackmanHarris:
+        winType = DFEngine::WindowFunction::BlackmanHarris;
+        break;
+    case WaveformView::SpectrogramWindowFunction::Hamming:
+        winType = DFEngine::WindowFunction::Hamming;
+        break;
+    case WaveformView::SpectrogramWindowFunction::Hanning:
+        winType = DFEngine::WindowFunction::Hanning;
+        break;
+    }
+
+    std::vector<float> window;
+    DFEngine::precomputeWindow(window, windowSize, winType);
+
+    for (int ch = 0; ch < audioDataCopy.size(); ++ch) {
+        const QVector<float>& samples = audioDataCopy[ch];
+        if (samples.size() <= windowSize) {
+            result[ch] = QImage();
+            continue;
+        }
+
+        const int totalSamples = samples.size();
+        const int hop = qMax(1, (totalSamples - windowSize) / maxFrames);
+        const int frameCount = qMax(1, (totalSamples - windowSize) / hop);
+
+        const unsigned fftSize = DFEngine::nextPow2(windowSize) * zeroPadFactor;
+        const int linearBins = int(fftSize / 2) + 1;
+
+        std::vector<std::vector<float>> colData(frameCount, std::vector<float>(freqBins, 0.f));
+        std::vector<float> linearMag;
+        std::vector<float> displayMag;
+
+        for (int frame = 0; frame < frameCount; ++frame) {
+            const int start = frame * hop;
+            if (start + windowSize > totalSamples) {
+                break;
+            }
+
+            DFEngine::realFFT(samples.constData() + start, windowSize,
+                              window, zeroPadFactor, linearMag);
+
+            if (useDb) {
+                DFEngine::normalizeDb(linearMag, floorDb);
+            } else {
+                DFEngine::normalizeLinear(linearMag);
+            }
+
+            if (logScale) {
+                DFEngine::logFreqCompress(linearMag, displayMag,
+                                          freqBins, float(sampleRateCopy));
+            } else {
+                displayMag.resize(freqBins);
+                for (int k = 0; k < freqBins; ++k) {
+                    const int srcIdx = k * (linearBins - 1) / qMax(freqBins - 1, 1);
+                    displayMag[k] = (srcIdx < int(linearMag.size())) ? linearMag[srcIdx] : 0.f;
+                }
+            }
+
+            for (int k = 0; k < freqBins; ++k) {
+                colData[frame][k] = (k < int(displayMag.size())) ? displayMag[k] : 0.f;
+            }
+        }
+
+        QImage img(frameCount, freqBins, QImage::Format_RGB32);
+        for (int y = 0; y < freqBins; ++y) {
+            QRgb* line = reinterpret_cast<QRgb*>(img.scanLine(y));
+            const int bin = freqBins - 1 - y;
+            for (int x = 0; x < frameCount; ++x) {
+                line[x] = spectrogramColorForValue(colData[x][bin], settingsCopy.colorScheme);
+            }
+        }
+        result[ch] = img;
+    }
+
+    return result;
+}
+
+} // namespace
 
 /**
  * Преобразует позицию в исходном аудио в позицию отображения с учётом меток растяжения.
@@ -240,12 +380,21 @@ WaveformView::WaveformView(QWidget *parent)
             pendingUpdateRect = QRect();
         }
     });
+
+    spectrogramWatcher = new QFutureWatcher<QVector<QImage>>(this);
+    connect(spectrogramWatcher, &QFutureWatcher<QVector<QImage>>::finished,
+            this, &WaveformView::onSpectrogramReady);
 }
 
 WaveformView::~WaveformView()
 {
     realtimeStretchShuttingDown = true;
     ++audioSourceGeneration;
+
+    if (spectrogramWatcher) {
+        spectrogramWatcher->cancel();
+        spectrogramWatcher->waitForFinished();
+    }
 
     QDeadlineTimer deadline(60000);
     while (realtimeStretchJobsRunning.load() > 0 && !deadline.hasExpired()) {
@@ -316,6 +465,8 @@ void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
     // Сброс кеша спектрограммы
     spectrogramImages.clear();
     spectrogramDirty = true;
+    invalidateWavePixmapCache();
+    markMarkersCacheDirty();
 
     // Сбрасываем масштаб и смещение
     zoomLevel = 1.0f;
@@ -345,6 +496,7 @@ void WaveformView::setZoomLevel(float zoom)
     float newZoom = qBound(float(minZoom), zoom, float(maxZoom));
     if (!qFuzzyCompare(newZoom, zoomLevel)) {
         zoomLevel = newZoom;
+        invalidateWavePixmapCache();
         emit zoomChanged(zoomLevel);
         update();
     }
@@ -393,6 +545,7 @@ void WaveformView::zoomAtPixelX(int angleDeltaY, float pixelX)
     }
 
     horizontalOffset = newOffset;
+    invalidateWavePixmapCache();
     emit zoomChanged(zoomLevel);
     emit horizontalOffsetChanged(horizontalOffset);
     update();
@@ -418,6 +571,158 @@ WaveformView::ViewportGeometry WaveformView::getViewportGeometry(qint64 sampleCo
     v.maxStartSample = qMax(0, int(sampleCount) - v.visibleSamples);
     v.startSample = int(horizontalOffset * v.maxStartSample);
     return v;
+}
+
+void WaveformView::markMarkersCacheDirty()
+{
+    markersSortDirty = true;
+}
+
+void WaveformView::ensureSortedMarkersCache()
+{
+    if (!markersSortDirty) {
+        return;
+    }
+    cachedSortedMarkers = markers;
+    std::sort(cachedSortedMarkers.begin(), cachedSortedMarkers.end(),
+              [](const Marker& a, const Marker& b) {
+                  return a.position < b.position;
+              });
+    markersSortDirty = false;
+}
+
+void WaveformView::invalidateWavePixmapCache()
+{
+    wavePixmapDirty = true;
+}
+
+bool WaveformView::isWavePixmapCacheValid() const
+{
+    if (wavePixmapDirty || cachedWavePixmap.isNull()) {
+        return false;
+    }
+    if (cachedWaveSize != size()) {
+        return false;
+    }
+    if (cachedWaveAudioGeneration != audioSourceGeneration) {
+        return false;
+    }
+    if (cachedWaveUsesWarpedPreview != needsWarpedWaveformPreview()) {
+        return false;
+    }
+    const int zoomKey = int(zoomLevel * 1000.f);
+    const int hOffsetKey = int(horizontalOffset * 1000.f);
+    const int vOffsetKey = int(verticalOffset * 1000.f);
+    return cachedWaveZoomKey == zoomKey
+        && cachedWaveHorizontalOffsetKey == hOffsetKey
+        && cachedWaveVerticalOffsetKey == vOffsetKey;
+}
+
+void WaveformView::regenerateWavePixmap()
+{
+    if (audioData.isEmpty() || width() <= 0 || height() <= 0) {
+        cachedWavePixmap = QPixmap();
+        wavePixmapDirty = true;
+        return;
+    }
+
+    cachedWavePixmap = QPixmap(size());
+    cachedWavePixmap.fill(colors.getBackgroundColor());
+
+    QPainter pixmapPainter(&cachedWavePixmap);
+    pixmapPainter.setRenderHint(QPainter::Antialiasing, false);
+
+    const float channelHeight = float(height()) / float(qMax(1, audioData.size()));
+    for (int i = 0; i < audioData.size(); ++i) {
+        const QRectF channelRect(0, i * channelHeight, width(), channelHeight);
+        if (needsWarpedWaveformPreview() && i >= originalAudioData.size()) {
+            continue;
+        }
+        const QVector<float>& sourceSamples =
+            needsWarpedWaveformPreview() ? originalAudioData[i] : audioData[i];
+        if (sourceSamples.isEmpty()) {
+            continue;
+        }
+        if (needsWarpedWaveformPreview()) {
+            drawWarpedWaveformPreview(pixmapPainter, sourceSamples, channelRect);
+        } else {
+            drawWaveform(pixmapPainter, sourceSamples, channelRect);
+        }
+    }
+
+    cachedWaveZoomKey = int(zoomLevel * 1000.f);
+    cachedWaveHorizontalOffsetKey = int(horizontalOffset * 1000.f);
+    cachedWaveVerticalOffsetKey = int(verticalOffset * 1000.f);
+    cachedWaveSize = size();
+    cachedWaveAudioGeneration = audioSourceGeneration;
+    cachedWaveUsesWarpedPreview = needsWarpedWaveformPreview();
+    wavePixmapDirty = false;
+}
+
+void WaveformView::scheduleSpectrogramRegeneration()
+{
+    if (renderMode != WaveformRenderMode::Spectrogram || audioData.isEmpty() || !spectrogramWatcher) {
+        return;
+    }
+    if (spectrogramComputationInProgress.load()) {
+        return;
+    }
+
+    spectrogramComputationInProgress = true;
+    spectrogramDirty = false;
+    const QVector<QVector<float>> audioCopy = audioData;
+    const int sampleRateCopy = sampleRate;
+    const SpectrogramSettings settingsCopy = spectrogramSettings;
+
+    const QFuture<QVector<QImage>> future = QtConcurrent::run(
+        [audioCopy, sampleRateCopy, settingsCopy]() {
+            return computeSpectrogramImages(audioCopy, sampleRateCopy, settingsCopy);
+        });
+    spectrogramWatcher->setFuture(future);
+}
+
+void WaveformView::onSpectrogramReady()
+{
+    spectrogramComputationInProgress = false;
+    if (realtimeStretchShuttingDown || !spectrogramWatcher) {
+        return;
+    }
+    if (spectrogramWatcher->isCanceled()) {
+        if (spectrogramDirty) {
+            scheduleSpectrogramRegeneration();
+        }
+        return;
+    }
+
+    if (spectrogramDirty) {
+        scheduleSpectrogramRegeneration();
+        return;
+    }
+
+    spectrogramImages = spectrogramWatcher->result();
+    update();
+}
+
+void WaveformView::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    invalidateWavePixmapCache();
+}
+
+void WaveformView::setMarkers(const QVector<Marker>& newMarkers)
+{
+    markers = newMarkers;
+    if (!markers.isEmpty() && markers[0].isFixed) {
+        markers[0].position = 0;
+        markers[0].originalPosition = 0;
+    }
+    for (Marker& marker : markers) {
+        marker.updateTimeFromSamples(sampleRate);
+    }
+    markMarkersCacheDirty();
+    invalidateWavePixmapCache();
+    update();
+    emit markersChanged();
 }
 
 void WaveformView::setBeatInfo(const QVector<BPMAnalyzer::BeatInfo>& newBeats)
@@ -448,131 +753,8 @@ void WaveformView::paintEvent(QPaintEvent* event)
         ViewportGeometry vp = getViewportGeometry(displaySampleCount(), width());
 
         if (renderMode == WaveformRenderMode::Spectrogram) {
-            // ---- Ленивая генерация спектрограммы (FFT Cooley-Tukey) ----
-            if (spectrogramDirty) {
-                spectrogramImages.clear();
-                spectrogramImages.resize(audioData.size());
-
-                const int windowSize    = spectrogramSettings.windowSize;
-                const int maxFrames     = spectrogramSettings.maxFrames;
-                const int freqBins      = spectrogramSettings.freqBins;
-                const int zeroPadFactor = qMax(1, spectrogramSettings.zeroPadFactor);
-                const bool logScale     = spectrogramSettings.logFreqScale;
-                const bool useDb        = spectrogramSettings.dbAmplitude;
-                const float floorDb     = spectrogramSettings.floorDb;
-
-                // Преобразование enum SpectrogramWindowFunction → DFEngine::WindowFunction
-                DFEngine::WindowFunction winType = DFEngine::WindowFunction::BlackmanHarris;
-                switch (spectrogramSettings.windowFunction) {
-                case SpectrogramWindowFunction::Rectangular:    winType = DFEngine::WindowFunction::Rectangular; break;
-                case SpectrogramWindowFunction::BlackmanHarris: winType = DFEngine::WindowFunction::BlackmanHarris; break;
-                case SpectrogramWindowFunction::Hamming:        winType = DFEngine::WindowFunction::Hamming; break;
-                case SpectrogramWindowFunction::Hanning:        winType = DFEngine::WindowFunction::Hanning; break;
-                }
-
-                // Предвычисляем окно один раз для всех каналов
-                std::vector<float> window;
-                DFEngine::precomputeWindow(window, windowSize, winType);
-
-                for (int ch = 0; ch < audioData.size(); ++ch) {
-                    const QVector<float>& samples = audioData[ch];
-                    if (samples.size() <= windowSize) {
-                        spectrogramImages[ch] = QImage();
-                        continue;
-                    }
-
-                    const int totalSamples = samples.size();
-                    const int hop       = qMax(1, (totalSamples - windowSize) / maxFrames);
-                    const int frameCount = qMax(1, (totalSamples - windowSize) / hop);
-
-                    // Вычисляем кол-во линейных бинов (зависит от fftSize)
-                    const unsigned fftSize = DFEngine::nextPow2(windowSize) * zeroPadFactor;
-                    const int linearBins   = int(fftSize / 2) + 1;
-
-                    // Собираем кадры: линейный спектр → [freqBins][frameCount]
-                    // Используем vector-of-vectors по столбцам для эффективной раскраски
-                    std::vector<std::vector<float>> colData(frameCount, std::vector<float>(freqBins, 0.f));
-
-                    std::vector<float> linearMag;
-                    std::vector<float> displayMag;
-
-                    for (int frame = 0; frame < frameCount; ++frame) {
-                        int start = frame * hop;
-                        if (start + windowSize > totalSamples) break;
-
-                        // FFT → линейные амплитуды
-                        DFEngine::realFFT(samples.constData() + start, windowSize,
-                                          window, zeroPadFactor, linearMag);
-
-                        // Нормализация
-                        if (useDb) {
-                            DFEngine::normalizeDb(linearMag, floorDb);
-                        } else {
-                            DFEngine::normalizeLinear(linearMag);
-                        }
-
-                        // Частотная перемаппинг (линейная → логарифмическая)
-                        if (logScale) {
-                            DFEngine::logFreqCompress(linearMag, displayMag,
-                                                       freqBins, float(sampleRate));
-                        } else {
-                            // Линейное прореживание до freqBins
-                            displayMag.resize(freqBins);
-                            for (int k = 0; k < freqBins; ++k) {
-                                int srcIdx = k * (linearBins - 1) / qMax(freqBins - 1, 1);
-                                displayMag[k] = (srcIdx < (int)linearMag.size())
-                                                ? linearMag[srcIdx] : 0.f;
-                            }
-                        }
-
-                        for (int k = 0; k < freqBins; ++k) {
-                            colData[frame][k] = (k < (int)displayMag.size()) ? displayMag[k] : 0.f;
-                        }
-                    }
-
-                    // Раскрашивание: высокие частоты наверху (y=0 → bin freqBins-1)
-                    QImage img(frameCount, freqBins, QImage::Format_RGB32);
-                    auto applyColor = [&](float v) -> QRgb {
-                        v = std::clamp(v, 0.f, 1.f);
-                        int r = 0, g = 0, b = 0;
-                        switch (spectrogramSettings.colorScheme) {
-                        case SpectrogramColorScheme::HeatMap:
-                            // чёрный → синий → красный → жёлтый → белый
-                            if (v < 0.25f) {
-                                b = int(v * 4.f * 255.f);
-                            } else if (v < 0.5f) {
-                                float t = (v - 0.25f) * 4.f;
-                                r = int(t * 255.f); b = int((1.f - t) * 255.f);
-                            } else if (v < 0.75f) {
-                                float t = (v - 0.5f) * 4.f;
-                                r = 255; g = int(t * 255.f);
-                            } else {
-                                float t = (v - 0.75f) * 4.f;
-                                r = 255; g = 255; b = int(t * 255.f);
-                            }
-                            break;
-                        case SpectrogramColorScheme::Grayscale:
-                            r = g = b = int(v * 255.f);
-                            break;
-                        case SpectrogramColorScheme::Cool:
-                            r = int(v * v * 255.f);
-                            g = int(v * 180.f);
-                            b = 255;
-                            break;
-                        }
-                        return qRgb(r, g, b);
-                    };
-
-                    for (int y = 0; y < freqBins; ++y) {
-                        QRgb* line = reinterpret_cast<QRgb*>(img.scanLine(y));
-                        int bin = freqBins - 1 - y; // высокие частоты наверху
-                        for (int x = 0; x < frameCount; ++x) {
-                            line[x] = applyColor(colData[x][bin]);
-                        }
-                    }
-                    spectrogramImages[ch] = img;
-                }
-                spectrogramDirty = false;
+            if (spectrogramDirty && !spectrogramComputationInProgress.load()) {
+                scheduleSpectrogramRegeneration();
             }
 
             // ---- Отрисовка по каналам ----
@@ -606,7 +788,6 @@ void WaveformView::paintEvent(QPaintEvent* event)
                 painter.drawImage(chRect, sub);
             }
 
-            // Разделяющая линия между каналами (как в режиме пиков)
             painter.setRenderHint(QPainter::Antialiasing, false);
             painter.setPen(QPen(QColor(80, 80, 80), 1));
             for (int i = 1; i < numCh; ++i) {
@@ -614,9 +795,14 @@ void WaveformView::paintEvent(QPaintEvent* event)
                 painter.drawLine(QPointF(0, y), QPointF(width(), y));
             }
         } else {
-            // Обычный режим: звуковые пики
-            float channelHeight = height() / float(audioData.size());
+            if (!isWavePixmapCacheValid()) {
+                regenerateWavePixmap();
+            }
+            if (!cachedWavePixmap.isNull()) {
+                painter.drawPixmap(0, 0, cachedWavePixmap);
+            }
 
+            const float channelHeight = height() / float(audioData.size());
             for (int i = 0; i < audioData.size(); ++i) {
                 QRectF channelRect(0, i * channelHeight, width(), channelHeight);
                 if (needsWarpedWaveformPreview() && i >= originalAudioData.size()) {
@@ -627,13 +813,7 @@ void WaveformView::paintEvent(QPaintEvent* event)
                 if (sourceSamples.isEmpty()) {
                     continue;
                 }
-                if (needsWarpedWaveformPreview()) {
-                    drawWarpedWaveformPreview(painter, sourceSamples, channelRect);
-                } else {
-                    drawWaveform(painter, sourceSamples, channelRect);
-                }
 
-                // Рисуем силуэт ударных поверх основной волны через BeatVisualizer
                 if (beatVisualizationSettings.showBeatWaveform && !beats.isEmpty()) {
                     QVector<BPMAnalyzer::BeatInfo> displayBeats = beats;
                     if (!originalAudioData.isEmpty() && markers.size() >= 2) {
@@ -762,6 +942,11 @@ qint64 WaveformView::displaySampleCount() const
         return estimateStretchedLength(markers, originalSize);
     }
     return audioData[0].size();
+}
+
+bool WaveformView::hasTimelineStretch() const
+{
+    return markersChangeTimeline(markers);
 }
 
 void WaveformView::drawWarpedWaveformPreview(QPainter& painter,
@@ -903,6 +1088,8 @@ void WaveformView::applyGridStartSample(qint64 newGrid, bool moveMarkers)
             m.originalPosition = m.position;
             m.updateTimeFromSamples(sampleRate);
         }
+        markMarkersCacheDirty();
+        invalidateWavePixmapCache();
         emit markersChanged();
     }
 
@@ -983,15 +1170,16 @@ void WaveformView::drawPlaybackCursor(QPainter& painter, const QRect& rect)
 
 
     if (cursorX >= 0 && cursorX < rect.width()) {
-        painter.setPen(QPen(colors.getPlayPositionColor(), 2));
+        const QColor cursorColor = colors.getPlayPositionColor();
+        painter.setPen(QPen(cursorColor, 2));
         painter.drawLine(QPointF(rect.x() + cursorX, rect.top()), QPointF(rect.x() + cursorX, rect.bottom()));
 
-        // Рисуем треугольник на курсоре
         QPolygonF triangle;
-        triangle << QPointF(cursorX - 5, rect.top() + 5)
-                << QPointF(cursorX + 5, rect.top() + 5)
-                << QPointF(cursorX, rect.top() + 15);
-        painter.setBrush(colors.getPlayPositionColor());
+        triangle << QPointF(rect.x() + cursorX - 5, rect.top() + 5)
+                 << QPointF(rect.x() + cursorX + 5, rect.top() + 5)
+                 << QPointF(rect.x() + cursorX, rect.top() + 15);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(cursorColor);
         painter.drawPolygon(triangle);
     }
 }
@@ -1164,6 +1352,7 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
 
             // Начинаем перетаскивание метки (основной — та, по которой кликнули)
             draggingMarkerIndex = markerIndex;
+            markerDragSessionActive = true;
             markers[markerIndex].isDragging = true;
             markers[markerIndex].dragStartPos = event->pos();
             qDebug() << "Started dragging marker" << markerIndex << "at position:" << markers[markerIndex].position;
@@ -1656,8 +1845,12 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 draggingMarkerIndex = -1;
             }
 
+            markMarkersCacheDirty();
+            invalidateWavePixmapCache();
             scheduleRealtimeProcess();
-            // 5) Быстрая отрисовка в реальном времени при перемещении метки
+            if (!originalAudioData.isEmpty() && markers.size() >= 2) {
+                emit markerDragFinished();
+            }
             update();
         }
         return;
@@ -1726,20 +1919,23 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
 void WaveformView::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton) {
+        const bool hadMarkerDrag = markerDragSessionActive || draggingMarkerIndex >= 0;
+
         // Завершаем перетаскивание метки
         if (draggingMarkerIndex >= 0) {
             markers[draggingMarkerIndex].isDragging = false;
             draggingMarkerIndex = -1;
             setCursor(Qt::ArrowCursor);
+        } else if (markerDragSessionActive) {
+            setCursor(Qt::ArrowCursor);
+        }
 
-            // Если были изменения в реальном времени, отправляем сигнал для обновления воспроизведения
+        if (hadMarkerDrag) {
+            markerDragSessionActive = false;
+
             if (!originalAudioData.isEmpty() && markers.size() >= 2) {
-                // Финальный пересчёт превью с актуальными позициями — в фоне
                 realtimeStretchDirty = true;
                 startRealtimeStretchJob();
-
-                // Сигнал отправляем сразу: MainWindow делает debounce и сам
-                // пересчитывает аудио для воспроизведения в фоновом потоке
                 emit markerDragFinished();
             }
 
@@ -1962,6 +2158,7 @@ QString WaveformView::getBarText(float beatPosition) const
 void WaveformView::setColorScheme(const QString& scheme)
 {
     colors.setColorScheme(scheme);
+    invalidateWavePixmapCache();
     update();
 }
 
@@ -2251,6 +2448,8 @@ void WaveformView::addMarker(qint64 position)
     }
 
     qDebug() << "addMarker: total markers now:" << markers.size();
+    markMarkersCacheDirty();
+    invalidateWavePixmapCache();
     update();
     emit markersChanged();
 }
@@ -2261,8 +2460,9 @@ void WaveformView::addMarker(const Marker& marker)
         return;
     }
 
-    // Добавляем метку напрямую (без проверок и автоматических меток)
     markers.append(marker);
+    markMarkersCacheDirty();
+    invalidateWavePixmapCache();
     update();
     emit markersChanged();
 }
@@ -2278,6 +2478,8 @@ void WaveformView::sortMarkers()
         markers[0].originalPosition = 0;
         markers[0].updateTimeFromSamples(sampleRate);
     }
+    markMarkersCacheDirty();
+    invalidateWavePixmapCache();
     update();
     emit markersChanged();
 }
@@ -2296,6 +2498,8 @@ void WaveformView::removeMarker(int index)
         } else if (lastTooltipMarkerIndex > index) {
             lastTooltipMarkerIndex--;
         }
+        markMarkersCacheDirty();
+        invalidateWavePixmapCache();
         update();
         emit markersChanged();
     }
@@ -2309,6 +2513,8 @@ void WaveformView::clearMarkers()
     markers.clear();
     draggingMarkerIndex = -1;
     lastTooltipMarkerIndex = -1;
+    markMarkersCacheDirty();
+    invalidateWavePixmapCache();
     update();
     emit markersChanged();
 }
@@ -2380,13 +2586,9 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
     const Marker* activeStartMarker = nullptr;
     const Marker* activeEndMarker = nullptr;
 
-    // Сортируем метки по позиции для поиска активного сегмента
-    QVector<Marker> sortedMarkers = markers;
-    std::sort(sortedMarkers.begin(), sortedMarkers.end(), [](const Marker& a, const Marker& b) {
-        return a.position < b.position;
-    });
+    ensureSortedMarkersCache();
+    const QVector<Marker>& sortedMarkers = cachedSortedMarkers;
 
-    // Находим сегмент, в котором находится позиция воспроизведения
     for (int i = 0; i < sortedMarkers.size() - 1; ++i) {
         if (playbackSample >= sortedMarkers[i].position && playbackSample <= sortedMarkers[i + 1].position) {
             activeStartMarker = &sortedMarkers[i];
@@ -2395,13 +2597,11 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
         }
     }
 
-    // Если позиция до первой метки
     if (!sortedMarkers.isEmpty() && playbackSample < sortedMarkers.first().position) {
         activeStartMarker = nullptr;
         activeEndMarker = &sortedMarkers.first();
     }
 
-    // Если позиция после последней метки
     if (!sortedMarkers.isEmpty() && playbackSample > sortedMarkers.last().position) {
         activeStartMarker = &sortedMarkers.last();
         activeEndMarker = nullptr;
@@ -2425,8 +2625,7 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
         }
     }
 
-    // Включаем антиалиасинг только для меток (для плавности)
-    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::Antialiasing, false);
 
     // Отрисовываем метки в отсортированном порядке, чтобы за один проход иметь доступ
     // к предыдущей и следующей метке без дополнительных поисков.
@@ -2794,6 +2993,7 @@ void WaveformView::applyStretchedPreview(const QVector<QVector<float>>& channels
         spectrogramImages.clear();
         spectrogramDirty = true;
     }
+    invalidateWavePixmapCache();
     scheduleUpdate();
 }
 

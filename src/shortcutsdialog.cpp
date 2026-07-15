@@ -34,6 +34,7 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
         { "PitchGrid",      tr("Переключить питч-сетку"), QKeySequence(Qt::CTRL | Qt::Key_G) },
         { "AddMarker",      tr("Добавить метку"),        QKeySequence(Qt::Key_M) },
         { "TimeStretch",    tr("Применить сжатие-растяжение"), QKeySequence(Qt::CTRL | Qt::Key_T) },
+        { "PitchCorrection", tr("Применить коррекцию высоты нот"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T) },
     };
 
     auto *layout = new QVBoxLayout(this);

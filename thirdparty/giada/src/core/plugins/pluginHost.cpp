@@ -1,0 +1,198 @@
+/* -----------------------------------------------------------------------------
+ *
+ * Giada - Your Hardcore Loopmachine
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * Copyright (C) 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories
+ *
+ * This file is part of Giada - Your Hardcore Loopmachine.
+ *
+ * Giada - Your Hardcore Loopmachine is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Giada - Your Hardcore Loopmachine is distributed in the hope that it
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Giada - Your Hardcore Loopmachine. If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * -------------------------------------------------------------------------- */
+
+#include "src/core/plugins/pluginHost.h"
+#include "src/core/channels/channel.h"
+#include "src/core/const.h"
+#include "src/core/model/model.h"
+#include "src/core/plugins/plugin.h"
+#include "src/core/plugins/pluginManager.h"
+#include "src/deps/mcl-audio-buffer/src/audioBuffer.hpp"
+#include "src/deps/mcl-utils/src/container.hpp"
+#include "src/utils/log.h"
+#include <cassert>
+#include <cstddef>
+#include <memory>
+
+namespace utils = mcl::utils;
+
+namespace giada::m
+{
+PluginHost::PluginHost(model::Model& m)
+: m_model(m)
+{
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::reset(int bufferSize)
+{
+	freeAllPlugins();
+	setBufferSize(bufferSize);
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::setBufferSize(int bufferSize)
+{
+	m_audioBuffer.setSize(G_MAX_IO_CHANS, bufferSize);
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::processStack(mcl::AudioBuffer& outBuf, const std::vector<Plugin*>& plugins,
+    const juce::MidiBuffer* events)
+{
+	assert(outBuf.countFrames() == m_audioBuffer.getNumSamples());
+
+	if (plugins.empty())
+		return;
+
+	giadaToJuceTempBuf(outBuf);
+
+	if (events == nullptr)
+	{
+		juce::MidiBuffer dummyEvents; // empty
+		processPlugins(plugins, dummyEvents);
+	}
+	else
+		processPlugins(plugins, *events);
+
+	juceToGiadaOutBuf(outBuf);
+}
+
+/* -------------------------------------------------------------------------- */
+
+const Plugin& PluginHost::addPlugin(std::unique_ptr<Plugin> p)
+{
+	return m_model.addPlugin(std::move(p));
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::freePlugin(ID pluginId)
+{
+	m_model.removePlugin(*m_model.findPlugin(pluginId));
+}
+
+void PluginHost::freePlugins(const std::vector<ID> ids)
+{
+	for (const ID id : ids)
+		freePlugin(id);
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::freeAllPlugins()
+{
+	m_model.clearPlugins();
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::setPluginParameter(ID pluginId, int paramIndex, float value)
+{
+	m_model.findPlugin(pluginId)->setParameter(paramIndex, value);
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::setPluginProgram(ID pluginId, int programIndex)
+{
+	m_model.findPlugin(pluginId)->setCurrentProgram(programIndex);
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::toggleBypass(ID pluginId)
+{
+	Plugin& plugin = *m_model.findPlugin(pluginId);
+	plugin.setBypass(!plugin.isBypassed());
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::giadaToJuceTempBuf(const mcl::AudioBuffer& outBuf)
+{
+	assert(outBuf.countChannels() == m_audioBuffer.getNumChannels());
+
+	using namespace juce;
+	using Format = AudioData::Format<AudioData::Float32, AudioData::BigEndian>;
+
+	AudioData::deinterleaveSamples(
+	    AudioData::InterleavedSource<Format>{outBuf[0], outBuf.countChannels()},
+	    AudioData::NonInterleavedDest<Format>{m_audioBuffer.getArrayOfWritePointers(), m_audioBuffer.getNumChannels()},
+	    outBuf.countFrames());
+}
+
+void PluginHost::juceToGiadaOutBuf(mcl::AudioBuffer& outBuf) const
+{
+	assert(outBuf.countChannels() == m_audioBuffer.getNumChannels());
+
+	using namespace juce;
+	using Format = AudioData::Format<AudioData::Float32, AudioData::BigEndian>;
+
+	AudioData::interleaveSamples(
+	    AudioData::NonInterleavedSource<Format>{m_audioBuffer.getArrayOfReadPointers(), m_audioBuffer.getNumChannels()},
+	    AudioData::InterleavedDest<Format>{outBuf[0], outBuf.countChannels()},
+	    outBuf.countFrames());
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::processPlugins(const std::vector<Plugin*>& plugins, const juce::MidiBuffer& events)
+{
+	/* Plugins receive a mutable, local copy of the incoming MIDI buffer so they
+	can modify existing events or generate new ones; the resulting MIDI stream
+	is then passed downstream to the next plugins in the stack. This allows
+	MIDI-generating plugins to forward their output to subsequent plugins. */
+
+	juce::MidiBuffer localEvents = events;
+	for (Plugin* p : plugins)
+	{
+		if (!p->valid || p->isSuspended() || p->isBypassed())
+			continue;
+		processPlugin(p, localEvents);
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+
+void PluginHost::processPlugin(Plugin* p, juce::MidiBuffer& events)
+{
+	const Plugin::Buffer& pluginBuffer = p->process(m_audioBuffer, events);
+
+	/* Merge the plugin buffer back into the local one. Special care is needed
+	if audio channels mismatch. */
+
+	for (int i = 0, j = 0; i < m_audioBuffer.getNumChannels(); i++)
+	{
+		m_audioBuffer.copyFrom(i, 0, pluginBuffer, j, 0, pluginBuffer.getNumSamples());
+		if (i < p->countMainOutChannels() - 1)
+			j++;
+	}
+}
+} // namespace giada::m

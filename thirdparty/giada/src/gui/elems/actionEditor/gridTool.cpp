@@ -1,0 +1,126 @@
+/* -----------------------------------------------------------------------------
+ *
+ * Giada - Your Hardcore Loopmachine
+ *
+ * ------------------------------------------------------------------------------
+ *
+ * Copyright (C) 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories
+ *
+ * This file is part of Giada - Your Hardcore Loopmachine.
+ *
+ * Giada - Your Hardcore Loopmachine is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Giada - Your Hardcore Loopmachine is distributed in the hope that it
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Giada - Your Hardcore Loopmachine. If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * --------------------------------------------------------------------------- */
+
+#include "src/gui/elems/actionEditor/gridTool.h"
+#include "src/deps/mcl-utils/src/math.hpp"
+#include "src/gui/elems/basics/check.h"
+#include "src/gui/elems/basics/choice.h"
+#include "src/gui/ui.h"
+#include "src/utils/time.h"
+#include <FL/Fl_Double_Window.H>
+
+extern giada::v::Ui* g_ui;
+
+namespace giada::v
+{
+geGridTool::geGridTool(Pixel x, Pixel y, const Model& model)
+: Fl_Group(x, y, 80, 20)
+{
+	divisions = new geChoice(x, y, 40, 20);
+	divisions->addItem("1");
+	divisions->addItem("2");
+	divisions->addItem("3");
+	divisions->addItem("4");
+	divisions->addItem("6");
+	divisions->addItem("8");
+	divisions->addItem("16");
+	divisions->addItem("32");
+	divisions->showItem(0);
+	divisions->onChange = [this](int)
+	{
+		window()->redraw();
+	};
+
+	active = new geCheck(divisions->x() + divisions->w() + 4, y, 20, 20);
+
+	divisions->showItem(model.actionEditorGridVal);
+	active->value(model.actionEditorGridOn);
+
+	end();
+
+	divisions->copy_tooltip(g_ui->getI18Text(LangMap::COMMON_GRIDRES));
+	active->copy_tooltip(g_ui->getI18Text(LangMap::COMMON_SNAPTOGRID));
+}
+
+/* -------------------------------------------------------------------------- */
+
+geGridTool::~geGridTool()
+{
+	g_ui->model.actionEditorGridVal = divisions->getSelectedId();
+	g_ui->model.actionEditorGridOn  = active->value();
+}
+
+/* -------------------------------------------------------------------------- */
+
+bool geGridTool::isOn() const
+{
+	return active->value();
+}
+
+/* -------------------------------------------------------------------------- */
+
+int geGridTool::getDivisionsPerBeat() const
+{
+	switch (divisions->getSelectedId())
+	{
+	case 0:
+		return 1;
+	case 1:
+		return 2;
+	case 2:
+		return 3;
+	case 3:
+		return 4;
+	case 4:
+		return 6;
+	case 5:
+		return 8;
+	case 6:
+		return 16;
+	case 7:
+		return 32;
+	}
+	return 0;
+}
+
+/* -------------------------------------------------------------------------- */
+
+Tick geGridTool::getSnapTick(Tick t) const
+{
+	namespace math = mcl::utils::math;
+
+	if (!isOn())
+		return t;
+	return Tick{u::time::quantize(t, getDivisionSize())};
+}
+
+/* -------------------------------------------------------------------------- */
+
+Tick geGridTool::getDivisionSize() const
+{
+	return G_PPQ / getDivisionsPerBeat();
+}
+} // namespace giada::v

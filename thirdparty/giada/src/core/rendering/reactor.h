@@ -1,0 +1,78 @@
+/* -----------------------------------------------------------------------------
+ *
+ * Giada - Your Hardcore Loopmachine
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * Copyright (C) 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories
+ *
+ * This file is part of Giada - Your Hardcore Loopmachine.
+ *
+ * Giada - Your Hardcore Loopmachine is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Giada - Your Hardcore Loopmachine is distributed in the hope that it
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Giada - Your Hardcore Loopmachine. If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * -------------------------------------------------------------------------- */
+
+#ifndef G_RENDERING_REACTOR_H
+#define G_RENDERING_REACTOR_H
+
+#include "src/core/midiMapper.h"
+#include "src/core/types.h"
+#include "src/scene.h"
+#include "src/types.h"
+
+namespace giada::m
+{
+class MidiEvent;
+class ActionManager;
+class KernelMidi;
+} // namespace giada::m
+
+namespace giada::m::model
+{
+class Model;
+}
+
+namespace giada::m::rendering
+{
+class Reactor
+{
+public:
+	Reactor(model::Model&, MidiMapper<KernelMidi>&, ActionManager&, KernelMidi&);
+
+	void keyPress(ID channelId, Scene, float velocity, bool canRecordActions, bool canQuantize, Tick currentTickQuantized);
+	void keyRelease(ID channelId, Scene, bool canRecordActions, Tick currentTickQuantized);
+	void keyKill(ID channelId, Scene, bool canRecordActions, Tick currentTickQuantized);
+	void processMidiEvent(ID channelId, Scene, const MidiEvent&, bool canRecordActions, Tick currentTickQuantized);
+	void toggleReadActions(ID channelId, bool seqIsRunning);
+	void killReadActions(ID channelId);
+	void toggleMute(ID channelId);
+	void toggleSolo(ID channelId);
+	void stopAll();
+	void rewindAll();
+
+	/* killEmptySampleChannels
+	Stop all channels that don't have a Wave to play for the selected scene. */
+
+	void killEmptySampleChannels(Scene);
+
+private:
+	model::Model&           m_model;
+	KernelMidi&             m_kernelMidi;
+	ActionManager&          m_actionManager;
+	MidiMapper<KernelMidi>& m_midiMapper;
+};
+} // namespace giada::m::rendering
+
+#endif

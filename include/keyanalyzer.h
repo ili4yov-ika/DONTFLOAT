@@ -29,19 +29,19 @@ public:
     };
 
     struct KeyInfo {
-        Key key;
-        float confidence;        // Уверенность определения (0-1)
-        QString keyName;         // Название тональности (например, "C Major")
-        float strength;          // Сила тональности
-        bool isMajor;           // Мажорная или минорная
+        Key key = UNKNOWN_KEY;
+        float confidence = 0.0f;  // Уверенность определения (0-1)
+        QString keyName;          // Название тональности (например, "C Major")
+        float strength = 0.0f;    // Сила тональности
+        bool isMajor = false;     // Мажорная или минорная
     };
 
     struct AnalysisResult {
         KeyInfo primaryKey;      // Основная тональность
-        KeyInfo secondaryKey;    // Вторичная тональность (если есть)
+        KeyInfo secondaryKey;    // Вторичная тональность (модуляция), UNKNOWN_KEY если нет
         QVector<float> chromaVector; // Хроматический вектор
-        float overallConfidence; // Общая уверенность
-        bool hasKeyChange;       // Есть ли смена тональности
+        float overallConfidence = 0.0f; // Общая уверенность
+        bool hasKeyChange = false;      // Есть ли смена тональности
         QVector<KeyInfo> keyChanges; // Позиции смены тональности
     };
 
@@ -90,6 +90,11 @@ private:
     
     static QVector<KeyInfo> detectKeyChanges(const QVector<QVector<float>>& chromaFrames,
                                             float threshold);
+
+    /// Вторая по времени звучания тональность трека (модуляция):
+    /// гистограмма покадровых тональностей, порог доли кадров.
+    static KeyInfo pickSecondaryKey(const QVector<QVector<float>>& chromaFrames,
+                                    Key primaryKey);
 };
 
 #endif // KEYANALYZER_H

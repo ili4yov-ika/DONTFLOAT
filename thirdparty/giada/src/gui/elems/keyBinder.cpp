@@ -1,0 +1,90 @@
+/* -----------------------------------------------------------------------------
+ *
+ * Giada - Your Hardcore Loopmachine
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * Copyright (C) 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories
+ *
+ * This file is part of Giada - Your Hardcore Loopmachine.
+ *
+ * Giada - Your Hardcore Loopmachine is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Giada - Your Hardcore Loopmachine is distributed in the hope that it
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Giada - Your Hardcore Loopmachine. If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * -------------------------------------------------------------------------- */
+
+#include "src/gui/elems/keyBinder.h"
+#include "src/glue/layout.h"
+#include "src/gui/dialogs/keyGrabber.h"
+#include "src/gui/elems/basics/box.h"
+#include "src/gui/elems/basics/boxtypes.h"
+#include "src/gui/elems/basics/textButton.h"
+#include "src/gui/ui.h"
+#include "src/utils/gui.h"
+
+extern giada::v::Ui* g_ui;
+
+namespace giada::v
+{
+geKeyBinder::geKeyBinder(const std::string& l, int key)
+: geFlex(Direction::HORIZONTAL, G_GUI_INNER_MARGIN)
+, onKeyBound(nullptr)
+, onKeyClear(nullptr)
+, m_key(key)
+{
+	m_labelBox = new geBox(l.c_str());
+	m_keyBox   = new geBox(u::gui::keyToString(key).c_str());
+	m_bindBtn  = new geTextButton(g_ui->getI18Text(LangMap::COMMON_BIND));
+	m_clearBtn = new geTextButton(g_ui->getI18Text(LangMap::COMMON_CLEAR));
+
+	addWidget(m_labelBox);
+	addWidget(m_keyBox, 100);
+	addWidget(m_bindBtn, 50);
+	addWidget(m_clearBtn, 50);
+	end();
+
+	m_labelBox->box(G_CUSTOM_BORDER_BOX);
+	m_keyBox->box(G_CUSTOM_BORDER_BOX);
+
+	m_bindBtn->onClick = [key, this]()
+	{
+		c::layout::openKeyGrabberWindow(key, [this](int newKey)
+		{
+			assert(onKeyBound != nullptr);
+			setKey(newKey);
+			onKeyBound(newKey);
+			return true;
+		});
+	};
+
+	m_clearBtn->onClick = [this]()
+	{
+		assert(onKeyClear != nullptr);
+		setKey(0);
+		onKeyClear();
+	};
+}
+
+/* -------------------------------------------------------------------------- */
+
+int geKeyBinder::getKey() const { return m_key; }
+
+/* -------------------------------------------------------------------------- */
+
+void geKeyBinder::setKey(int key)
+{
+	m_key = key;
+	m_keyBox->setLabel(u::gui::keyToString(key));
+}
+} // namespace giada::v

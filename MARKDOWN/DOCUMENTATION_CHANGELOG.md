@@ -1,5 +1,72 @@
 # История изменений документации
 
+## 2026-07-15 (питчер: живой звук при правке нот)
+
+- Правка высоты ноты теперь слышна без `Ctrl+Shift+T`: после drag/`↑`/`↓`/undo фоновый рендер (общий с превью меток stretch) применяет коррекцию высоты и переключает воспроизведение (`updatePlaybackAfterMarkerDrag` объединяет time stretch и `PitchCorrection::apply`).
+- Добавлено зацикленное прослушивание удерживаемой ноты: пока блок зажат мышью, сегмент играет по кругу через `NotePreviewPlayer` (QAudioSink, varispeed), высота меняется мгновенно при перетаскивании; основное воспроизведение ставится на паузу.
+- `Ctrl+Shift+T` теперь «закрепляет» коррекцию (рендер от исходных данных, чтобы не задваивать сдвиг поверх фонового превью).
+- Обновлены: `docs/features.md`, `docs/shortcuts.md`.
+
+## 2026-07-15 (питчер: ноты на пианоролле, коррекция высоты)
+
+- Реализованы фазы A–F плана `PLAN_CREATE_A_WORKING_PITCHER.md`:
+  - плашка «Анализировать» показывает progress bar; тональность и ноты анализируются одной фоновой задачей (`MainWindow::startPitchAnalysis()`);
+  - новый детектор нот `PitchDetector` (`include/pitchdetector.h`, `src/pitchdetector.cpp`): децимация до ~11 кГц, автокорреляция, медианное сглаживание, сегментация по полутонам;
+  - блоки нот на пианоролле (`PitchGridWidget::drawNoteBlocks()`): синие — как определены, оранжевые — отредактированные, белая рамка — выделенная;
+  - редактирование высоты: drag по вертикали, `↑`/`↓` (Shift — октава), undo/redo через `PitchNoteEditCommand`;
+  - warp нот при перетаскивании меток time stretch (`warpNotesThroughMarkers`), запекание координат при `Ctrl+T`;
+  - коррекция звука по нотам `Ctrl+Shift+T` (`PitchCorrection::apply()`: Rubber Band R3 + ресемплинг, кроссфейды, undo).
+- Обновлены: `docs/features.md`, `docs/shortcuts.md`, `MARKDOWN/PLAN_CREATE_A_WORKING_PITCHER.md`, диалог горячих клавиш.
+- Переводы синхронизированы (`lupdate -no-obsolete`, `tools/fix_translations.py`): 324 строки, добавлены строки анализа нот и коррекции высоты.
+
+## 2026-06-27 (пианоролл, тональность, переводы)
+
+- Питч-сетка переведена на собственный `PianoRollEngine` (`include/pianoroll_engine.h`); `GiadaPitchGridEngine` удалён из билда.
+- Задокументированы: легенда нот справа (полупрозрачная), подсветка out-of-key, синхронизация сетки с учётом ширины легенды, каретка поверх легенды без snap к тактам.
+- Тональность по умолчанию **C Major**; анализ по кнопке **«Анализировать»** на плашке после загрузки трека (`KeyAnalyzer`, фоновый поток).
+- Убраны упоминания пиков волны на пианоролле.
+- Переводы синхронизированы (`lupdate -no-obsolete`, `tools/fix_translations.py`): 349 строк, включая `MarkerTestGenWindow`, `AudioFileService`, кнопку «Анализировать».
+- Обновлены: `README.md`, `docs/features.md`, `docs/architecture.md`, `docs/shortcuts.md`, `thirdparty/README.md`, `MARKDOWN/ARCHITECTURE.md`, `MARKDOWN/README.md`, `MARKDOWN/PROJECT_FLOWCHART.md`, `MARKDOWN/INIT.MD`.
+
+## 2026-06-21 (плагины: CLAP/LV2 UI shell)
+
+- Lightweight Qt editor shell распространён на CLAP и LV2: `clap.gui` extension
+  для CLAP и отдельный `dontfloat_track_tool_ui` binary для LV2 bundle.
+- Добавлен общий Qt-hosting helper для plugin editor без blocking
+  `QApplication::exec()` и без зависимости от `MainWindow`.
+- Обновлены `plugins/README.md`, `plugins/clap/README.md`,
+  `plugins/lv2/README.md` и LV2 `.ttl` metadata.
+
+## 2026-06-21 (плагины: VST3 UI shell)
+
+- Добавлен первый VST3-first проброс интерфейса: lightweight Qt editor shell
+  `DONTFLOAT Track Tool` без прямого встраивания `MainWindow`.
+- Зафиксированы ограничения MVP: Windows `HWND` attachment, без blocking
+  `QApplication::exec()`, без анализа/render из audio callback.
+- Обновлена документация `plugins/README.md` и `plugins/vst3/README.md`.
+
+## 2026-06-21 (плагины: реализация Track Tool MVP)
+
+- `dontfloat_pitch_shift_*` targets заменены на `dontfloat_track_tool_*`.
+- Документация обновлена под новые wrapper files, LV2 bundle, smoke tests и
+  Windows installer paths: `dontfloat_track_tool.clap`,
+  `dontfloat_track_tool.lv2`, `DONTFLOAT Track Tool.vst3`.
+- `plugins/core` описывает реализованный `TrackToolSession` и безопасные
+  analysis/render stubs вместо granular pitch-shift API.
+
+## 2026-06-21 (плагины: DONTFLOAT Track Tool)
+
+- Зафиксирована новая продуктовая цель VST3/CLAP/LV2: не Melodyne-like pitcher,
+  а DAW-плагин `DONTFLOAT Track Tool` с UI DONTFLOAT, анализом аудио дорожки,
+  BPM/beat grid/key analysis, markers и выравниванием BPM.
+- На момент записи `dontfloat_pitch_shift_*` targets были описаны как
+  технический MVP; позднее они заменены на `dontfloat_track_tool_*`.
+- Обновлён roadmap `plugins/core`: будущие модули `TrackToolSession`, analysis,
+  marker map, BPM alignment и render/export.
+- Обновлены: `README.md`, `tools/README.md`, `MARKDOWN/DEVELOPMENT_GUIDE.md`,
+  `plugins/README.md`, `plugins/core/README.md`, `plugins/clap/README.md`,
+  `plugins/lv2/README.md`, `plugins/vst3/README.md`.
+
 ## 2026-06-21 (Windows NSIS: секции DAW-плагинов)
 
 - Задокументирована новая страница компонентов в `tools/nsis_installer.nsi`:

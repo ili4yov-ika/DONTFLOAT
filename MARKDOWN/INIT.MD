@@ -80,7 +80,7 @@ DONTFLOAT/
 - Синхронизация с позицией воспроизведения
 
 ### PitchGridWidget
-- Piano roll, пики волны, тактовая сетка (`GiadaPitchGridEngine`)
+- Piano roll, легенда нот, тактовая сетка (`PianoRollEngine`); анализ тональности по кнопке «Анализировать»
 - Синхронизация с WaveformView (zoom, offset, каретка, `displaySampleCount()`)
 - По умолчанию скрыта; `Ctrl+G`; состояние в QSettings
 - Подписи нот — overlay; таймлайн на всю ширину виджета
