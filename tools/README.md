@@ -21,9 +21,9 @@ chmod +x tools/setup_macos.sh tools/macos_build.sh
 bash tools/setup_macos.sh          # Homebrew: cmake, ninja, qt@6 → ~/.dontfloat_macos_env.sh
 source ~/.dontfloat_macos_env.sh
 
-bash tools/macos_build.sh              # Debug (preset macos-debug)
-bash tools/macos_build.sh release      # Release
-bash tools/macos_build.sh release test # + ctest (QT_QPA_PLATFORM=offscreen)
+bash tools/macos_build.sh                 # Debug (preset macos-debug)
+bash tools/macos_build.sh release         # Release
+bash tools/macos_build.sh release test    # + ctest (QT_QPA_PLATFORM=offscreen)
 bash tools/macos_build.sh release deploy  # + macdeployqt → build/macos/DONTFLOAT.app
 ```
 
@@ -57,12 +57,16 @@ tools\build_windows_installer.bat
 Windows installer включает страницу компонентов. Основная секция приложения
 обязательная, группа `DAW plugins` опционально ставит:
 
-- CLAP: `%CommonProgramFiles%\CLAP\dontfloat_pitch_shift.clap`
-- LV2: `%CommonProgramFiles%\LV2\dontfloat_pitch_shift.lv2`
+- CLAP: `%CommonProgramFiles%\CLAP\dontfloat_track_tool.clap`
+- LV2: `%CommonProgramFiles%\LV2\dontfloat_track_tool.lv2`
 - VST3: `%CommonProgramFiles%\VST3` при наличии собранного VST3 artifact
 
 Для VST3 перед запуском задайте `DONTFLOAT_VST3_SDK_ROOT`; без SDK этот target
 пропускается, а CLAP/LV2 продолжают собираться.
+
+Сейчас эти секции устанавливают технический `track_tool` MVP: DAW-плагин с
+интерфейсом DONTFLOAT в roadmap, analysis/render API stubs в `plugins/core` и
+passthrough wrapper targets для CLAP/LV2/VST3.
 
 ### Linux (Debian/Ubuntu)
 

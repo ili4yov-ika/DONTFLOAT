@@ -12,7 +12,9 @@
 #define CLAP_PLUGIN_FACTORY_ID "clap.plugin-factory"
 #define CLAP_EXT_PARAMS "clap.params"
 #define CLAP_EXT_AUDIO_PORTS "clap.audio-ports"
+#define CLAP_EXT_GUI "clap.gui"
 #define CLAP_PORT_STEREO "stereo"
+#define CLAP_WINDOW_API_WIN32 "win32"
 
 #define CLAP_CORE_EVENT_SPACE_ID 0
 #define CLAP_EVENT_PARAM_VALUE 5
@@ -186,6 +188,34 @@ struct clap_audio_port_info_t {
 struct clap_plugin_audio_ports_t {
     uint32_t (*count)(const clap_plugin_t* plugin, bool is_input);
     bool (*get)(const clap_plugin_t* plugin, uint32_t index, bool is_input, clap_audio_port_info_t* info);
+};
+
+struct clap_window_t {
+    const char* api;
+    union {
+        void* win32;
+        void* cocoa;
+        uintptr_t x11;
+        void* ptr;
+    };
+};
+
+struct clap_plugin_gui_t {
+    bool (*is_api_supported)(const clap_plugin_t* plugin, const char* api, bool is_floating);
+    bool (*get_preferred_api)(const clap_plugin_t* plugin, const char** api, bool* is_floating);
+    bool (*create)(const clap_plugin_t* plugin, const char* api, bool is_floating);
+    void (*destroy)(const clap_plugin_t* plugin);
+    bool (*set_scale)(const clap_plugin_t* plugin, double scale);
+    bool (*get_size)(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height);
+    bool (*can_resize)(const clap_plugin_t* plugin);
+    bool (*get_resize_hints)(const clap_plugin_t* plugin, void* hints);
+    bool (*adjust_size)(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height);
+    bool (*set_size)(const clap_plugin_t* plugin, uint32_t width, uint32_t height);
+    bool (*set_parent)(const clap_plugin_t* plugin, const clap_window_t* window);
+    bool (*set_transient)(const clap_plugin_t* plugin, const clap_window_t* window);
+    void (*suggest_title)(const clap_plugin_t* plugin, const char* title);
+    bool (*show)(const clap_plugin_t* plugin);
+    bool (*hide)(const clap_plugin_t* plugin);
 };
 
 #endif // DONTFLOAT_CLAP_MINIMAL_H

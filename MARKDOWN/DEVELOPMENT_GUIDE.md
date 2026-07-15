@@ -112,6 +112,11 @@ Installer build включает `DONTFLOAT_BUILD_PLUGINS=ON`: CLAP и LV2 со�
 `DONTFLOAT_VST3_SDK_ROOT`. В NSIS есть страница компонентов с обязательной
 секцией приложения и опциональной группой `DAW plugins`.
 
+Текущие CLAP/LV2/VST3 секции относятся к `track_tool` MVP: wrapper targets уже
+переименованы под `DONTFLOAT Track Tool`, а `plugins/core` содержит session/API
+stubs для будущего анализа дорожки, BPM alignment, markers и render/export
+сценариев основной программы.
+
 #### Иконка EXE (Windows)
 - **resources/app.rc** — ресурс иконки для EXE
 - **resources/icons/logo.ico** — генерируется из logo.svg

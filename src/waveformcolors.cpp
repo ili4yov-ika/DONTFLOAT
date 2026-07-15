@@ -14,7 +14,7 @@ void WaveformColors::setupDefaultColors() {
     m_beatHighlightColor = QColor(255, 255, 255); // Белый для выделенных битов
     
     m_gridColor = QColor(128, 128, 128);   // Серый для сетки
-    m_playPositionColor = QColor(255, 255, 255); // Белый для позиции воспроизведения
+    m_playPositionColor = QColor(255, 100, 100); // Красный — как каретка на пианоролле
     m_backgroundColor = QColor(30, 30, 30); // Темно-серый фон
     m_markerTextColor = QColor(200, 200, 200); // Светло-серый для текста
     m_markerBackgroundColor = QColor(60, 60, 60); // Темно-серый для фона
@@ -30,7 +30,7 @@ void WaveformColors::setupDarkColors() {
     m_beatHighlightColor = QColor(255, 255, 255); // Белый
     
     m_gridColor = QColor(128, 128, 128);   // Серый
-    m_playPositionColor = QColor(255, 255, 255); // Белый
+    m_playPositionColor = QColor(255, 100, 100); // Красный — как каретка на пианоролле
     m_backgroundColor = QColor(30, 30, 30); // Темно-серый
     m_markerTextColor = QColor(200, 200, 200); // Светло-серый
     m_markerBackgroundColor = QColor(60, 60, 60); // Темно-серый
@@ -46,7 +46,7 @@ void WaveformColors::setupLightColors() {
     m_beatHighlightColor = QColor(0, 0, 0); // Черный
     
     m_gridColor = QColor(100, 100, 100);   // Темно-серый
-    m_playPositionColor = QColor(0, 0, 0); // Черный
+    m_playPositionColor = QColor(220, 60, 60); // Красный — как каретка на пианоролле
     m_backgroundColor = QColor(240, 240, 240); // Светло-серый
     m_markerTextColor = QColor(50, 50, 50); // Темно-серый
     m_markerBackgroundColor = QColor(220, 220, 220); // Светло-серый

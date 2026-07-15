@@ -705,21 +705,6 @@
                                                                         <number>2</number>
                                                                     </property>
                                                                     <item>
-                                                                        <widget class="QLabel"
-                                                                            name="keyLabel">
-                                                                            <property
-                                                                                name="styleSheet">
-                                                                                <string>color: #ccc;
-                                                                                    font-size: 11px;
-                                                                                    font-weight:
-                                                                                    bold;</string>
-                                                                            </property>
-                                                                            <property name="text">
-                                                                                <string>Тональность:</string>
-                                                                            </property>
-                                                                        </widget>
-                                                                    </item>
-                                                                    <item>
                                                                         <widget class="QLineEdit"
                                                                             name="keyInput">
                                                                             <property

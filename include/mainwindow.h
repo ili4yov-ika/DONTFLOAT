@@ -28,7 +28,12 @@
 #include <QFutureWatcher>
 #include <QPair>
 #include <functional>
+#include <memory>
+#include <atomic>
 #include "waveformview.h"
+#include "keyanalyzer.h"
+#include "pitchdetector.h"
+#include "notepreviewplayer.h"
 #include "spectrogramsettingsdialog.h"
 #include "pitchshiftsettingsdialog.h"
 #include "granularpitchshifter_engine.h"
@@ -39,6 +44,7 @@
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
+class QProgressBar;
 QT_END_NAMESPACE
 
 class MainWindow : public QMainWindow
@@ -83,6 +89,14 @@ private slots:
     void clearLoopEnd();
     void togglePitchGrid();
     void analyzeKey();
+    void startPitchAnalysis();
+    void onPitchAnalysisFinished();
+    void onNotePitchEdited(int noteIndex, int oldPitch, int newPitch);
+    void applyPitchCorrection();
+    void onNotePreviewRequested(int noteIndex);
+    void onNotePreviewPitchChanged(int noteIndex, int midiPitch);
+    void stopNotePreview();
+    void onPitchGridAnalyzeClicked();
     void showKeyContextMenu(const QPoint& pos);
     void showKeyContextMenu2(const QPoint& pos);
     void setKey(const QString& key);
@@ -92,9 +106,11 @@ private slots:
     void setEnglishLanguage();
     void toggleBeatWaveform();
     void applyTimeStretch();
+    void scheduleMarkerPlaybackPreview();
     void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
     void onMarkerPreviewStretchFinished();
     void restorePlaybackPositionAfterSourceChange();
+    void applyMarkerPreviewMediaSource(const QString& path);
     void onUndoStackChanged();
     void createOnsetMarkersAuto();        // Авто-метки по транзиентам (Onset detection)
     void snapAllMarkersToGrid();          // Привязать все метки к тактовой сетке
@@ -108,6 +124,14 @@ private:
     void syncPitchGridFromWaveform();
     void syncPitchGridTimelineWidth();
     void layoutPitchGridScrollOverlay();
+    void setupPitchGridAnalyzeOverlay();
+    void showPitchGridAnalyzeOverlay();
+    void hidePitchGridAnalyzeOverlay();
+    void layoutPitchGridAnalyzeOverlay();
+    void applyPitchGridAnalyzeOverlayStyle(const QString& scheme);
+    void setPitchAnalysisUiRunning(bool running);
+    /// Пересчитывает координаты нот под текущие метки (warp) и передаёт в пианоролл
+    void refreshPitchGridNotes();
     void applyPitchGridVerticalScrollBarAlpha(int alpha);
     void updateWindowTitle();
     void setupConnections();
@@ -167,6 +191,9 @@ private:
     WaveformView *waveformView;
     PitchGridWidget *pitchGridWidget;
     QWidget *pitchGridScrollContainer;
+    QWidget *pitchGridAnalyzeOverlay;
+    QPushButton *pitchGridAnalyzeButton;
+    QProgressBar *pitchGridAnalyzeProgress;
     QScrollBar *horizontalScrollBar;
     QScrollBar *pitchGridVerticalScrollBar;
     QSplitter *mainSplitter;
@@ -230,6 +257,7 @@ private:
     qint64 previewRestorePosition;  // Позиция воспроизведения до пересчёта
     qint64 previewOldDuration;      // Длительность до пересчёта (для масштабирования позиции)
     bool previewWasPlaying;         // Продолжить воспроизведение после переключения источника
+    bool markerPlaybackPreviewPending = false;
 
     // Settings
     QSettings settings;
@@ -245,12 +273,31 @@ private:
 
     // Pitch grid visibility
     bool isPitchGridVisible;
+    bool pitchGridAnalyzePending = false;
 
     // Key analysis
     QString currentKey;
     QString currentKey2; // For modulation
     KeySelectionMenu *keyMenu;  // Контекстное меню для основного поля тональности
     KeySelectionMenu *keyMenu2; // Контекстное меню для поля модуляции
+
+    // Pitch analysis (тональность + ноты) в фоне
+    struct PitchAnalysisOutcome {
+        KeyAnalyzer::AnalysisResult key;
+        QVector<PitchDetector::PitchNote> notes;
+    };
+    QFutureWatcher<PitchAnalysisOutcome>* pitchAnalysisWatcher = nullptr;
+    std::shared_ptr<std::atomic<int>> pitchAnalysisProgressValue;
+    QTimer* pitchAnalysisProgressTimer = nullptr;
+    bool pitchAnalysisRunning = false;
+    QVector<PitchDetector::PitchNote> basePitchNotes; // координаты аудио на момент анализа
+    QAction *applyPitchCorrectionAct = nullptr;
+
+    // Прослушивание удерживаемой ноты (зацикленный сегмент, varispeed)
+    NotePreviewPlayer* notePreviewPlayer = nullptr;
+    // Правка ноты в undo-стеке: не дёргать syncPlaybackWithWaveform, звук
+    // пересчитывается фоновым превью (updatePlaybackAfterMarkerDrag)
+    bool noteEditCommandActive = false;
 
     // Undo/Redo stack
     QUndoStack *undoStack;

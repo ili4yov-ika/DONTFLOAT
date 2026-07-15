@@ -1,0 +1,96 @@
+/* -----------------------------------------------------------------------------
+ *
+ * Giada - Your Hardcore Loopmachine
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * Copyright (C) 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories
+ *
+ * This file is part of Giada - Your Hardcore Loopmachine.
+ *
+ * Giada - Your Hardcore Loopmachine is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Giada - Your Hardcore Loopmachine is distributed in the hope that it
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Giada - Your Hardcore Loopmachine. If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * -------------------------------------------------------------------------- */
+
+#include "src/gui/elems/basics/box.h"
+#include "src/gui/const.h"
+#include "src/gui/drawing.h"
+#include "src/utils/gui.h"
+#include <FL/fl_draw.H>
+#include <cassert>
+
+namespace giada::v
+{
+geBox::geBox(int x, int y, int w, int h, const char* l, Fl_Align al)
+: Fl_Box(x, y, w, h)
+, m_label(l != nullptr ? l : "")
+{
+	box(FL_NO_BOX);
+	color(G_COLOR_GREY_1);
+	labelcolor(G_COLOR_LIGHT_2);
+	align(al | FL_ALIGN_INSIDE);
+}
+
+/* -------------------------------------------------------------------------- */
+
+geBox::geBox(const char* l, Fl_Align al)
+: geBox(0, 0, 0, 0, l, al)
+{
+}
+
+/* -------------------------------------------------------------------------- */
+
+std::string geBox::getLabel() const { return m_label; }
+
+/* -------------------------------------------------------------------------- */
+
+void geBox::draw()
+{
+	const geompp::Rect<int> bounds{x(), y(), w(), h()};
+
+	drawRectf(bounds, color()); // Clear background
+
+	if (box() != FL_NO_BOX)
+		drawRect(bounds, G_COLOR_GREY_4); // Border
+
+	if (image() != nullptr)
+	{
+		if (m_image != nullptr)
+			m_image->scale(w(), h());
+		draw_label(); // draw_label also paints image, if any
+	}
+	else if (!m_label.empty())
+	{
+		const auto labelColor = active() ? labelcolor() : G_COLOR_GREY_4;
+		drawText(giada::u::gui::truncate(m_label, w()), bounds, FL_HELVETICA, G_GUI_FONT_SIZE_BASE,
+		    labelColor, align());
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+
+void geBox::setSvgImage(const char* svg)
+{
+	m_image = std::make_unique<Fl_SVG_Image>(nullptr, svg);
+	image(m_image.get());
+}
+/* -------------------------------------------------------------------------- */
+
+void geBox::setLabel(const std::string& l)
+{
+	m_label = l;
+	redraw();
+}
+} // namespace giada::v

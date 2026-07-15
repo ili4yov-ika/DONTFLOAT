@@ -1,0 +1,93 @@
+/* -----------------------------------------------------------------------------
+ *
+ * Giada - Your Hardcore Loopmachine
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * Copyright (C) 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories
+ *
+ * This file is part of Giada - Your Hardcore Loopmachine.
+ *
+ * Giada - Your Hardcore Loopmachine is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Giada - Your Hardcore Loopmachine is distributed in the hope that it
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Giada - Your Hardcore Loopmachine. If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * -------------------------------------------------------------------------- */
+
+#ifndef G_GLUE_ACTION_EDITOR_H
+#define G_GLUE_ACTION_EDITOR_H
+
+#include "src/core/actions/action.h"
+#include "src/core/types.h"
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace giada::m
+{
+class SampleChannel;
+class Channel;
+} // namespace giada::m
+
+/* giada::c::actionEditor
+Functions to interact with the Action Editor. Only the main thread can use these! */
+
+namespace giada::c::actionEditor
+{
+struct SampleData
+{
+	SampleData(const m::SampleChannel&);
+
+	SamplePlayerMode channelMode;
+	bool             isLoopMode;
+};
+
+struct Data
+{
+	Data() = default;
+	Data(const m::Channel&, Scene);
+
+	Tick getCurrentTick() const;
+	bool isChannelPlaying() const;
+
+	ID                            channelId;
+	Scene                         scene;
+	std::string                   channelName;
+	Tick                          ticksInSeq;
+	Tick                          ticksInBeat;
+	Tick                          ticksInBar;
+	Tick                          ticksInLoop;
+	std::vector<const m::Action*> actions;
+
+	std::optional<SampleData> sample;
+};
+
+Data getData(ID channelId);
+
+const m::Action* findAction(ID);
+
+/* MIDI actions.  */
+
+void recordMidiAction(ID channelId, int note, float velocity, TickRange);
+void deleteMidiAction(ID channelId, ID actionId);
+void updateMidiAction(ID channelId, ID actionId, int note, float velocity, TickRange);
+void updateVelocity(ID actionId, float value);
+
+/* Sample Actions. */
+
+void recordSampleAction(ID channelId, int type, Tick);
+void deleteSampleAction(ID actionId);
+void updateSampleAction(ID channelId, ID actionId, int type, Tick);
+} // namespace giada::c::actionEditor
+
+#endif

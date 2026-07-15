@@ -1,0 +1,84 @@
+#include "src/core/actions/ActionManager.h"
+#include "src/core/actions/action.h"
+#include "src/core/channels/channelFactory.h"
+#include "src/core/const.h"
+#include "src/core/model/actions.h"
+#include "src/core/model/model.h"
+#include "src/core/types.h"
+#include <catch2/catch_test_macros.hpp>
+
+TEST_CASE("ActionRecorder")
+{
+	using namespace giada;
+	using namespace giada::m;
+
+	const ID channelID1 = ID{1};
+	const ID channelID2 = ID{2};
+
+	model::Model model;
+
+	model.registerThread(Thread::MAIN, /*realtime=*/false);
+	model.reset();
+
+	channelFactory::Data channel1 = channelFactory::create(channelID1, ChannelType::SAMPLE, 1024, Resampler::Quality::LINEAR, false);
+	channelFactory::Data channel2 = channelFactory::create(channelID2, ChannelType::SAMPLE, 1024, Resampler::Quality::LINEAR, false);
+
+	model.get().tracks.add(0, false);
+	model.get().tracks.get(0).getChannels().getAll() = {channel1.channel, channel2.channel};
+	model.addChannelShared(std::move(channel1.shared));
+	model.addChannelShared(std::move(channel2.shared));
+	model.swap(model::SwapType::NONE);
+
+	ActionManager ar(model);
+
+	REQUIRE(ar.hasActions(channelID1) == false);
+
+	SECTION("Test record")
+	{
+		const Tick      t1 = Tick{10};
+		const Tick      t2 = Tick{70};
+		const MidiEvent e1 = MidiEvent::makeFrom3Bytes(MidiEvent::CHANNEL_NOTE_ON, 0x00, 0x00, 0);
+		const MidiEvent e2 = MidiEvent::makeFrom3Bytes(MidiEvent::CHANNEL_NOTE_OFF, 0x00, 0x00, 0);
+
+		const Action a1 = ar.rec(channelID1, Scene{0}, t1, e1);
+		const Action a2 = ar.rec(channelID1, Scene{0}, t2, e2);
+
+		REQUIRE(ar.hasActions(channelID1) == true);
+		REQUIRE(a1.tick == t1);
+		REQUIRE(a2.tick == t2);
+		REQUIRE(!a1.prevId.isValid());
+		REQUIRE(!a1.nextId.isValid());
+		REQUIRE(!a2.prevId.isValid());
+		REQUIRE(!a2.nextId.isValid());
+
+		SECTION("Test clear actions by channel")
+		{
+			const Tick      t1 = Tick{100};
+			const Tick      t2 = Tick{200};
+			const MidiEvent e1 = MidiEvent::makeFrom3Bytes(MidiEvent::CHANNEL_NOTE_ON, 0x00, 0x00, 0);
+			const MidiEvent e2 = MidiEvent::makeFrom3Bytes(MidiEvent::CHANNEL_NOTE_OFF, 0x00, 0x00, 0);
+
+			ar.rec(channelID2, Scene{0}, t1, e1);
+			ar.rec(channelID2, Scene{0}, t2, e2);
+
+			ar.clearChannel(channelID1, Scene{0});
+
+			REQUIRE(ar.hasActions(channelID1) == false);
+			REQUIRE(ar.hasActions(channelID2) == true);
+		}
+
+		SECTION("Test clear actions by type")
+		{
+			ar.clearActions(channelID1, MidiEvent::CHANNEL_NOTE_ON);
+			ar.clearActions(channelID1, MidiEvent::CHANNEL_NOTE_OFF);
+
+			REQUIRE(ar.hasActions(channelID1) == false);
+		}
+
+		SECTION("Test clear all")
+		{
+			ar.clearAllActions(Scene{0});
+			REQUIRE(ar.hasActions(channelID1) == false);
+		}
+	}
+}

@@ -6,6 +6,8 @@
 #include <QtCore/QTimer>
 #include <QtCore/QRect>
 #include <QtCore/QPointer>
+#include <QtCore/QFutureWatcher>
+#include <QtGui/QPixmap>
 #include <atomic>
 #include <QtGui/QPainter>
 #include <QtGui/QWheelEvent>
@@ -136,19 +138,7 @@ public:
         QString endMarkerTime;
     };
     ActiveSegmentInfo getActiveSegmentInfo() const;
-    void setMarkers(const QVector<Marker>& newMarkers) {
-        markers = newMarkers;
-        // Нулевая метка статична в 0:00
-        if (!markers.isEmpty() && markers[0].isFixed) {
-            markers[0].position = 0;
-            markers[0].originalPosition = 0;
-        }
-        for (Marker& marker : markers) {
-            marker.updateTimeFromSamples(sampleRate);
-        }
-        update();
-        emit markersChanged();
-    }
+    void setMarkers(const QVector<Marker>& newMarkers);
     void clearMarkers();
 
     // Метод для обновления исходных данных (используется TimeStretchCommand)
@@ -168,6 +158,8 @@ public:
 
     /** Длина отображаемого таймлайна (с учётом растянутого хвоста после меток). */
     qint64 displaySampleCount() const;
+    /** Есть ли активное растяжение/сжатие (position != originalPosition хотя бы у одной метки). */
+    bool hasTimelineStretch() const;
 
 signals:
     void positionChanged(qint64 position); // Сигнал для обновления позиции воспроизведения (в миллисекундах)
@@ -186,6 +178,7 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
     /// Параметры видимой области волны (сэмплы/пиксель, startSample и т.д.)
     struct ViewportGeometry {
@@ -224,6 +217,13 @@ private:
     QString getPositionText(qint64 position) const;
     QString getBarText(float beatPosition) const;
     void scheduleUpdate(const QRect& rect = QRect()); // Throttled update для производительности
+    void scheduleSpectrogramRegeneration();
+    void onSpectrogramReady();
+    void invalidateWavePixmapCache();
+    void regenerateWavePixmap();
+    bool isWavePixmapCacheValid() const;
+    void markMarkersCacheDirty();
+    void ensureSortedMarkersCache();
 
     // Методы для обработки в реальном времени (фоновый поток, UI не блокируется)
     void scheduleRealtimeProcess(); // Пометить превью устаревшим и запустить фоновый пересчёт
@@ -257,6 +257,7 @@ private:
 
     QVector<Marker> markers; // Список меток
     int draggingMarkerIndex; // Индекс перетаскиваемой метки (-1 если нет)
+    bool markerDragSessionActive = false;
 
     // Оптимизация производительности: throttling обновлений
     QTimer* updateTimer; // Таймер для отложенных обновлений
@@ -286,6 +287,20 @@ private:
     SpectrogramSettings spectrogramSettings;
     QVector<QImage> spectrogramImages; // по одному изображению на канал
     bool spectrogramDirty;
+    QFutureWatcher<QVector<QImage>>* spectrogramWatcher = nullptr;
+    std::atomic<bool> spectrogramComputationInProgress{false};
+
+    QPixmap cachedWavePixmap;
+    bool wavePixmapDirty = true;
+    int cachedWaveZoomKey = 0;
+    int cachedWaveHorizontalOffsetKey = 0;
+    int cachedWaveVerticalOffsetKey = 0;
+    QSize cachedWaveSize;
+    quint64 cachedWaveAudioGeneration = 0;
+    bool cachedWaveUsesWarpedPreview = false;
+
+    QVector<Marker> cachedSortedMarkers;
+    bool markersSortDirty = true;
 
     static const int minZoom;
     static const int maxZoom;

@@ -10,6 +10,15 @@
 #endif
 
 using LV2_Handle = void*;
+using LV2UI_Handle = void*;
+using LV2UI_Controller = void*;
+using LV2UI_Widget = void*;
+
+using LV2UI_Write_Function = void (*)(LV2UI_Controller controller,
+                                      uint32_t port_index,
+                                      uint32_t buffer_size,
+                                      uint32_t port_protocol,
+                                      const void* buffer);
 
 struct LV2_Feature {
     const char* URI;
@@ -29,6 +38,26 @@ struct LV2_Descriptor {
     void (*run)(LV2_Handle instance, uint32_t sample_count);
     void (*deactivate)(LV2_Handle instance);
     void (*cleanup)(LV2_Handle instance);
+    const void* (*extension_data)(const char* uri);
+};
+
+struct LV2UI_Descriptor {
+    const char* URI;
+
+    LV2UI_Handle (*instantiate)(const LV2UI_Descriptor* descriptor,
+                                const char* plugin_uri,
+                                const char* bundle_path,
+                                LV2UI_Write_Function write_function,
+                                LV2UI_Controller controller,
+                                LV2UI_Widget* widget,
+                                const LV2_Feature* const* features);
+
+    void (*cleanup)(LV2UI_Handle ui);
+    void (*port_event)(LV2UI_Handle ui,
+                       uint32_t port_index,
+                       uint32_t buffer_size,
+                       uint32_t format,
+                       const void* buffer);
     const void* (*extension_data)(const char* uri);
 };
 

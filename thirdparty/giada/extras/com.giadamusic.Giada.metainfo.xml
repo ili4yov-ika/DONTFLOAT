@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories -->
+<component type="desktop">
+	<id>com.giadamusic.Giada</id>
+	<metadata_license>CC0</metadata_license>
+	<project_license>GPL-2.0+</project_license>
+	<name>Giada</name>
+	<summary>Your hardcore loop machine</summary>
+	<description>
+		<p>Giada is an open source, minimalistic and hardcore music production tool. Designed for DJs, live performers and electronic musicians.</p>
+	</description>
+	<developer_name>Monocasual Laboratories</developer_name>
+	<content_rating type="oars-1.1" />
+	<launchable type="desktop-id">com.giadamusic.Giada.desktop</launchable>
+	<screenshots>
+		<screenshot type="default">
+			<image>https://giadamusic.com/images/giada-canvas.png</image>
+			<caption>Giada official screenshot</caption>
+		</screenshot>
+	</screenshots>
+	<releases>
+		<release version="1.5.0" date="2026-06-17">
+			<description>
+				<p>This release introduces a major overhaul of Giada's timing and sequencing engine, with a new tick-based internal timeline that improves musical precision across editing and playback. It also expands scene management with more flexible copy, clear and switching features, improves plug-in and MIDI workflow, adds CPU load monitoring to the main window and includes a broad round of internal cleanup and UI polish.</p>
+				<ul>
+					<li>New tick-based audio rendering engine, improving consistency across sequencing, playback and action editing;</li>
+					<li>Rework the internal storage of actions, improving performance and simplifying action handling;</li>
+					<li>Add support for forced scene switching;</li>
+					<li>Add the ability to copy the current scene to another;</li>
+					<li>Add options to clear all actions in the current scene or across all scenes;</li>
+					<li>Add options to free all sample channels in the current scene or across all scenes;</li>
+					<li>Allow plug-ins that generate MIDI to forward their output to subsequent plug-ins;</li>
+					<li>Improve transport and position reporting for plug-ins;</li>
+					<li>Add CPU load meter in the main window, along with a new footer area with extra information;</li>
+					<li>Fix audio glitches while saving a project;</li>
+					<li>Fix wrong sample range points computation when the system sample rate changes;</li>
+					<li>Include broader internal cleanup, refactoring, dependency updates and UI polish.</li>
+				</ul>
+			</description>
+		</release>
+		<release version="1.4.2" date="2026-06-02">
+			<description>
+				<p>This is the second bugfix release in the 1.4 series which makes working with scenes smoother and more flexible, fixes a few annoyances, and brings some welcome cleanup under the hood.</p>
+				<ul>
+					<li>Add ability to copy the entire scene to another;</li>
+					<li>Add ability to force-change a scene;</li>
+					<li>Add ability to clear all actions in current scene or in all scenes;</li>
+					<li>Add ability to free all sample channels in current scene or in all scenes;</li>
+					<li>Add missing pop-over labels to scene buttons;</li>
+					<li>Fix sample channels being killed abruptly on scene change;</li>
+					<li>Minor refactoring and code cleanup.</li>
+				</ul>
+			</description>
+		</release>
+		<release version="1.4.1" date="2026-05-10">
+			<description>
+				<p>This is a bugfix release that makes Giada feel smoother and more flexible, with better scene and channel workflow, customizable keyboard and MIDI control for switching scenes and a round of fixes for playback, editing, file browsing, and plug-in stability.</p>
+				<ul>
+					<li>Enable scene switching via keyboard or MIDI, with support for custom bindings;</li>
+					<li>Display inactive scenes (i.e. with no audio or actions);</li>
+					<li>Add ability to rename a channel in all scenes;</li>
+					<li>Add ability to undo a scene change when transport is running;</li>
+					<li>Remove obsolete 'export sample...' function;</li>
+					<li>Improve support for audio plug-ins with complex buses layout;</li>
+					<li>Revert scene status to IDLE when transport stops;</li>
+					<li>File Browser: fix bug that would allow to incorrectly browse into project folders;</li>
+					<li>Fix bug that would prevent to successfully clear keyboard bindings;</li>
+					<li>Fix crash when opening plug-in browser with no plug-ins detected;</li>
+					<li>Fix wrong Wave object deletion when freeing a sample channel;</li>
+					<li>Fix inability to play samples once removed from a scene;</li>
+					<li>Fix inability to delete all channel actions from all scenes;</li>
+					<li>Fix Channel 'copy to scene' function, copying too many actions;</li>
+					<li>Sample Editor: fix pitch changes not working in scenes greater than 1;</li>
+					<li>Sample Editor: prevent tools to get stuck in 'deactivated' state when switching between scenes;</li>
+					<li>Update JUCE to version 8.0.12;</li>
+					<li>Update FLTK to version 1.4.5.</li>
+				</ul>
+			</description>
+		</release>
+		<release version="1.4.0" date="2025-12-06">
+			<description>
+				<p>This release introduces scenes: a new way to add greater variety and richness to your live performances.</p>
+				<ul>
+					<li>New scenes feature;</li>
+					<li>Lots of code refactoring and minor internal improvements;</li>
+					<li>Update JUCE dependency to 8.0.10;</li>
+					<li>Update fmt dependency to 12.0.0;</li>
+					<li>Update catch2 dependency to 3.11.0;</li>
+					<li>Update nlohmann-json dependency to 3.12.0;</li>
+					<li>Update rtmidi dependency to 6.0.0;</li>
+					<li>Update libsndfile dependency to 1.2.2;</li>
+				</ul>
+			</description>
+		</release>
+		<release version="1.3.1" date="2025-10-24">
+			<description>
+				<p>This is a bugfix release.</p>
+				<ul>
+					<li>Fix broken plug-ins when a channel is cloned;</li>
+					<li>Prevent crash if using JACK and no samplerate choice is available;</li>
+					<li>Small improvements to project loading mechanism;</li>
+					<li>Update RtAudio library to latest commit.</li>
+				</ul>
+			</description>
+		</release>
+		<release version="1.3.0" date="2025-09-15">
+			<description>
+				<p>This release introduces support for multiple audio outputs (more than stereo). It is now possible to have multiple audio channels, each of which sends the signal to an external hardware output or internally to another software for multitrack recording of your live performances.</p>
+				<ul>
+					<li>Add support for multiple audio ouputs;</li>
+					<li>Improved JACK support allowing for multiple output connections;</li>
+					<li>UI: improved and beautified Plug-in Browser window;</li>
+					<li>Update FLTK to 1.4.4;</li>
+					<li>Refactoring and code gardening.</li>
+				</ul>
+			</description>
+		</release>
+		<release version="1.2.1" date="2025-06-28" />
+		<release version="1.2.0" date="2025-04-21" />
+		<release version="1.1.1" date="2025-02-08" />
+	</releases>
+	<update_contact>giadaloopmachine_AT_gmail.com</update_contact>
+	<url type="homepage">https://www.giadamusic.com/</url>
+	<url type="help">https://github.com/monocasual/giada/discussions</url>
+</component>

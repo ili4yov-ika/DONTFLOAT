@@ -88,7 +88,9 @@ KeyAnalyzer::AnalysisResult KeyAnalyzer::analyzeKey(const QVector<float>& sample
         }
         
         result.keyChanges = detectKeyChanges(chromaFrames, options.keyChangeThreshold);
-        result.hasKeyChange = !result.keyChanges.isEmpty();
+        result.secondaryKey = pickSecondaryKey(chromaFrames, result.primaryKey.key);
+        result.hasKeyChange = !result.keyChanges.isEmpty()
+            || result.secondaryKey.key != UNKNOWN_KEY;
     }
     
     return result;
@@ -163,14 +165,16 @@ KeyAnalyzer::AnalysisResult KeyAnalyzer::analyzeKeyUsingQM(const QVector<float>&
         result.primaryKey = detectKeyFromChroma(result.chromaVector);
         result.overallConfidence = result.primaryKey.confidence;
         
-        // Анализ смены тональности
+        // Анализ смены тональности (модуляции)
         if (options.detectKeyChanges) {
             QVector<QVector<float>> floatChromaFrames;
             for (const auto& frame : chromaFrames) {
                 floatChromaFrames.append(convertToFloat(frame));
             }
             result.keyChanges = detectKeyChanges(floatChromaFrames, options.keyChangeThreshold);
-            result.hasKeyChange = !result.keyChanges.isEmpty();
+            result.secondaryKey = pickSecondaryKey(floatChromaFrames, result.primaryKey.key);
+            result.hasKeyChange = !result.keyChanges.isEmpty()
+                || result.secondaryKey.key != UNKNOWN_KEY;
         }
         
     } catch (const std::exception& e) {
@@ -313,6 +317,63 @@ QVector<KeyAnalyzer::KeyInfo> KeyAnalyzer::detectKeyChanges(const QVector<QVecto
     }
     
     return keyChanges;
+}
+
+KeyAnalyzer::KeyInfo KeyAnalyzer::pickSecondaryKey(const QVector<QVector<float>>& chromaFrames,
+                                                   Key primaryKey) {
+    KeyInfo secondary; // key = UNKNOWN_KEY по умолчанию
+
+    if (chromaFrames.size() < 4) {
+        return secondary;
+    }
+
+    // Гистограмма покадровых тональностей
+    QVector<int> counts(int(UNKNOWN_KEY), 0);
+    QVector<float> strengthSum(int(UNKNOWN_KEY), 0.0f);
+    QVector<float> confidenceSum(int(UNKNOWN_KEY), 0.0f);
+    int voicedFrames = 0;
+
+    for (const QVector<float>& frame : chromaFrames) {
+        const KeyInfo info = detectKeyFromChroma(frame);
+        if (info.key == UNKNOWN_KEY) {
+            continue;
+        }
+        const int idx = int(info.key);
+        ++counts[idx];
+        strengthSum[idx] += info.strength;
+        confidenceSum[idx] += info.confidence;
+        ++voicedFrames;
+    }
+
+    if (voicedFrames < 4) {
+        return secondary;
+    }
+
+    // Самая частая тональность, отличная от основной
+    int bestIdx = -1;
+    for (int i = 0; i < counts.size(); ++i) {
+        if (i == int(primaryKey)) {
+            continue;
+        }
+        if (bestIdx < 0 || counts[i] > counts[bestIdx]) {
+            bestIdx = i;
+        }
+    }
+
+    // Модуляция считается значимой, если вторая тональность
+    // занимает заметную долю трека
+    constexpr float kMinShare = 0.2f;
+    if (bestIdx < 0 || counts[bestIdx] < 2
+        || float(counts[bestIdx]) / float(voicedFrames) < kMinShare) {
+        return secondary;
+    }
+
+    secondary.key = static_cast<Key>(bestIdx);
+    secondary.keyName = keyToString(secondary.key);
+    secondary.isMajor = isMajorKey(secondary.key);
+    secondary.strength = strengthSum[bestIdx] / counts[bestIdx];
+    secondary.confidence = confidenceSum[bestIdx] / counts[bestIdx];
+    return secondary;
 }
 
 QString KeyAnalyzer::keyToString(Key key) {

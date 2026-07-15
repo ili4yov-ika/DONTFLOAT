@@ -1,0 +1,62 @@
+/* -----------------------------------------------------------------------------
+ *
+ * Giada - Your Hardcore Loopmachine
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * Copyright (C) 2010-2026 Giovanni A. Zuliani | Monocasual Laboratories
+ *
+ * This file is part of Giada - Your Hardcore Loopmachine.
+ *
+ * Giada - Your Hardcore Loopmachine is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU General
+ * Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Giada - Your Hardcore Loopmachine is distributed in the hope that it
+ * will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Giada - Your Hardcore Loopmachine. If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * -------------------------------------------------------------------------- */
+
+#ifndef GE_BOX_H
+#define GE_BOX_H
+
+#include "src/deps/geompp/src/rect.hpp"
+#include <FL/Fl_Box.H>
+#include <FL/Fl_SVG_Image.H>
+#include <memory>
+#include <string>
+
+namespace giada::v
+{
+class geBox : public Fl_Box
+{
+public:
+	void        copy_label(const char*) = delete;
+	void        label(const char*)      = delete;
+	const char* label() const           = delete;
+
+	geBox(int x, int y, int w, int h, const char* l = nullptr, Fl_Align al = FL_ALIGN_CENTER);
+	geBox(const char* l = nullptr, Fl_Align al = FL_ALIGN_CENTER);
+
+	std::string getLabel() const;
+
+	void setSvgImage(const char*);
+	void setLabel(const std::string&);
+
+protected:
+	void draw() override;
+
+private:
+	std::unique_ptr<Fl_SVG_Image> m_image;
+	std::string                   m_label;
+};
+} // namespace giada::v
+
+#endif
