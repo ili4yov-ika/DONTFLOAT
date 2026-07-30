@@ -1,5 +1,14 @@
 # История изменений документации
 
+## 2026-07-30 (UI питч-сетки, модуляции, MIDI-тесты)
+
+- Питч-сетка **видна по умолчанию** (`pitchGridVisible` default = true); `Ctrl+G` по-прежнему переключает.
+- Одинаковые горизонтальные отступы волны и питч-сетки: `UiConstants::kTimelineHorizontalMarginPx` = **4 px** (внутренний layout волны без лишних Qt-margins).
+- Над пианороллом — потактовая полоса тональности `KeyModulationStrip` (регионы из `KeyAnalyzer::analyzeKeyPerBar`), вместо пары статичных dual-полей.
+- Фикстура `tests/midi/test_1` (+ README) и автотесты `midi_pitch_test`, `midi_beat_deviation_test`.
+- Обновлён скрин `docs/main_ui.png`.
+- Обновлены: `README.md`, `docs/features.md`, `docs/architecture.md`, `docs/shortcuts.md`, `tests/README.md`, `MARKDOWN/ARCHITECTURE.md`, `MARKDOWN/PROJECT_FLOWCHART.md`, `MARKDOWN/PLAN_CREATE_A_WORKING_PITCHER.md`, `MARKDOWN/DEVELOPMENT_GUIDE.md`, `thirdparty/README.md`.
+
 ## 2026-07-15 (питчер: живой звук при правке нот)
 
 - Правка высоты ноты теперь слышна без `Ctrl+Shift+T`: после drag/`↑`/`↓`/undo фоновый рендер (общий с превью меток stretch) применяет коррекцию высоты и переключает воспроизведение (`updatePlaybackAfterMarkerDrag` объединяет time stretch и `PitchCorrection::apply`).

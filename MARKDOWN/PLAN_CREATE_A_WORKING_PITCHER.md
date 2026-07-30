@@ -17,7 +17,7 @@
 |-----------|--------|------------|
 | Пианоролл (навигация, сетка, легенда) | ✅ | `PitchGridWidget`, `PianoRollEngine` |
 | Синхронизация тактов / каретки с волной | ✅ | `MainWindow::syncPitchGridFromWaveform()`, `syncPitchGridTimelineWidth()` |
-| Поля тональности (C Major по умолчанию, модуляция) | ✅ | `ui/mainwindow.ui`, `KeySelectionMenu`, `setKey` / `setKey2` |
+| Поля тональности (C Major по умолчанию, потактовая модуляция) | ✅ | `KeyModulationStrip`, `KeyAnalyzer::analyzeKeyPerBar`, `KeySelectionMenu` |
 | Плашка «Анализировать» после загрузки | ✅ | `pitchGridAnalyzeOverlay`, `onPitchGridAnalyzeClicked()` |
 | Анализ **тональности** (фон, qm-dsp) | ✅ | `KeyAnalyzer`, `MainWindow::startPitchAnalysis()` |
 | Анализ **нот / f0** и блоки на пианоролле | ✅ | `PitchDetector`, `PitchGridWidget::drawNoteBlocks()` |
@@ -41,7 +41,7 @@
 4. По завершении:
    - плашка исчезает;
    - на пианоролле рисуются **блоки нот**;
-   - поля тональности заполняются результатом (`KeyAnalyzer` + при модуляции — второе поле);
+   - полоса тональности заполняется регионами (`KeyAnalyzer::analyzeKeyPerBar` + `KeyModulationStrip`);
    - легенда подсвечивает in-key / out-of-key (уже есть).
 
 ### 2. Редактирование

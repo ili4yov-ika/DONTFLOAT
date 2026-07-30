@@ -290,12 +290,29 @@ MainWindow::MainWindow(QWidget *parent)
         ui->waveformWidget->setLayout(new QVBoxLayout());
     }
     if (auto* waveLayout = qobject_cast<QVBoxLayout*>(ui->waveformWidget->layout())) {
-        // Без внутренних отступов: ширина волны = ширина поля пианоролла.
+        // Внутренний layout без отступов; L/R задаёт waveformLayout / pitchGridLayout.
         waveLayout->setContentsMargins(0, 0, 0, 0);
         waveLayout->setSpacing(0);
     }
     ui->waveformWidget->layout()->addWidget(waveformView);
     waveformView->installEventFilter(this);
+
+    // Одинаковые горизонтальные отступы у волны и питч-сетки.
+    if (ui->waveformLayout) {
+        ui->waveformLayout->setContentsMargins(
+            UiConstants::kTimelineHorizontalMarginPx,
+            0,
+            UiConstants::kTimelineHorizontalMarginPx,
+            ui->waveformLayout->contentsMargins().bottom());
+    }
+    if (ui->pitchGridLayout) {
+        const QMargins m = ui->pitchGridLayout->contentsMargins();
+        ui->pitchGridLayout->setContentsMargins(
+            UiConstants::kTimelineHorizontalMarginPx,
+            m.top(),
+            UiConstants::kTimelineHorizontalMarginPx,
+            m.bottom());
+    }
 
     // Create and setup PitchGridWidget
     pitchGridWidget = new PitchGridWidget(this);
