@@ -490,6 +490,41 @@ QVector<KeyAnalyzer::KeyRegion> KeyAnalyzer::mergeBarsIntoRegions(const QVector<
     return regions;
 }
 
+KeyAnalyzer::KeyInfo KeyAnalyzer::dominantModulationKey(const PerBarKeyResult& perBar,
+                                                        Key excludeKey) {
+    KeyInfo result; // key = UNKNOWN_KEY по умолчанию
+
+    QVector<int> counts(int(UNKNOWN_KEY) + 1, 0);
+    QVector<float> strengthSum(int(UNKNOWN_KEY) + 1, 0.0f);
+    QVector<float> confidenceSum(int(UNKNOWN_KEY) + 1, 0.0f);
+    for (const BarKey& b : perBar.bars) {
+        if (b.key.key == UNKNOWN_KEY || b.key.key == excludeKey) {
+            continue;
+        }
+        const int idx = int(b.key.key);
+        ++counts[idx];
+        strengthSum[idx] += b.key.strength;
+        confidenceSum[idx] += b.key.confidence;
+    }
+
+    int bestIdx = -1;
+    for (int i = 0; i < int(UNKNOWN_KEY); ++i) {
+        if (counts[i] > 0 && (bestIdx < 0 || counts[i] > counts[bestIdx])) {
+            bestIdx = i;
+        }
+    }
+    if (bestIdx < 0) {
+        return result;
+    }
+
+    result.key = static_cast<Key>(bestIdx);
+    result.keyName = keyToString(result.key);
+    result.isMajor = isMajorKey(result.key);
+    result.strength = strengthSum[bestIdx] / float(counts[bestIdx]);
+    result.confidence = confidenceSum[bestIdx] / float(counts[bestIdx]);
+    return result;
+}
+
 KeyAnalyzer::PerBarKeyResult KeyAnalyzer::analyzeKeyPerBar(const QVector<float>& samples,
                                                           int sampleRate,
                                                           const BarGrid& grid,

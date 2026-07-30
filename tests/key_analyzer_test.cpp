@@ -25,6 +25,7 @@ private slots:
     void testPerBarModulationDetected();
     void testMergeBarsIntoRegions();
     void testGridStartOffset();
+    void testDominantModulationKey();
 
 private:
     static constexpr int kSampleRate = 44100;
@@ -248,6 +249,48 @@ void KeyAnalyzerTest::testGridStartOffset()
     QCOMPARE(res.bars[0].key.key, KeyAnalyzer::C_MAJOR);
     QCOMPARE(res.bars[1].key.key, KeyAnalyzer::C_MAJOR);
     qDebug() << "  ✓ Такт 0 начинается с gridStartSample";
+}
+
+void KeyAnalyzerTest::testDominantModulationKey()
+{
+    qDebug() << "\n=== Тест: dominantModulationKey (тональность для поля модуляции) ===";
+
+    auto mk = [](KeyAnalyzer::Key k) {
+        KeyAnalyzer::BarKey b;
+        b.key.key = k;
+        b.key.keyName = KeyAnalyzer::keyToString(k);
+        b.key.strength = 1.0f;
+        b.key.confidence = 1.0f;
+        return b;
+    };
+
+    KeyAnalyzer::PerBarKeyResult perBar;
+    perBar.bars << mk(KeyAnalyzer::C_MAJOR) << mk(KeyAnalyzer::C_MAJOR)
+                << mk(KeyAnalyzer::C_MAJOR) << mk(KeyAnalyzer::F_SHARP_MAJOR)
+                << mk(KeyAnalyzer::F_SHARP_MAJOR) << mk(KeyAnalyzer::G_MAJOR);
+    perBar.primaryKey.key = KeyAnalyzer::C_MAJOR;
+
+    // Самая частая тональность, отличная от основной, — F# Major (2 такта).
+    const KeyAnalyzer::KeyInfo mod =
+        KeyAnalyzer::dominantModulationKey(perBar, KeyAnalyzer::C_MAJOR);
+    QCOMPARE(mod.key, KeyAnalyzer::F_SHARP_MAJOR);
+    QCOMPARE(mod.keyName, QStringLiteral("F# Major"));
+
+    // Исключается ровно переданная тональность: если исключить не основную (F#),
+    // самой частой из оставшихся остаётся C Major (3 такта).
+    const KeyAnalyzer::KeyInfo mod2 =
+        KeyAnalyzer::dominantModulationKey(perBar, KeyAnalyzer::F_SHARP_MAJOR);
+    QCOMPARE(mod2.key, KeyAnalyzer::C_MAJOR);
+
+    // Без иной тональности (все такты — один ключ) → UNKNOWN.
+    KeyAnalyzer::PerBarKeyResult single;
+    single.bars << mk(KeyAnalyzer::C_MAJOR) << mk(KeyAnalyzer::C_MAJOR);
+    single.primaryKey.key = KeyAnalyzer::C_MAJOR;
+    const KeyAnalyzer::KeyInfo none =
+        KeyAnalyzer::dominantModulationKey(single, KeyAnalyzer::C_MAJOR);
+    QCOMPARE(none.key, KeyAnalyzer::UNKNOWN_KEY);
+
+    qDebug() << "  ✓ Тональность модуляции для поля выбирается корректно";
 }
 
 QTEST_MAIN(KeyAnalyzerTest)

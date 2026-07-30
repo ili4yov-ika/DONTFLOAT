@@ -1730,11 +1730,6 @@ void MainWindow::resetAudioState()
 
     // Сброс второй тональности — поле модуляции покажется только после анализа
     setKey2(QString());
-
-    // Сбрасываем потактовую модуляцию прошлого файла
-    if (waveformView) {
-        waveformView->clearKeyRegions();
-    }
 }
 
 void MainWindow::openAudioFile()
@@ -2640,29 +2635,36 @@ void MainWindow::onPitchAnalysisFinished()
 
     const PitchAnalysisOutcome outcome = pitchAnalysisWatcher->result();
 
+    // Основная тональность: трековая оценка, при неудаче — потактовая, иначе C Major.
     QString detectedKey = outcome.key.primaryKey.keyName;
-    if (detectedKey.isEmpty()
-        || outcome.key.primaryKey.key == KeyAnalyzer::UNKNOWN_KEY) {
-        detectedKey = QStringLiteral("C Major");
+    KeyAnalyzer::Key primaryEnum = outcome.key.primaryKey.key;
+    if (detectedKey.isEmpty() || primaryEnum == KeyAnalyzer::UNKNOWN_KEY) {
+        if (outcome.perBarKey.primaryKey.key != KeyAnalyzer::UNKNOWN_KEY) {
+            detectedKey = outcome.perBarKey.primaryKey.keyName;
+            primaryEnum = outcome.perBarKey.primaryKey.key;
+        } else {
+            detectedKey = QStringLiteral("C Major");
+            primaryEnum = KeyAnalyzer::stringToKey(detectedKey);
+        }
     }
     setKey(detectedKey);
 
+    // Модуляцию (смену тональности) показываем во втором поле над пианороллом,
+    // а не на звуковой волне: берём доминирующую потактовую тональность,
+    // отличную от основной; при её отсутствии — трековую вторичную тональность.
     QString keysText = detectedKey;
-    if (outcome.key.hasKeyChange
+    const KeyAnalyzer::KeyInfo modKey =
+        KeyAnalyzer::dominantModulationKey(outcome.perBarKey, primaryEnum);
+    if (modKey.key != KeyAnalyzer::UNKNOWN_KEY && !modKey.keyName.isEmpty()) {
+        setKey2(modKey.keyName);
+        keysText += QStringLiteral(" / ") + modKey.keyName;
+    } else if (outcome.key.hasKeyChange
         && outcome.key.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
         && !outcome.key.secondaryKey.keyName.isEmpty()) {
         setKey2(outcome.key.secondaryKey.keyName);
         keysText += QStringLiteral(" / ") + outcome.key.secondaryKey.keyName;
     } else {
         setKey2(QString());
-    }
-
-    // Потактовое отображение модуляции (смен тональности), как в Melodyne.
-    if (waveformView) {
-        waveformView->setKeyRegions(outcome.perBarKey.regions);
-    }
-    if (outcome.perBarKey.hasModulation) {
-        keysText += tr(" (модуляции: %1)").arg(outcome.perBarKey.regions.size());
     }
 
     basePitchNotes = outcome.notes;
@@ -2868,27 +2870,32 @@ void MainWindow::analyzeKey()
         setEnabled(true);
 
         QString detectedKey = result.primaryKey.keyName;
-        if (detectedKey.isEmpty()
-            || result.primaryKey.key == KeyAnalyzer::UNKNOWN_KEY) {
-            detectedKey = QStringLiteral("C Major");
+        KeyAnalyzer::Key primaryEnum = result.primaryKey.key;
+        if (detectedKey.isEmpty() || primaryEnum == KeyAnalyzer::UNKNOWN_KEY) {
+            if (perBar.primaryKey.key != KeyAnalyzer::UNKNOWN_KEY) {
+                detectedKey = perBar.primaryKey.keyName;
+                primaryEnum = perBar.primaryKey.key;
+            } else {
+                detectedKey = QStringLiteral("C Major");
+                primaryEnum = KeyAnalyzer::stringToKey(detectedKey);
+            }
         }
         setKey(detectedKey);
 
+        // Модуляцию показываем во втором поле над пианороллом (не на волне).
         QString keysText = detectedKey;
-        if (result.hasKeyChange
+        const KeyAnalyzer::KeyInfo modKey =
+            KeyAnalyzer::dominantModulationKey(perBar, primaryEnum);
+        if (modKey.key != KeyAnalyzer::UNKNOWN_KEY && !modKey.keyName.isEmpty()) {
+            setKey2(modKey.keyName);
+            keysText += QStringLiteral(" / ") + modKey.keyName;
+        } else if (result.hasKeyChange
             && result.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
             && !result.secondaryKey.keyName.isEmpty()) {
             setKey2(result.secondaryKey.keyName);
             keysText += QStringLiteral(" / ") + result.secondaryKey.keyName;
         } else {
             setKey2(QString());
-        }
-
-        if (waveformView) {
-            waveformView->setKeyRegions(perBar.regions);
-        }
-        if (perBar.hasModulation) {
-            keysText += tr(" (модуляции: %1)").arg(perBar.regions.size());
         }
 
         statusBar()->showMessage(tr("Тональность определена: %1").arg(keysText), 3000);

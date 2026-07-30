@@ -17,7 +17,6 @@
 #include <QtGui/QFontMetrics>
 #include <QtMultimedia/QAudioBuffer>
 #include "bpmanalyzer.h"
-#include "keyanalyzer.h"
 #include "waveformcolors.h"
 #include "timeutils.h"
 #include "beatvisualizer.h"
@@ -153,13 +152,6 @@ public:
     // Теперь использует TimeStretchProcessor::StretchResult
     TimeStretchProcessor::StretchResult applyTimeStretch(const QVector<Marker>& markers) const;
 
-    // Потактовое отображение модуляции (смен тональности), как в Melodyne.
-    void setKeyRegions(const QVector<KeyAnalyzer::KeyRegion>& regions);
-    QVector<KeyAnalyzer::KeyRegion> getKeyRegions() const { return keyRegions; }
-    void clearKeyRegions();
-    void setShowKeyModulation(bool show);
-    bool getShowKeyModulation() const { return showKeyModulation; }
-
     void setBeatVisualizationSettings(const BeatVisualizer::VisualizationSettings& settings);
     BeatVisualizer::VisualizationSettings getBeatVisualizationSettings() const { return beatVisualizationSettings; }
     void analyzeBeats();
@@ -206,7 +198,6 @@ private:
     void drawBeatLines(QPainter& painter, const QRect& rect);
     void drawPlaybackCursor(QPainter& painter, const QRect& rect);
     void drawBarMarkers(QPainter& painter, const QRectF& rect);
-    void drawKeyModulation(QPainter& painter, const QRectF& rect);
     void drawLoopMarkers(QPainter& painter, const QRect& rect);
     void drawMarkers(QPainter& painter, const QRect& rect);
     qint64 snapSampleToGrid(qint64 samplePos) const;
@@ -263,11 +254,6 @@ private:
     bool showTimeDisplay;
     bool showBarsDisplay;
     int beatsPerBar;
-
-    // Потактовые регионы тональности (для отображения модуляции)
-    QVector<KeyAnalyzer::KeyRegion> keyRegions;
-    bool showKeyModulation = true;
-    static const int keyStripHeight;
 
     QVector<Marker> markers; // Список меток
     int draggingMarkerIndex; // Индекс перетаскиваемой метки (-1 если нет)

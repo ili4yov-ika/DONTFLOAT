@@ -115,6 +115,11 @@ public:
     /// Объединяет соседние такты с одинаковой тональностью в регионы.
     static QVector<KeyRegion> mergeBarsIntoRegions(const QVector<BarKey>& bars);
 
+    /// Наиболее частая тональность тактов, отличная от excludeKey (тональность
+    /// модуляции для отображения во втором поле над пианороллом).
+    /// Возвращает KeyInfo с key == UNKNOWN_KEY, если другой тональности нет.
+    static KeyInfo dominantModulationKey(const PerBarKeyResult& perBar, Key excludeKey);
+
     // Вспомогательные методы
     static QString keyToString(Key key);
     static Key stringToKey(const QString& keyString);

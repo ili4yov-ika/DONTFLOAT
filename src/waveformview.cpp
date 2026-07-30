@@ -28,7 +28,6 @@ const int WaveformView::minZoom = 1;
 const int WaveformView::maxZoom = 1000;
 const int WaveformView::markerHeight = 20;  // Высота области маркеров
 const int WaveformView::markerSpacing = 60;  // Минимальное расстояние между маркерами в пикселях
-const int WaveformView::keyStripHeight = 16;  // Высота полосы модуляции (тональности по тактам)
 
 // Минимальный сегмент между метками: 50 мс (в таком сегменте нельзя создавать новые метки)
 static const qint64 MIN_MARKER_SEGMENT_MS = 50;
@@ -839,10 +838,6 @@ void WaveformView::paintEvent(QPaintEvent* event)
     QRectF markerRect(0, 0, width(), markerHeight);
     drawBarMarkers(painter, markerRect);
 
-    // Рисуем полосу модуляции (потактовые тональности), как в Melodyne
-    QRectF keyStripRect(0, markerHeight, width(), keyStripHeight);
-    drawKeyModulation(painter, keyStripRect);
-
     // Рисуем курсор воспроизведения
     drawPlaybackCursor(painter, rect());
 
@@ -1244,117 +1239,6 @@ void WaveformView::drawBarMarkers(QPainter& painter, const QRectF& rect)
             painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, height()));
         }
     }
-}
-
-void WaveformView::setKeyRegions(const QVector<KeyAnalyzer::KeyRegion>& regions)
-{
-    keyRegions = regions;
-    update();
-}
-
-void WaveformView::clearKeyRegions()
-{
-    if (keyRegions.isEmpty()) {
-        return;
-    }
-    keyRegions.clear();
-    update();
-}
-
-void WaveformView::setShowKeyModulation(bool show)
-{
-    if (showKeyModulation == show) {
-        return;
-    }
-    showKeyModulation = show;
-    update();
-}
-
-namespace {
-    // Стабильный цвет тональности: тоника задаёт оттенок, лад — насыщенность.
-    QColor keyRegionColor(KeyAnalyzer::Key key)
-    {
-        if (key == KeyAnalyzer::UNKNOWN_KEY) {
-            return QColor(110, 110, 110);
-        }
-        const int idx = int(key);
-        const int tonic = idx / 2;             // 0..11 (C..B)
-        const bool isMajor = (idx % 2) == 0;
-        // Квинтовый круг для равномерного разноса оттенков соседних тональностей.
-        const int circlePos = (tonic * 7) % 12;
-        const int hue = (circlePos * 30) % 360;
-        const int sat = isMajor ? 180 : 120;
-        const int val = isMajor ? 210 : 170;
-        return QColor::fromHsv(hue, sat, val);
-    }
-}
-
-void WaveformView::drawKeyModulation(QPainter& painter, const QRectF& rect)
-{
-    if (!showKeyModulation || keyRegions.isEmpty() || audioData.isEmpty()) {
-        return;
-    }
-
-    // Отображение сэмплов в пиксели — идентично drawBarMarkers, чтобы полоса
-    // совпадала с тактовой сеткой.
-    float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
-    if (samplesPerPixel <= 0.0f) {
-        return;
-    }
-    int visibleSamples = int(width() * samplesPerPixel);
-    int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-    int startSample = int(horizontalOffset * maxStartSample);
-
-    painter.save();
-    painter.setRenderHint(QPainter::Antialiasing, false);
-    painter.setFont(QFont("Arial", 8, QFont::Bold));
-    const QFontMetrics fm = painter.fontMetrics();
-
-    for (int i = 0; i < keyRegions.size(); ++i) {
-        const KeyAnalyzer::KeyRegion& region = keyRegions[i];
-
-        float xStart = (float(region.startSample) - startSample) / samplesPerPixel;
-        float xEnd = (float(region.endSample) - startSample) / samplesPerPixel;
-
-        // Пропускаем регионы полностью вне видимой области.
-        if (xEnd < 0.0f || xStart > width()) {
-            continue;
-        }
-
-        const float clampedStart = qMax(0.0f, xStart);
-        const float clampedEnd = qMin(float(width()), xEnd);
-        const float regionWidth = clampedEnd - clampedStart;
-        if (regionWidth <= 0.5f) {
-            continue;
-        }
-
-        QRectF band(clampedStart, rect.top(), regionWidth, rect.height());
-
-        QColor color = keyRegionColor(region.key.key);
-        QColor fill = color;
-        fill.setAlpha(150);
-        painter.fillRect(band, fill);
-
-        // Граница между регионами = точка модуляции: акцентная линия.
-        if (i > 0 && xStart >= 0.0f && xStart <= width()) {
-            painter.setPen(QPen(QColor(255, 255, 255, 220), 2.0));
-            painter.drawLine(QPointF(xStart, rect.top()),
-                             QPointF(xStart, rect.bottom()));
-        }
-
-        // Название тональности, если помещается (keyName заполняется анализатором).
-        const QString label = region.key.keyName;
-        if (!label.isEmpty() && regionWidth >= fm.horizontalAdvance(label) + 6.0f) {
-            painter.setPen(QColor(20, 20, 20));
-            painter.drawText(band, Qt::AlignCenter, label);
-        }
-    }
-
-    // Нижняя окантовка полосы.
-    painter.setPen(QPen(QColor(60, 60, 60), 1));
-    painter.drawLine(QPointF(rect.left(), rect.bottom()),
-                     QPointF(rect.right(), rect.bottom()));
-    painter.restore();
 }
 
 QString WaveformView::getPositionText(qint64 position) const
