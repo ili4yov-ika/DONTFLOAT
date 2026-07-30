@@ -11,7 +11,7 @@
             </rect>
         </property>
         <property name="windowTitle">
-            <string>Анализ и выравнивание долей</string>
+            <string>Analysis and Beat Alignment</string>
         </property>
         <property name="minimumSize">
             <size>
@@ -38,7 +38,7 @@
             <item>
                 <widget class="QLabel" name="statusLabel">
                     <property name="text">
-                        <string>Анализ аудио...</string>
+                        <string>Audio analysis...</string>
                     </property>
                     <property name="styleSheet">
                         <string>font-size: 14px; font-weight: bold; color: white;</string>
@@ -82,7 +82,7 @@
             <item>
                 <widget class="QLabel" name="preliminaryBPMLabel">
                     <property name="text">
-                        <string>Предварительный BPM (на основе Mixxx): -- BPM</string>
+                        <string>Preliminary BPM (based on Mixxx): -- BPM</string>
                     </property>
                     <property name="styleSheet">
                         <string>font-size: 11px; color: white; padding: 2px;</string>
@@ -92,7 +92,7 @@
             <item>
                 <widget class="QLabel" name="computedBPMLabel">
                     <property name="text">
-                        <string>Вычисленный BPM (уверенность --%): -- BPM</string>
+                        <string>Computed BPM (confidence --%): -- BPM</string>
                     </property>
                     <property name="styleSheet">
                         <string>font-size: 11px; color: white; padding: 2px;</string>
@@ -102,7 +102,7 @@
             <item>
                 <widget class="QLabel" name="deviationLabel">
                     <property name="text">
-                        <string>Среднее отклонение: --%</string>
+                        <string>Average deviation: --%</string>
                     </property>
                     <property name="styleSheet">
                         <string>font-size: 11px; color: white; padding: 2px;</string>
@@ -117,7 +117,7 @@
                     <item>
                         <widget class="QLabel" name="timeSignatureLabel">
                             <property name="text">
-                                <string>Размер такта:</string>
+                                <string>Time signature:</string>
                             </property>
                             <property name="styleSheet">
                                 <string>font-size: 11px; color: white; padding: 2px;</string>
@@ -133,7 +133,7 @@
                                 </size>
                             </property>
                             <property name="toolTip">
-                                <string>Размер такта. Перед выравниванием можно изменить.</string>
+                                <string>Time signature (change before alignment).</string>
                             </property>
                             <property name="styleSheet">
                                 <string>font-size: 11px; color: white; padding: 4px; background: palette(base);
@@ -176,7 +176,7 @@
             <item>
                 <widget class="QCheckBox" name="keepMarkersOnSkipCheckbox">
                     <property name="text">
-                        <string>Оставить метки даже в случае пропуска самовыровнения</string>
+                        <string>Keep markers when skipping alignment</string>
                     </property>
                     <property name="checked">
                         <bool>true</bool>
@@ -220,7 +220,7 @@
                     <item>
                         <widget class="QPushButton" name="fixButton">
                             <property name="text">
-                                <string>Выровнять</string>
+                                <string>Align</string>
                             </property>
                             <property name="enabled">
                                 <bool>false</bool>
@@ -249,7 +249,7 @@
                     <item>
                         <widget class="QPushButton" name="skipButton">
                             <property name="text">
-                                <string>Пропустить</string>
+                                <string>Skip</string>
                             </property>
                             <property name="enabled">
                                 <bool>false</bool>

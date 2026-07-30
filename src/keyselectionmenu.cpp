@@ -27,11 +27,11 @@ KeySelectionMenu::KeySelectionMenu(QWidget* parent)
         }
     };
 
-    addKeys(m_menu->addMenu(tr("Мажорные")), majorKeys);
-    addKeys(m_menu->addMenu(tr("Минорные")), minorKeys);
+    addKeys(m_menu->addMenu(tr("Major")), majorKeys);
+    addKeys(m_menu->addMenu(tr("Minor")), minorKeys);
 
     m_menu->addSeparator();
-    QAction* unknownAction = m_menu->addAction(tr("Не определена"));
+    QAction* unknownAction = m_menu->addAction(tr("Undefined"));
     connect(unknownAction, &QAction::triggered, this, [this]() {
         emit keySelected(QString());
     });

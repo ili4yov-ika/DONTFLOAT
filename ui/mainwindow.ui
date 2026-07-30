@@ -87,7 +87,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Открыть файл</string>
+                                        <string>Open file</string>
                                     </property>
                                     <property name="text">
                                         <string />
@@ -120,7 +120,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Сохранить файл</string>
+                                        <string>Save file</string>
                                     </property>
                                     <property name="text">
                                         <string />
@@ -180,7 +180,7 @@
                             <item>
                                 <widget class="QLabel" name="barsLabel">
                                     <property name="text">
-                                        <string>Размер такта:</string>
+                                        <string>Time signature:</string>
                                     </property>
                                 </widget>
                             </item>
@@ -193,7 +193,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Размер такта</string>
+                                        <string>Time signature</string>
                                     </property>
                                     <item>
                                         <property name="text">
@@ -242,7 +242,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Авто-метки по транзиентам (Onset detection)</string>
+                                        <string>Auto markers (onset detection)</string>
                                     </property>
                                     <property name="text">
                                         <string>OD</string>
@@ -264,7 +264,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Сдвинуть тактовую сетку на один удар назад</string>
+                                        <string>Shift beat grid one beat back</string>
                                     </property>
                                     <property name="text">
                                         <string>&lt;</string>
@@ -286,7 +286,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Привязать все метки к тактовой сетке BPM</string>
+                                        <string>Snap all markers to BPM grid</string>
                                     </property>
                                     <property name="text">
                                         <string>BG</string>
@@ -308,7 +308,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Сдвинуть тактовую сетку на один удар вперёд</string>
+                                        <string>Shift beat grid one beat forward</string>
                                     </property>
                                     <property name="text">
                                         <string>&gt;</string>
@@ -379,7 +379,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Метроном</string>
+                                        <string>Metronome</string>
                                     </property>
                                     <property name="text">
                                         <string />
@@ -415,7 +415,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Установить точку A (начало цикла)</string>
+                                        <string>Set loop start A</string>
                                     </property>
                                     <property name="text">
                                         <string>A</string>
@@ -443,7 +443,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Установить точку B (конец цикла)</string>
+                                        <string>Set loop end B</string>
                                     </property>
                                     <property name="text">
                                         <string>B</string>
@@ -471,7 +471,7 @@
                                         </size>
                                     </property>
                                     <property name="toolTip">
-                                        <string>Включить/выключить цикл</string>
+                                        <string>Toggle loop</string>
                                     </property>
                                     <property name="text">
                                         <string />
@@ -741,8 +741,8 @@
                                                                             </property>
                                                                             <property
                                                                                 name="placeholderText">
-                                                                                <string>Не
-                                                                                    определена</string>
+                                                                                <string>Not
+                                                                                    defined</string>
                                                                             </property>
                                                                         </widget>
                                                                     </item>
@@ -783,7 +783,7 @@
                                                                             </property>
                                                                             <property
                                                                                 name="placeholderText">
-                                                                                <string>Модуляция</string>
+                                                                                <string>Modulation</string>
                                                                             </property>
                                                                         </widget>
                                                                     </item>

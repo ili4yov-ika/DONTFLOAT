@@ -236,10 +236,10 @@ void MetronomeSettingsDialog::onWeakBeatVolumeChanged(int value)
 
 void MetronomeSettingsDialog::onSelectSoundButtonClicked()
 {
-    QString fileName = QFileDialog::getOpenFileName(this, tr("Выберите звук метронома"), "", tr("Аудиофайлы (*.wav *.mp3)"));
+    QString fileName = QFileDialog::getOpenFileName(this, tr("Select Metronome Sound"), "", tr("Audio files (*.wav *.mp3)"));
     if (!fileName.isEmpty())
     {
-        ui->soundComboBox->addItem(tr("Пользовательский"), fileName);
+        ui->soundComboBox->addItem(tr("Custom"), fileName);
         ui->soundComboBox->setCurrentIndex(ui->soundComboBox->count() - 1);
     }
 }

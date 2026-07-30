@@ -17,7 +17,7 @@ BeatFixCommand::BeatFixCommand(WaveformView* view,
     , beatInfo(beats)
     , gridStartSampleValue(gridStartSample)
 {
-    setText(QObject::tr("Выравнивание долей"));
+    setText(QObject::tr("Beat alignment"));
 }
 
 void BeatFixCommand::undo()

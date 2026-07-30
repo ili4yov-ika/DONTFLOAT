@@ -106,6 +106,22 @@ tools/build_rpm.sh
 - rpmbuild
 - rpmdevtools
 
+## Локализация (i18n)
+
+Исходный язык msgid — **английский** (`tr()` / `.ui`). Каталоги: `translations/en_US.ts` (identity), `translations/ru_RU.ts` (EN→RU).
+
+```powershell
+# Проверка: в UI-строках нет кириллицы (кроме автонима «Русский»)
+python tools/check_tr_english_source.py
+
+# После правок строк
+lupdate -no-obsolete src include ui plugins/ui -ts translations/en_US.ts translations/ru_RU.ts
+python tools/finalize_translations.py
+lrelease translations/en_US.ts translations/ru_RU.ts
+```
+
+См. также: `migrate_tr_to_english.py`, `install_en_source_translations.py`, `MARKDOWN/PLAN_I18N_ENGLISH_SOURCE.md`.
+
 ## Альтернатива: CPack
 
 Проект также поддерживает CPack (встроенный в CMake). После сборки проекта:

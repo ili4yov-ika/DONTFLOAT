@@ -14,6 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  i18n-guard:
+    name: i18n (English msgid guard)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check UI source strings are English
+        run: python3 tools/check_tr_english_source.py
+
   linux:
     name: Linux (Ubuntu, Qt ${{ matrix.qt }}, GCC)
     runs-on: ubuntu-24.04

@@ -117,7 +117,7 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
 
     keyInput_ = new QLineEdit(this);
     keyInput_->setReadOnly(true);
-    keyInput_->setPlaceholderText(tr("Не определена"));
+    keyInput_->setPlaceholderText(tr("Undefined"));
     keyInput_->setMinimumWidth(120);
     keyInput_->setStyleSheet(
         "QLineEdit { background:#2b2b2b; border:1px solid #555; border-radius:2px;"
@@ -126,7 +126,7 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
 
     keyInput2_ = new QLineEdit(this);
     keyInput2_->setReadOnly(true);
-    keyInput2_->setPlaceholderText(tr("Модуляция"));
+    keyInput2_->setPlaceholderText(tr("Modulation"));
     keyInput2_->setMinimumWidth(120);
     keyInput2_->setVisible(false);
     keyInput2_->setStyleSheet(keyInput_->styleSheet());
@@ -142,10 +142,10 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     root->addWidget(pitchGrid_, 1);
 
     auto* toolbar = new QHBoxLayout();
-    importButton_ = new QPushButton(tr("Импорт WAV…"), this);
-    analyzeButton_ = new QPushButton(tr("Анализировать"), this);
-    applyButton_ = new QPushButton(tr("Применить коррекцию"), this);
-    exportButton_ = new QPushButton(tr("Экспорт WAV…"), this);
+    importButton_ = new QPushButton(tr("Import WAV…"), this);
+    analyzeButton_ = new QPushButton(tr("Analyze"), this);
+    applyButton_ = new QPushButton(tr("Apply correction"), this);
+    exportButton_ = new QPushButton(tr("Export WAV…"), this);
     applyButton_->setEnabled(false);
     toolbar->addWidget(importButton_);
     toolbar->addWidget(analyzeButton_);
@@ -158,7 +158,7 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     statusLabel_->setWordWrap(true);
     statusLabel_->setStyleSheet(QStringLiteral("color:#aeb6c8;"));
     root->addWidget(statusLabel_);
-    setStatus(tr("загрузите аудио или воспроизведите трек в DAW для захвата сигнала."));
+    setStatus(tr("load audio or play a track in the DAW to capture the signal."));
 
     analyzeOverlay_ = new QWidget(this);
     analyzeOverlay_->setStyleSheet(QStringLiteral(
@@ -167,7 +167,7 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
 
     auto* overlayLayout = new QVBoxLayout(analyzeOverlay_);
     overlayLayout->setContentsMargins(16, 12, 16, 12);
-    auto* overlayAnalyzeButton = new QPushButton(tr("Анализировать"), analyzeOverlay_);
+    auto* overlayAnalyzeButton = new QPushButton(tr("Analyze"), analyzeOverlay_);
     analyzeProgress_ = new QProgressBar(analyzeOverlay_);
     analyzeProgress_->setRange(0, 100);
     analyzeProgress_->setTextVisible(true);
@@ -260,14 +260,14 @@ void DontfloatPitchEditor::refreshFromSession()
         pitchGrid_->setAudioData(channels);
         pitchGrid_->setSampleRate(buffer.sampleRate);
         pitchGrid_->setTimelineSampleCount(buffer.frameCount());
-        setStatus(tr("аудио: %1 сэмплов, %2 Гц")
+        setStatus(tr("audio: %1 samples, %2 Hz")
                       .arg(buffer.frameCount())
                       .arg(buffer.sampleRate));
         analyzeOverlay_->setVisible(!session_->pitchAnalysis().valid && !analysisRunning_);
     } else {
         pitchGrid_->clearNotes();
         analyzeOverlay_->hide();
-        setStatus(tr("загрузите аудио или воспроизведите трек в DAW для захвата сигнала."));
+        setStatus(tr("load audio or play a track in the DAW to capture the signal."));
     }
 
     if (session_->pitchAnalysis().valid) {
@@ -369,15 +369,15 @@ void DontfloatPitchEditor::resizeEvent(QResizeEvent* event)
 void DontfloatPitchEditor::onImportAudioClicked()
 {
     const QString path = QFileDialog::getOpenFileName(
-        this, tr("%1 — импорт аудио").arg(productName_), QString(),
-        tr("Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)"));
+        this, tr("%1 — audio import").arg(productName_), QString(),
+        tr("Audio Files (*.wav *.mp3 *.flac);;All Files (*)"));
     if (path.isEmpty() || !session_) {
         return;
     }
 
     const AudioFileService::DecodeResult decoded = AudioFileService::decode(path);
     if (!decoded.ok) {
-        setStatus(tr("ошибка импорта: %1").arg(decoded.error));
+        setStatus(tr("import error: %1").arg(decoded.error));
         return;
     }
 
@@ -412,7 +412,7 @@ void DontfloatPitchEditor::runPitchAnalysis()
     const QVector<float> mono = toQVector(session_->audioBuffer().mono);
     const int sampleRate = session_->audioBuffer().sampleRate;
     if (mono.isEmpty() || sampleRate <= 0) {
-        setStatus(tr("нет аудиоданных для анализа"));
+        setStatus(tr("no audio data for analysis"));
         return;
     }
 
@@ -472,7 +472,7 @@ void DontfloatPitchEditor::onPitchAnalysisFinished()
     const QString keysText = outcome.secondaryKeyName.isEmpty()
         ? outcome.primaryKeyName
         : outcome.primaryKeyName + QStringLiteral(" / ") + outcome.secondaryKeyName;
-    setStatus(tr("анализ завершён: %1, найдено нот: %2")
+    setStatus(tr("analysis done: %1, notes found: %2")
                   .arg(keysText)
                   .arg(baseNotes_.size()));
     emit pitchSessionChanged();
@@ -486,23 +486,23 @@ void DontfloatPitchEditor::onApplyCorrectionClicked()
 
     const TrackAudioBuffer& source = session_->audioBuffer();
     if (source.mono.empty()) {
-        setStatus(tr("нет исходного аудио для коррекции"));
+        setStatus(tr("no source audio for correction"));
         return;
     }
 
     const QVector<float> mono = toQVector(source.mono);
     if (!PitchCorrection::hasPendingEdits(baseNotes_)) {
-        setStatus(tr("нет изменённых нот для коррекции"));
+        setStatus(tr("no modified notes for correction"));
         return;
     }
 
-    setStatus(tr("применение коррекции высоты…"));
+    setStatus(tr("applying pitch correction…"));
     QVector<QVector<float>> channels;
     channels.append(mono);
     const QVector<QVector<float>> corrected = PitchCorrection::apply(
         channels, baseNotes_, source.sampleRate);
     if (corrected.isEmpty() || corrected[0].isEmpty()) {
-        setStatus(tr("коррекция не удалась"));
+        setStatus(tr("correction failed"));
         return;
     }
 
@@ -519,7 +519,7 @@ void DontfloatPitchEditor::onApplyCorrectionClicked()
     baseNotes_ = fromCoreNotes(session_->pitchAnalysis().notes);
     refreshFromSession();
     applyButton_->setEnabled(false);
-    setStatus(tr("коррекция применена — обработанное аудио в сессии плагина"));
+    setStatus(tr("correction applied — processed audio is in the plugin session"));
     emit pitchSessionChanged();
 }
 
@@ -530,7 +530,7 @@ void DontfloatPitchEditor::onExportClicked()
     }
 
     const QString path = QFileDialog::getSaveFileName(
-        this, tr("%1 — экспорт WAV").arg(productName_), QString(),
+        this, tr("%1 — WAV export").arg(productName_), QString(),
         tr("WAV (*.wav)"));
     if (path.isEmpty()) {
         return;
@@ -549,10 +549,10 @@ void DontfloatPitchEditor::onExportClicked()
 
     QString error;
     if (!WavWriter::writeFile(path, channels, buffer.sampleRate, &error)) {
-        setStatus(tr("ошибка экспорта: %1").arg(error));
+        setStatus(tr("export error: %1").arg(error));
         return;
     }
-    setStatus(tr("экспортировано: %1").arg(path));
+    setStatus(tr("exported: %1").arg(path));
 }
 
 void DontfloatPitchEditor::onPrimaryKeySelected(const QString& key)

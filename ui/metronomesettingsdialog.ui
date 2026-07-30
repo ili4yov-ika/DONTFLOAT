@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Настройки метронома</string>
+   <string>Metronome Settings</string>
   </property>
   <property name="minimumSize">
    <size>
@@ -48,7 +48,7 @@
        <item>
         <widget class="QLabel" name="strongBeatLabel">
          <property name="text">
-          <string>Большие доли:</string>
+          <string>Strong beats:</string>
          </property>
          <property name="minimumSize">
           <size>
@@ -102,7 +102,7 @@
           <string>►</string>
          </property>
          <property name="toolTip">
-          <string>Воспроизвести звук большой доли с текущей громкостью для настройки метронома</string>
+          <string>Play downbeat at current volume (metronome)</string>
          </property>
          <property name="maximumSize">
           <size>
@@ -122,7 +122,7 @@
        <item>
         <widget class="QLabel" name="weakBeatLabel">
          <property name="text">
-          <string>Малые доли:</string>
+          <string>Weak beats:</string>
          </property>
          <property name="minimumSize">
           <size>
@@ -176,7 +176,7 @@
           <string>►</string>
          </property>
          <property name="toolTip">
-          <string>Воспроизвести звук малой доли с текущей громкостью для настройки метронома</string>
+          <string>Play upbeat at current volume (metronome)</string>
          </property>
          <property name="maximumSize">
           <size>
@@ -198,7 +198,7 @@
      <item>
       <widget class="QLabel" name="soundLabel">
        <property name="text">
-        <string>Звук:</string>
+        <string>Sound:</string>
        </property>
        <property name="minimumSize">
         <size>
@@ -212,7 +212,7 @@
       <widget class="QComboBox" name="soundComboBox">
        <item>
         <property name="text">
-         <string>Щелчок (стандартный)</string>
+         <string>Click (default)</string>
         </property>
         <property name="userData">
          <string>click</string>
@@ -230,10 +230,10 @@
      <item>
       <widget class="QPushButton" name="selectSoundButton">
        <property name="text">
-        <string>Выбрать звук</string>
+        <string>Choose sound</string>
        </property>
        <property name="toolTip">
-        <string>Выберите пользовательский звук для метронома</string>
+        <string>Choose custom metronome sound</string>
        </property>
       </widget>
      </item>
@@ -255,7 +255,7 @@
    <item>
     <widget class="QLabel" name="statusLabel">
      <property name="text">
-      <string>Статус: загрузка...</string>
+      <string>Status: loading...</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>

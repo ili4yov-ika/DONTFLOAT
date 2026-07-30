@@ -13,7 +13,7 @@
 SpectrogramSettingsDialog::SpectrogramSettingsDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle(tr("Настройки спектрограммы"));
+    setWindowTitle(tr("Spectrogram settings"));
     setModal(false);
     buildUi();
 }
@@ -30,18 +30,18 @@ void SpectrogramSettingsDialog::buildUi()
     windowSizeCombo->addItem("1024", 1024);
     windowSizeCombo->addItem("2048", 2048);
     windowSizeCombo->setCurrentIndex(2); // 1024 по умолчанию
-    windowSizeCombo->setToolTip(tr("Размер FFT-окна. Больше — выше разрешение по частоте, ниже по времени."));
-    form->addRow(tr("Размер FFT-окна:"), windowSizeCombo);
+    windowSizeCombo->setToolTip(tr("FFT window. Larger = better frequency resolution, lower time resolution."));
+    form->addRow(tr("FFT window:"), windowSizeCombo);
 
     // --- Оконная функция ---
     windowFuncCombo = new QComboBox(this);
-    windowFuncCombo->addItem(tr("Прямоугольная"),   0);
+    windowFuncCombo->addItem(tr("Rectangular"),   0);
     windowFuncCombo->addItem(tr("Blackman-Harris"), 1);
     windowFuncCombo->addItem(tr("Hamming"),         2);
     windowFuncCombo->addItem(tr("Hanning"),         3);
     windowFuncCombo->setCurrentIndex(1); // Blackman-Harris
-    windowFuncCombo->setToolTip(tr("Оконная функция влияет на подавление боковых лепестков.\nBlackman-Harris — лучший выбор для спектрограмм."));
-    form->addRow(tr("Оконная функция:"), windowFuncCombo);
+    windowFuncCombo->setToolTip(tr("Window function; Blackman-Harris is a good default."));
+    form->addRow(tr("Window function:"), windowFuncCombo);
 
     // --- Временное разрешение ---
     maxFramesSlider = new QSlider(Qt::Horizontal, this);
@@ -49,13 +49,13 @@ void SpectrogramSettingsDialog::buildUi()
     maxFramesSlider->setSingleStep(64);
     maxFramesSlider->setPageStep(128);
     maxFramesSlider->setValue(512);
-    maxFramesSlider->setToolTip(tr("Количество временных кадров. Больше — детальнее по времени, медленнее генерация."));
-    maxFramesLabel = new QLabel(tr("512 кадров"), this);
+    maxFramesSlider->setToolTip(tr("Time frames; more = finer time resolution, slower render."));
+    maxFramesLabel = new QLabel(tr("512 frames"), this);
     {
         auto* row = new QHBoxLayout;
         row->addWidget(maxFramesSlider);
         row->addWidget(maxFramesLabel);
-        form->addRow(tr("Временное разрешение:"), row);
+        form->addRow(tr("Time resolution:"), row);
     }
 
     // --- Частотные полосы ---
@@ -64,58 +64,58 @@ void SpectrogramSettingsDialog::buildUi()
     freqBinsSlider->setSingleStep(16);
     freqBinsSlider->setPageStep(32);
     freqBinsSlider->setValue(256);
-    freqBinsSlider->setToolTip(tr("Число отображаемых частотных полос."));
-    freqBinsLabel = new QLabel(tr("256 полос"), this);
+    freqBinsSlider->setToolTip(tr("Number of frequency bands."));
+    freqBinsLabel = new QLabel(tr("256 bands"), this);
     {
         auto* row = new QHBoxLayout;
         row->addWidget(freqBinsSlider);
         row->addWidget(freqBinsLabel);
-        form->addRow(tr("Частотные полосы:"), row);
+        form->addRow(tr("Frequency bands:"), row);
     }
 
     // --- Цветовая схема ---
     colorSchemeCombo = new QComboBox(this);
-    colorSchemeCombo->addItem(tr("Тепловая карта"), 0);
-    colorSchemeCombo->addItem(tr("Оттенки серого"), 1);
-    colorSchemeCombo->addItem(tr("Холодная (cyan)"), 2);
-    form->addRow(tr("Цветовая схема:"), colorSchemeCombo);
+    colorSchemeCombo->addItem(tr("Heat map"), 0);
+    colorSchemeCombo->addItem(tr("Grayscale"), 1);
+    colorSchemeCombo->addItem(tr("Cool (cyan)"), 2);
+    form->addRow(tr("Color scheme:"), colorSchemeCombo);
 
     mainLayout->addLayout(form);
 
     // --- Группа дополнительных параметров ---
-    auto* advGroup = new QGroupBox(tr("Шкалы"), this);
+    auto* advGroup = new QGroupBox(tr("Scales"), this);
     auto* advLayout = new QFormLayout(advGroup);
 
-    logFreqCheck = new QCheckBox(tr("Логарифмическая шкала частот"), this);
+    logFreqCheck = new QCheckBox(tr("Log frequency scale"), this);
     logFreqCheck->setChecked(true);
-    logFreqCheck->setToolTip(tr("Логарифмическая шкала частот (рекомендуется для музыки).\nЛинейная показывает равные частотные интервалы."));
+    logFreqCheck->setToolTip(tr("Log scale (good for music). Linear = equal spacing."));
     advLayout->addRow(logFreqCheck);
 
-    dbAmplCheck = new QCheckBox(tr("Амплитуда в дБ"), this);
+    dbAmplCheck = new QCheckBox(tr("Amplitude (dB)"), this);
     dbAmplCheck->setChecked(true);
-    dbAmplCheck->setToolTip(tr("Отображение амплитуды в логарифмическом (дБ) масштабе.\nЛучше показывает слабые детали."));
+    dbAmplCheck->setToolTip(tr("dB amplitude scale; better for quiet detail."));
     advLayout->addRow(dbAmplCheck);
 
     floorDbSpin = new QDoubleSpinBox(this);
     floorDbSpin->setRange(-120.0, -20.0);
     floorDbSpin->setSingleStep(5.0);
     floorDbSpin->setValue(-90.0);
-    floorDbSpin->setSuffix(tr(" дБ"));
-    floorDbSpin->setToolTip(tr("Нижняя граница шкалы дБ. Более отрицательное значение — больше деталей в тихих частях."));
-    advLayout->addRow(tr("Нижний порог дБ:"), floorDbSpin);
+    floorDbSpin->setSuffix(tr(" dB"));
+    floorDbSpin->setToolTip(tr("dB floor; more negative = more quiet detail."));
+    advLayout->addRow(tr("Floor (dB):"), floorDbSpin);
 
     mainLayout->addWidget(advGroup);
 
     // --- Подсказка ---
     auto* note = new QLabel(
-        tr("<small><i>Изменения применяются сразу, если включён режим «Спектрограмма».</i></small>"),
+        tr("<small><i>Applies when Spectrogram mode is on.</i></small>"),
         this);
     note->setWordWrap(true);
     mainLayout->addWidget(note);
 
     mainLayout->addStretch();
 
-    closeBtn = new QPushButton(tr("Закрыть"), this);
+    closeBtn = new QPushButton(tr("Close"), this);
     mainLayout->addWidget(closeBtn, 0, Qt::AlignRight);
 
     setFixedWidth(400);
@@ -126,11 +126,11 @@ void SpectrogramSettingsDialog::buildUi()
     connect(windowFuncCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SpectrogramSettingsDialog::onAnyChange);
     connect(maxFramesSlider, &QSlider::valueChanged, this, [this](int v) {
-        maxFramesLabel->setText(tr("%1 кадров").arg(v));
+        maxFramesLabel->setText(tr("%1 frames").arg(v));
         onAnyChange();
     });
     connect(freqBinsSlider, &QSlider::valueChanged, this, [this](int v) {
-        freqBinsLabel->setText(tr("%1 полос").arg(v));
+        freqBinsLabel->setText(tr("%1 bands").arg(v));
         onAnyChange();
     });
     connect(colorSchemeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -167,10 +167,10 @@ void SpectrogramSettingsDialog::setSettings(const WaveformView::SpectrogramSetti
     windowFuncCombo->setCurrentIndex(static_cast<int>(s.windowFunction));
 
     maxFramesSlider->setValue(s.maxFrames);
-    maxFramesLabel->setText(tr("%1 кадров").arg(s.maxFrames));
+    maxFramesLabel->setText(tr("%1 frames").arg(s.maxFrames));
 
     freqBinsSlider->setValue(s.freqBins);
-    freqBinsLabel->setText(tr("%1 полос").arg(s.freqBins));
+    freqBinsLabel->setText(tr("%1 bands").arg(s.freqBins));
 
     colorSchemeCombo->setCurrentIndex(static_cast<int>(s.colorScheme));
     logFreqCheck->setChecked(s.logFreqScale);

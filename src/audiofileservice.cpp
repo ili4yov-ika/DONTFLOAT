@@ -66,13 +66,13 @@ QString decoderErrorText(QAudioDecoder::Error error)
 {
     switch (error) {
     case QAudioDecoder::ResourceError:
-        return QCoreApplication::translate("AudioFileService", "файл не найден или недоступен");
+        return QCoreApplication::translate("AudioFileService", "file not found or inaccessible");
     case QAudioDecoder::FormatError:
-        return QCoreApplication::translate("AudioFileService", "неподдерживаемый формат");
+        return QCoreApplication::translate("AudioFileService", "unsupported format");
     case QAudioDecoder::AccessDeniedError:
-        return QCoreApplication::translate("AudioFileService", "нет доступа к файлу");
+        return QCoreApplication::translate("AudioFileService", "no file access");
     default:
-        return QCoreApplication::translate("AudioFileService", "неизвестная ошибка");
+        return QCoreApplication::translate("AudioFileService", "unknown error");
     }
 }
 
@@ -162,7 +162,7 @@ DecodeResult decode(const QString& filePath, const std::function<void(int)>& onP
 
     if (leftChannel.isEmpty()) {
         result.error = QCoreApplication::translate("AudioFileService",
-                                                   "не удалось декодировать аудиоданные");
+                                                   "failed to decode audio data");
         return result;
     }
 
