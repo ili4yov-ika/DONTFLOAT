@@ -67,7 +67,7 @@ void blendInto(QVector<float>& channel, const QVector<float>& processed, int sta
 bool hasPendingEdits(const QVector<PitchDetector::PitchNote>& notes)
 {
     for (const PitchDetector::PitchNote& note : notes) {
-        if (note.midiPitch != note.detectedPitch) {
+        if (std::abs(note.midiPitch - note.detectedPitch) > 0.01f) {
             return true;
         }
     }
@@ -86,8 +86,8 @@ QVector<QVector<float>> apply(const QVector<QVector<float>>& channels,
     const qint64 totalSamples = channels[0].size();
 
     for (const PitchDetector::PitchNote& note : notes) {
-        const int semitones = note.midiPitch - note.detectedPitch;
-        if (semitones == 0) {
+        const float semitones = note.midiPitch - note.detectedPitch;
+        if (std::abs(semitones) < 0.01f) {
             continue;
         }
         const qint64 start = qBound<qint64>(0, note.startSample, totalSamples);
@@ -97,7 +97,7 @@ QVector<QVector<float>> apply(const QVector<QVector<float>>& channels,
             continue;
         }
 
-        const float ratio = std::pow(2.0f, float(semitones) / 12.0f);
+        const float ratio = std::pow(2.0f, semitones / 12.0f);
         for (QVector<float>& channel : out) {
             QVector<float> segment(len);
             std::copy(channel.constBegin() + start,

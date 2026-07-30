@@ -36,4 +36,7 @@
 
 <@LV2_UI_URI@>
     a @LV2_UI_TYPE@ ;
-    ui:binary <@LV2_UI_BINARY@@LV2_BINARY_EXT@> .
+    ui:binary <@LV2_UI_BINARY@@LV2_BINARY_EXT@> ;
+    lv2:optionalFeature ui:idleInterface ;
+    lv2:optionalFeature ui:parent ;
+    lv2:optionalFeature ui:resize .

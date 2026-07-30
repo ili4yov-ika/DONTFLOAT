@@ -3,6 +3,7 @@
 #include <QtCore/QtMath>
 #include <QtGui/QPainter>
 #include <QtWidgets/QApplication>
+#include <cmath>
 
 PitchGridWidget::PitchGridWidget(QWidget *parent)
     : QWidget(parent)
@@ -25,7 +26,8 @@ PitchGridWidget::PitchGridWidget(QWidget *parent)
     , selectedPitch(-1)
     , selectedNoteIndex(-1)
     , isNoteDragging(false)
-    , noteDragStartPitch(0)
+    , noteDragStartPitch(0.0f)
+    , noteDragFreePitch(false)
 {
     primaryKey = PianoRollEngine::KeySignature::fromString(QStringLiteral("C Major"));
     setMinimumHeight(kMinVisiblePitchRows * kPitchRowHeightPx);
@@ -302,12 +304,12 @@ void PitchGridWidget::clearNotes()
     update();
 }
 
-void PitchGridWidget::setNotePitch(int noteIndex, int midiPitch)
+void PitchGridWidget::setNotePitch(int noteIndex, float midiPitch)
 {
     if (noteIndex < 0 || noteIndex >= pitchNotes.size()) {
         return;
     }
-    pitchNotes[noteIndex].midiPitch = qBound(0, midiPitch, 127);
+    pitchNotes[noteIndex].midiPitch = qBound(0.0f, midiPitch, 127.0f);
     update();
 }
 
@@ -482,8 +484,8 @@ QRectF PitchGridWidget::noteRect(const PitchDetector::PitchNote& note) const
     const auto viewport = currentViewport();
     const float x1 = timelineToContentX(viewport.sampleToPixelX(note.startSample));
     const float x2 = timelineToContentX(viewport.sampleToPixelX(note.endSample));
-    const int yTop = (maxPitch - note.midiPitch) * kPitchRowHeightPx - verticalScrollPixels();
-    return QRectF(x1, yTop + 1, qMax(2.0f, x2 - x1), kPitchRowHeightPx - 2);
+    const float yTop = pitchToContentY(note.midiPitch);
+    return QRectF(x1, yTop + 1.0f, qMax(2.0f, x2 - x1), kPitchRowHeightPx - 2);
 }
 
 void PitchGridWidget::drawNoteBlocks(QPainter& painter, const QRect& rect) const
@@ -503,7 +505,7 @@ void PitchGridWidget::drawNoteBlocks(QPainter& painter, const QRect& rect) const
             continue;
         }
 
-        const bool edited = note.midiPitch != note.detectedPitch;
+        const bool edited = std::abs(note.midiPitch - note.detectedPitch) > 0.01f;
         QColor fill = edited ? theme.noteEditedFill : theme.noteFill;
         // Слабые (неуверенные) ноты — полупрозрачнее
         if (note.confidence < 0.5f) {
@@ -539,14 +541,34 @@ void PitchGridWidget::changeSelectedNotePitch(int semitoneDelta)
         return;
     }
     PitchDetector::PitchNote& note = pitchNotes[selectedNoteIndex];
-    const int oldPitch = note.midiPitch;
-    const int newPitch = qBound(0, oldPitch + semitoneDelta, 127);
-    if (newPitch == oldPitch) {
+    const float oldPitch = note.midiPitch;
+    // Клавиши двигают по полутонам от ближайшего целого (как snap-сетка).
+    const float base = std::round(oldPitch);
+    const float newPitch = qBound(0.0f, base + float(semitoneDelta), 127.0f);
+    if (std::abs(newPitch - oldPitch) < 1.0e-4f) {
         return;
     }
     note.midiPitch = newPitch;
     update();
     emit notePitchEdited(selectedNoteIndex, oldPitch, newPitch);
+}
+
+float PitchGridWidget::pitchToContentY(float midiPitch) const
+{
+    return (float(maxPitch) - midiPitch) * float(kPitchRowHeightPx)
+        - float(verticalScrollPixels());
+}
+
+int PitchGridWidget::getPitchFromY(int y) const
+{
+    return int(std::lround(getContinuousPitchFromY(float(y))));
+}
+
+float PitchGridWidget::getContinuousPitchFromY(float y) const
+{
+    const float adjustedY = y + float(verticalScrollPixels());
+    const float pitch = float(maxPitch) - adjustedY / float(kPitchRowHeightPx);
+    return qBound(float(minPitch), pitch, float(maxPitch));
 }
 
 void PitchGridWidget::drawPlaybackCursor(QPainter& painter, const QRect& rect) const
@@ -565,14 +587,6 @@ void PitchGridWidget::drawPlaybackCursor(QPainter& painter, const QRect& rect) c
              << QPointF(cursorX, rect.top() + 15);
     painter.setBrush(theme.cursor);
     painter.drawPolygon(triangle);
-}
-
-int PitchGridWidget::getPitchFromY(int y) const
-{
-    const int verticalOffsetPixels = verticalScrollPixels();
-    const int adjustedY = y + verticalOffsetPixels;
-    const int pitch = maxPitch - (adjustedY / kPitchRowHeightPx);
-    return qBound(minPitch, pitch, maxPitch);
 }
 
 qint64 PitchGridWidget::getPositionFromX(int x) const
@@ -596,11 +610,13 @@ void PitchGridWidget::mousePressEvent(QMouseEvent *event)
         setFocus(Qt::MouseFocusReason);
         lastMousePos = event->pos();
 
-        // Сначала пробуем захватить ноту: drag по вертикали меняет её высоту
+        // Сначала пробуем захватить ноту: drag по вертикали меняет её высоту.
+        // Alt + ЛКМ — свободный (дробный) питч мимо полутоновой сетки, как в Melodyne.
         const int noteIndex = noteIndexAt(event->pos());
         if (noteIndex >= 0) {
             selectedNoteIndex = noteIndex;
             isNoteDragging = true;
+            noteDragFreePitch = (event->modifiers() & Qt::AltModifier) != 0;
             noteDragStartPitch = pitchNotes[noteIndex].midiPitch;
             setCursor(Qt::SizeVerCursor);
             update();
@@ -640,8 +656,14 @@ void PitchGridWidget::mouseMoveEvent(QMouseEvent *event)
 
     if (isNoteDragging && (event->buttons() & Qt::LeftButton)) {
         if (selectedNoteIndex >= 0 && selectedNoteIndex < pitchNotes.size()) {
-            const int targetPitch = getPitchFromY(event->pos().y());
-            if (targetPitch != pitchNotes[selectedNoteIndex].midiPitch) {
+            // Alt можно зажать/отпустить во время drag.
+            noteDragFreePitch = (event->modifiers() & Qt::AltModifier) != 0;
+            float targetPitch = getContinuousPitchFromY(float(event->pos().y()));
+            if (!noteDragFreePitch) {
+                targetPitch = std::round(targetPitch);
+            }
+            targetPitch = qBound(0.0f, targetPitch, 127.0f);
+            if (std::abs(targetPitch - pitchNotes[selectedNoteIndex].midiPitch) > 1.0e-4f) {
                 pitchNotes[selectedNoteIndex].midiPitch = targetPitch;
                 update();
                 emit notePreviewPitchChanged(selectedNoteIndex, targetPitch);
@@ -672,11 +694,12 @@ void PitchGridWidget::mouseReleaseEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton) {
         if (isNoteDragging) {
             isNoteDragging = false;
+            noteDragFreePitch = false;
             setCursor(Qt::ArrowCursor);
             emit notePreviewStopped();
             if (selectedNoteIndex >= 0 && selectedNoteIndex < pitchNotes.size()) {
-                const int newPitch = pitchNotes[selectedNoteIndex].midiPitch;
-                if (newPitch != noteDragStartPitch) {
+                const float newPitch = pitchNotes[selectedNoteIndex].midiPitch;
+                if (std::abs(newPitch - noteDragStartPitch) > 1.0e-4f) {
                     emit notePitchEdited(selectedNoteIndex, noteDragStartPitch, newPitch);
                 }
             }

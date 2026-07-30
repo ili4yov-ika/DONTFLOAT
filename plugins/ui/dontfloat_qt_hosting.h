@@ -3,7 +3,8 @@
 
 namespace Dontfloat::Plugins::Ui {
 
-void ensureQtApplication();
+/** Создаёт QApplication при необходимости и задаёт имя приложения продукта. */
+void ensureQtApplication(const char* applicationName = "DONTFLOAT");
 
 } // namespace Dontfloat::Plugins::Ui
 

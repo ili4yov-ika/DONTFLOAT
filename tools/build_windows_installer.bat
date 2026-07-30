@@ -105,9 +105,43 @@ if exist "C:\Qt\6.9.3\msvc2022_64\bin\windeployqt.exe" set "WINDEPLOYQT=C:\Qt\6.
 if exist "C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe" set "WINDEPLOYQT=C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe"
 if defined WINDEPLOYQT (
     "%WINDEPLOYQT%" --release "%INSTALL_DIR%\bin\DONTFLOAT.exe"
-    if %ERRORLEVEL% NEQ 0 echo [WARN] windeployqt finished with error
+    if %ERRORLEVEL% NEQ 0 echo [WARN] windeployqt finished with error for app
+
+    REM Qt рядом с DAW-плагинами — без этого host не загружает модули
+    set "QT_ROOT_DIR="
+    for %%I in ("%WINDEPLOYQT%") do set "QT_BIN=%%~dpI"
+    for %%I in ("%QT_BIN%..") do set "QT_ROOT_DIR=%%~fI"
+
+    if exist "%INSTALL_DIR%\lib\clap\dontfloat_clap.impl.dll" (
+        echo   Deploying Qt for CLAP plugins...
+        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\clap" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\clap\dontfloat_clap.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+    )
+    if exist "%INSTALL_DIR%\lib\lv2\dontfloat.lv2\dontfloat_ui.impl.dll" (
+        echo   Deploying Qt for LV2 Full UI...
+        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\lv2\dontfloat.lv2" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\lv2\dontfloat.lv2\dontfloat_ui.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+    )
+    if exist "%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2\dontfloat_scratch_ui.impl.dll" (
+        echo   Deploying Qt for LV2 Scratch UI...
+        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2\dontfloat_scratch_ui.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+    )
+    if exist "%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2\dontfloat_pitcher_ui.impl.dll" (
+        echo   Deploying Qt for LV2 Pitcher UI...
+        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2\dontfloat_pitcher_ui.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+    )
+    if exist "%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win\DONTFLOAT.vst3.impl.dll" (
+        echo   Deploying Qt for VST3 Full...
+        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win\DONTFLOAT.vst3.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+    )
+    if exist "%INSTALL_DIR%\lib\vst3\DONTFLOAT Scratch.vst3\Contents\x86_64-win\DONTFLOAT Scratch.vst3.impl.dll" (
+        echo   Deploying Qt for VST3 Scratch...
+        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\vst3\DONTFLOAT Scratch.vst3\Contents\x86_64-win" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\vst3\DONTFLOAT Scratch.vst3\Contents\x86_64-win\DONTFLOAT Scratch.vst3.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+    )
+    if exist "%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win\DONTFLOAT Pitcher.vst3.impl.dll" (
+        echo   Deploying Qt for VST3 Pitcher...
+        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win\DONTFLOAT Pitcher.vst3.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+    )
 ) else (
-    echo [WARN] windeployqt not found - installer may lack Qt DLLs
+    echo [WARN] windeployqt not found - installer may lack Qt DLLs for app and plugins
 )
 
 echo [5/5] Creating NSIS installer...

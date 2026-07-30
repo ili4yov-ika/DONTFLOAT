@@ -81,9 +81,12 @@ undo, live preview при редактировании, offline pitch-корре
 
 | Продукт | CLAP ID | Editor |
 |---------|---------|--------|
-| **DONTFLOAT** | `com.dontfloat.full` | Scratch + Pitch (`DontfloatFullEditor`) |
-| **DONTFLOAT Scratch** | `com.dontfloat.scratch` | Waveform + BPM (`DontfloatScratchEditor`) |
-| **DONTFLOAT Pitcher** | `com.dontfloat.pitcher` | Пианоролл (`DontfloatPitchEditor`) |
+| **DONTFLOAT** | `com.dontfloat.full` | Header + Scratch (BPM/grid/markers/stretch/export) + Pitch |
+| **DONTFLOAT Scratch** | `com.dontfloat.scratch` | Waveform, BPM/beat grid, align, stretch markers, export |
+| **DONTFLOAT Pitcher** | `com.dontfloat.pitcher` | Пианоролл, key, анализ нот, коррекция, export |
+
+Каждый editor показывает **имя своего продукта** в заголовке shell и в статусной строке;
+`setWindowTitle` / `QApplication::setApplicationName` берутся из `PluginProductDesc`.
 
 Общая инфраструктура: `plugins/core/plugin_product.*`, `DontfloatPluginEditorShell`,
 параметризованные `dontfloat_*_plugin_impl.cpp` с `DONTFLOAT_PLUGIN_PRODUCT_INDEX`,

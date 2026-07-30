@@ -84,3 +84,19 @@ $env:DONTFLOAT_RUN_UI_TEST = "1"
 cmake --build build/Debug --config Debug --target pitch_compensation_file_test
 .\build\Debug\Debug\pitch_compensation_file_test.exe -v2
 ```
+
+### pitch/ (MIDI → WAV фикстуры для PitchDetector)
+
+Генерация:
+
+```powershell
+python tools/generate_pitch_test_fixtures.py
+```
+
+Файлы в `tests/source4test/pitch/`:
+- `scale_c0_c4` — C0…C4
+- `melody_c_major` — мелодия C-major
+- `vibrato_a3` — A3 с ±20 cent vibrato
+- `detuned_e3` — E3 +35 cents
+
+Тест: `pitch_detector_accuracy_test`.

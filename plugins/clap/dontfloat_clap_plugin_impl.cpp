@@ -4,6 +4,8 @@
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
 
+#include <QString>
+
 #include <algorithm>
 #include <cstring>
 #include <memory>
@@ -182,9 +184,10 @@ bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
         return false;
     }
 
-    ensureQtApplication();
+    ensureQtApplication(desc().clapName);
     s->editor = std::make_unique<DontfloatPluginEditorShell>(product());
     s->editor->bindSession(&s->session);
+    s->editor->setWindowTitle(QString::fromUtf8(desc().clapName));
     s->editor->resize(int(s->editorWidth), int(s->editorHeight));
     s->editor->setAttribute(Qt::WA_NativeWindow, true);
     return true;
@@ -264,7 +267,10 @@ bool guiSetParent(const clap_plugin_t* plugin, const clap_window_t* window)
 
 bool guiSetTransient(const clap_plugin_t*, const clap_window_t*) { return false; }
 
-void guiSuggestTitle(const clap_plugin_t*, const char*) {}
+void guiSuggestTitle(const clap_plugin_t*, const char* title)
+{
+    (void)title;
+}
 
 bool guiShow(const clap_plugin_t* plugin)
 {

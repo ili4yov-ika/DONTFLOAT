@@ -1,17 +1,20 @@
 #include "dontfloat_scratch_editor.h"
 
 #include "../../include/audiofileservice.h"
-#include "../../include/bpmanalyzer.h"
+#include "../../include/markerengine.h"
+#include "../../include/timeutils.h"
+#include "../../include/timestretchprocessor.h"
+#include "../../include/wavwriter.h"
 #include "../../include/waveformview.h"
 
 #include <QFileDialog>
-#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QtConcurrent/QtConcurrent>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 namespace Dontfloat::Plugins::Ui {
@@ -48,14 +51,46 @@ QVector<QVector<float>> channelsFromBuffer(const TrackAudioBuffer& buffer)
     return channels;
 }
 
+QVector<BPMAnalyzer::BeatInfo> createAlignedBeatGrid(float bpm,
+                                                     qint64 gridStartSample,
+                                                     qint64 totalSamples,
+                                                     int sampleRate,
+                                                     const QVector<QVector<float>>& audioData)
+{
+    QVector<BPMAnalyzer::BeatInfo> alignedBeats;
+    if (bpm <= 0.0f || totalSamples <= 0 || sampleRate <= 0) {
+        return alignedBeats;
+    }
+
+    const float beatInterval = (60.0f * float(sampleRate)) / bpm;
+    qint64 pos = gridStartSample;
+    while (pos < totalSamples) {
+        BPMAnalyzer::BeatInfo beat;
+        beat.position = pos;
+        beat.expectedPosition = pos;
+        beat.confidence = 1.0f;
+        beat.deviation = 0.0f;
+        beat.energy = 0.0f;
+        if (pos >= 0 && !audioData.isEmpty() && pos < audioData[0].size()) {
+            beat.energy = std::abs(audioData[0][static_cast<int>(pos)]);
+        }
+        alignedBeats.append(beat);
+        pos += static_cast<qint64>(beatInterval);
+    }
+    return alignedBeats;
+}
+
 } // namespace
 
-DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent)
+DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& productName)
     : QWidget(parent)
-    , bpmWatcher_(new QFutureWatcher<float>(this))
+    , productName_(productName)
+    , bpmWatcher_(new QFutureWatcher<BPMAnalyzer::AnalysisResult>(this))
+    , alignWatcher_(new QFutureWatcher<QVector<QVector<float>>>(this))
 {
     setObjectName(QStringLiteral("dontfloatScratchEditor"));
     setMinimumSize(900, 480);
+    setWindowTitle(productName_);
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(8, 8, 8, 8);
@@ -64,25 +99,66 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent)
     auto* toolbar = new QHBoxLayout();
     importButton_ = new QPushButton(tr("Импорт WAV…"), this);
     analyzeButton_ = new QPushButton(tr("Анализ BPM"), this);
+    alignButton_ = new QPushButton(tr("Выровнять доли"), this);
+    applyStretchButton_ = new QPushButton(tr("Применить stretch"), this);
+    exportButton_ = new QPushButton(tr("Экспорт WAV…"), this);
     toolbar->addWidget(importButton_);
     toolbar->addWidget(analyzeButton_);
+    toolbar->addWidget(alignButton_);
+    toolbar->addWidget(applyStretchButton_);
+    toolbar->addWidget(exportButton_);
     toolbar->addStretch(1);
     root->addLayout(toolbar);
 
     waveform_ = new WaveformView(this);
     waveform_->setMinimumHeight(320);
+    waveform_->setBeatsPerBar(beatsPerBar_);
     root->addWidget(waveform_, 1);
 
-    statusLabel_ = new QLabel(
-        tr("DONTFLOAT Scratch: загрузите аудио или воспроизведите трек в DAW для захвата сигнала."),
-        this);
+    statusLabel_ = new QLabel(this);
     statusLabel_->setWordWrap(true);
     statusLabel_->setStyleSheet(QStringLiteral("color:#aeb6c8;"));
     root->addWidget(statusLabel_);
+    setStatus(tr("загрузите аудио или воспроизведите трек в DAW для захвата сигнала."));
 
     connect(importButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onImportAudioClicked);
     connect(analyzeButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onAnalyzeBpmClicked);
-    connect(bpmWatcher_, &QFutureWatcher<float>::finished, this, &DontfloatScratchEditor::onBpmAnalysisFinished);
+    connect(alignButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onAlignBeatsClicked);
+    connect(applyStretchButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onApplyStretchClicked);
+    connect(exportButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onExportClicked);
+    connect(bpmWatcher_, &QFutureWatcher<BPMAnalyzer::AnalysisResult>::finished,
+            this, &DontfloatScratchEditor::onBpmAnalysisFinished);
+    connect(alignWatcher_, &QFutureWatcher<QVector<QVector<float>>>::finished,
+            this, &DontfloatScratchEditor::onAlignFinished);
+    connect(waveform_, &WaveformView::markersChanged, this, &DontfloatScratchEditor::onMarkersChanged);
+
+    updateActionButtons();
+}
+
+void DontfloatScratchEditor::setProductName(const QString& productName)
+{
+    productName_ = productName;
+    setWindowTitle(productName_);
+    refreshFromSession();
+}
+
+void DontfloatScratchEditor::setStatus(const QString& text)
+{
+    if (!statusLabel_) {
+        return;
+    }
+    statusLabel_->setText(QStringLiteral("%1: %2").arg(productName_, text));
+}
+
+void DontfloatScratchEditor::updateActionButtons()
+{
+    const bool hasAudio = session_ && !session_->audioBuffer().empty();
+    const bool hasBpm = lastAnalysis_.bpm > 0.0f;
+    const bool busy = analysisRunning_ || alignRunning_;
+    analyzeButton_->setEnabled(hasAudio && !busy);
+    alignButton_->setEnabled(hasAudio && hasBpm && !busy);
+    applyStretchButton_->setEnabled(hasAudio && waveform_ && waveform_->hasTimelineStretch() && !busy);
+    exportButton_->setEnabled(hasAudio && !busy);
 }
 
 void DontfloatScratchEditor::bindSession(TrackToolSession* session)
@@ -94,6 +170,7 @@ void DontfloatScratchEditor::bindSession(TrackToolSession* session)
 void DontfloatScratchEditor::refreshFromSession()
 {
     refreshWaveform();
+    updateActionButtons();
 }
 
 void DontfloatScratchEditor::notifyHostAudioAppended()
@@ -108,17 +185,50 @@ void DontfloatScratchEditor::refreshWaveform()
     }
     const TrackAudioBuffer& buffer = session_->audioBuffer();
     if (buffer.empty()) {
-        statusLabel_->setText(
-            tr("DONTFLOAT Scratch: загрузите аудио или воспроизведите трек в DAW для захвата сигнала."));
+        waveform_->setAudioData({});
+        waveform_->clearMarkers();
+        lastAnalysis_ = {};
+        setStatus(tr("загрузите аудио или воспроизведите трек в DAW для захвата сигнала."));
         return;
     }
 
     const QVector<QVector<float>> channels = channelsFromBuffer(buffer);
     waveform_->setAudioData(channels);
     waveform_->setSampleRate(buffer.sampleRate);
-    statusLabel_->setText(tr("Аудио: %1 сэмплов, %2 Гц")
-                              .arg(buffer.frameCount())
-                              .arg(buffer.sampleRate));
+
+    if (lastAnalysis_.bpm > 0.0f) {
+        waveform_->setBeatInfo(lastAnalysis_.beats);
+        waveform_->setGridStartSample(lastAnalysis_.gridStartSample);
+        waveform_->setBPM(lastAnalysis_.bpm);
+        waveform_->setBeatsPerBar(beatsPerBar_);
+        setStatus(tr("аудио %1 сэмплов @ %2 Гц · BPM %3")
+                      .arg(buffer.frameCount())
+                      .arg(buffer.sampleRate)
+                      .arg(double(lastAnalysis_.bpm), 0, 'f', 2));
+    } else {
+        setStatus(tr("аудио: %1 сэмплов, %2 Гц — нажмите «Анализ BPM»")
+                      .arg(buffer.frameCount())
+                      .arg(buffer.sampleRate));
+    }
+}
+
+void DontfloatScratchEditor::writeChannelsToSession(const QVector<QVector<float>>& channels, int sampleRate)
+{
+    if (!session_ || channels.isEmpty()) {
+        return;
+    }
+
+    TrackAudioBuffer buffer;
+    buffer.sampleRate = sampleRate;
+    buffer.channelCount = channels.size();
+    if (!channels.isEmpty()) {
+        buffer.left = toStdVector(channels[0]);
+    }
+    if (channels.size() > 1) {
+        buffer.right = toStdVector(channels[1]);
+    }
+    buffer.mono = toStdVector(AudioFileService::toMono(channels));
+    session_->setAudioBuffer(buffer);
 }
 
 void DontfloatScratchEditor::onImportAudioClicked()
@@ -127,7 +237,7 @@ void DontfloatScratchEditor::onImportAudioClicked()
         return;
     }
     const QString path = QFileDialog::getOpenFileName(
-        this, tr("Импорт аудио"), QString(),
+        this, tr("%1 — импорт аудио").arg(productName_), QString(),
         tr("Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)"));
     if (path.isEmpty()) {
         return;
@@ -135,22 +245,16 @@ void DontfloatScratchEditor::onImportAudioClicked()
 
     const AudioFileService::DecodeResult decoded = AudioFileService::decode(path);
     if (!decoded.ok) {
-        statusLabel_->setText(tr("Ошибка импорта: %1").arg(decoded.error));
+        setStatus(tr("ошибка импорта: %1").arg(decoded.error));
         return;
     }
 
-    TrackAudioBuffer buffer;
-    buffer.sampleRate = decoded.sampleRate;
-    buffer.channelCount = decoded.channels.size();
-    if (!decoded.channels.isEmpty()) {
-        buffer.left = toStdVector(decoded.channels[0]);
+    lastAnalysis_ = {};
+    writeChannelsToSession(decoded.channels, decoded.sampleRate);
+    if (waveform_) {
+        waveform_->clearMarkers();
+        waveform_->setBeatsAligned(false);
     }
-    if (decoded.channels.size() > 1) {
-        buffer.right = toStdVector(decoded.channels[1]);
-    }
-    buffer.mono = toStdVector(AudioFileService::toMono(decoded.channels));
-
-    session_->setAudioBuffer(buffer);
     refreshFromSession();
 }
 
@@ -162,17 +266,16 @@ void DontfloatScratchEditor::runBpmAnalysis()
     const QVector<float> mono = toQVector(session_->audioBuffer().mono);
     const int sampleRate = session_->audioBuffer().sampleRate;
     if (mono.isEmpty() || sampleRate <= 0) {
-        statusLabel_->setText(tr("Нет аудиоданных для анализа BPM"));
+        setStatus(tr("нет аудиоданных для анализа BPM"));
         return;
     }
 
     analysisRunning_ = true;
-    analyzeButton_->setEnabled(false);
-    statusLabel_->setText(tr("Анализ BPM…"));
+    updateActionButtons();
+    setStatus(tr("анализ BPM…"));
 
     bpmWatcher_->setFuture(QtConcurrent::run([mono, sampleRate]() {
-        const BPMAnalyzer::AnalysisResult result = BPMAnalyzer::analyzeBPM(mono, sampleRate);
-        return result.bpm;
+        return BPMAnalyzer::analyzeBPM(mono, sampleRate);
     }));
 }
 
@@ -184,13 +287,198 @@ void DontfloatScratchEditor::onAnalyzeBpmClicked()
 void DontfloatScratchEditor::onBpmAnalysisFinished()
 {
     analysisRunning_ = false;
-    analyzeButton_->setEnabled(true);
-    const float bpm = bpmWatcher_->result();
-    if (bpm > 0.0f) {
-        statusLabel_->setText(tr("BPM: %1").arg(double(bpm), 0, 'f', 2));
-    } else {
-        statusLabel_->setText(tr("Не удалось определить BPM"));
+    lastAnalysis_ = bpmWatcher_->result();
+
+    if (lastAnalysis_.bpm <= 0.0f) {
+        setStatus(tr("не удалось определить BPM"));
+        updateActionButtons();
+        return;
     }
+
+    BPMAnalyzer::calculateDeviations(lastAnalysis_.beats, lastAnalysis_.bpm,
+                                     session_ ? session_->audioBuffer().sampleRate : 44100);
+
+    if (waveform_) {
+        waveform_->setBeatInfo(lastAnalysis_.beats);
+        waveform_->setGridStartSample(lastAnalysis_.gridStartSample);
+        waveform_->setBPM(lastAnalysis_.bpm);
+        waveform_->setBeatsPerBar(beatsPerBar_);
+        waveform_->setBeatsAligned(false);
+        waveform_->setShowBeatWaveform(true);
+        waveform_->update();
+    }
+
+    const int unaligned = BPMAnalyzer::findUnalignedBeats(lastAnalysis_.beats).size();
+    setStatus(tr("BPM %1 · долей %2 · отклонений %3")
+                  .arg(double(lastAnalysis_.bpm), 0, 'f', 2)
+                  .arg(lastAnalysis_.beats.size())
+                  .arg(unaligned));
+    updateActionButtons();
+}
+
+QVector<Marker> DontfloatScratchEditor::makeAlignedBeatMarkers(
+    const QVector<BPMAnalyzer::BeatInfo>& beats, qint64 totalSamples, int sampleRate) const
+{
+    QVector<Marker> markers;
+    if (beats.isEmpty() || totalSamples <= 0 || sampleRate <= 0) {
+        return markers;
+    }
+
+    const qint64 minSegmentSamples = (sampleRate * 50) / 1000;
+    markers.append(Marker(0, true, sampleRate));
+    qint64 lastPos = 0;
+
+    for (const BPMAnalyzer::BeatInfo& beat : beats) {
+        const qint64 pos = beat.position;
+        if (pos <= 0) {
+            continue;
+        }
+        if (pos >= totalSamples) {
+            break;
+        }
+        if (pos - lastPos >= minSegmentSamples) {
+            Marker m(pos, sampleRate);
+            m.originalPosition = pos;
+            m.originalTimeMs = TimeUtils::samplesToMs(pos, sampleRate);
+            m.updateTimeFromSamples(sampleRate);
+            markers.append(m);
+            lastPos = pos;
+        }
+    }
+
+    const qint64 endPos = totalSamples - 1;
+    if (endPos > lastPos) {
+        Marker end(endPos, true, true, sampleRate);
+        end.originalPosition = endPos;
+        end.originalTimeMs = TimeUtils::samplesToMs(endPos, sampleRate);
+        end.updateTimeFromSamples(sampleRate);
+        markers.append(end);
+    }
+    return markers;
+}
+
+void DontfloatScratchEditor::runBeatAlign()
+{
+    if (!session_ || !waveform_ || lastAnalysis_.bpm <= 0.0f || alignRunning_) {
+        return;
+    }
+
+    const QVector<QVector<float>> source = channelsFromBuffer(session_->audioBuffer());
+    if (source.isEmpty()) {
+        return;
+    }
+
+    alignRunning_ = true;
+    updateActionButtons();
+    setStatus(tr("выравнивание долей…"));
+
+    const BPMAnalyzer::AnalysisResult analysis = lastAnalysis_;
+    const int sampleRate = session_->audioBuffer().sampleRate;
+    alignWatcher_->setFuture(QtConcurrent::run([source, analysis, sampleRate]() {
+        QVector<QVector<float>> fixed = source;
+        for (int ch = 0; ch < fixed.size(); ++ch) {
+            fixed[ch] = BPMAnalyzer::alignToBeatGrid(
+                source[ch], sampleRate, analysis.bpm, analysis.gridStartSample);
+        }
+        return fixed;
+    }));
+}
+
+void DontfloatScratchEditor::onAlignBeatsClicked()
+{
+    runBeatAlign();
+}
+
+void DontfloatScratchEditor::onAlignFinished()
+{
+    alignRunning_ = false;
+    const QVector<QVector<float>> fixed = alignWatcher_->result();
+    if (fixed.isEmpty() || !waveform_ || !session_) {
+        setStatus(tr("ошибка выравнивания долей"));
+        updateActionButtons();
+        return;
+    }
+
+    const int sampleRate = session_->audioBuffer().sampleRate;
+    writeChannelsToSession(fixed, sampleRate);
+
+    const qint64 totalSamples = fixed.isEmpty() ? 0 : fixed[0].size();
+    const QVector<BPMAnalyzer::BeatInfo> alignedBeats = createAlignedBeatGrid(
+        lastAnalysis_.bpm, lastAnalysis_.gridStartSample, totalSamples, sampleRate, fixed);
+    lastAnalysis_.beats = alignedBeats;
+
+    waveform_->setAudioData(fixed);
+    waveform_->setSampleRate(sampleRate);
+    waveform_->setBeatInfo(alignedBeats);
+    waveform_->setGridStartSample(lastAnalysis_.gridStartSample);
+    waveform_->setBPM(lastAnalysis_.bpm);
+    waveform_->setBeatsAligned(true);
+    waveform_->setBeatsPerBar(beatsPerBar_);
+
+    waveform_->clearMarkers();
+    const QVector<Marker> markers = makeAlignedBeatMarkers(alignedBeats, totalSamples, sampleRate);
+    if (markers.size() >= 2) {
+        waveform_->setMarkers(markers);
+    }
+    waveform_->update();
+
+    setStatus(tr("доли выровнены (BPM %1). Перетащите метки stretch при необходимости.")
+                  .arg(double(lastAnalysis_.bpm), 0, 'f', 2));
+    updateActionButtons();
+}
+
+void DontfloatScratchEditor::onApplyStretchClicked()
+{
+    if (!session_ || !waveform_ || !waveform_->hasTimelineStretch()) {
+        return;
+    }
+
+    const TimeStretchProcessor::StretchResult result =
+        waveform_->applyTimeStretch(waveform_->getMarkers());
+    if (result.audioData.isEmpty()) {
+        setStatus(tr("не удалось применить stretch"));
+        return;
+    }
+
+    const int sampleRate = waveform_->getSampleRate();
+    writeChannelsToSession(result.audioData, sampleRate);
+    waveform_->setAudioData(result.audioData);
+    waveform_->updateOriginalData(result.audioData);
+    if (!result.newMarkers.isEmpty()) {
+        waveform_->setMarkers(MarkerUtils::toMarkers(result.newMarkers));
+    }
+    waveform_->setBeatsAligned(true);
+    waveform_->update();
+
+    setStatus(tr("stretch применён · %1 сэмплов").arg(result.audioData[0].size()));
+    updateActionButtons();
+}
+
+void DontfloatScratchEditor::onExportClicked()
+{
+    if (!session_ || session_->audioBuffer().empty()) {
+        return;
+    }
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("%1 — экспорт WAV").arg(productName_), QString(),
+        tr("WAV (*.wav)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    const QVector<QVector<float>> channels = channelsFromBuffer(session_->audioBuffer());
+    QString error;
+    if (!WavWriter::writeFile(path, channels, session_->audioBuffer().sampleRate, &error)) {
+        setStatus(tr("ошибка экспорта: %1").arg(error));
+        return;
+    }
+    setStatus(tr("экспортировано: %1").arg(path));
+}
+
+void DontfloatScratchEditor::onMarkersChanged()
+{
+    updateActionButtons();
 }
 
 } // namespace Dontfloat::Plugins::Ui

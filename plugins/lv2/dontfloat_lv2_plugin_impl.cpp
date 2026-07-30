@@ -47,10 +47,14 @@ void copyChannel(const float* input, float* output, uint32_t sampleCount)
     }
 }
 
-LV2_Handle instantiate(const LV2_Descriptor*, double sampleRate, const char* pluginUri,
-                       const LV2_Feature* const*)
+LV2_Handle instantiate(const LV2_Descriptor* descriptor, double sampleRate,
+                       const char* /*bundlePath*/, const LV2_Feature* const*)
 {
-    if (!pluginUri || std::strcmp(pluginUri, desc().lv2Uri) != 0) {
+    // Third argument is bundle_path (filesystem), NOT the plugin URI.
+    // Hosts like Reaper pass e.g. "...\dontfloat.lv2\" here; comparing it to
+    // the URI made instantiate() return nullptr → "plugin is damaged".
+    if (!descriptor || !descriptor->URI
+        || std::strcmp(descriptor->URI, desc().lv2Uri) != 0) {
         return nullptr;
     }
 

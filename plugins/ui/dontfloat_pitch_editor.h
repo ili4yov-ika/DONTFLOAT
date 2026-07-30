@@ -31,8 +31,12 @@ class DontfloatPitchEditor final : public QWidget {
     Q_OBJECT
 
 public:
-    explicit DontfloatPitchEditor(QWidget* parent = nullptr);
+    explicit DontfloatPitchEditor(QWidget* parent = nullptr,
+                                  const QString& productName = QStringLiteral("DONTFLOAT Pitcher"));
     ~DontfloatPitchEditor() override;
+
+    void setProductName(const QString& productName);
+    QString productName() const { return productName_; }
 
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void refreshFromSession();
@@ -45,12 +49,13 @@ private slots:
     void onImportAudioClicked();
     void onAnalyzeClicked();
     void onApplyCorrectionClicked();
+    void onExportClicked();
     void onPitchAnalysisFinished();
     void onPrimaryKeySelected(const QString& key);
     void onSecondaryKeySelected(const QString& key);
-    void onNotePitchEdited(int noteIndex, int oldPitch, int newPitch);
+    void onNotePitchEdited(int noteIndex, float oldPitch, float newPitch);
     void onNotePreviewRequested(int noteIndex);
-    void onNotePreviewPitchChanged(int noteIndex, int midiPitch);
+    void onNotePreviewPitchChanged(int noteIndex, float midiPitch);
     void onNotePreviewStopped();
 
 protected:
@@ -65,8 +70,10 @@ private:
     void refreshPitchGrid();
     void runPitchAnalysis();
     void syncNotesToSession();
+    void setStatus(const QString& text);
 
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
+    QString productName_;
 
     PitchGridWidget* pitchGrid_ = nullptr;
     QLineEdit* keyInput_ = nullptr;
@@ -78,6 +85,7 @@ private:
     QProgressBar* analyzeProgress_ = nullptr;
     QPushButton* importButton_ = nullptr;
     QPushButton* applyButton_ = nullptr;
+    QPushButton* exportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
 
     QString primaryKey_;

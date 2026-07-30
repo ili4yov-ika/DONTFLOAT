@@ -204,8 +204,8 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
         PitchNote note;
         note.startSample = start;
         note.endSample = qMin<qint64>(end, mono.size());
-        note.midiPitch = runPitch;
-        note.detectedPitch = runPitch;
+        note.midiPitch = float(runPitch);
+        note.detectedPitch = float(runPitch);
         note.confidence = runFrames > 0 ? float(runConfidence / runFrames) : 0.0f;
         notes.append(note);
     };

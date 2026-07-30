@@ -2669,7 +2669,7 @@ void MainWindow::refreshPitchGridNotes()
         warpNotesThroughMarkers(basePitchNotes, waveformView->getMarkers()));
 }
 
-void MainWindow::onNotePitchEdited(int noteIndex, int oldPitch, int newPitch)
+void MainWindow::onNotePitchEdited(int noteIndex, float oldPitch, float newPitch)
 {
     if (noteIndex < 0 || noteIndex >= basePitchNotes.size() || !undoStack) {
         return;
@@ -2730,7 +2730,7 @@ void MainWindow::onNotePreviewRequested(int noteIndex)
     notePreviewPlayer->start(segment, sampleRate, note.midiPitch - note.detectedPitch);
 }
 
-void MainWindow::onNotePreviewPitchChanged(int noteIndex, int midiPitch)
+void MainWindow::onNotePreviewPitchChanged(int noteIndex, float midiPitch)
 {
     if (!notePreviewPlayer || !notePreviewPlayer->isActive()
         || noteIndex < 0 || noteIndex >= basePitchNotes.size()) {

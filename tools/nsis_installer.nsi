@@ -72,13 +72,13 @@ Section "DONTFLOAT application" SEC_APP
 SectionEnd
 
 SectionGroup /e "DAW plugins" SEC_PLUGINS
+  ; CLAP: .clap + Qt runtime рядом (hosts load only *.clap)
   Section "CLAP plugins (DONTFLOAT, Scratch, Pitcher)" SEC_CLAP
     SetOutPath "${CLAP_INSTALL_DIR}"
-    File /nonfatal "${BUILD_DIR}\lib\clap\dontfloat.clap"
-    File /nonfatal "${BUILD_DIR}\lib\clap\dontfloat_scratch.clap"
-    File /nonfatal "${BUILD_DIR}\lib\clap\dontfloat_pitcher.clap"
+    File /nonfatal /r "${BUILD_DIR}\lib\clap\*.*"
   SectionEnd
 
+  ; LV2: каждый bundle содержит binary + UI + Qt runtime
   Section "LV2 plugins (DONTFLOAT, Scratch, Pitcher)" SEC_LV2
     SetOutPath "${LV2_INSTALL_DIR}\dontfloat.lv2"
     File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat.lv2\*.*"
@@ -88,11 +88,21 @@ SectionGroup /e "DAW plugins" SEC_PLUGINS
     File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat_pitcher.lv2\*.*"
   SectionEnd
 
+  ; VST3: Steinberg bundles (DONTFLOAT.vst3/Contents/x86_64-win/...)
+  ; Qt DLL лежат внутри бандла, не в корне VST3 — иначе DAW сканирует их как плагины.
   Section "VST3 plugins (DONTFLOAT, Scratch, Pitcher)" SEC_VST3
-    SetOutPath "${VST3_INSTALL_DIR}"
-    File /nonfatal "${BUILD_DIR}\lib\vst3\DONTFLOAT.vst3"
-    File /nonfatal "${BUILD_DIR}\lib\vst3\DONTFLOAT Scratch.vst3"
-    File /nonfatal "${BUILD_DIR}\lib\vst3\DONTFLOAT Pitcher.vst3"
+    ; Удаляем устаревшие плоские .vst3 (DLL) от прошлых установок
+    Delete "${VST3_INSTALL_DIR}\DONTFLOAT.vst3"
+    Delete "${VST3_INSTALL_DIR}\DONTFLOAT Scratch.vst3"
+    Delete "${VST3_INSTALL_DIR}\DONTFLOAT Pitcher.vst3"
+    Delete "${VST3_INSTALL_DIR}\DONTFLOAT Track Tool.vst3"
+
+    SetOutPath "${VST3_INSTALL_DIR}\DONTFLOAT.vst3"
+    File /nonfatal /r "${BUILD_DIR}\lib\vst3\DONTFLOAT.vst3\*.*"
+    SetOutPath "${VST3_INSTALL_DIR}\DONTFLOAT Scratch.vst3"
+    File /nonfatal /r "${BUILD_DIR}\lib\vst3\DONTFLOAT Scratch.vst3\*.*"
+    SetOutPath "${VST3_INSTALL_DIR}\DONTFLOAT Pitcher.vst3"
+    File /nonfatal /r "${BUILD_DIR}\lib\vst3\DONTFLOAT Pitcher.vst3\*.*"
   SectionEnd
 SectionGroupEnd
 
@@ -108,16 +118,39 @@ Section "Uninstall"
   Delete "$INSTDIR\Uninstall.exe"
   Delete "$INSTDIR\*.dll"
 
-  ; Удаляем DAW-плагины, установленные опциональными секциями
+  ; Удаляем DAW-плагины
   Delete "${CLAP_INSTALL_DIR}\dontfloat.clap"
   Delete "${CLAP_INSTALL_DIR}\dontfloat_scratch.clap"
   Delete "${CLAP_INSTALL_DIR}\dontfloat_pitcher.clap"
+  ; Qt runtime рядом с CLAP (общие DLL)
+  Delete "${CLAP_INSTALL_DIR}\Qt6Core.dll"
+  Delete "${CLAP_INSTALL_DIR}\Qt6Gui.dll"
+  Delete "${CLAP_INSTALL_DIR}\Qt6Widgets.dll"
+  Delete "${CLAP_INSTALL_DIR}\Qt6Multimedia.dll"
+  Delete "${CLAP_INSTALL_DIR}\Qt6Network.dll"
+  Delete "${CLAP_INSTALL_DIR}\Qt6Concurrent.dll"
+  Delete "${CLAP_INSTALL_DIR}\Qt6Svg.dll"
+  RMDir /r "${CLAP_INSTALL_DIR}\platforms"
+  RMDir /r "${CLAP_INSTALL_DIR}\imageformats"
+  RMDir /r "${CLAP_INSTALL_DIR}\multimedia"
+  RMDir /r "${CLAP_INSTALL_DIR}\styles"
+  RMDir /r "${CLAP_INSTALL_DIR}\tls"
+  RMDir /r "${CLAP_INSTALL_DIR}\generic"
+  RMDir /r "${CLAP_INSTALL_DIR}\iconengines"
+  RMDir /r "${CLAP_INSTALL_DIR}\networkinformation"
+
   RMDir /r "${LV2_INSTALL_DIR}\dontfloat.lv2"
   RMDir /r "${LV2_INSTALL_DIR}\dontfloat_scratch.lv2"
   RMDir /r "${LV2_INSTALL_DIR}\dontfloat_pitcher.lv2"
+  RMDir /r "${LV2_INSTALL_DIR}\dontfloat_track_tool.lv2"
+
+  RMDir /r "${VST3_INSTALL_DIR}\DONTFLOAT.vst3"
+  RMDir /r "${VST3_INSTALL_DIR}\DONTFLOAT Scratch.vst3"
+  RMDir /r "${VST3_INSTALL_DIR}\DONTFLOAT Pitcher.vst3"
   Delete "${VST3_INSTALL_DIR}\DONTFLOAT.vst3"
   Delete "${VST3_INSTALL_DIR}\DONTFLOAT Scratch.vst3"
   Delete "${VST3_INSTALL_DIR}\DONTFLOAT Pitcher.vst3"
+  Delete "${VST3_INSTALL_DIR}\DONTFLOAT Track Tool.vst3"
 
   RMDir "$INSTDIR"
 

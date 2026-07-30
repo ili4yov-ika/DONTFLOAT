@@ -21,6 +21,7 @@ set(DONTFLOAT_PLUGIN_SCRATCH_UI_SOURCES
     src/timeutils.cpp
     src/audiofileservice.cpp
     src/rubberband_offline.cpp
+    src/wavwriter.cpp
     include/waveformview.h
     include/waveformcolors.h
     include/beatvisualizer.h
@@ -30,6 +31,7 @@ set(DONTFLOAT_PLUGIN_SCRATCH_UI_SOURCES
     include/timeutils.h
     include/audiofileservice.h
     include/rubberband_offline.h
+    include/wavwriter.h
 )
 
 set(DONTFLOAT_PLUGIN_FULL_ONLY_UI_SOURCES
@@ -110,8 +112,10 @@ function(dontfloat_link_plugin_ui target_name product_kind)
         target_sources(${target_name} PRIVATE
             src/audiofileservice.cpp
             src/timeutils.cpp
+            src/wavwriter.cpp
             include/audiofileservice.h
             include/timeutils.h
+            include/wavwriter.h
         )
     endif()
 

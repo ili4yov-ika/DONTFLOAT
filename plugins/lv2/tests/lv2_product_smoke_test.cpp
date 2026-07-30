@@ -42,7 +42,7 @@ int main()
         return 1;
     }
 
-    LV2_Handle instance = descriptor->instantiate(descriptor, 44100.0, expectedUri, nullptr);
+    LV2_Handle instance = descriptor->instantiate(descriptor, 44100.0, "C:/fake/bundle/dontfloat.lv2/", nullptr);
     if (!instance) {
         std::cerr << "instantiate failed\n";
         return 1;

@@ -57,16 +57,28 @@ tools\build_windows_installer.bat
 Windows installer включает страницу компонентов. Основная секция приложения
 обязательная, группа `DAW plugins` опционально ставит:
 
-- CLAP: `%CommonProgramFiles%\CLAP\dontfloat_track_tool.clap`
-- LV2: `%CommonProgramFiles%\LV2\dontfloat_track_tool.lv2`
-- VST3: `%CommonProgramFiles%\VST3` при наличии собранного VST3 artifact
+- CLAP: `%CommonProgramFiles%\CLAP\` (`dontfloat.clap`, `dontfloat_scratch.clap`,
+  `dontfloat_pitcher.clap` + Qt runtime рядом)
+- LV2: `%CommonProgramFiles%\LV2\dontfloat*.lv2\` (binary + UI + Qt внутри бандла)
+- VST3: `%CommonProgramFiles%\VST3\DONTFLOAT*.vst3\` (Steinberg bundle
+  `Contents\x86_64-win\` + Qt внутри бандла)
 
 Для VST3 перед запуском задайте `DONTFLOAT_VST3_SDK_ROOT`; без SDK этот target
 пропускается, а CLAP/LV2 продолжают собираться.
 
-Сейчас эти секции устанавливают технический `track_tool` MVP: DAW-плагин с
-интерфейсом DONTFLOAT в roadmap, analysis/render API stubs в `plugins/core` и
-passthrough wrapper targets для CLAP/LV2/VST3.
+**Важно:** плагины линкуются с Qt6. Инсталлятор обязан класть Qt DLL рядом с
+модулем (через `windeployqt` / `cmake/DeployPluginQt.cmake`). Без этого DAW
+молча пропускает плагин при сканировании. VST3 должен быть **папкой-бандлом**,
+а не одним файлом-DLL в корне `VST3\`.
+
+Если плагины «пропали» после установки, пересоберите installer или запустите
+от администратора:
+
+```powershell
+tools\repair_installed_plugins.ps1
+```
+
+затем сделайте rescan в DAW.
 
 ### Linux (Debian/Ubuntu)
 
