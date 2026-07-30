@@ -289,6 +289,11 @@ MainWindow::MainWindow(QWidget *parent)
     if (!ui->waveformWidget->layout()) {
         ui->waveformWidget->setLayout(new QVBoxLayout());
     }
+    if (auto* waveLayout = qobject_cast<QVBoxLayout*>(ui->waveformWidget->layout())) {
+        // Без внутренних отступов: ширина волны = ширина поля пианоролла.
+        waveLayout->setContentsMargins(0, 0, 0, 0);
+        waveLayout->setSpacing(0);
+    }
     ui->waveformWidget->layout()->addWidget(waveformView);
     waveformView->installEventFilter(this);
 

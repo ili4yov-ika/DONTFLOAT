@@ -5,8 +5,8 @@ namespace UiConstants {
 
 constexpr int kScrollBarWidthPx = 16;
 
-/** Горизонтальные отступы области таймлайна (волна, скролл, питч-сетка). */
-constexpr int kTimelineHorizontalMarginPx = 2;
+/** Горизонтальные отступы области таймлайна (волна / питч-сетка). 0 = edge-to-edge. */
+constexpr int kTimelineHorizontalMarginPx = 0;
 
 constexpr int kHorizontalScrollBarHeightPx = 20;
 constexpr int kHorizontalScrollBarHorizontalMarginPx = 10;
