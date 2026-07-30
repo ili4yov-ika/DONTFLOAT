@@ -1,0 +1,54 @@
+# DONTFLOAT mini-DAW hosts
+
+Minimal in-process plugin hosts ("mini-DAWs") for every plugin **format** and
+**product kind**. Each host loads an audio file (default `tests/midi/test_1.wav`),
+instantiates the DONTFLOAT plugin for its product, streams the whole file through
+the plugin, writes the processed output to a WAV, and can host the plugin editor.
+
+## Targets
+
+One executable per format × product (built when the matching format is enabled):
+
+| Format | Full | Scratch | Pitcher |
+|--------|------|---------|---------|
+| CLAP | `mini_daw_clap_full` | `mini_daw_clap_scratch` | `mini_daw_clap_pitcher` |
+| LV2  | `mini_daw_lv2_full`  | `mini_daw_lv2_scratch`  | `mini_daw_lv2_pitcher`  |
+| VST3 | `mini_daw_vst3_full` | `mini_daw_vst3_scratch` | `mini_daw_vst3_pitcher` |
+
+- **CLAP** hosts the real plugin via `clap_entry` → factory → `process()`.
+- **LV2** hosts the real plugin via `lv2_descriptor` → `connect_port`/`run()`.
+- **VST3** streams through the shared plugin **core session** (the same path the
+  VST3 wrapper feeds). A full realtime VST3 module requires the proprietary
+  Steinberg SDK (`DONTFLOAT_VST3_SDK_ROOT`); without it the DONTFLOAT VST3
+  binary is not built, so the VST3 mini-DAW uses the core engine.
+
+Disable with `-DDONTFLOAT_BUILD_MINI_DAW=OFF`.
+
+## Usage
+
+```bash
+# headless: load test_1.wav, stream through the plugin, print a summary
+QT_QPA_PLATFORM=offscreen ./mini_daw_clap_full --headless --seconds 4 --no-output
+
+# write the processed output to a WAV
+./mini_daw_lv2_scratch --input tests/midi/test_1.wav --output out.wav
+
+# open the plugin editor GUI with the audio loaded (needs a display)
+./mini_daw_clap_pitcher --gui
+```
+
+### Options
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--input, -i <path>` | `tests/midi/test_1.wav` | audio file to load |
+| `--output, -o <path>` | derived | processed output WAV path |
+| `--block <n>` | `512` | host processing block size (frames) |
+| `--seconds <s>` | `8` | cap processed length (`--full` = whole file) |
+| `--gui` / `--headless` | headless | show the plugin editor / run headless |
+| `--no-output` | write | skip writing the output WAV |
+
+## Tests
+
+Each CLAP/LV2/VST3 × product mini-DAW is registered as a CTest that runs headless
+on `tests/midi/test_1.wav` (labels `plugins;mini-daw;<format>;<kind>`).
