@@ -70,10 +70,59 @@ public:
                                           int sampleRate,
                                           const AnalysisOptions& options);
 
+    // ---- Потактовый анализ модуляции (смен тональности), как в Melodyne ----
+
+    /// Параметры тактовой сетки (совпадают с WaveformView / PianoRollEngine).
+    struct BarGrid {
+        float bpm = 120.0f;
+        int beatsPerBar = 4;          // 4/4->4, 3/4->3, 2/4->2, 1/4->1, 6/8->6, 12/8->12
+        qint64 gridStartSample = 0;   // опорный сэмпл начала такта 1
+    };
+
+    /// Тональность одного такта.
+    struct BarKey {
+        int barIndex = 0;             // 0-based, отсчёт от gridStartSample
+        qint64 startSample = 0;
+        qint64 endSample = 0;
+        KeyInfo key;
+    };
+
+    /// Непрерывный участок из тактов с одной тональностью (регион модуляции).
+    struct KeyRegion {
+        int startBar = 0;             // включительно, 0-based
+        int endBar = 0;               // включительно
+        qint64 startSample = 0;
+        qint64 endSample = 0;
+        KeyInfo key;
+    };
+
+    struct PerBarKeyResult {
+        KeyInfo primaryKey;                 // доминирующая тональность (по числу тактов)
+        QVector<BarKey> bars;               // по одной записи на проанализированный такт
+        QVector<KeyRegion> regions;         // соседние такты с одинаковой тональностью объединены
+        bool hasModulation = false;         // обнаружено больше одной тональности
+    };
+
+    /// Длина такта в сэмплах для заданной сетки (как в WaveformView::drawBarMarkers).
+    static double samplesPerBar(const BarGrid& grid, int sampleRate);
+
+    /// Потактово определяет тональность и группирует такты в регионы модуляции.
+    static PerBarKeyResult analyzeKeyPerBar(const QVector<float>& samples,
+                                            int sampleRate,
+                                            const BarGrid& grid,
+                                            const AnalysisOptions& options = AnalysisOptions());
+
+    /// Объединяет соседние такты с одинаковой тональностью в регионы.
+    static QVector<KeyRegion> mergeBarsIntoRegions(const QVector<BarKey>& bars);
+
     // Вспомогательные методы
     static QString keyToString(Key key);
     static Key stringToKey(const QString& keyString);
     static bool isMajorKey(Key key);
+
+    /// Хроматический вектор (12 полутонов) через алгоритм Гёрцеля.
+    /// Самодостаточный анализ высоты — не зависит от qm-dsp, поэтому детерминирован в тестах.
+    static QVector<float> computeChromaGoertzel(const QVector<float>& samples, int sampleRate);
 
 private:
     // Методы для работы с qm-dsp

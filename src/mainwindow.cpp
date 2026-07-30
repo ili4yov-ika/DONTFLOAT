@@ -1730,6 +1730,11 @@ void MainWindow::resetAudioState()
 
     // Сброс второй тональности — поле модуляции покажется только после анализа
     setKey2(QString());
+
+    // Сбрасываем потактовую модуляцию прошлого файла
+    if (waveformView) {
+        waveformView->clearKeyRegions();
+    }
 }
 
 void MainWindow::openAudioFile()
@@ -2579,6 +2584,12 @@ void MainWindow::startPitchAnalysis()
         return;
     }
 
+    // Тактовая сетка для потактового анализа модуляции (снимаем в UI-потоке).
+    KeyAnalyzer::BarGrid barGrid;
+    barGrid.bpm = waveformView->getBPM();
+    barGrid.beatsPerBar = waveformView->getBeatsPerBar();
+    barGrid.gridStartSample = waveformView->getGridStartSample();
+
     pitchAnalysisRunning = true;
     setPitchAnalysisUiRunning(true);
     statusBar()->showMessage(tr("Анализ тональности и нот..."), 0);
@@ -2602,10 +2613,12 @@ void MainWindow::startPitchAnalysis()
     }
 
     std::shared_ptr<std::atomic<int>> progress = pitchAnalysisProgressValue;
-    pitchAnalysisWatcher->setFuture(QtConcurrent::run([mono, sampleRate, progress]() {
+    pitchAnalysisWatcher->setFuture(QtConcurrent::run([mono, sampleRate, progress, barGrid]() {
         PitchAnalysisOutcome outcome;
         progress->store(2);
         outcome.key = KeyAnalyzer::analyzeKey(mono, sampleRate);
+        progress->store(8);
+        outcome.perBarKey = KeyAnalyzer::analyzeKeyPerBar(mono, sampleRate, barGrid);
         progress->store(15);
         outcome.notes = PitchDetector::detectNotes(
             mono, sampleRate, PitchDetector::Options(),
@@ -2642,6 +2655,14 @@ void MainWindow::onPitchAnalysisFinished()
         keysText += QStringLiteral(" / ") + outcome.key.secondaryKey.keyName;
     } else {
         setKey2(QString());
+    }
+
+    // Потактовое отображение модуляции (смен тональности), как в Melodyne.
+    if (waveformView) {
+        waveformView->setKeyRegions(outcome.perBarKey.regions);
+    }
+    if (outcome.perBarKey.hasModulation) {
+        keysText += tr(" (модуляции: %1)").arg(outcome.perBarKey.regions.size());
     }
 
     basePitchNotes = outcome.notes;
@@ -2829,13 +2850,21 @@ void MainWindow::analyzeKey()
     const QVector<float> samples = audioData[0];
     const int sampleRate = waveformView->getSampleRate();
 
+    KeyAnalyzer::BarGrid barGrid;
+    barGrid.bpm = waveformView->getBPM();
+    barGrid.beatsPerBar = waveformView->getBeatsPerBar();
+    barGrid.gridStartSample = waveformView->getGridStartSample();
+
     statusBar()->showMessage(tr("Анализ тональности..."), 0);
     setEnabled(false);
 
-    auto* watcher = new QFutureWatcher<KeyAnalyzer::AnalysisResult>(this);
-    connect(watcher, &QFutureWatcher<KeyAnalyzer::AnalysisResult>::finished, this,
+    using KeyOutcome = QPair<KeyAnalyzer::AnalysisResult, KeyAnalyzer::PerBarKeyResult>;
+    auto* watcher = new QFutureWatcher<KeyOutcome>(this);
+    connect(watcher, &QFutureWatcher<KeyOutcome>::finished, this,
             [this, watcher]() {
-        const KeyAnalyzer::AnalysisResult result = watcher->result();
+        const KeyOutcome outcome = watcher->result();
+        const KeyAnalyzer::AnalysisResult result = outcome.first;
+        const KeyAnalyzer::PerBarKeyResult perBar = outcome.second;
         setEnabled(true);
 
         QString detectedKey = result.primaryKey.keyName;
@@ -2855,12 +2884,20 @@ void MainWindow::analyzeKey()
             setKey2(QString());
         }
 
+        if (waveformView) {
+            waveformView->setKeyRegions(perBar.regions);
+        }
+        if (perBar.hasModulation) {
+            keysText += tr(" (модуляции: %1)").arg(perBar.regions.size());
+        }
+
         statusBar()->showMessage(tr("Тональность определена: %1").arg(keysText), 3000);
         watcher->deleteLater();
     });
 
-    watcher->setFuture(QtConcurrent::run([samples, sampleRate]() {
-        return KeyAnalyzer::analyzeKey(samples, sampleRate);
+    watcher->setFuture(QtConcurrent::run([samples, sampleRate, barGrid]() {
+        return qMakePair(KeyAnalyzer::analyzeKey(samples, sampleRate),
+                         KeyAnalyzer::analyzeKeyPerBar(samples, sampleRate, barGrid));
     }));
 }
 

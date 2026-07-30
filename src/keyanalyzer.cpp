@@ -1,5 +1,6 @@
 #include "../include/keyanalyzer.h"
 #include <QtCore/QDebug>
+#include <QtCore/QSet>
 #include <cmath>
 #include <algorithm>
 
@@ -396,6 +397,177 @@ KeyAnalyzer::Key KeyAnalyzer::stringToKey(const QString& keyString) {
 bool KeyAnalyzer::isMajorKey(Key key) {
     int index = static_cast<int>(key);
     return (index % 2) == 0; // Четные индексы - мажорные тональности
+}
+
+double KeyAnalyzer::samplesPerBar(const BarGrid& grid, int sampleRate) {
+    if (sampleRate <= 0 || grid.bpm <= 0.0f) {
+        return 0.0;
+    }
+    const double samplesPerBeat = (60.0 * double(sampleRate)) / double(grid.bpm);
+    // Длина такта в четвертях: 4/4->4, 3/4->3, 2/4->2, 1/4->1, 6/8->3, 12/8->6
+    const double barLengthInQuarters = (grid.beatsPerBar == 6) ? 3.0
+                                     : (grid.beatsPerBar == 12) ? 6.0
+                                     : double(std::max(1, grid.beatsPerBar));
+    return barLengthInQuarters * samplesPerBeat;
+}
+
+QVector<float> KeyAnalyzer::computeChromaGoertzel(const QVector<float>& samples, int sampleRate) {
+    QVector<float> chroma(12, 0.0f);
+    const int n = samples.size();
+    if (n < 32 || sampleRate <= 0) {
+        return chroma;
+    }
+
+    constexpr double kTwoPi = 6.28318530717958647692;
+    // Диапазон нот C2 (MIDI 36) .. B6 (MIDI 95) покрывает основные регистры.
+    const int midiLow = 36;
+    const int midiHigh = 95;
+    const double nyquist = 0.5 * double(sampleRate);
+
+    for (int midi = midiLow; midi <= midiHigh; ++midi) {
+        const double freq = 440.0 * std::pow(2.0, (double(midi) - 69.0) / 12.0);
+        if (freq <= 0.0 || freq >= nyquist) {
+            continue;
+        }
+
+        // Алгоритм Гёрцеля: величина спектра на частоте freq за один проход.
+        const double w = kTwoPi * freq / double(sampleRate);
+        const double coeff = 2.0 * std::cos(w);
+        double s1 = 0.0, s2 = 0.0;
+        for (int i = 0; i < n; ++i) {
+            const double s0 = double(samples[i]) + coeff * s1 - s2;
+            s2 = s1;
+            s1 = s0;
+        }
+        const double power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
+        const double magnitude = std::sqrt(std::max(0.0, power)) / double(n);
+
+        chroma[midi % 12] += float(magnitude);
+    }
+
+    float maxVal = 0.0f;
+    for (int i = 0; i < 12; ++i) {
+        maxVal = std::max(maxVal, chroma[i]);
+    }
+    if (maxVal > 0.0f) {
+        for (int i = 0; i < 12; ++i) {
+            chroma[i] /= maxVal;
+        }
+    }
+    return chroma;
+}
+
+QVector<KeyAnalyzer::KeyRegion> KeyAnalyzer::mergeBarsIntoRegions(const QVector<BarKey>& bars) {
+    QVector<KeyRegion> regions;
+    if (bars.isEmpty()) {
+        return regions;
+    }
+
+    KeyRegion cur;
+    cur.startBar = bars[0].barIndex;
+    cur.endBar = bars[0].barIndex;
+    cur.startSample = bars[0].startSample;
+    cur.endSample = bars[0].endSample;
+    cur.key = bars[0].key;
+
+    for (int i = 1; i < bars.size(); ++i) {
+        const BarKey& b = bars[i];
+        const bool sameKey = (b.key.key == cur.key.key);
+        const bool contiguous = (b.barIndex == cur.endBar + 1);
+        if (sameKey && contiguous) {
+            cur.endBar = b.barIndex;
+            cur.endSample = b.endSample;
+        } else {
+            regions.append(cur);
+            cur.startBar = b.barIndex;
+            cur.endBar = b.barIndex;
+            cur.startSample = b.startSample;
+            cur.endSample = b.endSample;
+            cur.key = b.key;
+        }
+    }
+    regions.append(cur);
+    return regions;
+}
+
+KeyAnalyzer::PerBarKeyResult KeyAnalyzer::analyzeKeyPerBar(const QVector<float>& samples,
+                                                          int sampleRate,
+                                                          const BarGrid& grid,
+                                                          const AnalysisOptions& options) {
+    Q_UNUSED(options);
+    PerBarKeyResult result;
+
+    const qint64 n = samples.size();
+    const double spb = samplesPerBar(grid, sampleRate);
+    if (n <= 0 || spb < 1.0) {
+        return result;
+    }
+
+    // Минимальная длина такта для устойчивого анализа (~50 мс).
+    const qint64 minBarSamples = qMax<qint64>(32, qint64(sampleRate) / 20);
+    const qint64 gridStart = qMax<qint64>(0, grid.gridStartSample);
+
+    for (int barIndex = 0; ; ++barIndex) {
+        const qint64 barStart = gridStart + qint64(std::llround(double(barIndex) * spb));
+        if (barStart >= n) {
+            break;
+        }
+        const qint64 barEnd = gridStart + qint64(std::llround(double(barIndex + 1) * spb));
+        const qint64 sliceEnd = qMin<qint64>(barEnd, n);
+        if (sliceEnd - barStart < minBarSamples) {
+            // Последний неполный такт слишком короткий — пропускаем.
+            break;
+        }
+
+        QVector<float> slice(samples.begin() + barStart, samples.begin() + sliceEnd);
+        const QVector<float> chroma = computeChromaGoertzel(slice, sampleRate);
+
+        BarKey bk;
+        bk.barIndex = barIndex;
+        bk.startSample = barStart;
+        bk.endSample = barEnd;
+        bk.key = detectKeyFromChroma(chroma);
+        result.bars.append(bk);
+    }
+
+    if (result.bars.isEmpty()) {
+        return result;
+    }
+
+    // Доминирующая тональность (по числу тактов), UNKNOWN не считаем основной.
+    QVector<int> counts(int(UNKNOWN_KEY) + 1, 0);
+    for (const BarKey& b : result.bars) {
+        counts[int(b.key.key)]++;
+    }
+    int bestIdx = -1;
+    int bestCount = 0;
+    for (int i = 0; i < int(UNKNOWN_KEY); ++i) {
+        if (counts[i] > bestCount) {
+            bestCount = counts[i];
+            bestIdx = i;
+        }
+    }
+    if (bestIdx < 0) {
+        result.primaryKey.key = UNKNOWN_KEY;
+        result.primaryKey.keyName = keyToString(UNKNOWN_KEY);
+    } else {
+        result.primaryKey.key = static_cast<Key>(bestIdx);
+        result.primaryKey.keyName = keyToString(result.primaryKey.key);
+        result.primaryKey.isMajor = isMajorKey(result.primaryKey.key);
+    }
+
+    result.regions = mergeBarsIntoRegions(result.bars);
+
+    // Модуляция: обнаружено больше одной различной тональности (без учёта UNKNOWN).
+    QSet<int> distinct;
+    for (const BarKey& b : result.bars) {
+        if (b.key.key != UNKNOWN_KEY) {
+            distinct.insert(int(b.key.key));
+        }
+    }
+    result.hasModulation = distinct.size() > 1;
+
+    return result;
 }
 
 QVector<double> KeyAnalyzer::convertToDouble(const QVector<float>& samples) {
