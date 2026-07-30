@@ -192,7 +192,7 @@ MainWindow::MainWindow(QWidget *parent)
     , isLoopEnabled(false)
     , loopStartPosition(0)
     , loopEndPosition(0)
-    , isPitchGridVisible(false) // По умолчанию питч-сетка скрыта
+    , isPitchGridVisible(true) // По умолчанию питч-сетка видна
     , currentKey("")
     , currentKey2("")
     , keyMenu(nullptr)
@@ -316,17 +316,12 @@ MainWindow::MainWindow(QWidget *parent)
         }
         if (pitchGridContainer) {
             pitchGridContainer->setMinimumHeight(UiConstants::kPitchGridContainerMinHeight);
-            // По умолчанию скрываем питч-сетку
-            pitchGridContainer->setVisible(false);
-            mainSplitter->setChildrenCollapsible(true);
-            // Устанавливаем размеры так, чтобы волна заняла всё пространство
+            // По умолчанию питч-сетка видна (финальное состояние — в readSettings).
+            pitchGridContainer->setVisible(true);
+            mainSplitter->setChildrenCollapsible(false);
             QList<int> sizes;
-            int totalHeight = mainSplitter->height();
-            if (totalHeight > 0) {
-                sizes << totalHeight << 0;
-            } else {
-                sizes << UiConstants::kDefaultSplitterWaveformHeight << 0;
-            }
+            sizes << UiConstants::kDefaultSplitterWaveformHeight
+                  << UiConstants::kDefaultSplitterPitchGridHeight;
             mainSplitter->setSizes(sizes);
         }
 
@@ -734,8 +729,8 @@ void MainWindow::readSettings()
     QString colorScheme = settings.value("colorScheme", "dark").toString();
     setColorScheme(colorScheme);
 
-    // Восстанавливаем видимость питч-сетки (по умолчанию скрыта)
-    isPitchGridVisible = settings.value("pitchGridVisible", false).toBool();
+    // Восстанавливаем видимость питч-сетки (по умолчанию видна)
+    isPitchGridVisible = settings.value("pitchGridVisible", true).toBool();
 
     // Восстанавливаем текущие тональности
     currentKey = settings.value("currentKey", QStringLiteral("C Major")).toString();
@@ -1321,7 +1316,7 @@ void MainWindow::createActions()
     connect(loopEndAct, &QAction::triggered, this, &MainWindow::setLoopEnd);
 
     // Pitch grid toggle (Ctrl+G)
-    togglePitchGridAct = new QAction(tr("Показать питч-сетку"), this);
+    togglePitchGridAct = new QAction(tr("Убрать питч-сетку"), this);
     togglePitchGridAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
     togglePitchGridAct->setStatusTip(tr("Переключить видимость питч-сетки"));
     connect(togglePitchGridAct, &QAction::triggered, this, &MainWindow::togglePitchGrid);
