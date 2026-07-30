@@ -30,7 +30,7 @@
 | Time stretch с тонкомпенсацией | Rubber Band v4 (R3 offline) | `src/rubberband_offline.cpp`, `src/timestretchprocessor.cpp` | `preservePitch=true`: метки, `Ctrl+T`, фоновое превью воспроизведения |
 | Быстрое превью волны при drag меток | собственный код (кубическая интерполяция) | `src/timestretchprocessor.cpp` | `preservePitch=false`: только визуализация, без Rubber Band |
 | Гранулярный питч-шифт | адаптация LMMS GranularPitchShifter | `include/granularpitchshifter_engine.h` | опционально после `Ctrl+T` |
-| Питч-сетка (viewport, beat grid, легенда) | собственный код | `include/pianoroll_engine.h`, `src/pitchgridwidget.cpp` | UI: скрыта по умолчанию, `Ctrl+G` |
+| Питч-сетка (viewport, beat grid, легенда) | собственный код | `include/pianoroll_engine.h`, `src/pitchgridwidget.cpp` | UI: видна по умолчанию, `Ctrl+G` |
 | FFT / оконные функции | адаптация LMMS `fft_helpers` | `include/fft_engine.h` | спектрограмма |
 | Спектрограмма (Cooley-Tukey FFT) | адаптация из LMMS | `include/fft_engine.h`, `src/waveformview.cpp` | визуализация |
 

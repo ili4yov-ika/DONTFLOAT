@@ -8,6 +8,10 @@
 
 - **bpm_analyzer_test.cpp** - Интеграционный тест анализатора BPM на реальных аудиофайлах из `source4test/`
 - **beat_deviation_test.cpp** - Юнит-тесты для вычисления отклонений долей и поиска неровных долей (новое с 2026-01-12)
+- **midi_pitch_test.cpp** - Питчер (`PitchDetector`) vs ground truth `tests/midi/test_1.mid` на `test_1.wav`
+- **midi_beat_deviation_test.cpp** - `findUnalignedBeats` / `calculateDeviations` на идеальной сетке `test_1.mid` (140 BPM) и искусственных сдвигах
+- **pitch_detector_accuracy_test.cpp** - Точность PitchDetector на синтезированных фикстурах `tests/source4test/pitch/`
+- **key_analyzer_test.cpp** - Потактовый анализ тональности / модуляций
 - **ui_responsiveness_test.cpp** - Интеграционный UI-тест: загрузка `example_V80BPM.mp3`, метки выравнивания, перетаскивание меток, `applyTimeStretch`, плавность `QMediaPlayer`
 - **pitch_compensation_file_test.cpp** - Тонкомпенсация на `pitch-test_C140BPM.mp3` (одна нота): сжатие/растяжение метками, проверка высоты тона (автокорреляция)
 
@@ -18,6 +22,12 @@
 - `example_C80BPM.mp3` - Файл с постоянными 80 BPM
 - `example_V80BPM.mp3` - Файл с переменными 80 BPM
 - `pitch-test_C140BPM.mp3` - ~140 BPM, одна устойчивая нота (тест тонкомпенсации)
+
+MIDI+WAV фикстура питчера / сетки долей: `tests/midi/` (`test_1.mid` + `test_1.wav`, см. `tests/midi/README.md`). Парсер SMF для тестов: `tests/midi_smf.h`.
+
+```powershell
+ctest --test-dir build/... -C Release -R "midi_(pitch|beat_deviation)_test" --output-on-failure
+```
 
 ### pitch_compensation_file_test
 
