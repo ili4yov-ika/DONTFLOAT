@@ -566,6 +566,18 @@ add_qt_test(beat_deviation_test
     src/bpmanalyzer.cpp
 )
 
+# Потактовый анализ модуляции (смен тональности), как в Melodyne
+add_qt_test(key_analyzer_test
+    tests/key_analyzer_test.cpp
+    src/keyanalyzer.cpp
+)
+
+set_tests_properties(key_analyzer_test PROPERTIES
+    LABELS "key;modulation;unit"
+    DESCRIPTION "Per-bar key/modulation detection (Melodyne-style)"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # Тесты TimeStretchProcessor (тонкомпенсация, processSegment, calculateStretchFactor)
 add_qt_test(timestretchprocessor_test
     tests/timestretchprocessor_test.cpp

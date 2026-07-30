@@ -2579,6 +2579,12 @@ void MainWindow::startPitchAnalysis()
         return;
     }
 
+    // Тактовая сетка для потактового анализа модуляции (снимаем в UI-потоке).
+    KeyAnalyzer::BarGrid barGrid;
+    barGrid.bpm = waveformView->getBPM();
+    barGrid.beatsPerBar = waveformView->getBeatsPerBar();
+    barGrid.gridStartSample = waveformView->getGridStartSample();
+
     pitchAnalysisRunning = true;
     setPitchAnalysisUiRunning(true);
     statusBar()->showMessage(tr("Анализ тональности и нот..."), 0);
@@ -2602,10 +2608,12 @@ void MainWindow::startPitchAnalysis()
     }
 
     std::shared_ptr<std::atomic<int>> progress = pitchAnalysisProgressValue;
-    pitchAnalysisWatcher->setFuture(QtConcurrent::run([mono, sampleRate, progress]() {
+    pitchAnalysisWatcher->setFuture(QtConcurrent::run([mono, sampleRate, progress, barGrid]() {
         PitchAnalysisOutcome outcome;
         progress->store(2);
         outcome.key = KeyAnalyzer::analyzeKey(mono, sampleRate);
+        progress->store(8);
+        outcome.perBarKey = KeyAnalyzer::analyzeKeyPerBar(mono, sampleRate, barGrid);
         progress->store(15);
         outcome.notes = PitchDetector::detectNotes(
             mono, sampleRate, PitchDetector::Options(),
@@ -2627,15 +2635,30 @@ void MainWindow::onPitchAnalysisFinished()
 
     const PitchAnalysisOutcome outcome = pitchAnalysisWatcher->result();
 
+    // Основная тональность: трековая оценка, при неудаче — потактовая, иначе C Major.
     QString detectedKey = outcome.key.primaryKey.keyName;
-    if (detectedKey.isEmpty()
-        || outcome.key.primaryKey.key == KeyAnalyzer::UNKNOWN_KEY) {
-        detectedKey = QStringLiteral("C Major");
+    KeyAnalyzer::Key primaryEnum = outcome.key.primaryKey.key;
+    if (detectedKey.isEmpty() || primaryEnum == KeyAnalyzer::UNKNOWN_KEY) {
+        if (outcome.perBarKey.primaryKey.key != KeyAnalyzer::UNKNOWN_KEY) {
+            detectedKey = outcome.perBarKey.primaryKey.keyName;
+            primaryEnum = outcome.perBarKey.primaryKey.key;
+        } else {
+            detectedKey = QStringLiteral("C Major");
+            primaryEnum = KeyAnalyzer::stringToKey(detectedKey);
+        }
     }
     setKey(detectedKey);
 
+    // Модуляцию (смену тональности) показываем во втором поле над пианороллом,
+    // а не на звуковой волне: берём доминирующую потактовую тональность,
+    // отличную от основной; при её отсутствии — трековую вторичную тональность.
     QString keysText = detectedKey;
-    if (outcome.key.hasKeyChange
+    const KeyAnalyzer::KeyInfo modKey =
+        KeyAnalyzer::dominantModulationKey(outcome.perBarKey, primaryEnum);
+    if (modKey.key != KeyAnalyzer::UNKNOWN_KEY && !modKey.keyName.isEmpty()) {
+        setKey2(modKey.keyName);
+        keysText += QStringLiteral(" / ") + modKey.keyName;
+    } else if (outcome.key.hasKeyChange
         && outcome.key.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
         && !outcome.key.secondaryKey.keyName.isEmpty()) {
         setKey2(outcome.key.secondaryKey.keyName);
@@ -2829,24 +2852,44 @@ void MainWindow::analyzeKey()
     const QVector<float> samples = audioData[0];
     const int sampleRate = waveformView->getSampleRate();
 
+    KeyAnalyzer::BarGrid barGrid;
+    barGrid.bpm = waveformView->getBPM();
+    barGrid.beatsPerBar = waveformView->getBeatsPerBar();
+    barGrid.gridStartSample = waveformView->getGridStartSample();
+
     statusBar()->showMessage(tr("Анализ тональности..."), 0);
     setEnabled(false);
 
-    auto* watcher = new QFutureWatcher<KeyAnalyzer::AnalysisResult>(this);
-    connect(watcher, &QFutureWatcher<KeyAnalyzer::AnalysisResult>::finished, this,
+    using KeyOutcome = QPair<KeyAnalyzer::AnalysisResult, KeyAnalyzer::PerBarKeyResult>;
+    auto* watcher = new QFutureWatcher<KeyOutcome>(this);
+    connect(watcher, &QFutureWatcher<KeyOutcome>::finished, this,
             [this, watcher]() {
-        const KeyAnalyzer::AnalysisResult result = watcher->result();
+        const KeyOutcome outcome = watcher->result();
+        const KeyAnalyzer::AnalysisResult result = outcome.first;
+        const KeyAnalyzer::PerBarKeyResult perBar = outcome.second;
         setEnabled(true);
 
         QString detectedKey = result.primaryKey.keyName;
-        if (detectedKey.isEmpty()
-            || result.primaryKey.key == KeyAnalyzer::UNKNOWN_KEY) {
-            detectedKey = QStringLiteral("C Major");
+        KeyAnalyzer::Key primaryEnum = result.primaryKey.key;
+        if (detectedKey.isEmpty() || primaryEnum == KeyAnalyzer::UNKNOWN_KEY) {
+            if (perBar.primaryKey.key != KeyAnalyzer::UNKNOWN_KEY) {
+                detectedKey = perBar.primaryKey.keyName;
+                primaryEnum = perBar.primaryKey.key;
+            } else {
+                detectedKey = QStringLiteral("C Major");
+                primaryEnum = KeyAnalyzer::stringToKey(detectedKey);
+            }
         }
         setKey(detectedKey);
 
+        // Модуляцию показываем во втором поле над пианороллом (не на волне).
         QString keysText = detectedKey;
-        if (result.hasKeyChange
+        const KeyAnalyzer::KeyInfo modKey =
+            KeyAnalyzer::dominantModulationKey(perBar, primaryEnum);
+        if (modKey.key != KeyAnalyzer::UNKNOWN_KEY && !modKey.keyName.isEmpty()) {
+            setKey2(modKey.keyName);
+            keysText += QStringLiteral(" / ") + modKey.keyName;
+        } else if (result.hasKeyChange
             && result.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
             && !result.secondaryKey.keyName.isEmpty()) {
             setKey2(result.secondaryKey.keyName);
@@ -2859,8 +2902,9 @@ void MainWindow::analyzeKey()
         watcher->deleteLater();
     });
 
-    watcher->setFuture(QtConcurrent::run([samples, sampleRate]() {
-        return KeyAnalyzer::analyzeKey(samples, sampleRate);
+    watcher->setFuture(QtConcurrent::run([samples, sampleRate, barGrid]() {
+        return qMakePair(KeyAnalyzer::analyzeKey(samples, sampleRate),
+                         KeyAnalyzer::analyzeKeyPerBar(samples, sampleRate, barGrid));
     }));
 }
 

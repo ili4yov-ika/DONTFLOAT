@@ -284,6 +284,7 @@ private:
     // Pitch analysis (тональность + ноты) в фоне
     struct PitchAnalysisOutcome {
         KeyAnalyzer::AnalysisResult key;
+        KeyAnalyzer::PerBarKeyResult perBarKey; // потактовая модуляция (смены тональности)
         QVector<PitchDetector::PitchNote> notes;
     };
     QFutureWatcher<PitchAnalysisOutcome>* pitchAnalysisWatcher = nullptr;
