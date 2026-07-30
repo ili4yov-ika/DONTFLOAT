@@ -135,8 +135,8 @@ struct TrackRenderResult {
 struct TrackPitchNote {
     std::int64_t startSample = 0;
     std::int64_t endSample = 0;
-    int midiPitch = 60;
-    int detectedPitch = 60;
+    float midiPitch = 60.0f;
+    float detectedPitch = 60.0f;
     float confidence = 0.0f;
 };
 

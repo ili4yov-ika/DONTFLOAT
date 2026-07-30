@@ -19,8 +19,8 @@ public:
     PitchNoteEditCommand(PitchGridWidget* widget,
                          QVector<PitchDetector::PitchNote>* baseNotes,
                          int noteIndex,
-                         int oldPitch,
-                         int newPitch,
+                         float oldPitch,
+                         float newPitch,
                          const QString& text,
                          std::function<void()> onApplied = {},
                          QUndoCommand* parent = nullptr)
@@ -52,7 +52,7 @@ public:
 private:
     static constexpr int kCommandId = 0xA10E;
 
-    void applyPitch(int pitch)
+    void applyPitch(float pitch)
     {
         if (m_baseNotes && m_noteIndex >= 0 && m_noteIndex < m_baseNotes->size()) {
             (*m_baseNotes)[m_noteIndex].midiPitch = pitch;
@@ -68,8 +68,8 @@ private:
     QPointer<PitchGridWidget> m_widget;
     QVector<PitchDetector::PitchNote>* m_baseNotes;
     int m_noteIndex;
-    int m_oldPitch;
-    int m_newPitch;
+    float m_oldPitch;
+    float m_newPitch;
     std::function<void()> m_onApplied;
 };
 

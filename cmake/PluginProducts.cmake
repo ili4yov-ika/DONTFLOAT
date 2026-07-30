@@ -57,25 +57,67 @@ endfunction()
 
 function(dontfloat_add_clap_product kind)
     _dontfloat_product_index(${kind} _index)
-    set(_target dontfloat_${kind}_clap)
-    add_library(${_target} MODULE
+    set(_impl dontfloat_${kind}_clap_impl)
+    set(_stub dontfloat_${kind}_clap)
+    set(_impl_dll "${_DONTFLOAT_CLAP_FILE_${kind}}_clap.impl.dll")
+
+    # Real CLAP plugin (Qt + DSP). Host never loads this directly.
+    add_library(${_impl} MODULE
         plugins/clap/dontfloat_clap_plugin_impl.cpp
         plugins/clap/clap_minimal.h
     )
-    target_compile_features(${_target} PRIVATE cxx_std_17)
-    target_compile_definitions(${_target} PRIVATE DONTFLOAT_PLUGIN_PRODUCT_INDEX=${_index})
-    target_include_directories(${_target} PRIVATE
+    target_compile_features(${_impl} PRIVATE cxx_std_17)
+    target_compile_definitions(${_impl} PRIVATE DONTFLOAT_PLUGIN_PRODUCT_INDEX=${_index})
+    target_include_directories(${_impl} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/clap
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/ui
     )
-    target_link_libraries(${_target} PRIVATE dontfloat_plugin_core)
-    set_target_properties(${_target} PROPERTIES
+    target_link_libraries(${_impl} PRIVATE dontfloat_plugin_core)
+    set_target_properties(${_impl} PROPERTIES
         PREFIX ""
-        OUTPUT_NAME "${_DONTFLOAT_CLAP_FILE_${kind}}"
-        SUFFIX ".clap"
+        OUTPUT_NAME "${_DONTFLOAT_CLAP_FILE_${kind}}_clap.impl"
+        SUFFIX ".dll"
     )
-    dontfloat_link_plugin_ui(${_target} ${kind})
+    dontfloat_link_plugin_ui(${_impl} ${kind})
+
+    # Thin stub .clap with no Qt imports — safe for Reaper plain LoadLibrary.
+    if(WIN32)
+        add_library(${_stub} MODULE
+            plugins/clap/dontfloat_clap_stub.cpp
+            plugins/core/windows_plugin_stub.cpp
+            plugins/core/windows_plugin_stub.h
+            plugins/clap/clap_minimal.h
+        )
+        target_compile_features(${_stub} PRIVATE cxx_std_17)
+        target_compile_definitions(${_stub} PRIVATE "DONTFLOAT_CLAP_IMPL_DLL=L\"${_impl_dll}\"")
+        target_include_directories(${_stub} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/clap
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        )
+        set_target_properties(${_stub} PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "${_DONTFLOAT_CLAP_FILE_${kind}}"
+            SUFFIX ".clap"
+        )
+        add_dependencies(${_stub} ${_impl})
+        install(TARGETS ${_stub} ${_impl}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/clap
+            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/clap
+            OPTIONAL
+        )
+    else()
+        # Non-Windows: expose the impl directly as the .clap module.
+        set_target_properties(${_impl} PROPERTIES
+            OUTPUT_NAME "${_DONTFLOAT_CLAP_FILE_${kind}}"
+            SUFFIX ".clap"
+        )
+        install(TARGETS ${_impl}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/clap
+            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/clap
+            OPTIONAL
+        )
+    endif()
 
     set(_smoke clap_${kind}_smoke_test)
     add_executable(${_smoke}
@@ -109,12 +151,6 @@ function(dontfloat_add_clap_product kind)
     set_tests_properties(${_smoke} PROPERTIES
         LABELS "plugins;clap;${kind}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-
-    install(TARGETS ${_target}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/clap
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/clap
-        OPTIONAL
     )
 endfunction()
 
@@ -151,21 +187,25 @@ function(dontfloat_add_lv2_product kind)
         RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${_bundle_dir}"
     )
 
-    add_library(${_lv2_ui_target} MODULE
+    set(_lv2_ui_impl dontfloat_${kind}_lv2_ui_impl)
+    set(_lv2_ui_stub dontfloat_${kind}_lv2_ui)
+    set(_lv2_ui_impl_dll "${_DONTFLOAT_LV2_UI_BINARY_${kind}}.impl.dll")
+
+    add_library(${_lv2_ui_impl} MODULE
         plugins/lv2/dontfloat_lv2_ui_impl.cpp
         plugins/lv2/lv2_minimal.h
     )
-    target_compile_features(${_lv2_ui_target} PRIVATE cxx_std_17)
-    target_compile_definitions(${_lv2_ui_target} PRIVATE DONTFLOAT_PLUGIN_PRODUCT_INDEX=${_index})
-    target_include_directories(${_lv2_ui_target} PRIVATE
+    target_compile_features(${_lv2_ui_impl} PRIVATE cxx_std_17)
+    target_compile_definitions(${_lv2_ui_impl} PRIVATE DONTFLOAT_PLUGIN_PRODUCT_INDEX=${_index})
+    target_include_directories(${_lv2_ui_impl} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
     )
-    set_target_properties(${_lv2_ui_target} PROPERTIES
+    set_target_properties(${_lv2_ui_impl} PROPERTIES
         PREFIX ""
-        OUTPUT_NAME "${_DONTFLOAT_LV2_UI_BINARY_${kind}}"
-        ARCHIVE_OUTPUT_NAME "${_lv2_ui_target}_import"
+        OUTPUT_NAME "${_DONTFLOAT_LV2_UI_BINARY_${kind}}.impl"
+        ARCHIVE_OUTPUT_NAME "${_lv2_ui_impl}_import"
         LIBRARY_OUTPUT_DIRECTORY "${_bundle_dir}"
         RUNTIME_OUTPUT_DIRECTORY "${_bundle_dir}"
         LIBRARY_OUTPUT_DIRECTORY_DEBUG "${_bundle_dir}"
@@ -177,7 +217,46 @@ function(dontfloat_add_lv2_product kind)
         LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${_bundle_dir}"
         RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${_bundle_dir}"
     )
-    dontfloat_link_plugin_ui(${_lv2_ui_target} ${kind})
+    dontfloat_link_plugin_ui(${_lv2_ui_impl} ${kind})
+
+    if(WIN32)
+        add_library(${_lv2_ui_stub} MODULE
+            plugins/lv2/dontfloat_lv2_ui_stub.cpp
+            plugins/core/windows_plugin_stub.cpp
+            plugins/core/windows_plugin_stub.h
+            plugins/lv2/lv2_minimal.h
+        )
+        target_compile_features(${_lv2_ui_stub} PRIVATE cxx_std_17)
+        target_compile_definitions(${_lv2_ui_stub} PRIVATE
+            "DONTFLOAT_LV2_UI_IMPL_DLL=L\"${_lv2_ui_impl_dll}\""
+        )
+        target_include_directories(${_lv2_ui_stub} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        )
+        set_target_properties(${_lv2_ui_stub} PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "${_DONTFLOAT_LV2_UI_BINARY_${kind}}"
+            ARCHIVE_OUTPUT_NAME "${_lv2_ui_stub}_import"
+            LIBRARY_OUTPUT_DIRECTORY "${_bundle_dir}"
+            RUNTIME_OUTPUT_DIRECTORY "${_bundle_dir}"
+            LIBRARY_OUTPUT_DIRECTORY_DEBUG "${_bundle_dir}"
+            RUNTIME_OUTPUT_DIRECTORY_DEBUG "${_bundle_dir}"
+            LIBRARY_OUTPUT_DIRECTORY_RELEASE "${_bundle_dir}"
+            RUNTIME_OUTPUT_DIRECTORY_RELEASE "${_bundle_dir}"
+            LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${_bundle_dir}"
+            RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${_bundle_dir}"
+            LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${_bundle_dir}"
+            RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${_bundle_dir}"
+        )
+        add_dependencies(${_lv2_ui_stub} ${_lv2_ui_impl})
+        set(_lv2_ui_target ${_lv2_ui_stub})
+    else()
+        set_target_properties(${_lv2_ui_impl} PROPERTIES
+            OUTPUT_NAME "${_DONTFLOAT_LV2_UI_BINARY_${kind}}"
+        )
+        set(_lv2_ui_target ${_lv2_ui_impl})
+    endif()
 
     if(WIN32)
         set(_dontfloat_lv2_binary_ext ".dll")
@@ -266,11 +345,19 @@ function(dontfloat_add_lv2_product kind)
         RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/${_DONTFLOAT_LV2_BUNDLE_${kind}}
         OPTIONAL
     )
-    install(TARGETS ${_lv2_ui_target}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/${_DONTFLOAT_LV2_BUNDLE_${kind}}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/${_DONTFLOAT_LV2_BUNDLE_${kind}}
-        OPTIONAL
-    )
+    if(WIN32)
+        install(TARGETS ${_lv2_ui_stub} ${_lv2_ui_impl}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/${_DONTFLOAT_LV2_BUNDLE_${kind}}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/${_DONTFLOAT_LV2_BUNDLE_${kind}}
+            OPTIONAL
+        )
+    else()
+        install(TARGETS ${_lv2_ui_target}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/${_DONTFLOAT_LV2_BUNDLE_${kind}}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/lv2/${_DONTFLOAT_LV2_BUNDLE_${kind}}
+            OPTIONAL
+        )
+    endif()
     install(FILES
         ${_bundle_dir}/manifest.ttl
         ${_bundle_dir}/${LV2_TTL_FILE}
@@ -303,34 +390,97 @@ function(dontfloat_add_vst3_product kind)
     endif()
 
     _dontfloat_product_index(${kind} _index)
-    set(_target dontfloat_${kind}_vst3)
-    add_library(${_target} MODULE
+    set(_impl dontfloat_${kind}_vst3_impl)
+    set(_stub dontfloat_${kind}_vst3)
+    set(_bundle_name "${_DONTFLOAT_VST3_NAME_${kind}}.vst3")
+    set(_module_name "${_DONTFLOAT_VST3_NAME_${kind}}")
+    set(_impl_dll "${_module_name}.vst3.impl.dll")
+    set(_bundle_dir "${CMAKE_CURRENT_BINARY_DIR}/plugins/vst3/${_bundle_name}")
+    set(_arch_dir "${_bundle_dir}/Contents/x86_64-win")
+
+    # Real VST3 module (Qt). Loaded by stub via LoadLibraryEx(ALTERED_SEARCH_PATH).
+    add_library(${_impl} MODULE
         plugins/vst3/dontfloat_vst3_plugin_impl.cpp
     )
-    target_compile_features(${_target} PRIVATE cxx_std_17)
-    target_compile_definitions(${_target} PRIVATE
+    target_compile_features(${_impl} PRIVATE cxx_std_17)
+    target_compile_definitions(${_impl} PRIVATE
         DONTFLOAT_HAS_VST3_SDK
         DONTFLOAT_PLUGIN_PRODUCT_INDEX=${_index}
     )
-    target_include_directories(${_target} PRIVATE
+    target_include_directories(${_impl} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/vst3
         ${DONTFLOAT_VST3_SDK_ROOT}
     )
-    set_target_properties(${_target} PROPERTIES
+    set_target_properties(${_impl} PROPERTIES
         PREFIX ""
-        OUTPUT_NAME "${_DONTFLOAT_VST3_NAME_${kind}}"
-        SUFFIX ".vst3"
+        OUTPUT_NAME "${_module_name}.vst3.impl"
+        SUFFIX ".dll"
     )
-    target_link_libraries(${_target} PRIVATE sdk)
-    dontfloat_link_plugin_ui(${_target} ${kind})
+    target_link_libraries(${_impl} PRIVATE sdk)
+    dontfloat_link_plugin_ui(${_impl} ${kind})
+    if(WIN32)
+        target_sources(${_impl} PRIVATE
+            "${DONTFLOAT_VST3_SDK_ROOT}/public.sdk/source/main/dllmain.cpp"
+        )
+    endif()
 
-    install(TARGETS ${_target}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/vst3
-        RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/vst3
-        OPTIONAL
-    )
+    if(WIN32)
+        add_library(${_stub} MODULE
+            plugins/vst3/dontfloat_vst3_stub.cpp
+            plugins/core/windows_plugin_stub.cpp
+            plugins/core/windows_plugin_stub.h
+        )
+        target_compile_features(${_stub} PRIVATE cxx_std_17)
+        target_compile_definitions(${_stub} PRIVATE
+            "DONTFLOAT_VST3_IMPL_DLL=L\"${_impl_dll}\""
+        )
+        target_include_directories(${_stub} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        )
+        set_target_properties(${_stub} PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "${_module_name}"
+            SUFFIX ".vst3"
+        )
+        add_dependencies(${_stub} ${_impl})
+
+        add_custom_command(TARGET ${_stub} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_arch_dir}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:${_stub}>"
+                "${_arch_dir}/${_module_name}.vst3"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:${_impl}>"
+                "${_arch_dir}/${_impl_dll}"
+            COMMENT "Packaging ${_bundle_name} VST3 stub+impl bundle"
+            VERBATIM
+        )
+
+        install(CODE "
+            set(_stub \"$<TARGET_FILE:${_stub}>\")
+            set(_impl \"$<TARGET_FILE:${_impl}>\")
+            set(_dst_dir \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/vst3/${_bundle_name}/Contents/x86_64-win\")
+            file(MAKE_DIRECTORY \"\${_dst_dir}\")
+            file(COPY \"\${_stub}\" DESTINATION \"\${_dst_dir}\")
+            file(COPY \"\${_impl}\" DESTINATION \"\${_dst_dir}\")
+            message(STATUS \"Installed VST3 stub+impl: \${_dst_dir}\")
+        " COMPONENT Runtime)
+    else()
+        set_target_properties(${_impl} PROPERTIES
+            OUTPUT_NAME "${_module_name}"
+            SUFFIX ".vst3"
+        )
+        add_custom_command(TARGET ${_impl} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_arch_dir}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:${_impl}>"
+                "${_arch_dir}/${_module_name}.vst3"
+            COMMENT "Packaging ${_bundle_name} VST3 bundle"
+            VERBATIM
+        )
+    endif()
 endfunction()
 
 function(dontfloat_add_all_plugin_products)

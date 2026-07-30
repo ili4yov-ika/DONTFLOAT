@@ -74,7 +74,7 @@ QByteArray NotePreviewPlayer::renderLoopBuffer() const
     }
 
     // Varispeed-ресемплинг: выше нота — быстрее чтение (короче цикл).
-    const float ratio = std::pow(2.0f, float(m_semitones) / 12.0f);
+    const float ratio = std::pow(2.0f, m_semitones / 12.0f);
     const int outLength = qMax(kFadeSamples * 2, int(m_segment.size() / ratio));
 
     QByteArray bytes(outLength * int(sizeof(float)), Qt::Uninitialized);
@@ -100,7 +100,7 @@ QByteArray NotePreviewPlayer::renderLoopBuffer() const
     return bytes;
 }
 
-void NotePreviewPlayer::start(const QVector<float>& monoSegment, int sampleRate, int semitoneOffset)
+void NotePreviewPlayer::start(const QVector<float>& monoSegment, int sampleRate, float semitoneOffset)
 {
     stop();
 
@@ -130,9 +130,9 @@ void NotePreviewPlayer::start(const QVector<float>& monoSegment, int sampleRate,
     m_sink->start(m_device);
 }
 
-void NotePreviewPlayer::setSemitoneOffset(int semitones)
+void NotePreviewPlayer::setSemitoneOffset(float semitones)
 {
-    if (semitones == m_semitones) {
+    if (std::abs(semitones - m_semitones) < 1.0e-4f) {
         return;
     }
     m_semitones = semitones;

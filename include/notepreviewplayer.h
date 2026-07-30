@@ -27,9 +27,9 @@ public:
     ~NotePreviewPlayer() override;
 
     /** Запускает зацикленное воспроизведение сегмента со сдвигом в полутонах. */
-    void start(const QVector<float>& monoSegment, int sampleRate, int semitoneOffset);
+    void start(const QVector<float>& monoSegment, int sampleRate, float semitoneOffset);
     /** Меняет сдвиг высоты (в полутонах от исходной) без остановки цикла. */
-    void setSemitoneOffset(int semitones);
+    void setSemitoneOffset(float semitones);
     void stop();
     bool isActive() const { return m_sink != nullptr; }
 
@@ -59,7 +59,7 @@ private:
     LoopDevice* m_device = nullptr;
     QVector<float> m_segment;
     int m_sampleRate = 0;
-    int m_semitones = 0;
+    float m_semitones = 0.0f;
 };
 
 #endif // NOTEPREVIEWPLAYER_H

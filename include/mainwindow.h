@@ -91,10 +91,10 @@ private slots:
     void analyzeKey();
     void startPitchAnalysis();
     void onPitchAnalysisFinished();
-    void onNotePitchEdited(int noteIndex, int oldPitch, int newPitch);
+    void onNotePitchEdited(int noteIndex, float oldPitch, float newPitch);
     void applyPitchCorrection();
     void onNotePreviewRequested(int noteIndex);
-    void onNotePreviewPitchChanged(int noteIndex, int midiPitch);
+    void onNotePreviewPitchChanged(int noteIndex, float midiPitch);
     void stopNotePreview();
     void onPitchGridAnalyzeClicked();
     void showKeyContextMenu(const QPoint& pos);

@@ -41,7 +41,7 @@ public:
     const QVector<PitchDetector::PitchNote>& notes() const { return pitchNotes; }
     void clearNotes();
     /** Меняет высоту одной ноты (для undo/redo), без сигналов. */
-    void setNotePitch(int noteIndex, int midiPitch);
+    void setNotePitch(int noteIndex, float midiPitch);
 
 signals:
     void positionChanged(qint64 position);
@@ -50,11 +50,11 @@ signals:
     void verticalOffsetChanged(float offset);
     void timelineZoomRequested(int angleDeltaY, float timelinePixelX);
     /** Пользователь изменил высоту ноты (drag или клавиши). */
-    void notePitchEdited(int noteIndex, int oldPitch, int newPitch);
+    void notePitchEdited(int noteIndex, float oldPitch, float newPitch);
     /** Блок ноты зажат мышью — начать зацикленное прослушивание. */
     void notePreviewRequested(int noteIndex);
     /** Высота удерживаемой ноты изменилась во время drag. */
-    void notePreviewPitchChanged(int noteIndex, int midiPitch);
+    void notePreviewPitchChanged(int noteIndex, float midiPitch);
     /** Блок ноты отпущен — остановить прослушивание. */
     void notePreviewStopped();
 
@@ -101,6 +101,8 @@ private:
     void changeSelectedNotePitch(int semitoneDelta);
 
     int getPitchFromY(int y) const;
+    float getContinuousPitchFromY(float y) const;
+    float pitchToContentY(float midiPitch) const;
     qint64 getPositionFromX(int x) const;
     PianoRollEngine::Viewport currentViewport() const;
     void adjustHorizontalOffset(float delta);
@@ -146,14 +148,15 @@ private:
     int selectedPitch;
     int selectedNoteIndex;
     bool isNoteDragging;
-    int noteDragStartPitch;
+    float noteDragStartPitch;
+    bool noteDragFreePitch;
 
     static constexpr int kLegendColumnWidthPx = 36;
     static constexpr int kLegendBackgroundAlpha = 165;
     static constexpr int kPitchRowHeightPx = 16;
     static constexpr int kMinVisiblePitchRows = 4;
-    static constexpr int kMinPitchDefault = 36;
-    static constexpr int kMaxPitchDefault = 84;
+    static constexpr int kMinPitchDefault = 12;  // C0
+    static constexpr int kMaxPitchDefault = 84;  // C6
 };
 
 #endif // PITCHGRIDWIDGET_H

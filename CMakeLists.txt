@@ -76,6 +76,7 @@ option(DONTFLOAT_BUILD_PLUGINS "Build DAW plugin targets" ON)
 option(DONTFLOAT_BUILD_CLAP "Build CLAP plugin target when plugins are enabled" ON)
 option(DONTFLOAT_BUILD_LV2 "Build LV2 plugin target when plugins are enabled" ON)
 option(DONTFLOAT_BUILD_VST3 "Build VST3 plugin target when SDK is available" ON)
+option(DONTFLOAT_BUILD_PLUGIN_TESTER "Build plugin host probe GUI tool" ON)
 set(DONTFLOAT_CLAP_SDK_ROOT "" CACHE PATH "Optional path to official CLAP SDK")
 set(DONTFLOAT_VST3_SDK_ROOT "" CACHE PATH "Optional path to VST3 SDK")
 if(DONTFLOAT_VST3_SDK_ROOT STREQUAL "" AND DEFINED ENV{DONTFLOAT_VST3_SDK_ROOT})
@@ -410,6 +411,75 @@ if(DONTFLOAT_BUILD_PLUGINS)
         DESCRIPTION "Smoke tests for DONTFLOAT plugin core Track Tool session"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
+
+    if(DONTFLOAT_BUILD_PLUGIN_TESTER AND WIN32)
+        set(PLUGIN_TESTER_PROBE_SOURCES
+            tools/plugin_tester/plugin_host_probe.cpp
+            tools/plugin_tester/plugin_host_probe.h
+        )
+
+        add_executable(dontfloat_plugin_tester WIN32
+            tools/plugin_tester/main.cpp
+            tools/plugin_tester/plugin_tester_window.cpp
+            tools/plugin_tester/plugin_tester_window.h
+            ${PLUGIN_TESTER_PROBE_SOURCES}
+        )
+        set_target_properties(dontfloat_plugin_tester PROPERTIES
+            AUTOMOC ON
+            WIN32_EXECUTABLE TRUE
+        )
+        target_include_directories(dontfloat_plugin_tester PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/plugin_tester
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/clap
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2
+        )
+        target_link_libraries(dontfloat_plugin_tester PRIVATE
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Widgets
+        )
+        target_compile_definitions(dontfloat_plugin_tester PRIVATE
+            "DONTFLOAT_PLUGIN_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\""
+        )
+        if(MSVC)
+            target_link_options(dontfloat_plugin_tester PRIVATE /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup)
+        endif()
+        dontfloat_deploy_qt(dontfloat_plugin_tester)
+
+        add_executable(plugin_host_probe_test
+            tools/plugin_tester/plugin_host_probe_test.cpp
+            ${PLUGIN_TESTER_PROBE_SOURCES}
+        )
+        target_include_directories(plugin_host_probe_test PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/plugin_tester
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/clap
+            ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2
+        )
+        target_link_libraries(plugin_host_probe_test PRIVATE Qt6::Core)
+        target_compile_definitions(plugin_host_probe_test PRIVATE
+            "DONTFLOAT_PLUGIN_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\""
+        )
+        if(DEFINED QT_ROOT_DIR)
+            add_test(NAME plugin_host_probe_test
+                COMMAND ${CMAKE_COMMAND}
+                    -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                    -DCONFIG=$<CONFIG>
+                    -DTARGET_NAME=plugin_host_probe_test
+                    -DQT_ROOT=${QT_ROOT_DIR}
+                    -DWORKING_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                    -DCMAKE_EXECUTABLE_SUFFIX=${CMAKE_EXECUTABLE_SUFFIX}
+                    -DCMAKE_COMMAND=${CMAKE_COMMAND}
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/RunQtTest.cmake
+            )
+        else()
+            add_test(NAME plugin_host_probe_test COMMAND plugin_host_probe_test)
+        endif()
+        set_tests_properties(plugin_host_probe_test PROPERTIES
+            LABELS "plugins;host-probe"
+            DESCRIPTION "Load/instantiate CLAP, VST3, LV2 product modules"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+    endif()
 endif()
 
 # Функция для создания тестового исполняемого файла
@@ -522,6 +592,19 @@ add_qt_test(pitch_compensation_file_test
 set_tests_properties(pitch_compensation_file_test PROPERTIES
     LABELS "timestretch;pitch;integration;files"
     DESCRIPTION "Pitch preservation on pitch-test_C140BPM.mp3 with marker stretch/compress"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Точность PitchDetector на синтезированных MIDI→WAV фикстурах (C0, мелодия, vibrato, detune)
+add_qt_test(pitch_detector_accuracy_test
+    tests/pitch_detector_accuracy_test.cpp
+    src/pitchdetector.cpp
+    src/audiofileservice.cpp
+)
+
+set_tests_properties(pitch_detector_accuracy_test PROPERTIES
+    LABELS "pitch;detector;accuracy;fixtures"
+    DESCRIPTION "PitchDetector accuracy on generated MIDI→WAV pitch fixtures"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 

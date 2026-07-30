@@ -3,6 +3,8 @@
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
 
+#include <QString>
+
 #include <algorithm>
 #include <cstring>
 #include <memory>
@@ -51,6 +53,7 @@ namespace Dontfloat::Vst3 {
 using Dontfloat::PluginCore::TrackAudioInfo;
 using Dontfloat::PluginCore::TrackToolSession;
 using Dontfloat::PluginCore::sharedSession;
+using Dontfloat::PluginHost::desc;
 using Dontfloat::PluginHost::product;
 using Dontfloat::Plugins::Ui::DontfloatPluginEditorShell;
 using Dontfloat::Plugins::Ui::ensureQtApplication;
@@ -91,9 +94,10 @@ public:
             return Steinberg::kInvalidArgument;
         }
 
-        ensureQtApplication();
+        ensureQtApplication(desc().clapName);
         editor_ = std::make_unique<DontfloatPluginEditorShell>(product());
         editor_->bindSession(&sharedSession(product()));
+        editor_->setWindowTitle(QString::fromUtf8(desc().clapName));
         editor_->setAttribute(Qt::WA_NativeWindow, true);
         editor_->resize(kEditorWidth, kEditorHeight);
         editor_->show();

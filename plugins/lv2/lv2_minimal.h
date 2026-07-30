@@ -61,4 +61,17 @@ struct LV2UI_Descriptor {
     const void* (*extension_data)(const char* uri);
 };
 
+#define LV2_UI__parent "http://lv2plug.in/ns/extensions/ui#parent"
+#define LV2_UI__idleInterface "http://lv2plug.in/ns/extensions/ui#idleInterface"
+#define LV2_UI__resize "http://lv2plug.in/ns/extensions/ui#resize"
+
+struct LV2UI_Idle_Interface {
+    int (*idle)(LV2UI_Handle ui);
+};
+
+struct LV2UI_Resize {
+    LV2UI_Controller handle;
+    int (*ui_resize)(LV2UI_Controller handle, int width, int height);
+};
+
 #endif // DONTFLOAT_LV2_MINIMAL_H
