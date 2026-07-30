@@ -41,9 +41,7 @@ int main(int argc, char** argv)
     MiniDaw::writeOutput(options, audio.sampleRate, outL, outR);
     MiniDaw::runOfflineAnalysis(audio);
 
-    if (options.gui) {
-        return MiniDaw::runEditorGui(app, audio, "VST3");
-    }
-    std::printf(" [done] VST3 mini-DAW finished (headless). Use --gui to open the editor.\n");
+    std::printf(" [done] VST3 mini-DAW finished: streamed test_1.wav through %s.\n",
+                MiniDaw::productName());
     return 0;
 }

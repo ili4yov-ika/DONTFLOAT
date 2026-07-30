@@ -28,10 +28,6 @@
 #include "plugin_host_config.h"
 
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QLabel>
-#include <QtWidgets/QVBoxLayout>
-#include <QtWidgets/QWidget>
-#include "dontfloat_plugin_editor_shell.h"
 
 namespace MiniDaw {
 
@@ -40,7 +36,6 @@ struct Options {
     QString output;            // default derived from product + format
     int blockSize = 512;       // host processing block size (frames)
     double maxSeconds = 8.0;   // cap processed length (<= 0 => whole file)
-    bool gui = false;          // show the plugin editor window
     bool writeOutput = true;   // write the processed output WAV
 };
 
@@ -67,13 +62,10 @@ inline Options parseArgs(int argc, char** argv, const char* formatTag)
             o.maxSeconds = next(QStringLiteral("8")).toDouble();
         } else if (a == QLatin1String("--full")) {
             o.maxSeconds = 0.0;
-        } else if (a == QLatin1String("--gui")) {
-            o.gui = true;
-        } else if (a == QLatin1String("--headless")) {
-            o.gui = false;
         } else if (a == QLatin1String("--no-output")) {
             o.writeOutput = false;
         }
+        // --headless is accepted for compatibility (this host is always headless).
     }
     if (o.output.isEmpty()) {
         o.output = QStringLiteral("mini_daw_%1_%2_out.wav")
@@ -238,48 +230,6 @@ inline int runCoreEngine(const LoadedAudio& a, const Options& o,
     std::printf(" [core] streamed %lld frames through session (in RMS %.4f)\n",
                 processed, rms(a.left));
     return 0;
-}
-
-// Show the actual plugin editor (compiled for this product) with the loaded
-// audio bound into a session. Returns the Qt event-loop exit code.
-inline int runEditorGui(QApplication& app, const LoadedAudio& a, const char* format)
-{
-    using namespace Dontfloat;
-
-    static PluginCore::TrackToolSession guiSession;
-    guiSession.setAudioBuffer(makeBuffer(a));
-
-    auto* window = new QWidget;
-    window->setObjectName(QStringLiteral("miniDawWindow"));
-    window->setWindowTitle(QStringLiteral("DONTFLOAT mini-DAW [%1] — %2")
-                               .arg(QString::fromLatin1(format))
-                               .arg(QString::fromUtf8(productName())));
-    window->resize(1180, 680);
-
-    auto* layout = new QVBoxLayout(window);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
-
-    auto* bar = new QLabel(
-        QStringLiteral("mini-DAW host  ·  format: %1  ·  %2  ·  %3 Hz  ·  %4 frames (%5 s) loaded from %6")
-            .arg(QString::fromLatin1(format))
-            .arg(QString::fromUtf8(productName()))
-            .arg(a.sampleRate)
-            .arg(a.frames)
-            .arg(a.sampleRate > 0 ? double(a.frames) / double(a.sampleRate) : 0.0, 0, 'f', 1)
-            .arg(QStringLiteral("test_1.wav")),
-        window);
-    bar->setStyleSheet(QStringLiteral(
-        "background:#11151c;color:#cdd6e5;padding:7px 12px;font-weight:bold;"));
-    layout->addWidget(bar);
-
-    auto* shell = new Plugins::Ui::DontfloatPluginEditorShell(PluginHost::product());
-    shell->bindSession(&guiSession);
-    shell->notifyHostAudioAppended();
-    layout->addWidget(shell, 1);
-
-    window->show();
-    return app.exec();
 }
 
 } // namespace MiniDaw

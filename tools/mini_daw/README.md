@@ -3,7 +3,8 @@
 Minimal in-process plugin hosts ("mini-DAWs") for every plugin **format** and
 **product kind**. Each host loads an audio file (default `tests/midi/test_1.wav`),
 instantiates the DONTFLOAT plugin for its product, streams the whole file through
-the plugin, writes the processed output to a WAV, and can host the plugin editor.
+the plugin, writes the processed output to a WAV, and exercises the shared plugin
+core session (prepare + analyze). These are headless command-line hosts.
 
 ## Targets
 
@@ -27,14 +28,15 @@ Disable with `-DDONTFLOAT_BUILD_MINI_DAW=OFF`.
 ## Usage
 
 ```bash
-# headless: load test_1.wav, stream through the plugin, print a summary
-QT_QPA_PLATFORM=offscreen ./mini_daw_clap_full --headless --seconds 4 --no-output
+# load test_1.wav, stream through the plugin, print a summary (no display needed)
+QT_QPA_PLATFORM=offscreen ./mini_daw_clap_full --seconds 4 --no-output
 
 # write the processed output to a WAV
-./mini_daw_lv2_scratch --input tests/midi/test_1.wav --output out.wav
+QT_QPA_PLATFORM=offscreen ./mini_daw_lv2_scratch \
+    --input tests/midi/test_1.wav --output out.wav
 
-# open the plugin editor GUI with the audio loaded (needs a display)
-./mini_daw_clap_pitcher --gui
+# process the whole file through the Pitcher CLAP plugin
+QT_QPA_PLATFORM=offscreen ./mini_daw_clap_pitcher --full --no-output
 ```
 
 ### Options
@@ -45,8 +47,10 @@ QT_QPA_PLATFORM=offscreen ./mini_daw_clap_full --headless --seconds 4 --no-outpu
 | `--output, -o <path>` | derived | processed output WAV path |
 | `--block <n>` | `512` | host processing block size (frames) |
 | `--seconds <s>` | `8` | cap processed length (`--full` = whole file) |
-| `--gui` / `--headless` | headless | show the plugin editor / run headless |
 | `--no-output` | write | skip writing the output WAV |
+
+> Note: these hosts need a Qt platform plugin; run headless with
+> `QT_QPA_PLATFORM=offscreen`.
 
 ## Tests
 
