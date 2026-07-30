@@ -52,7 +52,7 @@ void alignWaveformViewToBarGrid(WaveformView* view, float bpm, int beatsPerBar, 
 MarkerTestGenWindow::MarkerTestGenWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    setWindowTitle(tr("DONTFLOAT — разметка тестовых файлов"));
+    setWindowTitle(tr("DONTFLOAT — test file marking"));
     setMinimumSize(900, 520);
     resize(1100, 640);
 
@@ -62,14 +62,14 @@ MarkerTestGenWindow::MarkerTestGenWindow(QWidget* parent)
 
 void MarkerTestGenWindow::setupUi()
 {
-    auto* fileMenu = menuBar()->addMenu(tr("&Файл"));
-    fileMenu->addAction(tr("&Открыть…"), this, &MarkerTestGenWindow::openAudioFile, QKeySequence::Open);
-    fileMenu->addAction(tr("&Сохранить…"), this, &MarkerTestGenWindow::saveProject, QKeySequence::Save);
+    auto* fileMenu = menuBar()->addMenu(tr("&File"));
+    fileMenu->addAction(tr("&Open..."), this, &MarkerTestGenWindow::openAudioFile, QKeySequence::Open);
+    fileMenu->addAction(tr("&Save…"), this, &MarkerTestGenWindow::saveProject, QKeySequence::Save);
     fileMenu->addSeparator();
-    fileMenu->addAction(tr("В&ыход"), this, &QWidget::close, QKeySequence::Quit);
+    fileMenu->addAction(tr("E&xit"), this, &QWidget::close, QKeySequence::Quit);
 
-    auto* editMenu = menuBar()->addMenu(tr("&Правка"));
-    editMenu->addAction(tr("Привязать метки к сетке"), this, &MarkerTestGenWindow::snapMarkersToGrid);
+    auto* editMenu = menuBar()->addMenu(tr("&Edit"));
+    editMenu->addAction(tr("Snap markers to grid"), this, &MarkerTestGenWindow::snapMarkersToGrid);
 
     auto* central = new QWidget(this);
     auto* root = new QVBoxLayout(central);
@@ -80,7 +80,7 @@ void MarkerTestGenWindow::setupUi()
     m_bpmEdit->setFixedWidth(72);
     toolbar->addWidget(m_bpmEdit);
 
-    toolbar->addWidget(new QLabel(tr("Размер:"), central));
+    toolbar->addWidget(new QLabel(tr("Size:"), central));
     m_barsCombo = new QComboBox(central);
     const QList<int> bpbValues = { 4, 3, 1, 2, 6, 12 };
     for (int v : bpbValues) {
@@ -88,16 +88,16 @@ void MarkerTestGenWindow::setupUi()
     }
     toolbar->addWidget(m_barsCombo);
 
-    auto* gridBack = new QPushButton(tr("◀ сетка"), central);
-    gridBack->setToolTip(tr("Сдвинуть тактовую сетку на один удар назад (Shift — вместе с метками)\n"
-                           "Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки"));
-    auto* gridFwd = new QPushButton(tr("сетка ▶"), central);
-    gridFwd->setToolTip(tr("Сдвинуть тактовую сетку на один удар вперёд (Shift — вместе с метками)\n"
-                           "Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки"));
+    auto* gridBack = new QPushButton(tr("◀ grid"), central);
+    gridBack->setToolTip(tr("Shift the bar grid one beat backward (Shift — with markers)\n"
+                           "Shift + LMB drag on waveform — fine grid adjustment"));
+    auto* gridFwd = new QPushButton(tr("grid ▶"), central);
+    gridFwd->setToolTip(tr("Shift the bar grid one beat forward (Shift — with markers)\n"
+                           "Shift + LMB drag on waveform — fine grid adjustment"));
     toolbar->addWidget(gridBack);
     toolbar->addWidget(gridFwd);
 
-    auto* snapBtn = new QPushButton(tr("Привязать метки"), central);
+    auto* snapBtn = new QPushButton(tr("Snap markers"), central);
     toolbar->addWidget(snapBtn);
 
     toolbar->addStretch();
@@ -123,7 +123,7 @@ void MarkerTestGenWindow::setupUi()
     root->addWidget(m_horizontalScrollBar);
 
     setCentralWidget(central);
-    statusBar()->showMessage(tr("Откройте аудиофайл с постоянным BPM"));
+    statusBar()->showMessage(tr("Open an audio file with a constant BPM"));
 
     m_mediaPlayer = new QMediaPlayer(this);
     m_audioOutput = new QAudioOutput(this);
@@ -218,8 +218,8 @@ bool MarkerTestGenWindow::maybeSave()
         return true;
     }
     const auto reply = QMessageBox::question(
-        this, tr("Сохранить изменения?"),
-        tr("Сохранить метки и аудио перед продолжением?"),
+        this, tr("Save changes?"),
+        tr("Save markers and audio before continuing?"),
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
         QMessageBox::Save);
     if (reply == QMessageBox::Cancel) {
@@ -239,14 +239,14 @@ void MarkerTestGenWindow::openAudioFile()
     }
 
     const QString path = QFileDialog::getOpenFileName(
-        this, tr("Открыть аудио"),
+        this, tr("Open audio"),
         m_audioPath.isEmpty() ? QDir::currentPath() : QFileInfo(m_audioPath).absolutePath(),
-        tr("Аудио (*.wav *.mp3 *.flac);;Все файлы (*)"));
+        tr("Audio (*.wav *.mp3 *.flac);;All files (*)"));
     if (path.isEmpty()) {
         return;
     }
 
-    QProgressDialog progress(tr("Декодирование…"), QString(), 0, 100, this);
+    QProgressDialog progress(tr("Decoding…"), QString(), 0, 100, this);
     progress.setWindowModality(Qt::WindowModal);
     progress.setMinimumDuration(300);
     progress.show();
@@ -256,8 +256,8 @@ void MarkerTestGenWindow::openAudioFile()
     progress.close();
 
     if (!res.ok || res.channels.isEmpty()) {
-        QMessageBox::warning(this, tr("Ошибка"),
-                             tr("Не удалось декодировать файл: %1").arg(res.error));
+        QMessageBox::warning(this, tr("Error"),
+                             tr("Failed to decode file: %1").arg(res.error));
         return;
     }
 
@@ -289,7 +289,7 @@ void MarkerTestGenWindow::openAudioFile()
         m_waveformView->setGridStartSample(m_meta.gridStartSample);
         m_waveformView->setMarkers(MarkersFile::markersFromEntries(loadedEntries, res.sampleRate));
         alignViewToGrid();
-        setStatus(tr("Загружены метки из %1").arg(QFileInfo(m_markersPath).fileName()));
+        setStatus(tr("Loaded markers from %1").arg(QFileInfo(m_markersPath).fileName()));
     } else {
         if (!analyzeAndPlaceBeatMarkers()) {
             return;
@@ -315,8 +315,8 @@ bool MarkerTestGenWindow::analyzeAndPlaceBeatMarkers()
         BPMAnalyzer::analyzeBPM(mono, sampleRate, options);
 
     if (analysis.bpm <= 0.f) {
-        QMessageBox::warning(this, tr("Анализ BPM"),
-                             tr("Не удалось определить BPM. Укажите BPM вручную."));
+        QMessageBox::warning(this, tr("BPM analysis"),
+                             tr("Could not detect BPM. Enter BPM manually."));
         return false;
     }
 
@@ -336,7 +336,7 @@ bool MarkerTestGenWindow::analyzeAndPlaceBeatMarkers()
     alignViewToGrid();
     m_waveformView->update();
 
-    setStatus(tr("BPM: %1 — метки на каждой доле").arg(analysis.bpm, 0, 'f', 2), 5000);
+    setStatus(tr("BPM: %1 — markers on each beat").arg(analysis.bpm, 0, 'f', 2), 5000);
     return true;
 }
 
@@ -416,8 +416,8 @@ void MarkerTestGenWindow::shiftGridByBeats(int beatDelta)
     m_waveformView->shiftGridBySamples(newGrid - oldGrid, moveMarkers);
     alignViewToGrid();
 
-    setStatus(tr("Сетка сдвинута %1 на 1 удар")
-                  .arg(beatDelta < 0 ? tr("назад") : tr("вперёд")));
+    setStatus(tr("Grid shifted %1 by 1 beat")
+                  .arg(beatDelta < 0 ? tr("back") : tr("forward")));
 }
 
 void MarkerTestGenWindow::shiftGridBackward()
@@ -438,7 +438,7 @@ void MarkerTestGenWindow::snapMarkersToGrid()
     const QVector<Marker> snapped = m_waveformView->snapMarkersToGrid(m_waveformView->getMarkers());
     m_waveformView->setMarkers(snapped);
     m_dirty = true;
-    setStatus(tr("Метки привязаны к тактовой сетке"));
+    setStatus(tr("Markers snapped to the bar grid"));
 }
 
 void MarkerTestGenWindow::onBpmEdited()
@@ -476,9 +476,9 @@ void MarkerTestGenWindow::saveProject()
 
     const QString defaultAudio = m_audioPath;
     const QString audioOut = QFileDialog::getSaveFileName(
-        this, tr("Сохранить аудиофайл"),
+        this, tr("Save Audio File"),
         defaultAudio,
-        tr("WAV (*.wav);;MP3 — копия исходника (*.mp3);;Все файлы (*)"));
+        tr("WAV (*.wav);;MP3 — source copy (*.mp3);;All files (*)"));
     if (audioOut.isEmpty()) {
         return;
     }
@@ -493,7 +493,7 @@ void MarkerTestGenWindow::saveProject()
         QString err;
         if (!WavWriter::writeFile(audioOut, m_waveformView->getAudioData(),
                                   m_waveformView->getSampleRate(), &err, opts)) {
-            QMessageBox::warning(this, tr("Ошибка"), err);
+            QMessageBox::warning(this, tr("Error"), err);
             return;
         }
     } else if (QFileInfo(m_audioPath).absoluteFilePath() != QFileInfo(audioOut).absoluteFilePath()) {
@@ -501,8 +501,8 @@ void MarkerTestGenWindow::saveProject()
             QFile::remove(audioOut);
         }
         if (!QFile::copy(m_audioPath, audioOut)) {
-            QMessageBox::warning(this, tr("Ошибка"),
-                                 tr("Не удалось скопировать аудиофайл."));
+            QMessageBox::warning(this, tr("Error"),
+                                 tr("Failed to copy the audio file."));
             return;
         }
     }
@@ -515,14 +515,14 @@ void MarkerTestGenWindow::saveProject()
     QString err;
     if (!MarkersFile::writeFile(markersOut, m_meta, m_waveformView->getMarkers(),
                                 m_meta.sampleRate, &err)) {
-        QMessageBox::warning(this, tr("Ошибка"), err);
+        QMessageBox::warning(this, tr("Error"), err);
         return;
     }
 
     m_audioPath = audioOut;
     m_markersPath = markersOut;
     m_dirty = false;
-    setStatus(tr("Сохранено: %1 и %2")
+    setStatus(tr("Saved: %1 and %2")
                   .arg(QFileInfo(audioOut).fileName(), QFileInfo(markersOut).fileName()), 6000);
 }
 

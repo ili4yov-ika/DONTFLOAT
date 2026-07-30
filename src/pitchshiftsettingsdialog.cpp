@@ -12,7 +12,7 @@
 PitchShiftSettingsDialog::PitchShiftSettingsDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle(tr("Настройки питч-шифтера"));
+    setWindowTitle(tr("Pitch shift settings"));
     setModal(false);
     buildUi();
 }
@@ -21,12 +21,12 @@ void PitchShiftSettingsDialog::buildUi()
 {
     auto* mainLayout = new QVBoxLayout(this);
 
-    enableCheck = new QCheckBox(tr("Применять питч-шифт после растяжения"), this);
+    enableCheck = new QCheckBox(tr("Apply pitch shift after time stretch"), this);
     // По умолчанию питч-шифтер активен после растяжения
     enableCheck->setChecked(true);
     mainLayout->addWidget(enableCheck);
 
-    auto* group = new QGroupBox(tr("Параметры"), this);
+    auto* group = new QGroupBox(tr("Parameters"), this);
     auto* form  = new QFormLayout(group);
 
     // Питч (полутоны)
@@ -34,13 +34,13 @@ void PitchShiftSettingsDialog::buildUi()
     pitchSlider->setRange(-24, 24);
     pitchSlider->setSingleStep(1);
     pitchSlider->setValue(0);
-    pitchSlider->setToolTip(tr("Сдвиг высоты тона в полутонах (−24..+24)."));
-    pitchLabel = new QLabel(tr("0 пт"), this);
+    pitchSlider->setToolTip(tr("Pitch in semitones (−24..+24)."));
+    pitchLabel = new QLabel(tr("0 st"), this);
     {
         auto* row = new QHBoxLayout;
         row->addWidget(pitchSlider);
         row->addWidget(pitchLabel);
-        form->addRow(tr("Питч (пт):"), row);
+        form->addRow(tr("Pitch (st):"), row);
     }
 
     // Частота гран
@@ -48,70 +48,70 @@ void PitchShiftSettingsDialog::buildUi()
     grainHzSlider->setRange(20, 400); // 2.0..40.0 Гц × 10
     grainHzSlider->setSingleStep(5);
     grainHzSlider->setValue(80); // 8.0 Гц по умолчанию
-    grainHzSlider->setToolTip(tr("Частота генерации гран (Гц).\nМеньше = крупные граны, мягче. Больше = мелкие граны, чище."));
-    grainHzLabel = new QLabel(tr("8.0 Гц"), this);
+    grainHzSlider->setToolTip(tr("Grain rate (Hz). Lower = larger grains; higher = smaller, cleaner."));
+    grainHzLabel = new QLabel(tr("8.0 Hz"), this);
     {
         auto* row = new QHBoxLayout;
         row->addWidget(grainHzSlider);
         row->addWidget(grainHzLabel);
-        form->addRow(tr("Частота гран (Гц):"), row);
+        form->addRow(tr("Grain rate (Hz):"), row);
     }
 
     // Форма огибающей
     shapeSlider = new QSlider(Qt::Horizontal, this);
     shapeSlider->setRange(0, 100);
     shapeSlider->setValue(50);
-    shapeSlider->setToolTip(tr("Форма огибающей гранулы.\n0 = equal-gain (ровнее), 100 = equal-power (плотнее)."));
+    shapeSlider->setToolTip(tr("Grain envelope. 0 = equal-gain; 100 = equal-power."));
     shapeLabel = new QLabel(tr("50%"), this);
     {
         auto* row = new QHBoxLayout;
         row->addWidget(shapeSlider);
         row->addWidget(shapeLabel);
-        form->addRow(tr("Форма огибающей:"), row);
+        form->addRow(tr("Envelope:"), row);
     }
 
     // Джиттер питча
     jitterSlider = new QSlider(Qt::Horizontal, this);
     jitterSlider->setRange(0, 100);
     jitterSlider->setValue(0);
-    jitterSlider->setToolTip(tr("Разброс питча гран (0..1 октавы).\nДобавляет хорусный/ансамблевый эффект."));
+    jitterSlider->setToolTip(tr("Pitch spread (0..1 octave). Chorus-like."));
     jitterLabel = new QLabel(tr("0%"), this);
     {
         auto* row = new QHBoxLayout;
         row->addWidget(jitterSlider);
         row->addWidget(jitterLabel);
-        form->addRow(tr("Разброс питча:"), row);
+        form->addRow(tr("Pitch spread:"), row);
     }
 
     // Wet mix
     wetSlider = new QSlider(Qt::Horizontal, this);
     wetSlider->setRange(0, 100);
     wetSlider->setValue(100);
-    wetSlider->setToolTip(tr("Уровень обработанного сигнала (wet/dry)."));
+    wetSlider->setToolTip(tr("Wet/dry level."));
     wetLabel = new QLabel(tr("100%"), this);
     {
         auto* row = new QHBoxLayout;
         row->addWidget(wetSlider);
         row->addWidget(wetLabel);
-        form->addRow(tr("Уровень (wet):"), row);
+        form->addRow(tr("Wet level:"), row);
     }
 
     // Предфильтр
-    prefilterCheck = new QCheckBox(tr("Предфильтр (убирает алиасинг при сдвиге вверх)"), this);
+    prefilterCheck = new QCheckBox(tr("Prefilter (reduces aliasing when shifting up)"), this);
     prefilterCheck->setChecked(true);
     form->addRow(prefilterCheck);
 
     mainLayout->addWidget(group);
 
     auto* note = new QLabel(
-        tr("<small><i>Питч-шифт применяется к аудио при нажатии Ctrl+T.</i></small>"),
+        tr("<small><i>Pitch shift applies on Ctrl+T.</i></small>"),
         this);
     note->setWordWrap(true);
     mainLayout->addWidget(note);
 
     mainLayout->addStretch();
 
-    closeBtn = new QPushButton(tr("Закрыть"), this);
+    closeBtn = new QPushButton(tr("Close"), this);
     mainLayout->addWidget(closeBtn, 0, Qt::AlignRight);
 
     setFixedWidth(400);
@@ -127,11 +127,11 @@ void PitchShiftSettingsDialog::buildUi()
         onAnyChange();
     });
     connect(pitchSlider, &QSlider::valueChanged, this, [this](int v) {
-        pitchLabel->setText(tr("%1 пт").arg(v > 0 ? QString("+%1").arg(v) : QString::number(v)));
+        pitchLabel->setText(tr("%1 st").arg(v > 0 ? QString("+%1").arg(v) : QString::number(v)));
         onAnyChange();
     });
     connect(grainHzSlider, &QSlider::valueChanged, this, [this](int v) {
-        grainHzLabel->setText(tr("%1 Гц").arg(v / 10.0, 0, 'f', 1));
+        grainHzLabel->setText(tr("%1 Hz").arg(v / 10.0, 0, 'f', 1));
         onAnyChange();
     });
     connect(shapeSlider, &QSlider::valueChanged, this, [this](int v) {
@@ -172,13 +172,13 @@ void PitchShiftSettingsDialog::setParams(const GranularEngine::Params& p)
 
     enableCheck->setChecked(p.enabled);
     pitchSlider->setValue(qRound(p.pitchSemitones));
-    pitchLabel->setText(tr("%1 пт").arg(pitchSlider->value() > 0
+    pitchLabel->setText(tr("%1 st").arg(pitchSlider->value() > 0
         ? QString("+%1").arg(pitchSlider->value())
         : QString::number(pitchSlider->value())));
 
     const int grainHzInt = qRound(p.grainHz * 10.f);
     grainHzSlider->setValue(grainHzInt);
-    grainHzLabel->setText(tr("%1 Гц").arg(p.grainHz, 0, 'f', 1));
+    grainHzLabel->setText(tr("%1 Hz").arg(p.grainHz, 0, 'f', 1));
 
     shapeSlider->setValue(qRound(p.shape * 100.f));
     shapeLabel->setText(tr("%1%").arg(shapeSlider->value()));

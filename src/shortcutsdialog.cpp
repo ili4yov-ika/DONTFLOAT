@@ -14,34 +14,34 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
     , resetButton(nullptr)
     , m_settings("DONTFLOAT", "DONTFLOAT")
 {
-    setWindowTitle(tr("Горячие клавиши"));
+    setWindowTitle(tr("Hotkeys"));
     setMinimumSize(520, 420);
     resize(560, 480);
 
     m_entries = {
-        { "Open",           tr("Открыть файл"),           QKeySequence::Open },
-        { "Save",           tr("Сохранить файл"),         QKeySequence::Save },
-        { "Exit",           tr("Выход"),                 QKeySequence::Quit },
-        { "Play",           tr("Воспроизведение/Пауза"), QKeySequence(Qt::Key_Space) },
-        { "Stop",           tr("Стоп"),                  QKeySequence(Qt::Key_S) },
-        { "Metronome",      tr("Метроном"),              QKeySequence(Qt::Key_T) },
-        { "LoopStart",      tr("Установить начало цикла (A)"), QKeySequence(Qt::Key_A) },
-        { "LoopEnd",        tr("Установить конец цикла (B)"),  QKeySequence(Qt::Key_B) },
-        { "ClearLoopA",     tr("Удалить точку A"),       QKeySequence(Qt::SHIFT | Qt::Key_A) },
-        { "ClearLoopB",     tr("Удалить точку B"),        QKeySequence(Qt::SHIFT | Qt::Key_B) },
-        { "Undo",           tr("Отменить"),              QKeySequence::Undo },
-        { "Redo",           tr("Повторить"),             QKeySequence::Redo },
-        { "PitchGrid",      tr("Переключить питч-сетку"), QKeySequence(Qt::CTRL | Qt::Key_G) },
-        { "AddMarker",      tr("Добавить метку"),        QKeySequence(Qt::Key_M) },
-        { "TimeStretch",    tr("Применить сжатие-растяжение"), QKeySequence(Qt::CTRL | Qt::Key_T) },
-        { "PitchCorrection", tr("Применить коррекцию высоты нот"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T) },
+        { "Open",           tr("Open file"),           QKeySequence::Open },
+        { "Save",           tr("Save file"),         QKeySequence::Save },
+        { "Exit",           tr("Exit"),                 QKeySequence::Quit },
+        { "Play",           tr("Play/Pause"), QKeySequence(Qt::Key_Space) },
+        { "Stop",           tr("Stop"),                  QKeySequence(Qt::Key_S) },
+        { "Metronome",      tr("Metronome"),              QKeySequence(Qt::Key_T) },
+        { "LoopStart",      tr("Set loop start (A)"), QKeySequence(Qt::Key_A) },
+        { "LoopEnd",        tr("Set loop end (B)"),  QKeySequence(Qt::Key_B) },
+        { "ClearLoopA",     tr("Clear point A"),       QKeySequence(Qt::SHIFT | Qt::Key_A) },
+        { "ClearLoopB",     tr("Clear point B"),        QKeySequence(Qt::SHIFT | Qt::Key_B) },
+        { "Undo",           tr("Undo"),              QKeySequence::Undo },
+        { "Redo",           tr("Redo"),             QKeySequence::Redo },
+        { "PitchGrid",      tr("Toggle pitch grid"), QKeySequence(Qt::CTRL | Qt::Key_G) },
+        { "AddMarker",      tr("Add marker"),        QKeySequence(Qt::Key_M) },
+        { "TimeStretch",    tr("Apply time stretch"), QKeySequence(Qt::CTRL | Qt::Key_T) },
+        { "PitchCorrection", tr("Apply note pitch correction"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T) },
     };
 
     auto *layout = new QVBoxLayout(this);
 
     table = new QTableWidget(this);
     table->setColumnCount(2);
-    table->setHorizontalHeaderLabels({ tr("Действие"), tr("Сочетание клавиш") });
+    table->setHorizontalHeaderLabels({ tr("Action"), tr("Shortcut") });
     table->horizontalHeader()->setStretchLastSection(true);
     table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     table->setSelectionBehavior(QTableWidget::SelectRows);
@@ -51,8 +51,8 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
     layout->addWidget(table);
 
     auto *buttonLayout = new QHBoxLayout();
-    resetButton = new QPushButton(tr("По умолчанию"), this);
-    resetButton->setToolTip(tr("Восстановить все сочетания по умолчанию"));
+    resetButton = new QPushButton(tr("Reset to default"), this);
+    resetButton->setToolTip(tr("Restore all default shortcuts"));
     connect(resetButton, &QPushButton::clicked, this, &ShortcutsDialog::onResetDefaults);
     buttonLayout->addWidget(resetButton);
     buttonLayout->addStretch();

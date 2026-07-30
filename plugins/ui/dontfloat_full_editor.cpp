@@ -27,9 +27,9 @@ DontfloatFullEditor::DontfloatFullEditor(QWidget* parent)
     root->setContentsMargins(8, 8, 8, 8);
     root->setSpacing(6);
 
-    auto* rhythmLabel = new QLabel(tr("Ритм / BPM / stretch"), this);
+    auto* rhythmLabel = new QLabel(tr("Rhythm / BPM / stretch"), this);
     rhythmLabel->setStyleSheet(QStringLiteral("color:#cfd6e4; font-weight:600;"));
-    auto* pitchLabel = new QLabel(tr("Питч / ноты / тональность"), this);
+    auto* pitchLabel = new QLabel(tr("Pitch / notes / key"), this);
     pitchLabel->setStyleSheet(QStringLiteral("color:#cfd6e4; font-weight:600;"));
 
     auto* topPane = new QWidget(this);

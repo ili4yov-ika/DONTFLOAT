@@ -1421,12 +1421,12 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
                 }
             }
             QString snapText = (selectedCount > 1)
-                ? tr("Переместить выделенные метки на тактовую сетку")
-                : tr("Переместить метку на тактовую сетку");
+                ? tr("Snap selected markers to grid")
+                : tr("Snap marker to grid");
             QAction* snapAction = menu.addAction(snapText);
             QString deleteText = (selectedCount > 1)
-                ? tr("Удалить выделенные метки")
-                : tr("Удалить метку");
+                ? tr("Delete selected markers")
+                : tr("Delete marker");
             QAction* deleteAction = menu.addAction(deleteText);
 
             QAction* chosen = menu.exec(event->globalPosition().toPoint());
@@ -1529,11 +1529,11 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 // Формируем tooltip с информацией о метке
                 QString tooltipText;
                 if (marker.isEndMarker) {
-                    tooltipText = tr("Конец таймлайна\nВремя: %1\nПозиция: %2 сэмплов")
+                    tooltipText = tr("Timeline end\nTime: %1\nPosition: %2 samples")
                         .arg(TimeUtils::formatTime(marker.timeMs))
                         .arg(marker.position);
                 } else if (marker.isFixed) {
-                    tooltipText = tr("Начало таймлайна\nВремя: %1\nПозиция: %2 сэмплов")
+                    tooltipText = tr("Timeline start\nTime: %1\nPosition: %2 samples")
                         .arg(TimeUtils::formatTime(marker.timeMs))
                         .arg(marker.position);
                 } else {
@@ -1553,11 +1553,11 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                         qint64 currentDistance = nextMarker->position - marker.position;
                         if (originalDistance > 0) {
                             float coefficient = float(currentDistance) / float(originalDistance);
-                            coeffInfo = tr("\nКоэффициент: %1").arg(coefficient, 0, 'f', 3);
+                            coeffInfo = tr("Ratio: %1").arg(coefficient, 0, 'f', 3);
                         }
                     }
 
-                    tooltipText = tr("Метка\nВремя: %1\nПозиция: %2 сэмплов%3")
+                    tooltipText = tr("Marker\nTime: %1\nPosition: %2 samples%3")
                         .arg(TimeUtils::formatTime(marker.timeMs))
                         .arg(marker.position)
                         .arg(coeffInfo);
@@ -1571,7 +1571,7 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
                 // Показываем обычный tooltip с позицией
                 qint64 samplePos = qBound(qint64(0), mouseSample, qint64(audioData[0].size() - 1));
                 qint64 timeMs = TimeUtils::samplesToMs(samplePos, sampleRate);
-                QString positionText = tr("Позиция: %1\nВремя: %2")
+                QString positionText = tr("Position: %1\nTime: %2")
                     .arg(samplePos)
                     .arg(TimeUtils::formatTime(timeMs));
                 QToolTip::showText(event->globalPosition().toPoint(), positionText, this);
@@ -2726,7 +2726,7 @@ void WaveformView::drawMarkers(QPainter& painter, const QRect& rect)
             painter.drawLine(QPointF(x + 5, lineY), QPointF(x + lineLength, lineY));
 
             // Текст "Конец таймлайна" справа от метки
-            QString timelineEndText = tr("Конец таймлайна");
+            QString timelineEndText = tr("Timeline end");
             QFontMetrics fm(painter.font());
             QRect textRect = fm.boundingRect(timelineEndText);
             painter.setPen(Qt::white);

@@ -245,7 +245,13 @@ MainWindow::MainWindow(QWidget *parent)
         else if (sys.startsWith("ru")) lang = "ru_RU";
         else lang = "en_US";
     }
-    if (loadTranslation(m_appTranslator, lang)) {
+    // English msgid: en_US.qm is optional (identity). Russian requires ru_RU.qm.
+    if (lang == "ru_RU") {
+        if (loadTranslation(m_appTranslator, "ru_RU"))
+            qApp->installTranslator(m_appTranslator);
+        else
+            lang = "en_US";
+    } else if (loadTranslation(m_appTranslator, "en_US")) {
         qApp->installTranslator(m_appTranslator);
     }
 
@@ -685,41 +691,41 @@ void MainWindow::syncPitchGridFromWaveform()
 
 void MainWindow::retranslateMenus()
 {
-    if (fileMenu) fileMenu->setTitle(tr("&Файл"));
-    if (editMenu) editMenu->setTitle(tr("&Правка"));
-    if (viewMenu) viewMenu->setTitle(tr("&Вид"));
-    if (themesMenu) themesMenu->setTitle(tr("Темы"));
-    if (colorSchemeMenu) colorSchemeMenu->setTitle(tr("&Цветовая схема"));
-    if (settingsMenu) settingsMenu->setTitle(tr("&Настройки"));
+    if (fileMenu) fileMenu->setTitle(tr("&File"));
+    if (editMenu) editMenu->setTitle(tr("&Edit"));
+    if (viewMenu) viewMenu->setTitle(tr("&View"));
+    if (themesMenu) themesMenu->setTitle(tr("Themes"));
+    if (colorSchemeMenu) colorSchemeMenu->setTitle(tr("&Color Scheme"));
+    if (settingsMenu) settingsMenu->setTitle(tr("&Settings"));
     if (languageMenu) languageMenu->setTitle(tr("Language"));
-    if (openAct) openAct->setText(tr("&Открыть..."));
-    if (saveAct) saveAct->setText(tr("&Сохранить"));
-    if (exitAct) exitAct->setText(tr("&Выход"));
-    if (defaultThemeAct) { defaultThemeAct->setText(tr("По умолчанию")); defaultThemeAct->setStatusTip(tr("Использовать тему по умолчанию")); }
-    if (darkSchemeAct) { darkSchemeAct->setText(tr("Тёмная")); darkSchemeAct->setStatusTip(tr("Использовать тёмную тему")); }
-    if (lightSchemeAct) { lightSchemeAct->setText(tr("Светлая")); lightSchemeAct->setStatusTip(tr("Использовать светлую тему")); }
-    if (metronomeSettingsAct) { metronomeSettingsAct->setText(tr("Настройки &метронома...")); metronomeSettingsAct->setStatusTip(tr("Настройки метронома")); }
-    if (keyboardShortcutsAct) { keyboardShortcutsAct->setText(tr("&Горячие клавиши...")); keyboardShortcutsAct->setStatusTip(tr("Настройка горячих клавиш")); }
-    if (playPauseAct) playPauseAct->setText(tr("Воспроизведение/Пауза"));
-    if (stopAct) stopAct->setText(tr("Стоп"));
-    if (metronomeAct) metronomeAct->setText(tr("Метроном"));
-    if (loopStartAct) loopStartAct->setText(tr("Установить начало цикла"));
-    if (loopEndAct) loopEndAct->setText(tr("Установить конец цикла"));
-    if (togglePitchGridAct) { togglePitchGridAct->setStatusTip(tr("Переключить видимость питч-сетки")); if (isPitchGridVisible) togglePitchGridAct->setText(tr("Убрать питч-сетку")); else togglePitchGridAct->setText(tr("Показать питч-сетку")); }
-    if (toggleBeatWaveformAct) { toggleBeatWaveformAct->setText(tr("Силуэт ударных")); toggleBeatWaveformAct->setStatusTip(tr("Переключить отображение силуэта ударных поверх волны")); }
-    if (undoAct) undoAct->setText(tr("&Отменить"));
-    if (redoAct) redoAct->setText(tr("&Повторить"));
+    if (openAct) openAct->setText(tr("&Open..."));
+    if (saveAct) saveAct->setText(tr("&Save"));
+    if (exitAct) exitAct->setText(tr("&Exit"));
+    if (defaultThemeAct) { defaultThemeAct->setText(tr("Reset to default")); defaultThemeAct->setStatusTip(tr("Use default theme")); }
+    if (darkSchemeAct) { darkSchemeAct->setText(tr("Dark")); darkSchemeAct->setStatusTip(tr("Use dark theme")); }
+    if (lightSchemeAct) { lightSchemeAct->setText(tr("Light")); lightSchemeAct->setStatusTip(tr("Use light theme")); }
+    if (metronomeSettingsAct) { metronomeSettingsAct->setText(tr("&Metronome Settings...")); metronomeSettingsAct->setStatusTip(tr("Metronome Settings")); }
+    if (keyboardShortcutsAct) { keyboardShortcutsAct->setText(tr("&Hotkeys...")); keyboardShortcutsAct->setStatusTip(tr("Configure hotkeys")); }
+    if (playPauseAct) playPauseAct->setText(tr("Play/Pause"));
+    if (stopAct) stopAct->setText(tr("Stop"));
+    if (metronomeAct) metronomeAct->setText(tr("Metronome"));
+    if (loopStartAct) loopStartAct->setText(tr("Set loop start"));
+    if (loopEndAct) loopEndAct->setText(tr("Set loop end"));
+    if (togglePitchGridAct) { togglePitchGridAct->setStatusTip(tr("Toggle pitch grid visibility")); if (isPitchGridVisible) togglePitchGridAct->setText(tr("Hide Pitch Grid")); else togglePitchGridAct->setText(tr("Show Pitch Grid")); }
+    if (toggleBeatWaveformAct) { toggleBeatWaveformAct->setText(tr("Beat Waveform")); toggleBeatWaveformAct->setStatusTip(tr("Toggle beat waveform overlay")); }
+    if (undoAct) undoAct->setText(tr("&Undo"));
+    if (redoAct) redoAct->setText(tr("&Redo"));
     if (russianAction) russianAction->setText(tr("Русский"));
     if (englishAction) englishAction->setText(tr("English"));
-    if (applyTimeStretchAct) { applyTimeStretchAct->setText(tr("Применить сжатие-растяжение")); applyTimeStretchAct->setStatusTip(tr("Применить сжатие-растяжение аудио по меткам с тонкомпенсацией")); }
-    if (applyPitchCorrectionAct) { applyPitchCorrectionAct->setText(tr("Применить коррекцию высоты нот")); applyPitchCorrectionAct->setStatusTip(tr("Пересчитать звук по изменённым нотам пианоролла")); }
-    if (waveformViewMenu) waveformViewMenu->setTitle(tr("Вид звуковой волны"));
-    if (waveformPeaksAct) waveformPeaksAct->setText(tr("Звуковые пики"));
-    if (waveformSpectrogramAct) waveformSpectrogramAct->setText(tr("Спектрограмма"));
-    if (spectrogramSettingsAct) { spectrogramSettingsAct->setText(tr("Настройки отображения спектрограммы...")); spectrogramSettingsAct->setStatusTip(tr("Настроить параметры спектрограммы (размер окна, полосы, цвет)")); }
-    if (pitchShiftSettingsAct) { pitchShiftSettingsAct->setText(tr("Настройки питч-шифтера...")); pitchShiftSettingsAct->setStatusTip(tr("Настроить гранулярный питч-шифтер, применяемый после растяжения (Ctrl+T)")); }
-    if (pitchGridAnalyzeButton) pitchGridAnalyzeButton->setText(tr("Анализировать"));
-    if (pitchGridAnalyzeProgress) pitchGridAnalyzeProgress->setFormat(tr("Анализ... %p%"));
+    if (applyTimeStretchAct) { applyTimeStretchAct->setText(tr("Apply time stretch")); applyTimeStretchAct->setStatusTip(tr("Apply time stretch with pitch compensation")); }
+    if (applyPitchCorrectionAct) { applyPitchCorrectionAct->setText(tr("Apply note pitch correction")); applyPitchCorrectionAct->setStatusTip(tr("Re-render audio using the edited piano roll notes")); }
+    if (waveformViewMenu) waveformViewMenu->setTitle(tr("Waveform view"));
+    if (waveformPeaksAct) waveformPeaksAct->setText(tr("Wave peaks"));
+    if (waveformSpectrogramAct) waveformSpectrogramAct->setText(tr("Spectrogram"));
+    if (spectrogramSettingsAct) { spectrogramSettingsAct->setText(tr("Spectrogram display settings...")); spectrogramSettingsAct->setStatusTip(tr("Spectrogram options (window, bands, color)")); }
+    if (pitchShiftSettingsAct) { pitchShiftSettingsAct->setText(tr("Pitch shift settings...")); pitchShiftSettingsAct->setStatusTip(tr("Granular pitch shift after stretch (Ctrl+T)")); }
+    if (pitchGridAnalyzeButton) pitchGridAnalyzeButton->setText(tr("Analyze"));
+    if (pitchGridAnalyzeProgress) pitchGridAnalyzeProgress->setFormat(tr("Analyzing... %p%"));
 }
 
 void MainWindow::changeEvent(QEvent *event)
@@ -765,8 +771,8 @@ void MainWindow::readSettings()
 
     if (togglePitchGridAct) {
         togglePitchGridAct->setText(isPitchGridVisible
-            ? tr("Убрать питч-сетку")
-            : tr("Показать питч-сетку"));
+            ? tr("Hide Pitch Grid")
+            : tr("Show Pitch Grid"));
     }
 
     if (isPitchGridVisible) {
@@ -826,7 +832,7 @@ void MainWindow::setupConnections()
         }
         updateTimeLabel(mediaPlayer ? mediaPlayer->position() : currentPosition);
         QString text = ui->barsCombo->currentText();
-        statusBar()->showMessage(tr("Размер такта изменен на %1").arg(text), 2000);
+        statusBar()->showMessage(tr("Time signature set to %1").arg(text), 2000);
     });
     // Временно закомментировано до пересборки UI
     // После пересборки проекта в Qt Creator раскомментировать эти строки:
@@ -846,7 +852,7 @@ void MainWindow::setupConnections()
                 metronomeController->reset();
             }
 
-            statusBar()->showMessage(tr("Воспроизведение завершено"), 2000);
+            statusBar()->showMessage(tr("Playback completed"), 2000);
         }
     });
 
@@ -1021,7 +1027,7 @@ void MainWindow::setupConnections()
 
     // Авто-метки по транзиентам (Onset detection — пока заглушка)
     if (ui->onsetDetectButton) {
-        ui->onsetDetectButton->setToolTip(tr("Автоматически создать метки по транзиентам (Onset detection из LMMS)"));
+        ui->onsetDetectButton->setToolTip(tr("Auto-place markers from transients (LMMS onset detection)"));
         connect(ui->onsetDetectButton, &QPushButton::clicked,
                 this, &MainWindow::createOnsetMarkersAuto);
     }
@@ -1029,19 +1035,19 @@ void MainWindow::setupConnections()
     // Авто-привязка всех меток к тактовой сетке (Beat Grid)
     if (ui->gridMarkersButton) {
         ui->gridMarkersButton->setToolTip(
-            tr("Привязать все метки к тактовой сетке BPM (подразделения такта)"));
+            tr("Snap all markers to BPM grid (bar subdivisions)"));
         connect(ui->gridMarkersButton, &QPushButton::clicked,
                 this, &MainWindow::snapAllMarkersToGrid);
     }
     if (ui->gridBackButton) {
-        ui->gridBackButton->setToolTip(tr("Сдвинуть тактовую сетку на один удар назад (Shift — вместе с метками)\n"
-                                          "Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки"));
+        ui->gridBackButton->setToolTip(tr("Shift the bar grid one beat backward (Shift — with markers)\n"
+                                          "Shift + LMB drag on waveform — fine grid adjustment"));
         connect(ui->gridBackButton, &QPushButton::clicked,
                 this, &MainWindow::shiftBeatGridBackward);
     }
     if (ui->gridForwardButton) {
-        ui->gridForwardButton->setToolTip(tr("Сдвинуть тактовую сетку на один удар вперёд (Shift — вместе с метками)\n"
-                                             "Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки"));
+        ui->gridForwardButton->setToolTip(tr("Shift the bar grid one beat forward (Shift — with markers)\n"
+                                             "Shift + LMB drag on waveform — fine grid adjustment"));
         connect(ui->gridForwardButton, &QPushButton::clicked,
                 this, &MainWindow::shiftBeatGridForward);
     }
@@ -1059,18 +1065,18 @@ void MainWindow::setupConnections()
     });
 
     // Добавляем подсказки для кнопок цикла
-    ui->loopStartButton->setToolTip(tr("ЛКМ: Установить точку A (начало цикла)\nПКМ: Удалить точку A\nA: Установить точку A\nShift+A: Удалить точку A"));
-    ui->loopEndButton->setToolTip(tr("ЛКМ: Установить точку B (конец цикла)\nПКМ: Удалить точку B\nB: Установить точку B\nShift+B: Удалить точку B"));
+    ui->loopStartButton->setToolTip(tr("LMB: Set point A (loop start)\nRMB: Remove point A\nA: Set point A\nShift+A: Remove point A"));
+    ui->loopEndButton->setToolTip(tr("LMB: Set point B (loop end)\nRMB: Remove point B\nB: Set point B\nShift+B: Remove point B"));
 
     connect(ui->loopStartButton, &QPushButton::pressed, this, [this]() {
         if (loopStartPosition > 0) {
-            statusBar()->showMessage(tr("Точка A: %1").arg(TimeUtils::formatTime(loopStartPosition)), 2000);
+            statusBar()->showMessage(tr("Point A: %1").arg(TimeUtils::formatTime(loopStartPosition)), 2000);
         }
     });
 
     connect(ui->loopEndButton, &QPushButton::pressed, this, [this]() {
         if (loopEndPosition > 0) {
-            statusBar()->showMessage(tr("Точка B: %1").arg(TimeUtils::formatTime(loopEndPosition)), 2000);
+            statusBar()->showMessage(tr("Point B: %1").arg(TimeUtils::formatTime(loopEndPosition)), 2000);
         }
     });
 
@@ -1127,7 +1133,7 @@ void MainWindow::playAudio()
         ui->playButton->setIcon(QIcon(":/icons/resources/icons/pause.svg"));
         mediaPlayer->play();
         playbackTimer->start();
-        statusBar()->showMessage(tr("Воспроизведение..."));
+        statusBar()->showMessage(tr("Playing..."));
 
         // Обновляем состояние метронома
         if (metronomeController) {
@@ -1138,7 +1144,7 @@ void MainWindow::playAudio()
         ui->playButton->setIcon(QIcon(":/icons/resources/icons/play.svg"));
         mediaPlayer->pause();
         playbackTimer->stop();
-        statusBar()->showMessage(tr("Пауза"));
+        statusBar()->showMessage(tr("Paused"));
 
         // Обновляем состояние метронома
         if (metronomeController) {
@@ -1160,7 +1166,7 @@ void MainWindow::stopAudio()
     mediaPlayer->stop();
     playbackTimer->stop();
     ui->timeLabel->setText(formatTimeAndBars(0));
-    statusBar()->showMessage(tr("Остановлено"));
+    statusBar()->showMessage(tr("Stopped"));
 }
 
 void MainWindow::updateTime()
@@ -1191,10 +1197,10 @@ void MainWindow::updateBPM()
         if (pitchGridWidget) {
             pitchGridWidget->update();
         }
-        statusBar()->showMessage(tr("BPM установлен: %1").arg(bpm), 2000);
+        statusBar()->showMessage(tr("BPM set to: %1").arg(bpm), 2000);
     } else {
         ui->bpmEdit->setText("120.00");
-        statusBar()->showMessage(tr("Неверное значение BPM (допустимый диапазон: 0.01 - 9999.99)"), 3000);
+        statusBar()->showMessage(tr("Invalid BPM value (valid range: 0.01 - 9999.99)"), 3000);
     }
 }
 
@@ -1233,7 +1239,7 @@ void MainWindow::updateTimeLabel(qint64 msPosition)
 
     // Показываем информацию о цикле в статусной строке
     if (isLoopEnabled && loopStartPosition > 0 && loopEndPosition > 0) {
-        QString loopInfo = tr("Цикл: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition));
+        QString loopInfo = tr("Loop: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition));
         if (msPosition >= loopStartPosition && msPosition <= loopEndPosition) {
             statusBar()->showMessage(loopInfo, 1000);
         }
@@ -1255,7 +1261,7 @@ void MainWindow::updatePlaybackPosition(qint64 position)
         if (!waveformView->getMarkers().isEmpty()) {
             WaveformView::ActiveSegmentInfo segmentInfo = waveformView->getActiveSegmentInfo();
             if (segmentInfo.isValid) {
-                QString segmentText = tr("Сегмент: %1 - %2 | Коэффициент: %3")
+                QString segmentText = tr("Segment: %1 - %2 | Ratio: %3")
                     .arg(segmentInfo.startMarkerTime)
                     .arg(segmentInfo.endMarkerTime)
                     .arg(segmentInfo.stretchFactor, 0, 'f', 3);
@@ -1278,80 +1284,80 @@ void MainWindow::updatePlaybackPosition(qint64 position)
 void MainWindow::createActions()
 {
     // File actions
-    openAct = new QAction(tr("&Открыть..."), this);
+    openAct = new QAction(tr("&Open..."), this);
     openAct->setShortcuts(QKeySequence::Open);
     connect(openAct, &QAction::triggered, this, &MainWindow::openAudioFile);
 
-    saveAct = new QAction(tr("&Сохранить"), this);
+    saveAct = new QAction(tr("&Save"), this);
     saveAct->setShortcuts(QKeySequence::Save);
     connect(saveAct, &QAction::triggered, this, &MainWindow::saveAudioFile);
 
-    exitAct = new QAction(tr("&Выход"), this);
+    exitAct = new QAction(tr("&Exit"), this);
     exitAct->setShortcuts(QKeySequence::Quit);
     connect(exitAct, &QAction::triggered, this, &QWidget::close);
 
     // Theme actions
-    defaultThemeAct = new QAction(tr("По умолчанию"), this);
-    defaultThemeAct->setStatusTip(tr("Использовать тему по умолчанию"));
+    defaultThemeAct = new QAction(tr("Reset to default"), this);
+    defaultThemeAct->setStatusTip(tr("Use default theme"));
     connect(defaultThemeAct, &QAction::triggered, this, [this]() { setTheme("default"); });
 
     // Color scheme actions
-    darkSchemeAct = new QAction(tr("Тёмная"), this);
-    darkSchemeAct->setStatusTip(tr("Использовать тёмную тему"));
+    darkSchemeAct = new QAction(tr("Dark"), this);
+    darkSchemeAct->setStatusTip(tr("Use dark theme"));
     connect(darkSchemeAct, &QAction::triggered, this, [this]() { setColorScheme("dark"); });
 
-    lightSchemeAct = new QAction(tr("Светлая"), this);
-    lightSchemeAct->setStatusTip(tr("Использовать светлую тему"));
+    lightSchemeAct = new QAction(tr("Light"), this);
+    lightSchemeAct->setStatusTip(tr("Use light theme"));
     connect(lightSchemeAct, &QAction::triggered, this, [this]() { setColorScheme("light"); });
 
     // Settings actions
-    metronomeSettingsAct = new QAction(tr("Настройки &метронома..."), this);
-    metronomeSettingsAct->setStatusTip(tr("Настройки метронома"));
+    metronomeSettingsAct = new QAction(tr("&Metronome Settings..."), this);
+    metronomeSettingsAct->setStatusTip(tr("Metronome Settings"));
     connect(metronomeSettingsAct, &QAction::triggered, this, &MainWindow::showMetronomeSettings);
 
-    keyboardShortcutsAct = new QAction(tr("&Горячие клавиши..."), this);
-    keyboardShortcutsAct->setStatusTip(tr("Настройка горячих клавиш"));
+    keyboardShortcutsAct = new QAction(tr("&Hotkeys..."), this);
+    keyboardShortcutsAct->setStatusTip(tr("Configure hotkeys"));
     connect(keyboardShortcutsAct, &QAction::triggered, this, &MainWindow::showKeyboardShortcuts);
 
     // Playback actions
-    playPauseAct = new QAction(tr("Воспроизведение/Пауза"), this);
+    playPauseAct = new QAction(tr("Play/Pause"), this);
     playPauseAct->setShortcut(QKeySequence(Qt::Key_Space));
     connect(playPauseAct, &QAction::triggered, this, &MainWindow::playAudio);
 
-    stopAct = new QAction(tr("Стоп"), this);
+    stopAct = new QAction(tr("Stop"), this);
     stopAct->setShortcut(QKeySequence(Qt::Key_S));
     connect(stopAct, &QAction::triggered, this, &MainWindow::stopAudio);
 
     // Metronome action
-    metronomeAct = new QAction(tr("Метроном"), this);
+    metronomeAct = new QAction(tr("Metronome"), this);
     metronomeAct->setShortcut(QKeySequence(Qt::Key_T));
     metronomeAct->setCheckable(true);
     connect(metronomeAct, &QAction::triggered, this, &MainWindow::toggleMetronome);
 
     // Loop actions
-    loopStartAct = new QAction(tr("Установить начало цикла"), this);
+    loopStartAct = new QAction(tr("Set loop start"), this);
     loopStartAct->setShortcut(QKeySequence(Qt::Key_A));
     connect(loopStartAct, &QAction::triggered, this, &MainWindow::setLoopStart);
 
-    loopEndAct = new QAction(tr("Установить конец цикла"), this);
+    loopEndAct = new QAction(tr("Set loop end"), this);
     loopEndAct->setShortcut(QKeySequence(Qt::Key_B));
     connect(loopEndAct, &QAction::triggered, this, &MainWindow::setLoopEnd);
 
     // Pitch grid toggle (Ctrl+G)
-    togglePitchGridAct = new QAction(tr("Убрать питч-сетку"), this);
+    togglePitchGridAct = new QAction(tr("Hide Pitch Grid"), this);
     togglePitchGridAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
-    togglePitchGridAct->setStatusTip(tr("Переключить видимость питч-сетки"));
+    togglePitchGridAct->setStatusTip(tr("Toggle pitch grid visibility"));
     connect(togglePitchGridAct, &QAction::triggered, this, &MainWindow::togglePitchGrid);
 
     // Beat deviations toggle action
-    toggleBeatWaveformAct = new QAction(tr("Силуэт ударных"), this);
+    toggleBeatWaveformAct = new QAction(tr("Beat Waveform"), this);
     toggleBeatWaveformAct->setCheckable(true);
     toggleBeatWaveformAct->setChecked(true); // Включено по умолчанию
-    toggleBeatWaveformAct->setStatusTip(tr("Переключить отображение силуэта ударных поверх волны"));
+    toggleBeatWaveformAct->setStatusTip(tr("Toggle beat waveform overlay"));
     connect(toggleBeatWaveformAct, &QAction::triggered, this, &MainWindow::toggleBeatWaveform);
 
     // Waveform view mode actions
-    waveformPeaksAct = new QAction(tr("Звуковые пики"), this);
+    waveformPeaksAct = new QAction(tr("Wave peaks"), this);
     waveformPeaksAct->setCheckable(true);
     waveformPeaksAct->setChecked(true);
     connect(waveformPeaksAct, &QAction::triggered, this, [this]() {
@@ -1362,7 +1368,7 @@ void MainWindow::createActions()
         }
     });
 
-    waveformSpectrogramAct = new QAction(tr("Спектрограмма"), this);
+    waveformSpectrogramAct = new QAction(tr("Spectrogram"), this);
     waveformSpectrogramAct->setCheckable(true);
     connect(waveformSpectrogramAct, &QAction::triggered, this, [this]() {
         if (waveformView) {
@@ -1374,11 +1380,11 @@ void MainWindow::createActions()
 
     // Edit actions - use QUndoStack's built-in actions
     undoAct = undoStack->createUndoAction(this);
-    undoAct->setText(tr("&Отменить"));
+    undoAct->setText(tr("&Undo"));
     undoAct->setShortcuts(QKeySequence::Undo);
 
     redoAct = undoStack->createRedoAction(this);
-    redoAct->setText(tr("&Повторить"));
+    redoAct->setText(tr("&Redo"));
     redoAct->setShortcuts(QKeySequence::Redo);
 
     // Language actions
@@ -1392,8 +1398,8 @@ void MainWindow::createActions()
     connect(englishAction, &QAction::triggered, this, &MainWindow::setEnglishLanguage);
 
     // Spectrogram settings action
-    spectrogramSettingsAct = new QAction(tr("Настройки отображения спектрограммы..."), this);
-    spectrogramSettingsAct->setStatusTip(tr("Настроить параметры спектрограммы (размер окна, полосы, цвет)"));
+    spectrogramSettingsAct = new QAction(tr("Spectrogram display settings..."), this);
+    spectrogramSettingsAct->setStatusTip(tr("Spectrogram options (window, bands, color)"));
     connect(spectrogramSettingsAct, &QAction::triggered, this, [this]() {
         if (!spectrogramSettingsDialog) {
             spectrogramSettingsDialog = new SpectrogramSettingsDialog(this);
@@ -1414,8 +1420,8 @@ void MainWindow::createActions()
     spectrogramSettingsDialog = nullptr;
 
     // Pitch shift settings action
-    pitchShiftSettingsAct = new QAction(tr("Настройки питч-шифтера..."), this);
-    pitchShiftSettingsAct->setStatusTip(tr("Настроить гранулярный питч-шифтер, применяемый после растяжения (Ctrl+T)"));
+    pitchShiftSettingsAct = new QAction(tr("Pitch shift settings..."), this);
+    pitchShiftSettingsAct->setStatusTip(tr("Granular pitch shift after stretch (Ctrl+T)"));
     connect(pitchShiftSettingsAct, &QAction::triggered, this, [this]() {
         if (!pitchShiftSettingsDialog) {
             pitchShiftSettingsDialog = new PitchShiftSettingsDialog(this);
@@ -1432,28 +1438,28 @@ void MainWindow::createActions()
     pitchShiftSettingsDialog = nullptr;
 
     // Time stretch action
-    applyTimeStretchAct = new QAction(tr("Применить сжатие-растяжение"), this);
+    applyTimeStretchAct = new QAction(tr("Apply time stretch"), this);
     applyTimeStretchAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
-    applyTimeStretchAct->setStatusTip(tr("Применить сжатие-растяжение аудио по меткам с тонкомпенсацией"));
+    applyTimeStretchAct->setStatusTip(tr("Apply time stretch with pitch compensation"));
     connect(applyTimeStretchAct, &QAction::triggered, this, &MainWindow::applyTimeStretch);
 
-    applyPitchCorrectionAct = new QAction(tr("Применить коррекцию высоты нот"), this);
+    applyPitchCorrectionAct = new QAction(tr("Apply note pitch correction"), this);
     applyPitchCorrectionAct->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T));
-    applyPitchCorrectionAct->setStatusTip(tr("Пересчитать звук по изменённым нотам пианоролла"));
+    applyPitchCorrectionAct->setStatusTip(tr("Re-render audio using the edited piano roll notes"));
     connect(applyPitchCorrectionAct, &QAction::triggered, this, &MainWindow::applyPitchCorrection);
 }
 
 void MainWindow::createMenus()
 {
     // File menu
-    fileMenu = menuBar()->addMenu(tr("&Файл"));
+    fileMenu = menuBar()->addMenu(tr("&File"));
     fileMenu->addAction(openAct);
     fileMenu->addAction(saveAct);
     fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
 
     // Edit menu
-    editMenu = menuBar()->addMenu(tr("&Правка"));
+    editMenu = menuBar()->addMenu(tr("&Edit"));
     editMenu->addAction(undoAct);
     editMenu->addAction(redoAct);
     editMenu->addSeparator();
@@ -1462,19 +1468,19 @@ void MainWindow::createMenus()
     editMenu->addSeparator();
 
     // View menu
-    viewMenu = menuBar()->addMenu(tr("&Вид"));
+    viewMenu = menuBar()->addMenu(tr("&View"));
 
     // Themes submenu in View menu
-    themesMenu = viewMenu->addMenu(tr("Темы"));
+    themesMenu = viewMenu->addMenu(tr("Themes"));
     themesMenu->addAction(defaultThemeAct);
 
     // Color scheme submenu in View menu
-    colorSchemeMenu = viewMenu->addMenu(tr("&Цветовая схема"));
+    colorSchemeMenu = viewMenu->addMenu(tr("&Color Scheme"));
     colorSchemeMenu->addAction(darkSchemeAct);
     colorSchemeMenu->addAction(lightSchemeAct);
 
     // Waveform view submenu
-    waveformViewMenu = viewMenu->addMenu(tr("Вид звуковой волны"));
+    waveformViewMenu = viewMenu->addMenu(tr("Waveform view"));
     waveformViewMenu->addAction(waveformPeaksAct);
     waveformViewMenu->addAction(waveformSpectrogramAct);
 
@@ -1485,7 +1491,7 @@ void MainWindow::createMenus()
     viewMenu->addAction(toggleBeatWaveformAct);
 
     // Settings menu (last)
-    settingsMenu = menuBar()->addMenu(tr("&Настройки"));
+    settingsMenu = menuBar()->addMenu(tr("&Settings"));
     settingsMenu->addAction(metronomeSettingsAct);
     settingsMenu->addAction(keyboardShortcutsAct);
     settingsMenu->addSeparator();
@@ -1520,7 +1526,7 @@ void MainWindow::setupShortcuts()
             qint64 playbackPos = waveformView->getPlaybackPosition();
             qint64 samplePos = (playbackPos * waveformView->getSampleRate()) / 1000;
             waveformView->addMarker(samplePos);
-            statusBar()->showMessage(tr("Метка добавлена"), 2000);
+            statusBar()->showMessage(tr("Marker added"), 2000);
         }
     });
 
@@ -1591,11 +1597,11 @@ void MainWindow::setLoopStart()
         // Визуально показываем, что точка A установлена
         ui->loopStartButton->setStyleSheet("QPushButton { background-color: #4CAF50; color: white; border: 2px solid #45a049; }");
 
-        statusBar()->showMessage(tr("Установлена точка A (начало цикла): %1").arg(TimeUtils::formatTime(loopStartPosition)), 3000);
+        statusBar()->showMessage(tr("Point A (loop start) set: %1").arg(TimeUtils::formatTime(loopStartPosition)), 3000);
 
         // Если точка B уже установлена, показываем сообщение в статусбаре
         if (loopEndPosition > 0 && loopEndPosition > loopStartPosition) {
-            statusBar()->showMessage(tr("Цикл готов! Нажмите кнопку Цикл для включения."), 3000);
+            statusBar()->showMessage(tr("Loop ready! Press Loop button to enable."), 3000);
         }
     }
 }
@@ -1608,7 +1614,7 @@ void MainWindow::setLoopEnd()
 
         // Проверяем, что точка B больше точки A
         if (loopEndPosition <= loopStartPosition) {
-            statusBar()->showMessage(tr("Ошибка: Точка B должна быть больше точки A!"), 3000);
+            statusBar()->showMessage(tr("Error: Point B must be greater than point A!"), 3000);
             loopEndPosition = 0;
             return;
         }
@@ -1616,11 +1622,11 @@ void MainWindow::setLoopEnd()
         // Визуально показываем, что точка B установлена
         ui->loopEndButton->setStyleSheet("QPushButton { background-color: #f44336; color: white; border: 2px solid #da190b; }");
 
-        statusBar()->showMessage(tr("Установлена точка B (конец цикла): %1").arg(TimeUtils::formatTime(loopEndPosition)), 3000);
+        statusBar()->showMessage(tr("Point B (loop end) set: %1").arg(TimeUtils::formatTime(loopEndPosition)), 3000);
 
         // Если точка A уже установлена, показываем сообщение в статусбаре
         if (loopStartPosition > 0) {
-            statusBar()->showMessage(tr("Цикл готов! Нажмите кнопку Цикл для включения."), 3000);
+            statusBar()->showMessage(tr("Loop ready! Press Loop button to enable."), 3000);
         }
     }
 }
@@ -1642,7 +1648,7 @@ void MainWindow::clearLoopStart()
             ui->loopButton->setStyleSheet("");
         }
 
-        statusBar()->showMessage(tr("Точка A (начало цикла) удалена"), 2000);
+        statusBar()->showMessage(tr("Point A (loop start) removed"), 2000);
         qDebug() << "Loop start cleared successfully";
     } else {
         qDebug() << "waveformView is null";
@@ -1666,7 +1672,7 @@ void MainWindow::clearLoopEnd()
             ui->loopButton->setStyleSheet("");
         }
 
-        statusBar()->showMessage(tr("Точка B (конец цикла) удалена"), 2000);
+        statusBar()->showMessage(tr("Point B (loop end) removed"), 2000);
         qDebug() << "Loop end cleared successfully";
     } else {
         qDebug() << "waveformView is null";
@@ -1680,12 +1686,12 @@ bool MainWindow::maybeSave()
 
     QMessageBox msgBox(this);
     msgBox.setWindowTitle(tr("DONTFLOAT"));
-    msgBox.setText(tr("В аудиофайле есть несохраненные изменения.\n"
-                     "Хотите сохранить изменения?"));
+    msgBox.setText(tr("The audio file has unsaved changes.\n"
+                     "Do you want to save the changes?"));
     msgBox.setIcon(QMessageBox::Warning);
-    QPushButton* saveBtn = msgBox.addButton(tr("Сохранить"), QMessageBox::AcceptRole);
-    msgBox.addButton(tr("Не сохранять"), QMessageBox::DestructiveRole);
-    QPushButton* cancelBtn = msgBox.addButton(tr("Отмена"), QMessageBox::RejectRole);
+    QPushButton* saveBtn = msgBox.addButton(tr("Save"), QMessageBox::AcceptRole);
+    msgBox.addButton(tr("Don't save"), QMessageBox::DestructiveRole);
+    QPushButton* cancelBtn = msgBox.addButton(tr("Cancel"), QMessageBox::RejectRole);
     msgBox.setDefaultButton(saveBtn);
     msgBox.setEscapeButton(cancelBtn);
     msgBox.exec();
@@ -1764,8 +1770,8 @@ void MainWindow::openAudioFile()
         return;
 
     QString fileName = QFileDialog::getOpenFileName(this,
-        tr("Открыть аудиофайл"), "",
-        tr("Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)"));
+        tr("Open Audio File"), "",
+        tr("Audio Files (*.wav *.mp3 *.flac);;All Files (*)"));
 
     if (!fileName.isEmpty()) {
         // Останавливаем воспроизведение и сбрасываем состояние
@@ -1783,7 +1789,7 @@ void MainWindow::openAudioFile()
         processAudioFile(fileName);
         mediaPlayer->setSource(QUrl::fromLocalFile(fileName));
         hasUnsavedChanges = false;
-        statusBar()->showMessage(tr("Файл загружен: %1").arg(fileName), 2000);
+        statusBar()->showMessage(tr("File loaded: %1").arg(fileName), 2000);
     }
 }
 
@@ -1793,9 +1799,9 @@ void MainWindow::processAudioFile(const QString& filePath)
     QApplication::processEvents();
 
     LoadFileDialog dialog(this, BPMAnalyzer::AnalysisResult());
-    dialog.setWindowTitle(tr("Анализ и выравнивание долей"));
+    dialog.setWindowTitle(tr("Analysis and Beat Alignment"));
     dialog.setWindowModality(Qt::ApplicationModal);
-    dialog.updateProgress(tr("Загрузка аудиофайла..."), 10);
+    dialog.updateProgress(tr("Loading audio..."), 10);
     dialog.show();
     dialog.raise();
     dialog.activateWindow();
@@ -1805,23 +1811,23 @@ void MainWindow::processAudioFile(const QString& filePath)
     const QVector<QVector<float>> audioData = loadAudioFile(filePath, &loadOk,
         [this, &dialog](int percent) {
             // Декодирование занимает «нижнюю» часть прогресс-бара (10..45 %).
-            dialog.updateProgress(tr("Загрузка аудиофайла..."), 10 + (percent * 35) / 100);
+            dialog.updateProgress(tr("Loading audio..."), 10 + (percent * 35) / 100);
         });
     if (!loadOk || audioData.isEmpty()) {
         dialog.close();
         setEnabled(true);
-        statusBar()->showMessage(tr("Ошибка загрузки файла"), 3000);
+        statusBar()->showMessage(tr("File load error"), 3000);
         return;
     }
 
     // Параметры совпадают с BPMAnalyzer::AnalysisOptions по умолчанию (Mixxx, 60–200 BPM, δ 5 %)
     const BPMAnalyzer::AnalysisOptions analysisOptions;
 
-    dialog.updateProgress(tr("Анализ аудио..."), 50);
+    dialog.updateProgress(tr("Audio analysis..."), 50);
     const BPMAnalyzer::AnalysisResult analysis =
         BPMAnalyzer::analyzeBPM(audioData[0], waveformView->getSampleRate(), analysisOptions);
 
-    dialog.updateProgress(tr("Анализ завершён."), 100);
+    dialog.updateProgress(tr("Analysis completed."), 100);
     dialog.showResult(analysis);
     dialog.setBeatsPerBar(4);
 
@@ -1870,7 +1876,7 @@ QVector<QVector<float>> MainWindow::loadAudioFile(const QString& filePath,
 
     if (!res.ok) {
         if (!res.error.isEmpty())
-            statusBar()->showMessage(tr("Ошибка декодирования: %1").arg(res.error), 3000);
+            statusBar()->showMessage(tr("Decode error: %1").arg(res.error), 3000);
         return {};
     }
 
@@ -1893,7 +1899,7 @@ bool MainWindow::doSaveAudioFile()
     const QString filterFloat = tr("WAV 32-bit float (*.wav)");
     const QString filterPcm24 = tr("WAV 24-bit PCM (*.wav)");
     const QString filterPcm16 = tr("WAV 16-bit PCM (*.wav)");
-    const QString filterAll = tr("Все файлы (*)");
+    const QString filterAll = tr("All files (*)");
     const QString filters = filterFloat + QStringLiteral(";;")
                           + filterPcm24 + QStringLiteral(";;")
                           + filterPcm16 + QStringLiteral(";;")
@@ -1901,7 +1907,7 @@ bool MainWindow::doSaveAudioFile()
 
     QString selectedFilter;
     QString fileName = QFileDialog::getSaveFileName(this,
-        tr("Сохранить аудиофайл"), "",
+        tr("Save Audio File"), "",
         filters,
         &selectedFilter);
 
@@ -1914,7 +1920,7 @@ bool MainWindow::doSaveAudioFile()
 
     const QVector<QVector<float>>& audioData = waveformView->getAudioData();
     if (audioData.isEmpty()) {
-        statusBar()->showMessage(tr("Ошибка: нет данных для сохранения"), 2000);
+        statusBar()->showMessage(tr("Error: nothing to save"), 2000);
         return false;
     }
 
@@ -1930,13 +1936,13 @@ bool MainWindow::doSaveAudioFile()
     QString error;
     if (!WavWriter::writeFile(fileName, audioData, waveformView->getSampleRate(), &error, writeOptions)) {
         QMessageBox::warning(this, tr("DONTFLOAT"),
-                           tr("Не удалось сохранить файл %1:\n%2.")
+                           tr("Could not save %1:\n%2.")
                            .arg(QDir::toNativeSeparators(fileName), error));
         return false;
     }
 
     hasUnsavedChanges = false;
-    statusBar()->showMessage(tr("Файл сохранен: %1").arg(fileName), 2000);
+    statusBar()->showMessage(tr("Saved: %1").arg(fileName), 2000);
     return true;
 }
 
@@ -2013,7 +2019,7 @@ void MainWindow::dropEvent(QDropEvent *event)
     processAudioFile(fileName);
     mediaPlayer->setSource(QUrl::fromLocalFile(fileName));
     hasUnsavedChanges = false;
-    statusBar()->showMessage(tr("Файл загружен: %1").arg(fileName), 2000);
+    statusBar()->showMessage(tr("File loaded: %1").arg(fileName), 2000);
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
@@ -2072,9 +2078,9 @@ void MainWindow::toggleMetronome()
     if (metronomeController->isEnabled()) {
         float bpm = ui->bpmEdit->text().toFloat();
         metronomeController->setBPM(bpm);
-        statusBar()->showMessage(tr("Метроном включен"), 2000);
+        statusBar()->showMessage(tr("Metronome on"), 2000);
     } else {
-        statusBar()->showMessage(tr("Метроном выключен"), 2000);
+        statusBar()->showMessage(tr("Metronome off"), 2000);
     }
 }
 
@@ -2082,7 +2088,7 @@ void MainWindow::toggleLoop()
 {
     // Проверяем, что точки A и B установлены
     if (loopStartPosition <= 0 || loopEndPosition <= 0) {
-        statusBar()->showMessage(tr("Ошибка: Сначала установите точки A и B для цикла!"), 3000);
+        statusBar()->showMessage(tr("Error: Set loop points A and B first!"), 3000);
         ui->loopButton->setChecked(false);
         return;
     }
@@ -2093,11 +2099,11 @@ void MainWindow::toggleLoop()
     if (isLoopEnabled) {
         // Включаем цикл
         ui->loopButton->setStyleSheet("QPushButton { background-color: #2196F3; color: white; border: 2px solid #1976D2; }");
-        statusBar()->showMessage(tr("Цикл включен: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition)), 3000);
+        statusBar()->showMessage(tr("Loop on: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition)), 3000);
     } else {
         // Выключаем цикл
         ui->loopButton->setStyleSheet("");
-        statusBar()->showMessage(tr("Цикл выключен"), 2000);
+        statusBar()->showMessage(tr("Loop off"), 2000);
     }
 }
 
@@ -2118,7 +2124,7 @@ void MainWindow::updateLoopPoints()
             }
 
             // Показываем сообщение о цикле
-            statusBar()->showMessage(tr("Цикл: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition)), 1000);
+            statusBar()->showMessage(tr("Loop: %1 - %2").arg(TimeUtils::formatTime(loopStartPosition)).arg(TimeUtils::formatTime(loopEndPosition)), 1000);
         }
     }
 }
@@ -2131,7 +2137,7 @@ void MainWindow::showMetronomeSettings()
     MetronomeSettingsDialog dialog(this, metronomeController);
     if (dialog.exec() == QDialog::Accepted) {
         // Настройки уже применены к контроллеру в saveSettings() диалога
-        statusBar()->showMessage(tr("Настройки метронома обновлены"), 2000);
+        statusBar()->showMessage(tr("Metronome settings updated"), 2000);
     }
 }
 
@@ -2218,7 +2224,7 @@ void MainWindow::setTheme(const QString& theme)
     }
 
     settings.setValue("theme", theme);
-    statusBar()->showMessage(tr("Тема изменена: %1").arg(theme), 2000);
+    statusBar()->showMessage(tr("Theme: %1").arg(theme), 2000);
 }
 
 void MainWindow::setColorScheme(const QString& scheme)
@@ -2277,7 +2283,7 @@ void MainWindow::setColorScheme(const QString& scheme)
     applyPitchGridAnalyzeOverlayStyle(scheme);
 
     settings.setValue("colorScheme", scheme);
-    statusBar()->showMessage(tr("Цветовая схема изменена: %1").arg(scheme == "dark" ? "Тёмная" : "Светлая"), 2000);
+    statusBar()->showMessage(tr("Color scheme: %1").arg(scheme == "dark" ? "Тёмная" : "Светлая"), 2000);
 }
 
 void MainWindow::updateHorizontalScrollBar(float zoom)
@@ -2342,31 +2348,31 @@ void MainWindow::constrainWindowSize()
 void MainWindow::snapAllMarkersToGrid()
 {
     if (!waveformView) {
-        statusBar()->showMessage(tr("Волновая форма не инициализирована."), 3000);
+        statusBar()->showMessage(tr("Waveform not initialized."), 3000);
         return;
     }
 
     const QVector<QVector<float>>& data = waveformView->getAudioData();
     if (data.isEmpty() || data[0].isEmpty()) {
-        statusBar()->showMessage(tr("Аудиоданные не загружены."), 3000);
+        statusBar()->showMessage(tr("No audio loaded."), 3000);
         return;
     }
 
     const float bpm = waveformView->getBPM();
     if (bpm <= 0.0f || waveformView->getBeatInfo().isEmpty()) {
-        statusBar()->showMessage(tr("Нет тактовой сетки для привязки (BPM или доли не определены)."), 4000);
+        statusBar()->showMessage(tr("No beat grid to snap to (BPM or beats not detected)."), 4000);
         return;
     }
 
     QVector<Marker> markers = waveformView->getMarkers();
     if (markers.size() < 2) {
-        statusBar()->showMessage(tr("Нет меток для привязки к тактовой сетке."), 3000);
+        statusBar()->showMessage(tr("No markers to snap to the grid."), 3000);
         return;
     }
 
     QVector<Marker> snapped = waveformView->snapMarkersToGrid(markers);
     if (snapped.isEmpty() || snapped.size() != markers.size()) {
-        statusBar()->showMessage(tr("Не удалось привязать метки к тактовой сетке."), 3000);
+        statusBar()->showMessage(tr("Could not snap markers to the grid."), 3000);
         return;
     }
 
@@ -2381,10 +2387,10 @@ void MainWindow::snapAllMarkersToGrid()
 
     if (movedCount > 0) {
         statusBar()->showMessage(
-            tr("Метки привязаны к тактовой сетке (%1 шт.)").arg(movedCount),
+            tr("Markers snapped to the grid (%1)").arg(movedCount),
             4000);
     } else {
-        statusBar()->showMessage(tr("Все метки уже на тактовой сетке."), 3000);
+        statusBar()->showMessage(tr("All markers are already on the grid."), 3000);
     }
 }
 
@@ -2401,20 +2407,20 @@ void MainWindow::shiftBeatGridForward()
 void MainWindow::shiftBeatGridByBeats(int beatDelta)
 {
     if (!waveformView) {
-        statusBar()->showMessage(tr("Волновая форма не инициализирована."), 3000);
+        statusBar()->showMessage(tr("Waveform not initialized."), 3000);
         return;
     }
 
     const QVector<QVector<float>>& data = waveformView->getAudioData();
     if (data.isEmpty() || data[0].isEmpty()) {
-        statusBar()->showMessage(tr("Аудиоданные не загружены."), 3000);
+        statusBar()->showMessage(tr("No audio loaded."), 3000);
         return;
     }
 
     const float bpm = waveformView->getBPM();
     const int sampleRate = waveformView->getSampleRate();
     if (bpm <= 0.0f || sampleRate <= 0) {
-        statusBar()->showMessage(tr("Нет тактовой сетки для сдвига (BPM не определён)."), 4000);
+        statusBar()->showMessage(tr("No beat grid to shift (BPM not detected)."), 4000);
         return;
     }
 
@@ -2428,17 +2434,17 @@ void MainWindow::shiftBeatGridByBeats(int beatDelta)
         maxGridStart);
 
     if (newGridStart == oldGridStart) {
-        statusBar()->showMessage(tr("Тактовая сетка уже на границе аудиофайла."), 3000);
+        statusBar()->showMessage(tr("Beat grid is already at the file boundary."), 3000);
         return;
     }
 
     waveformView->shiftGridBySamples(newGridStart - oldGridStart, moveMarkers);
     updateTimeLabel(currentPosition);
 
-    const QString direction = beatDelta < 0 ? tr("назад") : tr("вперёд");
-    const QString markersNote = moveMarkers ? tr(" (метки сдвинуты)") : QString();
+    const QString direction = beatDelta < 0 ? tr("back") : tr("forward");
+    const QString markersNote = moveMarkers ? tr(" (markers moved)") : QString();
     statusBar()->showMessage(
-        tr("Тактовая сетка сдвинута на один удар %1%2").arg(direction, markersNote),
+        tr("Beat grid shifted one beat %1%2").arg(direction, markersNote),
         3000);
 }
 
@@ -2451,7 +2457,7 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
     // Получаем информацию о долях из WaveformView
     QVector<BPMAnalyzer::BeatInfo> beats = waveformView->getBeatInfo();
     if (beats.isEmpty()) {
-        statusBar()->showMessage(tr("Информация о долях отсутствует"), 3000);
+        statusBar()->showMessage(tr("No beat information"), 3000);
         return;
     }
 
@@ -2460,7 +2466,7 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
     int sampleRate = waveformView->getSampleRate();
 
     if (bpm <= 0 || sampleRate <= 0) {
-        statusBar()->showMessage(tr("Некорректные параметры BPM или sampleRate"), 3000);
+        statusBar()->showMessage(tr("Invalid BPM or sample rate"), 3000);
         return;
     }
 
@@ -2472,7 +2478,7 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
     QVector<int> unalignedIndices = BPMAnalyzer::findUnalignedBeats(beats, deviationThreshold);
 
     if (unalignedIndices.isEmpty()) {
-        statusBar()->showMessage(tr("Неровные доли не найдены"), 3000);
+        statusBar()->showMessage(tr("No irregular beats found"), 3000);
         return;
     }
 
@@ -2517,7 +2523,7 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
     waveformView->sortMarkers();
 
     statusBar()->showMessage(
-        tr("Создано %1 меток коррекции для %2 неровных долей")
+        tr("Created %1 correction markers for %2 irregular beats")
             .arg(markersCreated)
             .arg(unalignedIndices.size()),
         5000);
@@ -2553,8 +2559,8 @@ void MainWindow::togglePitchGrid()
 
     if (togglePitchGridAct) {
         togglePitchGridAct->setText(isPitchGridVisible
-            ? tr("Убрать питч-сетку")
-            : tr("Показать питч-сетку"));
+            ? tr("Hide Pitch Grid")
+            : tr("Show Pitch Grid"));
     }
 
     if (isPitchGridVisible) {
@@ -2592,7 +2598,7 @@ void MainWindow::startPitchAnalysis()
         return;
     }
     if (!waveformView || waveformView->getAudioData().isEmpty()) {
-        statusBar()->showMessage(tr("Сначала загрузите аудиофайл"), 3000);
+        statusBar()->showMessage(tr("Load an audio file first"), 3000);
         return;
     }
 
@@ -2600,7 +2606,7 @@ void MainWindow::startPitchAnalysis()
     const QVector<float> mono = AudioFileService::toMono(waveformView->getSourceAudioData());
     const int sampleRate = waveformView->getSampleRate();
     if (mono.isEmpty() || sampleRate <= 0) {
-        statusBar()->showMessage(tr("Нет аудиоданных для анализа"), 3000);
+        statusBar()->showMessage(tr("No audio to analyze"), 3000);
         return;
     }
 
@@ -2612,7 +2618,7 @@ void MainWindow::startPitchAnalysis()
 
     pitchAnalysisRunning = true;
     setPitchAnalysisUiRunning(true);
-    statusBar()->showMessage(tr("Анализ тональности и нот..."), 0);
+    statusBar()->showMessage(tr("Analyzing key and notes..."), 0);
 
     pitchAnalysisProgressValue = std::make_shared<std::atomic<int>>(0);
     if (!pitchAnalysisProgressTimer) {
@@ -2673,7 +2679,7 @@ void MainWindow::onPitchAnalysisFinished()
     setPitchAnalysisUiRunning(false);
     hidePitchGridAnalyzeOverlay();
     statusBar()->showMessage(
-        tr("Анализ завершён: %1, найдено нот: %2")
+        tr("Analysis finished: %1, notes found: %2")
             .arg(keysText)
             .arg(basePitchNotes.size()),
         5000);
@@ -2701,7 +2707,7 @@ void MainWindow::onNotePitchEdited(int noteIndex, float oldPitch, float newPitch
     // запускаем фоновый пересчёт звука (см. updatePlaybackAfterMarkerDrag)
     undoStack->push(new PitchNoteEditCommand(
         pitchGridWidget, &basePitchNotes, noteIndex, oldPitch, newPitch,
-        tr("Изменить высоту ноты"),
+        tr("Change note pitch"),
         [this]() {
             noteEditCommandActive = true;
             scheduleMarkerPlaybackPreview();
@@ -2776,18 +2782,18 @@ void MainWindow::applyPitchCorrection()
     }
     if (basePitchNotes.isEmpty()) {
         statusBar()->showMessage(
-            tr("Сначала выполните анализ нот (кнопка «Анализировать»)"), 4000);
+            tr("Run note analysis first (the \"Analyze\" button)"), 4000);
         return;
     }
     if (!PitchCorrection::hasPendingEdits(basePitchNotes)) {
         statusBar()->showMessage(
-            tr("Нет изменённых нот — сдвиньте ноты на пианоролле"), 4000);
+            tr("No edited notes — drag notes on the piano roll"), 4000);
         return;
     }
     if (waveformView->hasTimelineStretch()) {
-        QMessageBox::information(this, tr("Коррекция высоты нот"),
-            tr("Сначала примените сжатие-растяжение (Ctrl+T), "
-               "затем коррекцию высоты нот."));
+        QMessageBox::information(this, tr("Note pitch correction"),
+            tr("Apply time-stretch first (Ctrl+T), "
+               "then note pitch correction."));
         return;
     }
 
@@ -2802,7 +2808,7 @@ void MainWindow::applyPitchCorrection()
     const QVector<PitchDetector::PitchNote> notes =
         warpNotesThroughMarkers(basePitchNotes, waveformView->getMarkers());
 
-    statusBar()->showMessage(tr("Коррекция высоты нот..."), 0);
+    statusBar()->showMessage(tr("Applying note pitch correction..."), 0);
     setEnabled(false);
 
     auto* watcher = new QFutureWatcher<QVector<QVector<float>>>(this);
@@ -2813,14 +2819,14 @@ void MainWindow::applyPitchCorrection()
         watcher->deleteLater();
 
         if (newData.isEmpty() || newData[0].isEmpty()) {
-            statusBar()->showMessage(tr("Ошибка при коррекции высоты нот"), 4000);
+            statusBar()->showMessage(tr("Error while applying note pitch correction"), 4000);
             return;
         }
 
         const QVector<Marker> markers = waveformView->getMarkers();
         undoStack->push(new TimeStretchCommand(
             waveformView, oldData, newData, markers, markers,
-            tr("Применить коррекцию высоты нот")));
+            tr("Apply note pitch correction")));
 
         // Применённые правки становятся «текущей» высотой нот
         for (PitchDetector::PitchNote& note : basePitchNotes) {
@@ -2828,7 +2834,7 @@ void MainWindow::applyPitchCorrection()
         }
         refreshPitchGridNotes();
 
-        statusBar()->showMessage(tr("Коррекция высоты нот применена"), 5000);
+        statusBar()->showMessage(tr("Note pitch correction applied"), 5000);
     });
 
     watcher->setFuture(QtConcurrent::run([baseData, notes, sampleRate]() {
@@ -2839,13 +2845,13 @@ void MainWindow::applyPitchCorrection()
 void MainWindow::analyzeKey()
 {
     if (!waveformView || waveformView->getAudioData().isEmpty()) {
-        statusBar()->showMessage(tr("Сначала загрузите аудиофайл"), 3000);
+        statusBar()->showMessage(tr("Load an audio file first"), 3000);
         return;
     }
 
     const QVector<QVector<float>>& audioData = waveformView->getAudioData();
     if (audioData.isEmpty()) {
-        statusBar()->showMessage(tr("Нет аудиоданных для анализа"), 3000);
+        statusBar()->showMessage(tr("No audio to analyze"), 3000);
         return;
     }
 
@@ -2857,7 +2863,7 @@ void MainWindow::analyzeKey()
     barGrid.beatsPerBar = waveformView->getBeatsPerBar();
     barGrid.gridStartSample = waveformView->getGridStartSample();
 
-    statusBar()->showMessage(tr("Анализ тональности..."), 0);
+    statusBar()->showMessage(tr("Key analysis..."), 0);
     setEnabled(false);
 
     using KeyOutcome = QPair<KeyAnalyzer::AnalysisResult, KeyAnalyzer::PerBarKeyResult>;
@@ -2876,7 +2882,7 @@ void MainWindow::analyzeKey()
             keysText += QStringLiteral(" / ") + currentKey2;
         }
 
-        statusBar()->showMessage(tr("Тональность определена: %1").arg(keysText), 3000);
+        statusBar()->showMessage(tr("Key: %1").arg(keysText), 3000);
         watcher->deleteLater();
     });
 
@@ -3156,7 +3162,7 @@ void MainWindow::setupPitchGridAnalyzeOverlay()
 
     auto* buttonRow = new QHBoxLayout();
     buttonRow->addStretch();
-    pitchGridAnalyzeButton = new QPushButton(tr("Анализировать"), pitchGridAnalyzeOverlay);
+    pitchGridAnalyzeButton = new QPushButton(tr("Analyze"), pitchGridAnalyzeOverlay);
     pitchGridAnalyzeButton->setCursor(Qt::PointingHandCursor);
     pitchGridAnalyzeButton->setMinimumWidth(140);
     pitchGridAnalyzeButton->setMinimumHeight(30);
@@ -3170,7 +3176,7 @@ void MainWindow::setupPitchGridAnalyzeOverlay()
     pitchGridAnalyzeProgress->setRange(0, 100);
     pitchGridAnalyzeProgress->setValue(0);
     pitchGridAnalyzeProgress->setTextVisible(true);
-    pitchGridAnalyzeProgress->setFormat(tr("Анализ... %p%"));
+    pitchGridAnalyzeProgress->setFormat(tr("Analyzing... %p%"));
     pitchGridAnalyzeProgress->setFixedWidth(240);
     pitchGridAnalyzeProgress->setMinimumHeight(22);
     pitchGridAnalyzeProgress->hide();
@@ -3395,11 +3401,11 @@ void MainWindow::setRussianLanguage()
     qApp->removeTranslator(m_appTranslator);
     if (!loadTranslation(m_appTranslator, "ru_RU")) {
         // Restore previous translator and revert checkboxes
-        loadTranslation(m_appTranslator, "en_US");
-        qApp->installTranslator(m_appTranslator);
+        if (loadTranslation(m_appTranslator, "en_US"))
+            qApp->installTranslator(m_appTranslator);
         russianAction->setChecked(false);
         englishAction->setChecked(true);
-        statusBar()->showMessage(tr("Ошибка загрузки перевода"), 3000);
+        statusBar()->showMessage(tr("Translation load error"), 3000);
         return;
     }
     qApp->installTranslator(m_appTranslator);
@@ -3408,7 +3414,7 @@ void MainWindow::setRussianLanguage()
     englishAction->setChecked(false);
     ui->retranslateUi(this);
     retranslateMenus();
-    statusBar()->showMessage(tr("Язык: Русский"), 2000);
+    statusBar()->showMessage(tr("Language: Russian"), 2000);
 }
 
 void MainWindow::setEnglishLanguage()
@@ -3416,16 +3422,9 @@ void MainWindow::setEnglishLanguage()
     if (settings.value("language").toString() == "en_US")
         return;
     qApp->removeTranslator(m_appTranslator);
-    if (!loadTranslation(m_appTranslator, "en_US")) {
-        // Restore previous translator and revert checkboxes
-        loadTranslation(m_appTranslator, "ru_RU");
+    // Source strings are English: identity en_US.qm is optional.
+    if (loadTranslation(m_appTranslator, "en_US"))
         qApp->installTranslator(m_appTranslator);
-        englishAction->setChecked(false);
-        russianAction->setChecked(true);
-        statusBar()->showMessage(tr("Ошибка загрузки перевода"), 3000);
-        return;
-    }
-    qApp->installTranslator(m_appTranslator);
     settings.setValue("language", "en_US");
     englishAction->setChecked(true);
     russianAction->setChecked(false);
@@ -3437,7 +3436,7 @@ void MainWindow::setEnglishLanguage()
 void MainWindow::applyTimeStretch()
 {
     if (!waveformView) {
-        statusBar()->showMessage(tr("Ошибка: WaveformView не инициализирован"), 3000);
+        statusBar()->showMessage(tr("Error: WaveformView not initialized"), 3000);
         return;
     }
 
@@ -3446,9 +3445,9 @@ void MainWindow::applyTimeStretch()
 
     if (currentMarkers.size() < 2) {
         QMessageBox::warning(this,
-                            tr("Недостаточно меток"),
-                            tr("Для применения растяжения необходимо минимум 2 метки.\n"
-                                            "Используйте клавишу M для добавления меток."));
+                            tr("Not enough markers"),
+                            tr("At least 2 markers are required to apply stretch.\n"
+                                            "Press M to add markers."));
         return;
     }
 
@@ -3456,7 +3455,7 @@ void MainWindow::applyTimeStretch()
     const QVector<QVector<float>>& oldData = waveformView->getAudioData();
 
     if (oldData.isEmpty()) {
-        statusBar()->showMessage(tr("Ошибка: нет загруженного аудио"), 3000);
+        statusBar()->showMessage(tr("Error: no audio loaded"), 3000);
         return;
     }
 
@@ -3473,7 +3472,7 @@ void MainWindow::applyTimeStretch()
     QVector<Marker> newMarkers = MarkerUtils::toMarkers(stretchResult.newMarkers);
 
     if (newData.isEmpty() || newData[0].isEmpty()) {
-        statusBar()->showMessage(tr("Ошибка при обработке аудио"), 3000);
+        statusBar()->showMessage(tr("Audio processing error"), 3000);
         return;
     }
 
@@ -3507,7 +3506,7 @@ void MainWindow::applyTimeStretch()
         newData,
         currentMarkers,
         newMarkers,
-        tr("Применить сжатие-растяжение")
+        tr("Apply time stretch")
     );
 
     // Применяем команду (push автоматически вызывает redo())
@@ -3536,7 +3535,7 @@ void MainWindow::applyTimeStretch()
         waveformView->update();
     }
 
-    statusBar()->showMessage(tr("Растяжение применено успешно. Размер: %1 → %2 сэмплов")
+    statusBar()->showMessage(tr("Stretch applied. Length: %1 → %2 samples")
                              .arg(oldData.isEmpty() ? 0 : oldData[0].size())
                              .arg(newData.isEmpty() ? 0 : newData[0].size()), 5000);
 }
@@ -3793,22 +3792,22 @@ void MainWindow::onMarkerPreviewStretchFinished()
 
 void MainWindow::createOnsetMarkersAuto()
 {
-    const QString dialogTitle = tr("Авто-метки по транзиентам");
+    const QString dialogTitle = tr("Auto markers on transients");
 
     if (!waveformView) {
-        QMessageBox::warning(this, dialogTitle, tr("Волновая форма не инициализирована."));
+        QMessageBox::warning(this, dialogTitle, tr("Waveform not initialized."));
         return;
     }
 
     const QVector<QVector<float>>& data = waveformView->getAudioData();
     if (data.isEmpty() || data[0].isEmpty()) {
-        QMessageBox::warning(this, dialogTitle, tr("Аудиоданные не загружены."));
+        QMessageBox::warning(this, dialogTitle, tr("No audio loaded."));
         return;
     }
 
     const int sampleRate = waveformView->getSampleRate();
     if (sampleRate <= 0) {
-        QMessageBox::warning(this, dialogTitle, tr("Некорректная частота дискретизации."));
+        QMessageBox::warning(this, dialogTitle, tr("Invalid sample rate."));
         return;
     }
 
@@ -3849,7 +3848,7 @@ void MainWindow::createOnsetMarkersAuto()
 
     if (maxDiff <= 0.0f) {
         QMessageBox::information(this, dialogTitle,
-                                 tr("Не удалось обнаружить транзиенты в аудиофайле."));
+                                 tr("No transients found."));
         return;
     }
 
@@ -3876,7 +3875,7 @@ void MainWindow::createOnsetMarkersAuto()
     }
 
     if (onsetSamples.isEmpty()) {
-        QMessageBox::information(this, dialogTitle, tr("Подходящих транзиентов не найдено."));
+        QMessageBox::information(this, dialogTitle, tr("No suitable transients found."));
         return;
     }
 
@@ -3892,7 +3891,7 @@ void MainWindow::createOnsetMarkersAuto()
     waveformView->update();
 
     statusBar()->showMessage(
-        tr("Создано %1 авто-меток по транзиентам").arg(onsetSamples.size()),
+        tr("Created %1 transient markers").arg(onsetSamples.size()),
         4000);
 }
 
@@ -3904,9 +3903,9 @@ void MainWindow::toggleBeatWaveform()
         toggleBeatWaveformAct->setChecked(!currentState);
 
         if (!currentState) {
-            statusBar()->showMessage(tr("Силуэт ударных включен"), 2000);
+            statusBar()->showMessage(tr("Beat waveform enabled"), 2000);
         } else {
-            statusBar()->showMessage(tr("Силуэт ударных отключен"), 2000);
+            statusBar()->showMessage(tr("Beat waveform disabled"), 2000);
         }
     }
 }

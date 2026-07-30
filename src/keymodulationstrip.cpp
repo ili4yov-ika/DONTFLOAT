@@ -79,7 +79,7 @@ void KeyModulationStrip::setRegionKey(int regionIndex, const QString& keyName)
     if (regionIndex < m_fields.size() && m_fields[regionIndex]) {
         m_fields[regionIndex]->setText(keyName);
         m_fields[regionIndex]->setToolTip(keyName.isEmpty()
-            ? tr("Не определена")
+            ? tr("Undefined")
             : keyName);
     }
 }
@@ -149,12 +149,12 @@ void KeyModulationStrip::rebuildFields()
         edit->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         edit->setStyleSheet(style);
         edit->setText(region.key.keyName);
-        edit->setPlaceholderText(tr("Не определена"));
+        edit->setPlaceholderText(tr("Undefined"));
         edit->setToolTip(region.key.keyName.isEmpty()
-            ? tr("Тональность тактов %1–%2")
+            ? tr("Key for bars %1–%2")
                   .arg(region.startBar + 1)
                   .arg(region.endBar + 1)
-            : tr("%1 (такты %2–%3)")
+            : tr("%1 (bars %2–%3)")
                   .arg(region.key.keyName)
                   .arg(region.startBar + 1)
                   .arg(region.endBar + 1));

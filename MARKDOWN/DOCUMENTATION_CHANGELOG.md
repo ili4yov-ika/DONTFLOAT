@@ -1,5 +1,20 @@
 # История изменений документации
 
+## 2026-07-30 (i18n: English source в коде и .ts)
+
+- UI msgid переведён на английский (`tr()` / `.ui` / плагины UI); автоним «Русский» сохранён.
+- Live `translations/en_US.ts` = EN→EN, `ru_RU.ts` = EN→RU; `.qm` пересобраны (`lupdate -no-obsolete`, `lrelease`).
+- Скрипты: `migrate_tr_to_english.py`, `install_en_source_translations.py`; helpers `fix_translations.py` / `finalize_translations.py` / `apply_remaining_en.py` — под EN→RU.
+- CI-guard: `tools/check_tr_english_source.py` + job `i18n-guard` в GitHub Actions.
+- `setEnglishLanguage` / старт: EN работает без `.qm` (строки = source); RU по-прежнему требует `ru_RU.qm`.
+- Политика языка обновлена в `MARKDOWN/INIT.MD`, `.cursor/commands/init.md`, `MARKDOWN/DEVELOPMENT_GUIDE.md`, `docs/features.md`, `docs/architecture.md`, `README.md`, `tools/README.md`.
+- План: `MARKDOWN/PLAN_I18N_ENGLISH_SOURCE.md` (этапы выполнены).
+
+## 2026-07-30 (i18n: подготовка EN как исходного языка)
+
+- Добавлены каталоги `translations/from_en/` (EN→EN / EN→RU) и скрипт `tools/prepare_en_source_translations.py`.
+- План миграции UI с русского msgid на английский: `MARKDOWN/PLAN_I18N_ENGLISH_SOURCE.md`.
+
 ## 2026-07-30 (UI питч-сетки, модуляции, MIDI-тесты)
 
 - Питч-сетка **видна по умолчанию** (`pitchGridVisible` default = true); `Ctrl+G` по-прежнему переключает.
