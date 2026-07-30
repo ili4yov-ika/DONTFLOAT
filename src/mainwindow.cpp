@@ -255,6 +255,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Меню тональностей вынесены в отдельный класс KeySelectionMenu.
     keyMenu = new KeySelectionMenu(this);
     keyMenu2 = new KeySelectionMenu(this);
+    keyRegionMenu = new KeySelectionMenu(this);
     connect(keyMenu, &KeySelectionMenu::keySelected, this, &MainWindow::setKey);
     connect(keyMenu2, &KeySelectionMenu::keySelected, this, &MainWindow::setKey2);
 
@@ -409,6 +410,7 @@ MainWindow::MainWindow(QWidget *parent)
     pitchGridVerticalScrollBar->setFixedWidth(UiConstants::kScrollBarWidthPx);
     layoutPitchGridScrollOverlay();
     setupPitchGridAnalyzeOverlay();
+    setupKeyModulationStrip();
 
     // Стили скроллбаров применяются ниже (после readSettings) единым вызовом applyScrollBarStyles().
 
@@ -641,6 +643,7 @@ void MainWindow::syncPitchGridTimelineWidth()
     pitchGridWidget->setTimelineReferenceWidth(waveformView->width());
     pitchGridWidget->setTimelineSampleCount(waveformView->displaySampleCount());
     pitchGridWidget->setCursorPosition(waveformView->getCursorXPosition());
+    syncKeyModulationStripFromWaveform();
 }
 
 void MainWindow::syncPitchGridFromWaveform()
@@ -659,6 +662,7 @@ void MainWindow::syncPitchGridFromWaveform()
     pitchGridWidget->setPrimaryKey(currentKey);
     pitchGridWidget->setSecondaryKey(currentKey2);
     syncPitchGridTimelineWidth();
+    syncKeyModulationStripFromWaveform();
     pitchGridWidget->update();
 }
 
@@ -1730,6 +1734,10 @@ void MainWindow::resetAudioState()
 
     // Сброс второй тональности — поле модуляции покажется только после анализа
     setKey2(QString());
+    lastPerBarKey = KeyAnalyzer::PerBarKeyResult();
+    if (keyModulationStrip) {
+        keyModulationStrip->clearRegions();
+    }
 }
 
 void MainWindow::openAudioFile()
@@ -2635,36 +2643,11 @@ void MainWindow::onPitchAnalysisFinished()
 
     const PitchAnalysisOutcome outcome = pitchAnalysisWatcher->result();
 
-    // Основная тональность: трековая оценка, при неудаче — потактовая, иначе C Major.
-    QString detectedKey = outcome.key.primaryKey.keyName;
-    KeyAnalyzer::Key primaryEnum = outcome.key.primaryKey.key;
-    if (detectedKey.isEmpty() || primaryEnum == KeyAnalyzer::UNKNOWN_KEY) {
-        if (outcome.perBarKey.primaryKey.key != KeyAnalyzer::UNKNOWN_KEY) {
-            detectedKey = outcome.perBarKey.primaryKey.keyName;
-            primaryEnum = outcome.perBarKey.primaryKey.key;
-        } else {
-            detectedKey = QStringLiteral("C Major");
-            primaryEnum = KeyAnalyzer::stringToKey(detectedKey);
-        }
-    }
-    setKey(detectedKey);
+    applyPerBarKeyResult(outcome.perBarKey, outcome.key);
 
-    // Модуляцию (смену тональности) показываем во втором поле над пианороллом,
-    // а не на звуковой волне: берём доминирующую потактовую тональность,
-    // отличную от основной; при её отсутствии — трековую вторичную тональность.
-    QString keysText = detectedKey;
-    const KeyAnalyzer::KeyInfo modKey =
-        KeyAnalyzer::dominantModulationKey(outcome.perBarKey, primaryEnum);
-    if (modKey.key != KeyAnalyzer::UNKNOWN_KEY && !modKey.keyName.isEmpty()) {
-        setKey2(modKey.keyName);
-        keysText += QStringLiteral(" / ") + modKey.keyName;
-    } else if (outcome.key.hasKeyChange
-        && outcome.key.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
-        && !outcome.key.secondaryKey.keyName.isEmpty()) {
-        setKey2(outcome.key.secondaryKey.keyName);
-        keysText += QStringLiteral(" / ") + outcome.key.secondaryKey.keyName;
-    } else {
-        setKey2(QString());
+    QString keysText = currentKey;
+    if (!currentKey2.isEmpty()) {
+        keysText += QStringLiteral(" / ") + currentKey2;
     }
 
     basePitchNotes = outcome.notes;
@@ -2869,33 +2852,11 @@ void MainWindow::analyzeKey()
         const KeyAnalyzer::PerBarKeyResult perBar = outcome.second;
         setEnabled(true);
 
-        QString detectedKey = result.primaryKey.keyName;
-        KeyAnalyzer::Key primaryEnum = result.primaryKey.key;
-        if (detectedKey.isEmpty() || primaryEnum == KeyAnalyzer::UNKNOWN_KEY) {
-            if (perBar.primaryKey.key != KeyAnalyzer::UNKNOWN_KEY) {
-                detectedKey = perBar.primaryKey.keyName;
-                primaryEnum = perBar.primaryKey.key;
-            } else {
-                detectedKey = QStringLiteral("C Major");
-                primaryEnum = KeyAnalyzer::stringToKey(detectedKey);
-            }
-        }
-        setKey(detectedKey);
+        applyPerBarKeyResult(perBar, result);
 
-        // Модуляцию показываем во втором поле над пианороллом (не на волне).
-        QString keysText = detectedKey;
-        const KeyAnalyzer::KeyInfo modKey =
-            KeyAnalyzer::dominantModulationKey(perBar, primaryEnum);
-        if (modKey.key != KeyAnalyzer::UNKNOWN_KEY && !modKey.keyName.isEmpty()) {
-            setKey2(modKey.keyName);
-            keysText += QStringLiteral(" / ") + modKey.keyName;
-        } else if (result.hasKeyChange
-            && result.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
-            && !result.secondaryKey.keyName.isEmpty()) {
-            setKey2(result.secondaryKey.keyName);
-            keysText += QStringLiteral(" / ") + result.secondaryKey.keyName;
-        } else {
-            setKey2(QString());
+        QString keysText = currentKey;
+        if (!currentKey2.isEmpty()) {
+            keysText += QStringLiteral(" / ") + currentKey2;
         }
 
         statusBar()->showMessage(tr("Тональность определена: %1").arg(keysText), 3000);
@@ -2918,6 +2879,152 @@ void MainWindow::showKeyContextMenu2(const QPoint& pos)
 {
     if (keyMenu2)
         keyMenu2->popup(ui->keyInput2, pos);
+}
+
+void MainWindow::setupKeyModulationStrip()
+{
+    if (!ui->keyInputContainer) {
+        return;
+    }
+
+    // Статические dual-поля оставляем скрытыми: тональность/модуляция
+    // отображаются потактово на полосе над пианороллом.
+    if (ui->keyInput) {
+        ui->keyInput->hide();
+    }
+    if (ui->keyInput2) {
+        ui->keyInput2->hide();
+    }
+    if (ui->keyInputSpacer) {
+        ui->keyInputSpacer->changeSize(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
+    }
+
+    if (!keyModulationStrip) {
+        keyModulationStrip = new KeyModulationStrip(ui->keyInputContainer);
+        if (auto* layout = ui->keyInputLayout) {
+            layout->setContentsMargins(0, 0, 0, 0);
+            layout->setSpacing(0);
+            layout->insertWidget(0, keyModulationStrip, 1);
+        } else {
+            keyModulationStrip->setParent(ui->keyInputContainer);
+            keyModulationStrip->setGeometry(ui->keyInputContainer->rect());
+        }
+        connect(keyModulationStrip, &KeyModulationStrip::fieldMenuRequested,
+                this, &MainWindow::onKeyModulationFieldMenu);
+    }
+    syncKeyModulationStripFromWaveform();
+}
+
+void MainWindow::syncKeyModulationStripFromWaveform()
+{
+    if (!keyModulationStrip || !waveformView) {
+        return;
+    }
+    keyModulationStrip->setTimelineSampleCount(waveformView->displaySampleCount());
+    keyModulationStrip->setTimelineReferenceWidth(waveformView->width());
+    keyModulationStrip->setZoomLevel(waveformView->getZoomLevel());
+    keyModulationStrip->setHorizontalOffset(waveformView->getHorizontalOffset());
+}
+
+void MainWindow::applyPerBarKeyResult(const KeyAnalyzer::PerBarKeyResult& perBar,
+                                      const KeyAnalyzer::AnalysisResult& trackKey)
+{
+    lastPerBarKey = perBar;
+
+    QString detectedKey = trackKey.primaryKey.keyName;
+    KeyAnalyzer::Key primaryEnum = trackKey.primaryKey.key;
+    if (detectedKey.isEmpty() || primaryEnum == KeyAnalyzer::UNKNOWN_KEY) {
+        if (perBar.primaryKey.key != KeyAnalyzer::UNKNOWN_KEY) {
+            detectedKey = perBar.primaryKey.keyName;
+            primaryEnum = perBar.primaryKey.key;
+        } else {
+            detectedKey = QStringLiteral("C Major");
+            primaryEnum = KeyAnalyzer::stringToKey(detectedKey);
+        }
+    }
+    setKey(detectedKey);
+
+    const KeyAnalyzer::KeyInfo modKey =
+        KeyAnalyzer::dominantModulationKey(perBar, primaryEnum);
+    if (modKey.key != KeyAnalyzer::UNKNOWN_KEY && !modKey.keyName.isEmpty()) {
+        setKey2(modKey.keyName);
+    } else if (trackKey.hasKeyChange
+        && trackKey.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
+        && !trackKey.secondaryKey.keyName.isEmpty()) {
+        setKey2(trackKey.secondaryKey.keyName);
+    } else {
+        setKey2(QString());
+    }
+
+    // Поля над пианороллом — по регионам тактов (Melodyne-style).
+    QVector<KeyAnalyzer::KeyRegion> regions = perBar.regions;
+    if (regions.isEmpty() && !detectedKey.isEmpty() && waveformView) {
+        KeyAnalyzer::KeyRegion whole;
+        whole.startBar = 0;
+        whole.endBar = 0;
+        whole.startSample = waveformView->getGridStartSample();
+        whole.endSample = qMax<qint64>(whole.startSample + 1, waveformView->displaySampleCount());
+        whole.key.keyName = detectedKey;
+        whole.key.key = primaryEnum;
+        regions.push_back(whole);
+    }
+    lastPerBarKey.regions = regions;
+
+    if (keyModulationStrip) {
+        keyModulationStrip->setRegions(regions);
+        syncKeyModulationStripFromWaveform();
+    }
+}
+
+void MainWindow::onKeyModulationFieldMenu(int regionIndex, QWidget* anchor, const QPoint& localPos)
+{
+    if (!keyRegionMenu || !anchor || regionIndex < 0) {
+        return;
+    }
+    editingKeyRegionIndex = regionIndex;
+    disconnect(keyRegionMenu, &KeySelectionMenu::keySelected, this, nullptr);
+    connect(keyRegionMenu, &KeySelectionMenu::keySelected, this,
+            [this](const QString& key) {
+                applyKeyModulationRegion(editingKeyRegionIndex, key);
+            },
+            static_cast<Qt::ConnectionType>(Qt::SingleShotConnection));
+    keyRegionMenu->popup(anchor, localPos);
+}
+
+void MainWindow::applyKeyModulationRegion(int regionIndex, const QString& key)
+{
+    if (!keyModulationStrip || regionIndex < 0
+        || regionIndex >= lastPerBarKey.regions.size()) {
+        return;
+    }
+
+    lastPerBarKey.regions[regionIndex].key.keyName = key;
+    lastPerBarKey.regions[regionIndex].key.key =
+        key.isEmpty() ? KeyAnalyzer::UNKNOWN_KEY : KeyAnalyzer::stringToKey(key);
+    keyModulationStrip->setRegionKey(regionIndex, key);
+
+    // Обновляем потактовые записи внутри региона.
+    const KeyAnalyzer::KeyRegion& region = lastPerBarKey.regions[regionIndex];
+    for (KeyAnalyzer::BarKey& bar : lastPerBarKey.bars) {
+        if (bar.barIndex >= region.startBar && bar.barIndex <= region.endBar) {
+            bar.key = lastPerBarKey.regions[regionIndex].key;
+        }
+    }
+
+    // Пересобираем primary/modulation для легенды пианоролла.
+    if (regionIndex == 0 || currentKey.isEmpty()) {
+        setKey(key);
+    }
+    const KeyAnalyzer::KeyInfo modKey =
+        KeyAnalyzer::dominantModulationKey(lastPerBarKey,
+            KeyAnalyzer::stringToKey(currentKey));
+    if (modKey.key != KeyAnalyzer::UNKNOWN_KEY) {
+        setKey2(modKey.keyName);
+    } else if (regionIndex > 0 && !key.isEmpty()) {
+        setKey2(key);
+    } else {
+        setKey2(QString());
+    }
 }
 
 void MainWindow::setKey(const QString& key)
@@ -2962,8 +3069,9 @@ void MainWindow::setKey(const QString& key)
 void MainWindow::setKey2(const QString& key)
 {
     currentKey2 = key;
-    // Второе поле показываем только при модуляции (двух тональностях)
-    ui->keyInput2->setVisible(!key.isEmpty());
+    // Dual-поле скрыто: модуляция видна на потактовой полосе.
+    // Оставляем скрытый QLineEdit синхронизированным для совместимости.
+    ui->keyInput2->setVisible(false);
     ui->keyInput2->setText(key);
 
     // Обновляем стиль поля ввода в зависимости от того, определена ли тональность

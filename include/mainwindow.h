@@ -41,6 +41,7 @@
 #include "shortcutsdialog.h"
 #include "metronomecontroller.h"
 #include "keyselectionmenu.h"
+#include "keymodulationstrip.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -101,6 +102,8 @@ private slots:
     void showKeyContextMenu2(const QPoint& pos);
     void setKey(const QString& key);
     void setKey2(const QString& key);
+    void onKeyModulationFieldMenu(int regionIndex, QWidget* anchor, const QPoint& localPos);
+    void applyKeyModulationRegion(int regionIndex, const QString& key);
     void updateScrollBarTransparency();
     void setRussianLanguage();
     void setEnglishLanguage();
@@ -123,6 +126,10 @@ private:
     void updatePitchGridLayout();
     void syncPitchGridFromWaveform();
     void syncPitchGridTimelineWidth();
+    void syncKeyModulationStripFromWaveform();
+    void setupKeyModulationStrip();
+    void applyPerBarKeyResult(const KeyAnalyzer::PerBarKeyResult& perBar,
+                              const KeyAnalyzer::AnalysisResult& trackKey);
     void layoutPitchGridScrollOverlay();
     void setupPitchGridAnalyzeOverlay();
     void showPitchGridAnalyzeOverlay();
@@ -280,6 +287,10 @@ private:
     QString currentKey2; // For modulation
     KeySelectionMenu *keyMenu;  // Контекстное меню для основного поля тональности
     KeySelectionMenu *keyMenu2; // Контекстное меню для поля модуляции
+    KeySelectionMenu *keyRegionMenu = nullptr; // меню для потактовой полосы
+    KeyModulationStrip *keyModulationStrip = nullptr;
+    KeyAnalyzer::PerBarKeyResult lastPerBarKey;
+    int editingKeyRegionIndex = -1;
 
     // Pitch analysis (тональность + ноты) в фоне
     struct PitchAnalysisOutcome {

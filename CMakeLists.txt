@@ -134,6 +134,7 @@ set(SOURCES
     src/wavwriter.cpp
     src/audiofileservice.cpp
     src/keyselectionmenu.cpp
+    src/keymodulationstrip.cpp
     src/spectrogramsettingsdialog.cpp
     src/pitchshiftsettingsdialog.cpp
     src/shortcutsdialog.cpp
@@ -168,6 +169,7 @@ set(HEADERS
     include/audiofileservice.h
     include/uiconstants.h
     include/keyselectionmenu.h
+    include/keymodulationstrip.h
     include/spectrogramsettingsdialog.h
     include/fft_engine.h
     include/granularpitchshifter_engine.h
@@ -623,6 +625,31 @@ set_tests_properties(pitch_detector_accuracy_test PROPERTIES
 set_tests_properties(beat_deviation_test PROPERTIES
     LABELS "bpm;deviation;unit"
     DESCRIPTION "Unit tests for beat deviation calculation and unaligned beat detection"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Питчер на фикстуре tests/midi/test_1 (MIDI ground truth + WAV)
+add_qt_test(midi_pitch_test
+    tests/midi_pitch_test.cpp
+    src/pitchdetector.cpp
+    src/audiofileservice.cpp
+)
+
+set_tests_properties(midi_pitch_test PROPERTIES
+    LABELS "pitch;detector;midi;fixtures;integration"
+    DESCRIPTION "PitchDetector vs tests/midi/test_1.mid ground truth on test_1.wav"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Неровные доли на идеальной сетке test_1.mid (140 BPM) + искусственные сдвиги
+add_qt_test(midi_beat_deviation_test
+    tests/midi_beat_deviation_test.cpp
+    src/bpmanalyzer.cpp
+)
+
+set_tests_properties(midi_beat_deviation_test PROPERTIES
+    LABELS "bpm;deviation;midi;fixtures"
+    DESCRIPTION "findUnalignedBeats on test_1.mid quarter grid (192 kHz sample map)"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
