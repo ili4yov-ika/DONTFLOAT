@@ -52,9 +52,7 @@ int idleUi(LV2UI_Handle handle)
     if (!ui || !ui->editor) {
         return 0;
     }
-    if (QApplication* app = qApp) {
-        app->processEvents(QEventLoop::AllEvents, 16);
-    }
+    Dontfloat::Plugins::Ui::pumpQtEvents(16);
     return 0;
 }
 
@@ -87,16 +85,24 @@ LV2UI_Handle instantiateUi(const LV2UI_Descriptor*,
     (void)ui->editor->winId();
     const HWND child = reinterpret_cast<HWND>(ui->editor->winId());
     if (const void* parentData = featureData(features, LV2_UI__parent)) {
-        const HWND parent = *static_cast<const HWND*>(parentData);
+        // LV2 WindowsUI: feature data IS the HWND value (same as LV2UI_Widget),
+        // not a pointer-to-HWND. Dereferencing it as HWND* crashes / blanks the UI.
+        const HWND parent = reinterpret_cast<HWND>(const_cast<void*>(parentData));
         if (parent) {
+            LONG_PTR style = GetWindowLongPtrW(child, GWL_STYLE);
+            style &= ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX
+                       | WS_MAXIMIZEBOX | WS_SYSMENU);
+            style |= WS_CHILD | WS_VISIBLE;
+            SetWindowLongPtrW(child, GWL_STYLE, style);
             SetParent(child, parent);
-            SetWindowLongPtr(child, GWL_STYLE, WS_CHILD | WS_VISIBLE);
             MoveWindow(child, 0, 0, kEditorWidth, kEditorHeight, TRUE);
+            ShowWindow(child, SW_SHOW);
         }
     }
 #endif
 
     ui->editor->show();
+    // WindowsUI widget is the HWND itself, stored in the pointer-sized slot.
     *widget = reinterpret_cast<LV2UI_Widget>(ui->editor->winId());
 
     if (const auto* resize = static_cast<const LV2UI_Resize*>(featureData(features, LV2_UI__resize))) {

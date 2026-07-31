@@ -110,7 +110,8 @@ private slots:
     void applyTimeStretch();
     void scheduleMarkerPlaybackPreview();
     void updatePlaybackAfterMarkerDrag(); // Обновление воспроизведения после перетаскивания метки
-    void onMarkerPreviewStretchFinished();
+    void finishMarkerPreview(qint64 epoch, bool ok,
+                             const std::shared_ptr<QPair<QString, QVector<QVector<float>>>>& preview);
     void restorePlaybackPositionAfterSourceChange();
     void applyMarkerPreviewMediaSource(const QString& path);
     void onUndoStackChanged();
@@ -257,9 +258,10 @@ private:
     QTimer *markerPreviewTimer; // debounce для обновления воспроизведения после перетаскивания меток
 
     // Фоновый пересчёт аудио для воспроизведения после перетаскивания меток.
-    // Time stretch (Rubber Band) и запись WAV выполняются в пуле потоков,
-    // UI-поток только переключает источник QMediaPlayer на готовый файл.
-    QFutureWatcher<QPair<QString, QVector<QVector<float>>>>* markerPreviewWatcher;
+    // Без QFutureWatcher: setFuture/result на MSVC Debug дают AV после PitchCorrection.
+    std::shared_ptr<std::atomic_bool> markerPreviewRunning =
+        std::make_shared<std::atomic_bool>(false);
+    qint64 markerPreviewEpoch = 0;
     qint64 previewRestorePosition;  // Позиция воспроизведения до пересчёта
     qint64 previewOldDuration;      // Длительность до пересчёта (для масштабирования позиции)
     bool previewWasPlaying;         // Продолжить воспроизведение после переключения источника

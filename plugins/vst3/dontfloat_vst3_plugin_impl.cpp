@@ -95,18 +95,29 @@ public:
         }
 
         ensureQtApplication(desc().clapName);
+
         editor_ = std::make_unique<DontfloatPluginEditorShell>(product());
         editor_->bindSession(&sharedSession(product()));
         editor_->setWindowTitle(QString::fromUtf8(desc().clapName));
         editor_->setAttribute(Qt::WA_NativeWindow, true);
+        editor_->setAttribute(Qt::WA_DontCreateNativeAncestors, true);
         editor_->resize(kEditorWidth, kEditorHeight);
-        editor_->show();
 
+        // Native HWND first, parent into host, then show — avoids reentrancy hangs
+        // when the host waits for attached() while Qt waits for a message pump.
+        (void)editor_->winId();
         const HWND child = reinterpret_cast<HWND>(editor_->winId());
         const HWND hostParent = reinterpret_cast<HWND>(parent);
+        LONG_PTR style = GetWindowLongPtrW(child, GWL_STYLE);
+        style &= ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX
+                   | WS_MAXIMIZEBOX | WS_SYSMENU);
+        style |= WS_CHILD | WS_VISIBLE;
+        SetWindowLongPtrW(child, GWL_STYLE, style);
         SetParent(child, hostParent);
-        SetWindowLongPtr(child, GWL_STYLE, WS_CHILD | WS_VISIBLE);
         MoveWindow(child, 0, 0, kEditorWidth, kEditorHeight, TRUE);
+        ShowWindow(child, SW_SHOW);
+        editor_->show();
+        Dontfloat::Plugins::Ui::pumpQtEvents(8);
 
         return Steinberg::CPluginView::attached(parent, type);
 #else

@@ -119,7 +119,13 @@ int runClapGuiHost(QApplication& app, const MiniDaw::LoadedAudio& a, const MiniD
 
     clap_window_t window {};
     window.api = api;
+#if defined(_WIN32)
+    window.win32 = reinterpret_cast<void*>(hostWindow->winId());
+#elif defined(__APPLE__)
+    window.cocoa = reinterpret_cast<void*>(hostWindow->winId());
+#else
     window.x11 = static_cast<uintptr_t>(hostWindow->winId());
+#endif
     if (!gui->set_parent(plugin, &window)) {
         std::cerr << " [clap] gui set_parent failed for api " << api << "\n";
     }

@@ -230,7 +230,6 @@ MainWindow::MainWindow(QWidget *parent)
     , englishAction(nullptr)
     , applyTimeStretchAct(nullptr)
     , markerPreviewTimer(nullptr)
-    , markerPreviewWatcher(nullptr)
     , previewRestorePosition(0)
     , previewOldDuration(0)
     , previewWasPlaying(false)
@@ -471,11 +470,6 @@ MainWindow::MainWindow(QWidget *parent)
     markerPreviewTimer->setInterval(250); // ждем паузы после перетаскивания
     connect(markerPreviewTimer, &QTimer::timeout, this, &MainWindow::updatePlaybackAfterMarkerDrag);
 
-    // Фоновый пересчёт аудио (time stretch + WAV) после перетаскивания меток
-    markerPreviewWatcher = new QFutureWatcher<QPair<QString, QVector<QVector<float>>>>(this);
-    connect(markerPreviewWatcher, &QFutureWatcher<QPair<QString, QVector<QVector<float>>>>::finished,
-            this, &MainWindow::onMarkerPreviewStretchFinished);
-
     // Initial window title
     updateWindowTitle();
 
@@ -511,11 +505,10 @@ void MainWindow::prepareShutdown()
         notePreviewPlayer->stop();
     }
 
-    if (markerPreviewWatcher) {
-        disconnect(markerPreviewWatcher, nullptr, this, nullptr);
-        if (markerPreviewWatcher->isRunning()) {
-            markerPreviewWatcher->waitForFinished();
-        }
+    // Инвалидируем фоновый preview; не ждём пул (может быть длинный PitchCorrection).
+    ++markerPreviewEpoch;
+    if (markerPreviewRunning) {
+        markerPreviewRunning->store(false);
     }
 
     if (waveformView) {
@@ -2851,35 +2844,41 @@ void MainWindow::applyPitchCorrection()
     statusBar()->showMessage(tr("Applying note pitch correction..."), 0);
     setEnabled(false);
 
-    auto* watcher = new QFutureWatcher<QVector<QVector<float>>>(this);
-    connect(watcher, &QFutureWatcher<QVector<QVector<float>>>::finished, this,
-            [this, watcher, oldData]() {
-        setEnabled(true);
-        const QVector<QVector<float>> newData = watcher->result();
-        watcher->deleteLater();
+    // Не возвращаем аудио через QFuture::result() — на MSVC Debug это AV в QList::at.
+    auto newDataBox = std::make_shared<QVector<QVector<float>>>();
+    const QPointer<MainWindow> self(this);
 
-        if (newData.isEmpty() || newData[0].isEmpty()) {
-            statusBar()->showMessage(tr("Error while applying note pitch correction"), 4000);
+    (void)QtConcurrent::run([self, baseData, notes, sampleRate, newDataBox, oldData]() {
+        *newDataBox = PitchCorrection::apply(baseData, notes, sampleRate);
+        if (!self) {
             return;
         }
+        QMetaObject::invokeMethod(self, [self, newDataBox, oldData]() {
+            if (!self) {
+                return;
+            }
+            self->setEnabled(true);
+            const QVector<QVector<float>>& newData = *newDataBox;
+            if (newData.isEmpty() || newData[0].isEmpty()) {
+                self->statusBar()->showMessage(
+                    self->tr("Error while applying note pitch correction"), 4000);
+                return;
+            }
 
-        const QVector<Marker> markers = waveformView->getMarkers();
-        undoStack->push(new TimeStretchCommand(
-            waveformView, oldData, newData, markers, markers,
-            tr("Apply note pitch correction")));
+            const QVector<Marker> markers = self->waveformView->getMarkers();
+            self->undoStack->push(new TimeStretchCommand(
+                self->waveformView, oldData, newData, markers, markers,
+                self->tr("Apply note pitch correction")));
 
-        // Применённые правки становятся «текущей» высотой нот
-        for (PitchDetector::PitchNote& note : basePitchNotes) {
-            note.detectedPitch = note.midiPitch;
-        }
-        refreshPitchGridNotes();
+            for (PitchDetector::PitchNote& note : self->basePitchNotes) {
+                note.detectedPitch = note.midiPitch;
+            }
+            self->refreshPitchGridNotes();
 
-        statusBar()->showMessage(tr("Note pitch correction applied"), 5000);
+            self->statusBar()->showMessage(
+                self->tr("Note pitch correction applied"), 5000);
+        }, Qt::QueuedConnection);
     });
-
-    watcher->setFuture(QtConcurrent::run([baseData, notes, sampleRate]() {
-        return PitchCorrection::apply(baseData, notes, sampleRate);
-    }));
 }
 
 void MainWindow::analyzeKey()
@@ -3712,7 +3711,7 @@ void MainWindow::updatePlaybackAfterMarkerDrag()
     }
 
     // Предыдущий пересчёт ещё идёт — повторим после завершения
-    if (markerPreviewWatcher && markerPreviewWatcher->isRunning()) {
+    if (markerPreviewRunning && markerPreviewRunning->load()) {
         markerPlaybackPreviewPending = true;
         markerPreviewTimer->start();
         return;
@@ -3735,34 +3734,65 @@ void MainWindow::updatePlaybackAfterMarkerDrag()
     previewOldDuration = mediaPlayer->duration();
     previewWasPlaying = (mediaPlayer->playbackState() == QMediaPlayer::PlayingState);
 
-    markerPreviewWatcher->setFuture(QtConcurrent::run(
-        [sourceData, markerData, sampleRate, hasStretch, notesForRender]()
-            -> QPair<QString, QVector<QVector<float>>> {
-            QVector<QVector<float>> processed = sourceData;
+    const qint64 epoch = ++markerPreviewEpoch;
+    markerPreviewRunning->store(true);
 
-            if (hasStretch) {
-                const TimeStretchProcessor::StretchResult result =
-                    TimeStretchProcessor::applyMarkerStretch(sourceData, markerData, sampleRate, true);
-                if (result.audioData.isEmpty() || result.audioData[0].isEmpty()) {
-                    return {};
+    auto pending = std::make_shared<QPair<QString, QVector<QVector<float>>>>();
+    const QPointer<MainWindow> self(this);
+    auto running = markerPreviewRunning;
+
+    (void)QtConcurrent::run(
+        [self, epoch, running, sourceData, markerData, sampleRate, hasStretch, notesForRender, pending]() {
+            bool ok = false;
+            try {
+                QVector<QVector<float>> processed = sourceData;
+                bool failed = false;
+
+                if (hasStretch) {
+                    const TimeStretchProcessor::StretchResult result =
+                        TimeStretchProcessor::applyMarkerStretch(sourceData, markerData, sampleRate, true);
+                    if (result.audioData.isEmpty() || result.audioData[0].isEmpty()) {
+                        failed = true;
+                    } else {
+                        processed = result.audioData;
+                    }
                 }
-                processed = result.audioData;
+
+                if (!failed && !notesForRender.isEmpty()) {
+                    processed = PitchCorrection::apply(processed, notesForRender, sampleRate);
+                }
+
+                if (failed || processed.isEmpty() || processed[0].isEmpty()) {
+                    *pending = {};
+                    ok = false;
+                } else {
+                    const QString path = WavWriter::writeTempProcessedFile(processed, sampleRate);
+                    if (path.isEmpty()) {
+                        qWarning() << "updatePlaybackAfterMarkerDrag: failed to save processed audio";
+                    }
+                    *pending = qMakePair(path, processed);
+                    ok = true;
+                }
+            } catch (const std::exception& e) {
+                qWarning() << "Marker preview render failed:" << e.what();
+                *pending = {};
+                ok = false;
+            } catch (...) {
+                qWarning() << "Marker preview render failed with unknown exception";
+                *pending = {};
+                ok = false;
             }
 
-            if (!notesForRender.isEmpty()) {
-                processed = PitchCorrection::apply(processed, notesForRender, sampleRate);
+            if (running) {
+                running->store(false);
             }
-
-            if (processed.isEmpty() || processed[0].isEmpty()) {
-                return {};
-            }
-
-            const QString path = WavWriter::writeTempProcessedFile(processed, sampleRate);
-            if (path.isEmpty()) {
-                qWarning() << "updatePlaybackAfterMarkerDrag: failed to save processed audio";
-            }
-            return qMakePair(path, processed);
-        }));
+            QMetaObject::invokeMethod(self, [self, epoch, ok, pending]() {
+                if (!self) {
+                    return;
+                }
+                self->finishMarkerPreview(epoch, ok, pending);
+            }, Qt::QueuedConnection);
+        });
 
     qDebug() << "updatePlaybackAfterMarkerDrag: background render started,"
              << sourceData[0].size() << "samples," << markerData.size() << "markers,"
@@ -3809,25 +3839,36 @@ void MainWindow::applyMarkerPreviewMediaSource(const QString& path)
     mediaPlayer->setSource(url);
 }
 
-void MainWindow::onMarkerPreviewStretchFinished()
+void MainWindow::finishMarkerPreview(qint64 epoch, bool ok,
+    const std::shared_ptr<QPair<QString, QVector<QVector<float>>>>& preview)
 {
-    if (isShuttingDown || !ui || !markerPreviewWatcher || !mediaPlayer) {
+    if (isShuttingDown || !ui || !mediaPlayer) {
         return;
     }
-
-    const QPair<QString, QVector<QVector<float>>> preview = markerPreviewWatcher->result();
-    if (!preview.second.isEmpty() && waveformView) {
-        waveformView->applyStretchedPreview(preview.second);
+    if (epoch != markerPreviewEpoch) {
+        return;
     }
+    Q_UNUSED(ok);
 
-    if (preview.first.isEmpty()) {
+    if (!preview || (preview->first.isEmpty() && preview->second.isEmpty())) {
         if (markerPlaybackPreviewPending) {
             scheduleMarkerPlaybackPreview();
         }
         return;
     }
 
-    applyMarkerPreviewMediaSource(preview.first);
+    if (!preview->second.isEmpty() && waveformView) {
+        waveformView->applyStretchedPreview(preview->second);
+    }
+
+    if (preview->first.isEmpty()) {
+        if (markerPlaybackPreviewPending) {
+            scheduleMarkerPlaybackPreview();
+        }
+        return;
+    }
+
+    applyMarkerPreviewMediaSource(preview->first);
 }
 
 void MainWindow::createOnsetMarkersAuto()

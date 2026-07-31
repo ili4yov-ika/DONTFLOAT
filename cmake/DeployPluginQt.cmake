@@ -1,6 +1,11 @@
 # Deploy Qt runtime next to plugin binaries (Windows).
 # Usage from build_windows_installer.bat after cmake --install:
-#   cmake -DQT_ROOT=... -DPLUGIN_DIR=... -P cmake/DeployPluginQt.cmake
+#   cmake -DQT_ROOT=... -DPLUGIN_DIR=... [-DPLUGIN_BINARY=...] -P cmake/DeployPluginQt.cmake
+#
+# Hosts (REAPER, etc.) load our stub then *.impl.dll in-process. Qt looks for
+# platforms/qwindows.dll relative to the host EXE unless the plugin sets
+# QT_PLUGIN_PATH (see plugins/ui/dontfloat_qt_hosting.cpp). Either way the
+# installer MUST ship platforms\qwindows.dll next to the impl module.
 
 if(NOT WIN32)
     return()
@@ -30,6 +35,8 @@ else()
     file(GLOB _candidates
         "${PLUGIN_DIR}/*.clap"
         "${PLUGIN_DIR}/*.vst3"
+        "${PLUGIN_DIR}/*_ui.impl.dll"
+        "${PLUGIN_DIR}/*.impl.dll"
         "${PLUGIN_DIR}/*_ui.dll"
         "${PLUGIN_DIR}/*.dll"
     )
@@ -54,5 +61,16 @@ execute_process(
     ERROR_VARIABLE _err
 )
 if(NOT _rc EQUAL 0)
-    message(WARNING "windeployqt failed (${_rc}) for ${_binary}:\n${_err}\n${_out}")
+    message(FATAL_ERROR "windeployqt failed (${_rc}) for ${_binary}:\n${_err}\n${_out}")
 endif()
+
+if(NOT EXISTS "${PLUGIN_DIR}/Qt6Core.dll")
+    message(FATAL_ERROR "DeployPluginQt: Qt6Core.dll missing in ${PLUGIN_DIR} after windeployqt")
+endif()
+if(NOT EXISTS "${PLUGIN_DIR}/platforms/qwindows.dll")
+    message(FATAL_ERROR
+        "DeployPluginQt: platforms/qwindows.dll missing in ${PLUGIN_DIR}\n"
+        "Without it hosts report: no Qt platform plugin could be initialized")
+endif()
+
+message(STATUS "DeployPluginQt OK: Qt6Core.dll + platforms/qwindows.dll in ${PLUGIN_DIR}")

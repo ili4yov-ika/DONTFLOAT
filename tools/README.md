@@ -58,18 +58,32 @@ Windows installer включает страницу компонентов. Ос
 обязательная, группа `DAW plugins` опционально ставит:
 
 - CLAP: `%CommonProgramFiles%\CLAP\` (`dontfloat.clap`, `dontfloat_scratch.clap`,
-  `dontfloat_pitcher.clap` + Qt runtime рядом)
-- LV2: `%CommonProgramFiles%\LV2\dontfloat*.lv2\` (binary + UI + Qt внутри бандла)
+  `dontfloat_pitcher.clap` + `*_clap.impl.dll` + Qt runtime рядом)
+- LV2: `%CommonProgramFiles%\LV2\dontfloat*.lv2\` (DSP + UI stub/impl + Qt внутри бандла)
 - VST3: `%CommonProgramFiles%\VST3\DONTFLOAT*.vst3\` (Steinberg bundle
   `Contents\x86_64-win\` + Qt внутри бандла)
 
-Для VST3 перед запуском задайте `DONTFLOAT_VST3_SDK_ROOT`; без SDK этот target
-пропускается, а CLAP/LV2 продолжают собираться.
+`build_windows_installer.bat` собирает только приложение и plugin targets
+(`DONTFLOAT_BUILD_MINI_DAW=OFF`, `DONTFLOAT_BUILD_PLUGIN_TESTER=OFF`) и после
+`cmake --install` **обязан** положить Qt рядом с каждым `*.impl.dll`:
 
-**Важно:** плагины линкуются с Qt6. Инсталлятор обязан класть Qt DLL рядом с
-модулем (через `windeployqt` / `cmake/DeployPluginQt.cmake`). Без этого DAW
-молча пропускает плагин при сканировании. VST3 должен быть **папкой-бандлом**,
-а не одним файлом-DLL в корне `VST3\`.
+- `Qt6Core.dll` (и остальные Qt DLL)
+- `platforms\qwindows.dll` — без него REAPER пишет
+  *«no Qt platform plugin could be initialized»*
+
+Код плагина (`ensureQtApplication`) при установке из свежего installer:
+- направляет Qt в каталог модуля (`QT_PLUGIN_PATH` / `platforms`)
+- на Windows ставит native timer для `processEvents` (без него VST3 UI
+  зависает в REAPER — deadlock `attached()` ↔ message pump)
+
+Инсталлятор обязан комплектовать runtime рядом с `*.impl.dll`. Проверка
+встроена в `cmake/DeployPluginQt.cmake` и в `.bat` (сборка падает, если
+файлов нет). CLAP/LV2/VST3 бинарники помечены `required` — silent skip больше
+невозможен.
+
+Для VST3 `build_windows_installer.bat` сам подхватывает `DONTFLOAT_VST3_SDK_ROOT`
+или `C:\SDKs\vst3sdk`. Без SDK VST3 **не** собираются (WARN), CLAP/LV2
+продолжают собираться; при наличии SDK отсутствие VST3 — **ошибка**.
 
 Если плагины «пропали» после установки, пересоберите installer или запустите
 от администратора:

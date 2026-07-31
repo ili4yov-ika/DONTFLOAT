@@ -17,7 +17,7 @@ DontfloatFullEditor::DontfloatFullEditor(QWidget* parent)
         Dontfloat::PluginCore::productDesc(Dontfloat::PluginCore::PluginProduct::Full).clapName);
 
     setObjectName(QStringLiteral("dontfloatFullEditor"));
-    setMinimumSize(960, 720);
+    setMinimumSize(640, 480);
     setWindowTitle(productName);
 
     scratch_ = new DontfloatScratchEditor(this, productName);

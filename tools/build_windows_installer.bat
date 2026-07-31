@@ -2,6 +2,14 @@
 chcp 65001 >nul
 REM DONTFLOAT Windows installer build script
 REM Requires: CMake, Qt6, NSIS
+REM
+REM Builds app + DAW plugins only (no tests / mini-DAW / plugin_tester).
+REM After cmake --install, deploys Qt next to each plugin impl/UI:
+REM   Qt6*.dll + platforms\qwindows.dll (required — hosts look next to the
+REM   host EXE; ensureQtApplication points Qt at the plugin module dir and
+REM   starts a Win32 timer so Qt events pump inside VST3/LV2 without exec()).
+REM VST3: auto-detects C:\SDKs\vst3sdk; if SDK present, missing VST3 artifacts
+REM are a hard error (do not ship installer without them).
 
 setlocal enabledelayedexpansion
 
@@ -69,11 +77,18 @@ cd /d "%PROJECT_ROOT%"
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 cd /d "%BUILD_DIR%"
 
-set "PLUGIN_CMAKE_ARGS=-DDONTFLOAT_BUILD_PLUGINS=ON -DDONTFLOAT_BUILD_CLAP=ON -DDONTFLOAT_BUILD_LV2=ON -DDONTFLOAT_BUILD_VST3=ON"
+REM Plugins ON; skip mini-DAW / plugin_tester so installer build does not compile tests/hosts.
+set "PLUGIN_CMAKE_ARGS=-DDONTFLOAT_BUILD_PLUGINS=ON -DDONTFLOAT_BUILD_CLAP=ON -DDONTFLOAT_BUILD_LV2=ON -DDONTFLOAT_BUILD_VST3=ON -DDONTFLOAT_BUILD_MINI_DAW=OFF -DDONTFLOAT_BUILD_PLUGIN_TESTER=OFF"
+
+REM Auto-detect Steinberg SDK if env not set (same default as CMakeLists.txt).
+if not defined DONTFLOAT_VST3_SDK_ROOT (
+    if exist "C:\SDKs\vst3sdk\CMakeLists.txt" set "DONTFLOAT_VST3_SDK_ROOT=C:\SDKs\vst3sdk"
+)
 if defined DONTFLOAT_VST3_SDK_ROOT (
+    echo [INFO] VST3 SDK: %DONTFLOAT_VST3_SDK_ROOT%
     "%CMAKE_CMD%" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" !PLUGIN_CMAKE_ARGS! "-DDONTFLOAT_VST3_SDK_ROOT=%DONTFLOAT_VST3_SDK_ROOT:"=%" "%PROJECT_ROOT%"
 ) else (
-    echo [INFO] DONTFLOAT_VST3_SDK_ROOT is not set; VST3 target will be skipped.
+    echo [WARN] DONTFLOAT_VST3_SDK_ROOT not set and C:\SDKs\vst3sdk missing — VST3 plugins will NOT be built.
     "%CMAKE_CMD%" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" !PLUGIN_CMAKE_ARGS! "%PROJECT_ROOT%"
 )
 if %ERRORLEVEL% NEQ 0 (
@@ -81,8 +96,15 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-echo [2/5] Building...
-"%CMAKE_CMD%" --build . --config Release
+echo [2/5] Building app + plugins ^(not tests / mini-DAW^)...
+REM Stub targets pull *_impl via add_dependencies. LV2 UI stub pulls ui_impl.
+set "BUILD_TARGETS=DONTFLOAT dontfloat_full_clap dontfloat_scratch_clap dontfloat_pitcher_clap dontfloat_full_lv2 dontfloat_scratch_lv2 dontfloat_pitcher_lv2 dontfloat_full_lv2_ui dontfloat_scratch_lv2_ui dontfloat_pitcher_lv2_ui"
+if defined DONTFLOAT_VST3_SDK_ROOT (
+    set "BUILD_TARGETS=!BUILD_TARGETS! dontfloat_full_vst3 dontfloat_scratch_vst3 dontfloat_pitcher_vst3"
+) else (
+    echo [WARN] Skipping VST3 build targets
+)
+"%CMAKE_CMD%" --build . --config Release --target !BUILD_TARGETS!
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Build failed!
     exit /b 1
@@ -103,45 +125,49 @@ if not exist "%INSTALL_DIR%\bin\DONTFLOAT.exe" (
 set "WINDEPLOYQT="
 if exist "C:\Qt\6.9.3\msvc2022_64\bin\windeployqt.exe" set "WINDEPLOYQT=C:\Qt\6.9.3\msvc2022_64\bin\windeployqt.exe"
 if exist "C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe" set "WINDEPLOYQT=C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe"
-if defined WINDEPLOYQT (
-    "%WINDEPLOYQT%" --release "%INSTALL_DIR%\bin\DONTFLOAT.exe"
-    if %ERRORLEVEL% NEQ 0 echo [WARN] windeployqt finished with error for app
+if not defined WINDEPLOYQT (
+    where windeployqt >nul 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        for /f "delims=" %%i in ('where windeployqt 2^>nul') do set "WINDEPLOYQT=%%i" & goto :wdq_ok
+    )
+)
+:wdq_ok
+if not defined WINDEPLOYQT (
+    echo [ERROR] windeployqt not found - installer would ship plugins without Qt and DAWs show empty UI
+    exit /b 1
+)
 
-    REM Qt рядом с DAW-плагинами — без этого host не загружает модули
-    set "QT_ROOT_DIR="
-    for %%I in ("%WINDEPLOYQT%") do set "QT_BIN=%%~dpI"
-    for %%I in ("%QT_BIN%..") do set "QT_ROOT_DIR=%%~fI"
+"%WINDEPLOYQT%" --release "%INSTALL_DIR%\bin\DONTFLOAT.exe"
+if %ERRORLEVEL% NEQ 0 echo [WARN] windeployqt finished with error for app
 
-    if exist "%INSTALL_DIR%\lib\clap\dontfloat_clap.impl.dll" (
-        echo   Deploying Qt for CLAP plugins...
-        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\clap" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\clap\dontfloat_clap.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
-    )
-    if exist "%INSTALL_DIR%\lib\lv2\dontfloat.lv2\dontfloat_ui.impl.dll" (
-        echo   Deploying Qt for LV2 Full UI...
-        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\lv2\dontfloat.lv2" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\lv2\dontfloat.lv2\dontfloat_ui.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
-    )
-    if exist "%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2\dontfloat_scratch_ui.impl.dll" (
-        echo   Deploying Qt for LV2 Scratch UI...
-        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2\dontfloat_scratch_ui.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
-    )
-    if exist "%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2\dontfloat_pitcher_ui.impl.dll" (
-        echo   Deploying Qt for LV2 Pitcher UI...
-        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2\dontfloat_pitcher_ui.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
-    )
-    if exist "%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win\DONTFLOAT.vst3.impl.dll" (
-        echo   Deploying Qt for VST3 Full...
-        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win\DONTFLOAT.vst3.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
-    )
-    if exist "%INSTALL_DIR%\lib\vst3\DONTFLOAT Scratch.vst3\Contents\x86_64-win\DONTFLOAT Scratch.vst3.impl.dll" (
-        echo   Deploying Qt for VST3 Scratch...
-        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\vst3\DONTFLOAT Scratch.vst3\Contents\x86_64-win" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\vst3\DONTFLOAT Scratch.vst3\Contents\x86_64-win\DONTFLOAT Scratch.vst3.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
-    )
-    if exist "%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win\DONTFLOAT Pitcher.vst3.impl.dll" (
-        echo   Deploying Qt for VST3 Pitcher...
-        "%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win" -DPLUGIN_BINARY="%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win\DONTFLOAT Pitcher.vst3.impl.dll" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+REM Qt next to DAW plugins. Stub loads *.impl.dll via LoadLibraryEx(ALTERED_SEARCH_PATH).
+REM platforms\qwindows.dll MUST sit next to the impl — otherwise REAPER shows:
+REM   "no Qt platform plugin could be initialized"
+set "QT_ROOT_DIR="
+for %%I in ("%WINDEPLOYQT%") do set "QT_BIN=%%~dpI"
+for %%I in ("%QT_BIN%..") do set "QT_ROOT_DIR=%%~fI"
+
+call :deploy_plugin_qt "%INSTALL_DIR%\lib\clap" "%INSTALL_DIR%\lib\clap\dontfloat_clap.impl.dll" "CLAP" required
+if errorlevel 1 exit /b 1
+call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat.lv2\dontfloat_ui.impl.dll" "LV2 Full" required
+if errorlevel 1 exit /b 1
+call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2\dontfloat_scratch_ui.impl.dll" "LV2 Scratch" required
+if errorlevel 1 exit /b 1
+call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2\dontfloat_pitcher_ui.impl.dll" "LV2 Pitcher" required
+if errorlevel 1 exit /b 1
+if defined DONTFLOAT_VST3_SDK_ROOT (
+    call :deploy_plugin_qt "%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win" "%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win\DONTFLOAT.vst3.impl.dll" "VST3 Full" required
+    if errorlevel 1 exit /b 1
+    call :deploy_plugin_qt "%INSTALL_DIR%\lib\vst3\DONTFLOAT Scratch.vst3\Contents\x86_64-win" "%INSTALL_DIR%\lib\vst3\DONTFLOAT Scratch.vst3\Contents\x86_64-win\DONTFLOAT Scratch.vst3.impl.dll" "VST3 Scratch" required
+    if errorlevel 1 exit /b 1
+    call :deploy_plugin_qt "%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win" "%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win\DONTFLOAT Pitcher.vst3.impl.dll" "VST3 Pitcher" required
+    if errorlevel 1 exit /b 1
+    if not exist "%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win\DONTFLOAT.vst3" (
+        echo [ERROR] VST3 stub missing after install — NSIS would ship empty VST3 section
+        exit /b 1
     )
 ) else (
-    echo [WARN] windeployqt not found - installer may lack Qt DLLs for app and plugins
+    echo [WARN] VST3 section will be empty in the installer ^(no SDK^)
 )
 
 echo [5/5] Creating NSIS installer...
@@ -165,3 +191,41 @@ echo Done! Installer: %SCRIPT_DIR%DONTFLOAT_Setup.exe
 echo ========================================
 
 endlocal
+exit /b 0
+
+REM ---------------------------------------------------------------------------
+REM Deploy Qt next to a plugin binary; fail if Qt6Core / qwindows missing.
+REM Args: %1=PLUGIN_DIR  %2=PLUGIN_BINARY  %3=LABEL  [%4=required]
+REM ---------------------------------------------------------------------------
+:deploy_plugin_qt
+set "DEP_DIR=%~1"
+set "DEP_BIN=%~2"
+set "DEP_LABEL=%~3"
+set "DEP_REQUIRED=%~4"
+if not exist "%DEP_BIN%" (
+    if /I "%DEP_REQUIRED%"=="required" (
+        echo [ERROR] %DEP_LABEL%: required binary missing: %DEP_BIN%
+        echo         Rebuild plugins / check CMAKE_INSTALL_PREFIX layout.
+        exit /b 1
+    )
+    echo   [skip] %DEP_LABEL%: %DEP_BIN% not installed
+    exit /b 0
+)
+echo   Deploying Qt for %DEP_LABEL%...
+"%CMAKE_CMD%" -DQT_ROOT="%QT_ROOT_DIR%" -DPLUGIN_DIR="%DEP_DIR%" -DPLUGIN_BINARY="%DEP_BIN%" -P "%PROJECT_ROOT%\cmake\DeployPluginQt.cmake"
+if errorlevel 1 (
+    echo [ERROR] DeployPluginQt.cmake failed for %DEP_LABEL%
+    exit /b 1
+)
+if not exist "%DEP_DIR%\Qt6Core.dll" (
+    echo [ERROR] Qt deploy failed for %DEP_LABEL%: Qt6Core.dll missing in %DEP_DIR%
+    echo         Without Qt next to the plugin, DAWs show an empty UI / fail to load.
+    exit /b 1
+)
+if not exist "%DEP_DIR%\platforms\qwindows.dll" (
+    echo [ERROR] Qt platform plugin missing: %DEP_DIR%\platforms\qwindows.dll
+    echo         REAPER error: "no Qt platform plugin could be initialized"
+    exit /b 1
+)
+echo   OK %DEP_LABEL%: Qt6Core.dll + platforms\qwindows.dll
+exit /b 0
