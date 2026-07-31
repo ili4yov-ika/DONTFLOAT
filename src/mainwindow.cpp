@@ -39,6 +39,7 @@
 #include <QtCore/QDir>
 #include <QtCore/QtGlobal>
 #include <QtCore/QDebug>
+#include <QtCore/QPointer>
 #include <QtCore/QSignalBlocker>
 #include <QtCore/QEventLoop>
 #include <QtConcurrent/QtConcurrent>
@@ -1747,11 +1748,11 @@ void MainWindow::resetAudioState()
 
     // Сбрасываем результаты анализа нот прошлого файла
     stopNotePreview();
+    abortPitchAnalysis();
     basePitchNotes.clear();
     if (pitchGridWidget) {
         pitchGridWidget->clearNotes();
     }
-    setPitchAnalysisUiRunning(false);
 
     hidePitchGridAnalyzeOverlay();
 
@@ -2581,6 +2582,16 @@ void MainWindow::onPitchGridAnalyzeClicked()
     startPitchAnalysis();
 }
 
+void MainWindow::abortPitchAnalysis()
+{
+    ++pitchAnalysisEpoch;
+    pitchAnalysisRunning = false;
+    if (pitchAnalysisProgressTimer) {
+        pitchAnalysisProgressTimer->stop();
+    }
+    setPitchAnalysisUiRunning(false);
+}
+
 void MainWindow::setPitchAnalysisUiRunning(bool running)
 {
     if (pitchGridAnalyzeButton) {
@@ -2616,6 +2627,7 @@ void MainWindow::startPitchAnalysis()
     barGrid.beatsPerBar = waveformView->getBeatsPerBar();
     barGrid.gridStartSample = waveformView->getGridStartSample();
 
+    const qint64 epoch = ++pitchAnalysisEpoch;
     pitchAnalysisRunning = true;
     setPitchAnalysisUiRunning(true);
     statusBar()->showMessage(tr("Analyzing key and notes..."), 0);
@@ -2632,48 +2644,76 @@ void MainWindow::startPitchAnalysis()
     }
     pitchAnalysisProgressTimer->start();
 
-    if (!pitchAnalysisWatcher) {
-        pitchAnalysisWatcher = new QFutureWatcher<PitchAnalysisOutcome>(this);
-        connect(pitchAnalysisWatcher, &QFutureWatcher<PitchAnalysisOutcome>::finished,
-                this, &MainWindow::onPitchAnalysisFinished);
-    }
-
+    auto pending = std::make_shared<PitchAnalysisOutcome>();
     std::shared_ptr<std::atomic<int>> progress = pitchAnalysisProgressValue;
-    pitchAnalysisWatcher->setFuture(QtConcurrent::run([mono, sampleRate, progress, barGrid]() {
-        PitchAnalysisOutcome outcome;
-        progress->store(2);
-        outcome.key = KeyAnalyzer::analyzeKey(mono, sampleRate);
-        progress->store(8);
-        outcome.perBarKey = KeyAnalyzer::analyzeKeyPerBar(mono, sampleRate, barGrid);
-        progress->store(15);
-        outcome.notes = PitchDetector::detectNotes(
-            mono, sampleRate, PitchDetector::Options(),
-            [progress](int pct) { progress->store(15 + pct * 85 / 100); });
-        progress->store(100);
-        return outcome;
-    }));
+    // QPointer: окно могли закрыть, пока крутится пул потоков.
+    const QPointer<MainWindow> self(this);
+
+    (void)QtConcurrent::run([self, epoch, mono, sampleRate, progress, barGrid, pending]() {
+        bool ok = false;
+        try {
+            progress->store(2);
+            pending->perBarKey = KeyAnalyzer::analyzeKeyPerBar(mono, sampleRate, barGrid);
+            progress->store(12);
+            pending->key.primaryKey = pending->perBarKey.primaryKey;
+            pending->key.overallConfidence = pending->perBarKey.primaryKey.confidence;
+            pending->key.hasKeyChange = pending->perBarKey.hasModulation;
+            if (pending->perBarKey.hasModulation) {
+                pending->key.secondaryKey =
+                    KeyAnalyzer::dominantModulationKey(
+                        pending->perBarKey, pending->perBarKey.primaryKey.key);
+            }
+            progress->store(15);
+            pending->notes = PitchDetector::detectNotes(
+                mono, sampleRate, PitchDetector::Options(),
+                [progress](int pct) { progress->store(15 + pct * 85 / 100); });
+            progress->store(100);
+            ok = true;
+        } catch (const std::exception& e) {
+            qWarning() << "Pitch analysis failed:" << e.what();
+        } catch (...) {
+            qWarning() << "Pitch analysis failed with unknown exception";
+        }
+
+        if (!self) {
+            return;
+        }
+        // Без QFutureWatcher::result() — только QueuedConnection в UI-поток.
+        QMetaObject::invokeMethod(self, [self, epoch, ok, pending]() {
+            if (!self) {
+                return;
+            }
+            self->finishPitchAnalysis(epoch, ok, pending);
+        }, Qt::QueuedConnection);
+    });
 }
 
-void MainWindow::onPitchAnalysisFinished()
+void MainWindow::finishPitchAnalysis(qint64 epoch, bool ok,
+                                     const std::shared_ptr<PitchAnalysisOutcome>& pending)
 {
+    if (epoch != pitchAnalysisEpoch) {
+        return;
+    }
+
     pitchAnalysisRunning = false;
     if (pitchAnalysisProgressTimer) {
         pitchAnalysisProgressTimer->stop();
     }
-    if (!pitchAnalysisWatcher) {
+
+    if (!ok || !pending) {
+        setPitchAnalysisUiRunning(false);
+        statusBar()->showMessage(tr("Analysis failed"), 3000);
         return;
     }
 
-    const PitchAnalysisOutcome outcome = pitchAnalysisWatcher->result();
-
-    applyPerBarKeyResult(outcome.perBarKey, outcome.key);
+    applyPerBarKeyResult(pending->perBarKey, pending->key);
 
     QString keysText = currentKey;
     if (!currentKey2.isEmpty()) {
         keysText += QStringLiteral(" / ") + currentKey2;
     }
 
-    basePitchNotes = outcome.notes;
+    basePitchNotes = pending->notes;
     refreshPitchGridNotes();
 
     setPitchAnalysisUiRunning(false);
