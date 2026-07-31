@@ -178,6 +178,14 @@ void DontfloatScratchEditor::notifyHostAudioAppended()
     refreshFromSession();
 }
 
+void DontfloatScratchEditor::setHostPlayhead(qint64 positionMs, bool playing)
+{
+    Q_UNUSED(playing);
+    if (waveform_) {
+        waveform_->setPlaybackPosition(positionMs);
+    }
+}
+
 void DontfloatScratchEditor::refreshWaveform()
 {
     if (!session_ || !waveform_) {
