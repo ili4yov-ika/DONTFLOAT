@@ -91,7 +91,6 @@ private slots:
     void togglePitchGrid();
     void analyzeKey();
     void startPitchAnalysis();
-    void onPitchAnalysisFinished();
     void onNotePitchEdited(int noteIndex, float oldPitch, float newPitch);
     void applyPitchCorrection();
     void onNotePreviewRequested(int noteIndex);
@@ -292,18 +291,25 @@ private:
     KeyAnalyzer::PerBarKeyResult lastPerBarKey;
     int editingKeyRegionIndex = -1;
 
-    // Pitch analysis (тональность + ноты) в фоне
+    // Pitch analysis (тональность + ноты) в фоне.
+    // Не используем QFutureWatcher::result(): после длинного анализа
+    // QResultStore/QList::at даёт AV даже для bool (порча store).
+    // Результат передаём через shared_ptr + QueuedConnection.
     struct PitchAnalysisOutcome {
         KeyAnalyzer::AnalysisResult key;
         KeyAnalyzer::PerBarKeyResult perBarKey; // потактовая модуляция (смены тональности)
         QVector<PitchDetector::PitchNote> notes;
     };
-    QFutureWatcher<PitchAnalysisOutcome>* pitchAnalysisWatcher = nullptr;
     std::shared_ptr<std::atomic<int>> pitchAnalysisProgressValue;
     QTimer* pitchAnalysisProgressTimer = nullptr;
     bool pitchAnalysisRunning = false;
+    qint64 pitchAnalysisEpoch = 0; // инвалидирует устаревшее завершение после abort
     QVector<PitchDetector::PitchNote> basePitchNotes; // координаты аудио на момент анализа
     QAction *applyPitchCorrectionAct = nullptr;
+
+    void abortPitchAnalysis();
+    void finishPitchAnalysis(qint64 epoch, bool ok,
+                             const std::shared_ptr<PitchAnalysisOutcome>& pending);
 
     // Прослушивание удерживаемой ноты (зацикленный сегмент, varispeed)
     NotePreviewPlayer* notePreviewPlayer = nullptr;

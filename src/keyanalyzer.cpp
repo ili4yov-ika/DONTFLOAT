@@ -118,12 +118,16 @@ KeyAnalyzer::AnalysisResult KeyAnalyzer::analyzeKeyUsingQM(const QVector<float>&
         QVector<double> doubleSamples = convertToDouble(samples);
         
         // Обрабатываем аудио по кадрам
-        int frameSize = keyDetector.getBlockSize();
-        int hopSize = keyDetector.getHopSize();
+        const int frameSize = keyDetector.getBlockSize();
+        const int hopSize = keyDetector.getHopSize();
+        if (frameSize <= 0 || hopSize <= 0 || doubleSamples.size() < frameSize) {
+            qDebug() << "GetKeyMode: invalid frame/hop size or too short audio";
+            return result;
+        }
         
         QVector<QVector<double>> chromaFrames;
         
-        for (int i = 0; i < doubleSamples.size() - frameSize; i += hopSize) {
+        for (int i = 0; i <= doubleSamples.size() - frameSize; i += hopSize) {
             QVector<double> frame(doubleSamples.begin() + i, 
                                  doubleSamples.begin() + i + frameSize);
             
@@ -502,6 +506,9 @@ KeyAnalyzer::KeyInfo KeyAnalyzer::dominantModulationKey(const PerBarKeyResult& p
             continue;
         }
         const int idx = int(b.key.key);
+        if (idx < 0 || idx >= counts.size()) {
+            continue;
+        }
         ++counts[idx];
         strengthSum[idx] += b.key.strength;
         confidenceSum[idx] += b.key.confidence;

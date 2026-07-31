@@ -101,6 +101,19 @@ GetKeyMode::GetKeyMode(Config config) :
         (m_hpcpAverage * chromaConfig.FS / m_chromaFrameSize);
     m_medianWinSize = (int)ceil
         (m_medianAverage * chromaConfig.FS / m_chromaFrameSize);
+    // ceil(...) can be 0 for extreme frame sizes → process() writes index -1 / OOB.
+    if (m_chromaFrameSize <= 0) {
+        m_chromaFrameSize = 1;
+    }
+    if (m_chromaHopSize <= 0) {
+        m_chromaHopSize = 1;
+    }
+    if (m_chromaBufferSize < 1) {
+        m_chromaBufferSize = 1;
+    }
+    if (m_medianWinSize < 1) {
+        m_medianWinSize = 1;
+    }
     
     // Reset counters
     m_bufferIndex = 0;
@@ -194,6 +207,12 @@ int GetKeyMode::process(double *pcmData)
 {
     int key;
     int j, k;
+
+    if (!pcmData || !m_decimator || !m_chroma || !m_chromaBuffer
+        || !m_medianFilterBuffer || !m_sortedBuffer
+        || m_chromaBufferSize < 1 || m_medianWinSize < 1) {
+        return 0;
+    }
 
     m_decimator->process(pcmData, m_decimatedBuffer);
 
