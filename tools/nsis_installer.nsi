@@ -72,13 +72,14 @@ Section "DONTFLOAT application" SEC_APP
 SectionEnd
 
 SectionGroup /e "DAW plugins" SEC_PLUGINS
-  ; CLAP: .clap + Qt runtime рядом (hosts load only *.clap)
+  ; CLAP: stub .clap + *.impl.dll + Qt runtime рядом
   Section "CLAP plugins (DONTFLOAT, Scratch, Pitcher)" SEC_CLAP
     SetOutPath "${CLAP_INSTALL_DIR}"
     File /nonfatal /r "${BUILD_DIR}\lib\clap\*.*"
   SectionEnd
 
-  ; LV2: каждый bundle содержит binary + UI + Qt runtime
+  ; LV2: каждый bundle — DSP + UI stub/impl + Qt (включая platforms\qwindows.dll).
+  ; Без platforms DAW: "no Qt platform plugin could be initialized".
   Section "LV2 plugins (DONTFLOAT, Scratch, Pitcher)" SEC_LV2
     SetOutPath "${LV2_INSTALL_DIR}\dontfloat.lv2"
     File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat.lv2\*.*"
@@ -89,7 +90,8 @@ SectionGroup /e "DAW plugins" SEC_PLUGINS
   SectionEnd
 
   ; VST3: Steinberg bundles (DONTFLOAT.vst3/Contents/x86_64-win/...)
-  ; Qt DLL лежат внутри бандла, не в корне VST3 — иначе DAW сканирует их как плагины.
+  ; Qt + platforms\qwindows.dll рядом с *.impl.dll (не в корне VST3).
+  ; UI pump живёт в коде плагина (ensureQtApplication); без Qt runtime DAW зависает/пусто.
   Section "VST3 plugins (DONTFLOAT, Scratch, Pitcher)" SEC_VST3
     ; Удаляем устаревшие плоские .vst3 (DLL) от прошлых установок
     Delete "${VST3_INSTALL_DIR}\DONTFLOAT.vst3"
@@ -122,6 +124,9 @@ Section "Uninstall"
   Delete "${CLAP_INSTALL_DIR}\dontfloat.clap"
   Delete "${CLAP_INSTALL_DIR}\dontfloat_scratch.clap"
   Delete "${CLAP_INSTALL_DIR}\dontfloat_pitcher.clap"
+  Delete "${CLAP_INSTALL_DIR}\dontfloat_clap.impl.dll"
+  Delete "${CLAP_INSTALL_DIR}\dontfloat_scratch_clap.impl.dll"
+  Delete "${CLAP_INSTALL_DIR}\dontfloat_pitcher_clap.impl.dll"
   ; Qt runtime рядом с CLAP (общие DLL)
   Delete "${CLAP_INSTALL_DIR}\Qt6Core.dll"
   Delete "${CLAP_INSTALL_DIR}\Qt6Gui.dll"
@@ -130,6 +135,16 @@ Section "Uninstall"
   Delete "${CLAP_INSTALL_DIR}\Qt6Network.dll"
   Delete "${CLAP_INSTALL_DIR}\Qt6Concurrent.dll"
   Delete "${CLAP_INSTALL_DIR}\Qt6Svg.dll"
+  Delete "${CLAP_INSTALL_DIR}\Qt6Pdf.dll"
+  Delete "${CLAP_INSTALL_DIR}\opengl32sw.dll"
+  Delete "${CLAP_INSTALL_DIR}\D3Dcompiler_47.dll"
+  Delete "${CLAP_INSTALL_DIR}\dxcompiler.dll"
+  Delete "${CLAP_INSTALL_DIR}\dxil.dll"
+  Delete "${CLAP_INSTALL_DIR}\avcodec-61.dll"
+  Delete "${CLAP_INSTALL_DIR}\avformat-61.dll"
+  Delete "${CLAP_INSTALL_DIR}\avutil-59.dll"
+  Delete "${CLAP_INSTALL_DIR}\swresample-5.dll"
+  Delete "${CLAP_INSTALL_DIR}\swscale-8.dll"
   RMDir /r "${CLAP_INSTALL_DIR}\platforms"
   RMDir /r "${CLAP_INSTALL_DIR}\imageformats"
   RMDir /r "${CLAP_INSTALL_DIR}\multimedia"

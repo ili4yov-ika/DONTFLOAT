@@ -1,6 +1,7 @@
 # Repairs installed DONTFLOAT DAW plugins:
 # - packs VST3 as Steinberg bundles with Qt runtime next to the .impl.dll
 # - deploys Qt next to CLAP/LV2 impl modules (stub hosts load via LoadLibraryEx)
+# - requires platforms\qwindows.dll (plugin code pumps Qt via Win32 timer)
 # Self-elevates via UAC when not already running as Administrator.
 
 $ErrorActionPreference = "Stop"
@@ -27,6 +28,12 @@ if (-not (Test-Admin)) {
 function Deploy-Qt($dir, $binary) {
     if (-not (Test-Path $binary)) { throw "Missing $binary" }
     & $wdq --release --no-translations --no-compiler-runtime --dir $dir $binary | Out-Null
+    if (-not (Test-Path (Join-Path $dir "Qt6Core.dll"))) {
+        throw "Qt6Core.dll missing in $dir after windeployqt"
+    }
+    if (-not (Test-Path (Join-Path $dir "platforms\qwindows.dll"))) {
+        throw "platforms\qwindows.dll missing in $dir (REAPER: no Qt platform plugin)"
+    }
 }
 
 # Ensure VST3 bundles exist: stub (.vst3) + impl (.impl.dll) + Qt beside impl
@@ -72,7 +79,7 @@ Get-ChildItem $clapStage | ForEach-Object {
         Copy-Item $_.FullName $dest -Force
     }
 }
-Write-Host "CLAP stub: $(Test-Path (Join-Path $clapDst 'dontfloat.clap')) impl: $(Test-Path (Join-Path $clapDst 'dontfloat_clap.impl.dll')) Qt: $(Test-Path (Join-Path $clapDst 'Qt6Core.dll'))"
+Write-Host "CLAP stub: $(Test-Path (Join-Path $clapDst 'dontfloat.clap')) impl: $(Test-Path (Join-Path $clapDst 'dontfloat_clap.impl.dll')) Qt: $(Test-Path (Join-Path $clapDst 'Qt6Core.dll')) qwindows: $(Test-Path (Join-Path $clapDst 'platforms\qwindows.dll'))"
 
 # LV2 install (replace whole bundles)
 foreach ($n in @("dontfloat.lv2", "dontfloat_scratch.lv2", "dontfloat_pitcher.lv2")) {
@@ -80,7 +87,7 @@ foreach ($n in @("dontfloat.lv2", "dontfloat_scratch.lv2", "dontfloat_pitcher.lv
     $dst = Join-Path $lv2Dst $n
     if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
     Copy-Item $src $dst -Recurse -Force
-    Write-Host "LV2 $n Qt: $(Test-Path (Join-Path $dst 'Qt6Core.dll'))"
+    Write-Host "LV2 $n Qt: $(Test-Path (Join-Path $dst 'Qt6Core.dll')) qwindows: $(Test-Path (Join-Path $dst 'platforms\qwindows.dll'))"
 }
 
 # VST3 install (replace with stub+impl bundles)
@@ -92,8 +99,9 @@ foreach ($n in @("DONTFLOAT", "DONTFLOAT Scratch", "DONTFLOAT Pitcher")) {
     if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
     Copy-Item $src $dst -Recurse -Force
     $qtOk = Test-Path (Join-Path $dst "Contents\x86_64-win\Qt6Core.dll")
+    $qpaOk = Test-Path (Join-Path $dst "Contents\x86_64-win\platforms\qwindows.dll")
     $implOk = Test-Path (Join-Path $dst "Contents\x86_64-win\$n.vst3.impl.dll")
-    Write-Host "VST3 $n bundle=$([bool](Test-Path $dst -PathType Container)) impl=$implOk Qt=$qtOk"
+    Write-Host "VST3 $n bundle=$([bool](Test-Path $dst -PathType Container)) impl=$implOk Qt=$qtOk qwindows=$qpaOk"
 }
 
 # Remove legacy flat / track tool leftovers

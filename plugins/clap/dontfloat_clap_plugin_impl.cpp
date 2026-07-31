@@ -4,7 +4,10 @@
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
 
+#include <QApplication>
+#include <QEventLoop>
 #include <QString>
+#include <QWindow>
 
 #include <algorithm>
 #include <cstring>
@@ -35,9 +38,32 @@ struct ClapPluginInstance {
     const clap_host_t* host = nullptr;
     TrackToolSession session;
     std::unique_ptr<DontfloatPluginEditorShell> editor;
+    std::unique_ptr<QWindow> foreignParent; // host window wrapper (X11 embedding)
     uint32_t editorWidth = kEditorWidth;
     uint32_t editorHeight = kEditorHeight;
+    clap_id guiTimerId = 0;
+    bool guiTimerRegistered = false;
 };
+
+// Pump the Qt event loop from the host timer so the editor stays responsive
+// inside non-Qt DAW hosts (Reaper, Bitwig, Ardour, …).
+void pumpQtEvents()
+{
+    if (QApplication* app = qApp) {
+        app->sendPostedEvents();
+        app->processEvents(QEventLoop::AllEvents, 8);
+        app->sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    }
+}
+
+const clap_host_timer_support_t* hostTimerSupport(ClapPluginInstance* s)
+{
+    if (!s || !s->host || !s->host->get_extension) {
+        return nullptr;
+    }
+    return static_cast<const clap_host_timer_support_t*>(
+        s->host->get_extension(s->host, CLAP_EXT_TIMER_SUPPORT));
+}
 
 const char* const kFeatures[] = {
     "audio-effect",
@@ -154,26 +180,31 @@ bool guiIsApiSupported(const clap_plugin_t*, const char* api, bool isFloating)
 {
 #if defined(_WIN32)
     return api && std::strcmp(api, CLAP_WINDOW_API_WIN32) == 0 && !isFloating;
-#else
+#elif defined(__APPLE__)
     (void)api;
     (void)isFloating;
-    return false;
+    return false; // Cocoa embedding not implemented yet
+#else
+    // Linux: embed into the host's X11 window.
+    return api && std::strcmp(api, CLAP_WINDOW_API_X11) == 0 && !isFloating;
 #endif
 }
 
 bool guiGetPreferredApi(const clap_plugin_t*, const char** api, bool* isFloating)
 {
-#if defined(_WIN32)
     if (!api || !isFloating) {
         return false;
     }
+#if defined(_WIN32)
     *api = CLAP_WINDOW_API_WIN32;
     *isFloating = false;
     return true;
-#else
-    (void)api;
-    (void)isFloating;
+#elif defined(__APPLE__)
     return false;
+#else
+    *api = CLAP_WINDOW_API_X11;
+    *isFloating = false;
+    return true;
 #endif
 }
 
@@ -190,16 +221,32 @@ bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
     s->editor->setWindowTitle(QString::fromUtf8(desc().clapName));
     s->editor->resize(int(s->editorWidth), int(s->editorHeight));
     s->editor->setAttribute(Qt::WA_NativeWindow, true);
+
+    // Ask the host to tick us so the Qt event loop keeps running in non-Qt DAWs.
+    if (const clap_host_timer_support_t* ts = hostTimerSupport(s)) {
+        if (ts->register_timer && ts->register_timer(s->host, 16, &s->guiTimerId)) {
+            s->guiTimerRegistered = true;
+        }
+    }
     return true;
 }
 
 void guiDestroy(const clap_plugin_t* plugin)
 {
     if (ClapPluginInstance* s = self(plugin)) {
+        if (s->guiTimerRegistered) {
+            if (const clap_host_timer_support_t* ts = hostTimerSupport(s)) {
+                if (ts->unregister_timer) {
+                    ts->unregister_timer(s->host, s->guiTimerId);
+                }
+            }
+            s->guiTimerRegistered = false;
+        }
         if (s->editor) {
             s->editor->hide();
         }
         s->editor.reset();
+        s->foreignParent.reset();
     }
 }
 
@@ -258,10 +305,34 @@ bool guiSetParent(const clap_plugin_t* plugin, const clap_window_t* window)
     SetWindowLongPtr(child, GWL_STYLE, WS_CHILD | WS_VISIBLE);
     MoveWindow(child, 0, 0, int(s->editorWidth), int(s->editorHeight), TRUE);
     return true;
-#else
+#elif defined(__APPLE__)
     (void)plugin;
     (void)window;
     return false;
+#else
+    // Linux/X11: reparent the editor's native window under the host window.
+    ClapPluginInstance* s = self(plugin);
+    if (!s || !s->editor || !window) {
+        return false;
+    }
+    if (window->api && std::strcmp(window->api, CLAP_WINDOW_API_X11) != 0) {
+        return false;
+    }
+
+    (void)s->editor->winId(); // force creation of the native X11 window
+    QWindow* childWindow = s->editor->windowHandle();
+    if (!childWindow) {
+        return false;
+    }
+    QWindow* parentWindow = QWindow::fromWinId(static_cast<WId>(window->x11));
+    if (!parentWindow) {
+        return false;
+    }
+    s->foreignParent.reset(parentWindow);
+    childWindow->setParent(parentWindow);
+    s->editor->move(0, 0);
+    s->editor->resize(int(s->editorWidth), int(s->editorHeight));
+    return true;
 #endif
 }
 
@@ -310,6 +381,17 @@ const clap_plugin_gui_t kGuiExtension = {
     guiHide,
 };
 
+void pluginOnTimer(const clap_plugin_t* plugin, clap_id timerId)
+{
+    ClapPluginInstance* s = self(plugin);
+    if (!s || !s->guiTimerRegistered || timerId != s->guiTimerId) {
+        return;
+    }
+    pumpQtEvents();
+}
+
+const clap_plugin_timer_support_t kTimerSupportExtension = { pluginOnTimer };
+
 const void* pluginGetExtension(const clap_plugin_t*, const char* id)
 {
     if (id && std::strcmp(id, CLAP_EXT_AUDIO_PORTS) == 0) {
@@ -317,6 +399,9 @@ const void* pluginGetExtension(const clap_plugin_t*, const char* id)
     }
     if (id && std::strcmp(id, CLAP_EXT_GUI) == 0) {
         return &kGuiExtension;
+    }
+    if (id && std::strcmp(id, CLAP_EXT_TIMER_SUPPORT) == 0) {
+        return &kTimerSupportExtension;
     }
     return nullptr;
 }

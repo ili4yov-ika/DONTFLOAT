@@ -37,6 +37,7 @@ struct Options {
     int blockSize = 512;       // host processing block size (frames)
     double maxSeconds = 8.0;   // cap processed length (<= 0 => whole file)
     bool writeOutput = true;   // write the processed output WAV
+    bool gui = false;          // embed & show the plugin editor (CLAP X11 host)
 };
 
 inline const char* productName()
@@ -64,8 +65,11 @@ inline Options parseArgs(int argc, char** argv, const char* formatTag)
             o.maxSeconds = 0.0;
         } else if (a == QLatin1String("--no-output")) {
             o.writeOutput = false;
+        } else if (a == QLatin1String("--gui")) {
+            o.gui = true;
+        } else if (a == QLatin1String("--headless")) {
+            o.gui = false;
         }
-        // --headless is accepted for compatibility (this host is always headless).
     }
     if (o.output.isEmpty()) {
         o.output = QStringLiteral("mini_daw_%1_%2_out.wav")

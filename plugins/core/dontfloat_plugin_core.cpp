@@ -110,8 +110,13 @@ TrackToolStatus TrackToolSession::appendHostFrames(const float* const* inputs,
         return TrackToolStatus::InvalidAudioInfo;
     }
 
-    if (audioBuffer_.sampleRate <= 0) {
-        audioBuffer_.sampleRate = audioInfo_.sampleRate > 0 ? audioInfo_.sampleRate : 44100;
+    // Host-captured audio must use the sample rate the plugin was activated with,
+    // not the TrackAudioBuffer default (44100). Otherwise analysis (BPM/pitch)
+    // runs at the wrong rate inside a DAW.
+    if (audioInfo_.sampleRate > 0) {
+        audioBuffer_.sampleRate = audioInfo_.sampleRate;
+    } else if (audioBuffer_.sampleRate <= 0) {
+        audioBuffer_.sampleRate = 44100;
     }
     audioBuffer_.channelCount = std::max(audioBuffer_.channelCount, channelCount);
 

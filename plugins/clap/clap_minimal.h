@@ -13,8 +13,12 @@
 #define CLAP_EXT_PARAMS "clap.params"
 #define CLAP_EXT_AUDIO_PORTS "clap.audio-ports"
 #define CLAP_EXT_GUI "clap.gui"
+#define CLAP_EXT_TIMER_SUPPORT "clap.timer-support"
 #define CLAP_PORT_STEREO "stereo"
 #define CLAP_WINDOW_API_WIN32 "win32"
+#define CLAP_WINDOW_API_COCOA "cocoa"
+#define CLAP_WINDOW_API_X11 "x11"
+#define CLAP_WINDOW_API_WAYLAND "wayland"
 
 #define CLAP_CORE_EVENT_SPACE_ID 0
 #define CLAP_EVENT_PARAM_VALUE 5
@@ -198,6 +202,17 @@ struct clap_window_t {
         uintptr_t x11;
         void* ptr;
     };
+};
+
+// clap.timer-support — lets a plugin ask the host to call it back periodically.
+// Used to pump the Qt event loop when the host is not Qt-based.
+struct clap_host_timer_support_t {
+    bool (*register_timer)(const clap_host_t* host, uint32_t period_ms, clap_id* timer_id);
+    bool (*unregister_timer)(const clap_host_t* host, clap_id timer_id);
+};
+
+struct clap_plugin_timer_support_t {
+    void (*on_timer)(const clap_plugin_t* plugin, clap_id timer_id);
 };
 
 struct clap_plugin_gui_t {

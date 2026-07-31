@@ -35,9 +35,15 @@ QT_QPA_PLATFORM=offscreen ./mini_daw_clap_full --seconds 4 --no-output
 QT_QPA_PLATFORM=offscreen ./mini_daw_lv2_scratch \
     --input tests/midi/test_1.wav --output out.wav
 
-# process the whole file through the Pitcher CLAP plugin
-QT_QPA_PLATFORM=offscreen ./mini_daw_clap_pitcher --full --no-output
+# CLAP: open the plugin editor embedded in a host window (needs a display),
+# just like a DAW — the Pitcher shows the piano roll and an interactive Analyze
+QT_QPA_PLATFORM=xcb ./mini_daw_clap_pitcher --gui --seconds 5
 ```
+
+The `--gui` flag (CLAP hosts only) acts as a tiny DAW: it creates a host window,
+loads the plugin, feeds it `test_1.wav`, then embeds the plugin editor via the
+CLAP `clap.gui` **X11** extension and runs it — proving the plugin UI shows and
+is interactive (Melodyne-style) inside a host.
 
 ### Options
 
@@ -48,6 +54,7 @@ QT_QPA_PLATFORM=offscreen ./mini_daw_clap_pitcher --full --no-output
 | `--block <n>` | `512` | host processing block size (frames) |
 | `--seconds <s>` | `8` | cap processed length (`--full` = whole file) |
 | `--no-output` | write | skip writing the output WAV |
+| `--gui` / `--headless` | headless | CLAP only: embed & show the plugin editor |
 
 > Note: these hosts need a Qt platform plugin; run headless with
 > `QT_QPA_PLATFORM=offscreen`.
