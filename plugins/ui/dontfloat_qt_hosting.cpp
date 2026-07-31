@@ -137,11 +137,20 @@ void ensureQtApplication(const char* applicationName)
 
 void pumpQtEvents(int maxMillis)
 {
+    // Guard against re-entrancy: a host timer callback may fire while we are
+    // already inside processEvents() (e.g. Qt-based hosts, or nested pumps),
+    // which would otherwise recurse and peg the CPU.
+    static bool pumping = false;
+    if (pumping) {
+        return;
+    }
+    pumping = true;
     if (QApplication* app = qApp) {
         app->sendPostedEvents();
         app->processEvents(QEventLoop::AllEvents, maxMillis);
         app->sendPostedEvents(nullptr, QEvent::DeferredDelete);
     }
+    pumping = false;
 }
 
 } // namespace Dontfloat::Plugins::Ui

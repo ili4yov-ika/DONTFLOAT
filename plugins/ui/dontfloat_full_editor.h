@@ -18,6 +18,7 @@ public:
 
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void notifyHostAudioAppended();
+    void setHostPlayhead(qint64 positionMs, bool playing);
 
 private:
     DontfloatScratchEditor* scratch_ = nullptr;
