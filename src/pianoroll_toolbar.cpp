@@ -127,6 +127,11 @@ void PianoRollToolbar::applyStyle()
     // некорректным и рисует прямоугольник без скруглений
     const QString capsuleRadius = QString::number(kCapsuleHeightPx / 2);
     const QString modeRadius = QString::number(kCutModeButtonSizePx / 2);
+    // Слева капсула повторяет форму кнопки ножниц (в макете прямоугольник
+    // кнопки закрашивает круглый конец капсулы): радиус кнопки + её отступ,
+    // чтобы рамка вокруг кнопки была одинаковой ширины по углам
+    const QString capsuleLeftRadius = QString::number(
+        kSplitButtonRadiusPx + (kCapsuleHeightPx - kSplitButtonSizePx) / 2);
     const QString modeBox =
         QStringLiteral("border: 0px solid transparent; padding: 0px; border-radius: %1px;")
             .arg(modeRadius);
@@ -148,7 +153,11 @@ void PianoRollToolbar::applyStyle()
     setStyleSheet(
         rule(QStringLiteral("QWidget#pianoRollToolbar"), background(panelBg))
         + rule(QStringLiteral("QWidget#pianoRollCutGroup"),
-               background(groupBg) + QStringLiteral(" border-radius: ") + capsuleRadius
+               background(groupBg)
+                   + QStringLiteral(" border-top-left-radius: ") + capsuleLeftRadius
+                   + QStringLiteral("px; border-bottom-left-radius: ") + capsuleLeftRadius
+                   + QStringLiteral("px; border-top-right-radius: ") + capsuleRadius
+                   + QStringLiteral("px; border-bottom-right-radius: ") + capsuleRadius
                    + QStringLiteral("px;"))
         + rule(QStringLiteral("QWidget#pianoRollCutModeGroup"),
                background(modeBg) + QStringLiteral(" border-radius: ") + capsuleRadius
