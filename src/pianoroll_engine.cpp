@@ -192,6 +192,18 @@ qint64 snapToGrid(qint64 sample,
                       enabled);
 }
 
+bool canSplitNoteAt(qint64 startSample,
+                    qint64 endSample,
+                    qint64 cutSample,
+                    qint64 minPartSamples)
+{
+    const qint64 minPart = qMax<qint64>(1, minPartSamples);
+    if (endSample - startSample < 2 * minPart) {
+        return false;
+    }
+    return cutSample - startSample >= minPart && endSample - cutSample >= minPart;
+}
+
 bool isBlackKey(int midiNote)
 {
     switch (midiNote % 12) {

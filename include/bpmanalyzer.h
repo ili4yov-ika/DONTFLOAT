@@ -14,23 +14,66 @@ class BPMAnalyzer
 {
 public:
     struct BeatInfo {
-        qint64 position;          // Позиция в сэмплах
-        qint64 expectedPosition;  // Ожидаемая позиция (для вычисления коррекции)
-        float confidence;         // Уверенность определения (0-1)
-        float deviation;          // Отклонение от идеальной позиции в долях
-        float energy;            // Энергия бита (для определения акцентов)
+        qint64 position = 0;          // Позиция в сэмплах
+        qint64 expectedPosition = 0;  // Ожидаемая позиция (для вычисления коррекции)
+        float confidence = 0.0f;      // Уверенность определения (0-1)
+        float deviation = 0.0f;       // Отклонение от идеальной позиции в долях
+        float energy = 0.0f;          // Энергия бита (для определения акцентов)
     };
 
     struct AnalysisResult {
-        float bpm;
-        float confidence;    // Общая уверенность в определении BPM (0-1)
+        float bpm = 0.0f;
+        float confidence = 0.0f;    // Общая уверенность в определении BPM (0-1)
         QVector<BeatInfo> beats;
-        bool hasIrregularBeats;
-        float averageDeviation;
-        bool isFixedTempo;  // Определяет, имеет ли трек фиксированный темп
-        qint64 gridStartSample; // Опорная позиция сетки (первая доля)
-        float preliminaryBPM;   // Предварительный BPM (например, базовый из Mixxx до гармоник)
-        bool hasPreliminaryBPM; // Признак наличия предварительного BPM
+        bool hasIrregularBeats = false;
+        float averageDeviation = 0.0f;
+        bool isFixedTempo = true;      // Определяет, имеет ли трек фиксированный темп
+        qint64 gridStartSample = 0;    // Опорная позиция сетки (первая доля)
+        float preliminaryBPM = 0.0f;   // Предварительный BPM (например, базовый из Mixxx до гармоник)
+        bool hasPreliminaryBPM = false; // Признак наличия предварительного BPM
+    };
+
+    // Настройки поиска неровных долей (см. calculateDeviations)
+    struct DeviationOptions {
+        // Опорная линия сетки в сэмплах. Отрицательное значение — оценить по самим долям.
+        static constexpr qint64 kAutoGridStart = -1;
+
+        qint64 gridStartSample;   // Начало сетки (kAutoGridStart = определить автоматически)
+        bool snapToNearestGrid;   // Сопоставлять долю ближайшей линии сетки, а не порядковому номеру
+        bool refineTempo;         // Уточнять интервал сетки регрессией (гасит дрейф темпа)
+        float maxTempoCorrection; // Предел уточнения интервала (доля от номинального, 0.05 = ±5%)
+
+        DeviationOptions()
+            : gridStartSample(kAutoGridStart)
+            , snapToNearestGrid(true)
+            , refineTempo(false)
+            , maxTempoCorrection(0.05f)
+        {}
+    };
+
+    // Статистика отклонений долей от сетки (результат calculateDeviations)
+    struct DeviationStats {
+        int beatCount;              // Сколько долей обработано
+        int gapCount;               // Пропущенные линии сетки (доли, которые детектор не нашёл)
+        int duplicateCount;         // Доли, попавшие на одну линию сетки (лишние срабатывания)
+        float meanAbsDeviation;     // Среднее |отклонение| в долях интервала
+        float medianAbsDeviation;   // Медианное |отклонение| (устойчиво к выбросам)
+        float maxAbsDeviation;      // Максимальное |отклонение|
+        float rmsDeviation;         // Среднеквадратичное отклонение (джиттер)
+        float gridBPM;              // BPM сетки, по которой считались отклонения
+        qint64 gridStartSample;     // Опорная линия использованной сетки
+
+        DeviationStats()
+            : beatCount(0)
+            , gapCount(0)
+            , duplicateCount(0)
+            , meanAbsDeviation(0.0f)
+            , medianAbsDeviation(0.0f)
+            , maxAbsDeviation(0.0f)
+            , rmsDeviation(0.0f)
+            , gridBPM(0.0f)
+            , gridStartSample(0)
+        {}
     };
 
     struct AnalysisOptions {
@@ -69,9 +112,19 @@ public:
     // Вспомогательные функции
     static float correctToStandardBPM(float bpm);
 
-    // Новые методы для работы с отклонениями (план замены визуализации)
+    // Поиск неровных долей: раскладка долей по сетке BPM и отбор выбивающихся.
+    // Заполняет BeatInfo::expectedPosition и BeatInfo::deviation (в долях интервала).
     static void calculateDeviations(QVector<BeatInfo>& beats, float bpm, int sampleRate);
-    static QVector<int> findUnalignedBeats(const QVector<BeatInfo>& beats, float deviationThreshold = 0.02f);
+    static DeviationStats calculateDeviations(QVector<BeatInfo>& beats,
+                                              float bpm,
+                                              int sampleRate,
+                                              const DeviationOptions& options);
+
+    // Индексы долей с |deviation| строго больше порога. Доли с confidence ниже
+    // minConfidence и с нечисловым deviation пропускаются.
+    static QVector<int> findUnalignedBeats(const QVector<BeatInfo>& beats,
+                                           float deviationThreshold = 0.02f,
+                                           float minConfidence = 0.0f);
 
     // Методы для работы с предварительно определенным BPM
     static AnalysisResult createBeatGridFromBPM(const QVector<float>& samples,

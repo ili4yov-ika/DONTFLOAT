@@ -5,7 +5,7 @@ REM Requires: CMake, Qt6, NSIS
 REM
 REM Builds app + DAW plugins only (no tests / mini-DAW / plugin_tester).
 REM After cmake --install, deploys Qt next to each plugin impl/UI:
-REM   Qt6*.dll + platforms\qwindows.dll (required — hosts look next to the
+REM   Qt6*.dll + platforms\qwindows.dll (required - hosts look next to the
 REM   host EXE; ensureQtApplication points Qt at the plugin module dir and
 REM   starts a Win32 timer so Qt events pump inside VST3/LV2 without exec()).
 REM VST3: auto-detects C:\SDKs\vst3sdk; if SDK present, missing VST3 artifacts
@@ -88,7 +88,7 @@ if defined DONTFLOAT_VST3_SDK_ROOT (
     echo [INFO] VST3 SDK: %DONTFLOAT_VST3_SDK_ROOT%
     "%CMAKE_CMD%" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" !PLUGIN_CMAKE_ARGS! "-DDONTFLOAT_VST3_SDK_ROOT=%DONTFLOAT_VST3_SDK_ROOT:"=%" "%PROJECT_ROOT%"
 ) else (
-    echo [WARN] DONTFLOAT_VST3_SDK_ROOT not set and C:\SDKs\vst3sdk missing — VST3 plugins will NOT be built.
+    echo [WARN] DONTFLOAT_VST3_SDK_ROOT not set and C:\SDKs\vst3sdk missing - VST3 plugins will NOT be built.
     "%CMAKE_CMD%" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" !PLUGIN_CMAKE_ARGS! "%PROJECT_ROOT%"
 )
 if %ERRORLEVEL% NEQ 0 (
@@ -141,7 +141,7 @@ if not defined WINDEPLOYQT (
 if %ERRORLEVEL% NEQ 0 echo [WARN] windeployqt finished with error for app
 
 REM Qt next to DAW plugins. Stub loads *.impl.dll via LoadLibraryEx(ALTERED_SEARCH_PATH).
-REM platforms\qwindows.dll MUST sit next to the impl — otherwise REAPER shows:
+REM platforms\qwindows.dll MUST sit next to the impl - otherwise REAPER shows:
 REM   "no Qt platform plugin could be initialized"
 set "QT_ROOT_DIR="
 for %%I in ("%WINDEPLOYQT%") do set "QT_BIN=%%~dpI"
@@ -163,7 +163,7 @@ if defined DONTFLOAT_VST3_SDK_ROOT (
     call :deploy_plugin_qt "%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win" "%INSTALL_DIR%\lib\vst3\DONTFLOAT Pitcher.vst3\Contents\x86_64-win\DONTFLOAT Pitcher.vst3.impl.dll" "VST3 Pitcher" required
     if errorlevel 1 exit /b 1
     if not exist "%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win\DONTFLOAT.vst3" (
-        echo [ERROR] VST3 stub missing after install — NSIS would ship empty VST3 section
+        echo [ERROR] VST3 stub missing after install - NSIS would ship empty VST3 section
         exit /b 1
     )
 ) else (

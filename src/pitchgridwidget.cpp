@@ -1,6 +1,7 @@
 #include "../include/pitchgridwidget.h"
 #include "../include/uiconstants.h"
 #include <QtCore/QtMath>
+#include <QtGui/QCursor>
 #include <QtGui/QPainter>
 #include <QtWidgets/QApplication>
 #include <cmath>
@@ -28,6 +29,12 @@ PitchGridWidget::PitchGridWidget(QWidget *parent)
     , isNoteDragging(false)
     , noteDragStartPitch(0.0f)
     , noteDragFreePitch(false)
+    , noteCutMode(CutMode::SnapToGrid)
+    , splitModeActive(false)
+    , splitPreviewNoteIndex(-1)
+    , splitPreviewSample(0)
+    , splitPreviewValid(false)
+    , splitShortcut(Qt::Key_S)
 {
     primaryKey = PianoRollEngine::KeySignature::fromString(QStringLiteral("C Major"));
     setMinimumHeight(kMinVisiblePitchRows * kPitchRowHeightPx);
@@ -57,6 +64,7 @@ void PitchGridWidget::applyTheme(const QString& scheme)
         theme.noteEditedFill = QColor(240, 160, 60, 200);
         theme.noteBorder = QColor(40, 90, 160);
         theme.noteSelectedBorder = QColor(255, 255, 255);
+        theme.splitLine = QColor(30, 30, 30);
     } else {
         theme.background = QColor(32, 32, 32);
         theme.whiteKey = QColor(48, 48, 48);
@@ -76,6 +84,7 @@ void PitchGridWidget::applyTheme(const QString& scheme)
         theme.noteEditedFill = QColor(235, 150, 50, 200);
         theme.noteBorder = QColor(150, 200, 255);
         theme.noteSelectedBorder = QColor(255, 255, 255);
+        theme.splitLine = QColor(255, 245, 200);
     }
     update();
 }
@@ -293,6 +302,9 @@ void PitchGridWidget::setNotes(const QVector<PitchDetector::PitchNote>& newNotes
     if (selectedNoteIndex >= pitchNotes.size()) {
         selectedNoteIndex = -1;
     }
+    // Индексы нот сместились (например, после разреза) — подсветку реза сбрасываем
+    splitPreviewNoteIndex = -1;
+    splitPreviewValid = false;
     update();
 }
 
@@ -301,6 +313,8 @@ void PitchGridWidget::clearNotes()
     pitchNotes.clear();
     selectedNoteIndex = -1;
     isNoteDragging = false;
+    splitPreviewNoteIndex = -1;
+    splitPreviewValid = false;
     update();
 }
 
@@ -311,6 +325,163 @@ void PitchGridWidget::setNotePitch(int noteIndex, float midiPitch)
     }
     pitchNotes[noteIndex].midiPitch = qBound(0.0f, midiPitch, 127.0f);
     update();
+}
+
+void PitchGridWidget::setCutMode(CutMode mode)
+{
+    if (noteCutMode == mode) {
+        return;
+    }
+    noteCutMode = mode;
+    if (splitModeActive) {
+        // Позиция реза под курсором пересчитывается по новому режиму
+        updateSplitPreview(mapFromGlobal(QCursor::pos()));
+    }
+    update();
+}
+
+void PitchGridWidget::setSplitModeActive(bool active)
+{
+    if (splitModeActive == active) {
+        return;
+    }
+    splitModeActive = active;
+    if (!splitModeActive) {
+        clearSplitPreview();
+    } else if (underMouse()) {
+        updateSplitPreview(mapFromGlobal(QCursor::pos()));
+    }
+    applyCursorShape();
+    update();
+    emit splitModeChanged(splitModeActive);
+}
+
+void PitchGridWidget::setSplitShortcut(const QKeySequence& sequence)
+{
+    splitShortcut = sequence;
+}
+
+qint64 PitchGridWidget::cutSampleFromX(int x) const
+{
+    const auto viewport = currentViewport();
+    const qint64 sample = viewport.pixelToSample(int(contentToTimelineX(float(x))));
+    const qint64 maxSample = qMax<qint64>(0, effectiveTimelineSamples());
+    return qBound<qint64>(0, sample, maxSample);
+}
+
+qint64 PitchGridWidget::playbackCursorSample() const
+{
+    const auto viewport = currentViewport();
+    const qint64 maxSample = qMax<qint64>(0, effectiveTimelineSamples());
+    const qint64 pixelSample =
+        qBound<qint64>(0, viewport.pixelToSample(int(cursorXPosition)), maxSample);
+    if (sampleRate <= 0) {
+        return pixelSample;
+    }
+
+    // Позиция в мс точнее пиксельной (один пиксель — сотни сэмплов при малом
+    // зуме), но берём её только если она совпадает с нарисованной кареткой.
+    const qint64 msSample =
+        qBound<qint64>(0, (playbackPosition * sampleRate) / 1000, maxSample);
+    const float drift = std::abs(viewport.sampleToPixelX(msSample) - cursorXPosition);
+    return drift <= 2.0f ? msSample : pixelSample;
+}
+
+int PitchGridWidget::noteIndexContainingSample(qint64 sample) const
+{
+    auto contains = [this, sample](int index) {
+        const PitchDetector::PitchNote& note = pitchNotes[index];
+        return sample >= note.startSample && sample < note.endSample;
+    };
+
+    if (selectedNoteIndex >= 0 && selectedNoteIndex < pitchNotes.size()
+        && contains(selectedNoteIndex)) {
+        return selectedNoteIndex;
+    }
+    // Сверху вниз по z-порядку, как и при попадании мышью
+    for (int i = pitchNotes.size() - 1; i >= 0; --i) {
+        if (contains(i)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool PitchGridWidget::requestNoteSplit(int noteIndex, qint64 rawSample)
+{
+    if (noteIndex < 0 || noteIndex >= pitchNotes.size()) {
+        emit noteSplitRejected(SplitRejection::NoNoteAtCursor);
+        return false;
+    }
+
+    const PitchDetector::PitchNote& note = pitchNotes[noteIndex];
+    const qint64 cutSample = PianoRollEngine::snapToGrid(
+        rawSample, bpm, beatsPerBar, sampleRate, gridStartSample,
+        noteCutMode == CutMode::SnapToGrid);
+
+    if (!PianoRollEngine::canSplitNoteAt(note.startSample, note.endSample, cutSample)) {
+        emit noteSplitRejected(SplitRejection::CutOutsideNote);
+        return false;
+    }
+
+    emit noteSplitRequested(noteIndex, cutSample);
+    return true;
+}
+
+bool PitchGridWidget::splitNoteAtPlaybackCursor()
+{
+    const qint64 sample = playbackCursorSample();
+    return requestNoteSplit(noteIndexContainingSample(sample), sample);
+}
+
+void PitchGridWidget::updateSplitPreview(const QPoint& pos)
+{
+    if (!splitModeActive || !rect().contains(pos)) {
+        clearSplitPreview();
+        return;
+    }
+
+    const int noteIndex = noteIndexAt(pos);
+    const qint64 rawSample = cutSampleFromX(pos.x());
+    const qint64 cutSample = PianoRollEngine::snapToGrid(
+        rawSample, bpm, beatsPerBar, sampleRate, gridStartSample,
+        noteCutMode == CutMode::SnapToGrid);
+    const bool valid = noteIndex >= 0
+        && PianoRollEngine::canSplitNoteAt(pitchNotes[noteIndex].startSample,
+                                           pitchNotes[noteIndex].endSample, cutSample);
+
+    if (splitPreviewNoteIndex == noteIndex && splitPreviewSample == cutSample
+        && splitPreviewValid == valid) {
+        return;
+    }
+    splitPreviewNoteIndex = noteIndex;
+    splitPreviewSample = cutSample;
+    splitPreviewValid = valid;
+    update();
+}
+
+void PitchGridWidget::clearSplitPreview()
+{
+    if (splitPreviewNoteIndex < 0 && !splitPreviewValid) {
+        return;
+    }
+    splitPreviewNoteIndex = -1;
+    splitPreviewValid = false;
+    update();
+}
+
+bool PitchGridWidget::matchesSplitShortcut(const QKeyEvent* keyEvent) const
+{
+    if (!keyEvent || splitShortcut.isEmpty()) {
+        return false;
+    }
+    const QKeySequence pressed(keyEvent->keyCombination());
+    return pressed == splitShortcut;
+}
+
+void PitchGridWidget::applyCursorShape()
+{
+    setCursor(splitModeActive ? Qt::SplitHCursor : Qt::ArrowCursor);
 }
 
 PianoRollEngine::Viewport PitchGridWidget::currentViewport() const
@@ -376,6 +547,7 @@ void PitchGridWidget::paintEvent(QPaintEvent*)
     drawBeatGrid(painter, area);
     drawSelectedPitchRow(painter, area);
     drawNoteBlocks(painter, area);
+    drawSplitPreview(painter, area);
     drawLegendColumn(painter, legendRect());
     drawPlaybackCursor(painter, area);
 }
@@ -524,6 +696,33 @@ void PitchGridWidget::drawNoteBlocks(QPainter& painter, const QRect& rect) const
     painter.restore();
 }
 
+void PitchGridWidget::drawSplitPreview(QPainter& painter, const QRect& rect) const
+{
+    if (!splitModeActive || splitPreviewNoteIndex < 0
+        || splitPreviewNoteIndex >= pitchNotes.size()) {
+        return;
+    }
+
+    const auto viewport = currentViewport();
+    const float x = rect.left() + timelineToContentX(viewport.sampleToPixelX(splitPreviewSample));
+    if (x < rect.left() || x > rect.right()) {
+        return;
+    }
+
+    const QRectF target = noteRect(pitchNotes[splitPreviewNoteIndex]);
+    QColor lineColor = splitPreviewValid ? theme.splitLine : theme.outOfKeyLegendText;
+
+    painter.save();
+    // Линия реза через весь пианоролл — видно, к какому делению притянулся рез
+    painter.setPen(QPen(lineColor, 1.0, Qt::DashLine));
+    painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+    if (splitPreviewValid) {
+        painter.setPen(QPen(lineColor, 2.0));
+        painter.drawLine(QPointF(x, target.top()), QPointF(x, target.bottom()));
+    }
+    painter.restore();
+}
+
 int PitchGridWidget::noteIndexAt(const QPoint& pos) const
 {
     // Сверху вниз по z-порядку: последняя отрисованная нота проверяется первой
@@ -610,6 +809,12 @@ void PitchGridWidget::mousePressEvent(QMouseEvent *event)
         setFocus(Qt::MouseFocusReason);
         lastMousePos = event->pos();
 
+        // Режим «Разделить»: клик по ноте режет её и не двигает каретку
+        if (splitModeActive && !isInLegendArea(event->pos().x())) {
+            requestNoteSplit(noteIndexAt(event->pos()), cutSampleFromX(event->pos().x()));
+            return;
+        }
+
         // Сначала пробуем захватить ноту: drag по вертикали меняет её высоту.
         // Alt + ЛКМ — свободный (дробный) питч мимо полутоновой сетки, как в Melodyne.
         const int noteIndex = noteIndexAt(event->pos());
@@ -646,6 +851,11 @@ void PitchGridWidget::mousePressEvent(QMouseEvent *event)
 
 void PitchGridWidget::mouseMoveEvent(QMouseEvent *event)
 {
+    if (splitModeActive && !(event->buttons() & Qt::RightButton)) {
+        updateSplitPreview(event->pos());
+        return;
+    }
+
     if (isRightMousePanning && (event->buttons() & Qt::RightButton)) {
         const QPoint delta = event->pos() - lastMousePos;
         const int refWidth = qMax(1, timelineReferenceWidth());
@@ -711,8 +921,38 @@ void PitchGridWidget::mouseReleaseEvent(QMouseEvent *event)
     }
 }
 
+void PitchGridWidget::leaveEvent(QEvent *event)
+{
+    clearSplitPreview();
+    QWidget::leaveEvent(event);
+}
+
+bool PitchGridWidget::event(QEvent *event)
+{
+    // Клавиша реза перехватывается до QShortcut приложения (по умолчанию S —
+    // это же «Стоп»): пока фокус на пианоролле, режем ноту, а не останавливаем.
+    if (event->type() == QEvent::ShortcutOverride
+        && matchesSplitShortcut(static_cast<QKeyEvent*>(event))) {
+        event->accept();
+        return true;
+    }
+    return QWidget::event(event);
+}
+
 void PitchGridWidget::keyPressEvent(QKeyEvent *event)
 {
+    if (matchesSplitShortcut(event)) {
+        splitNoteAtPlaybackCursor();
+        event->accept();
+        return;
+    }
+
+    if (splitModeActive && event->key() == Qt::Key_Escape) {
+        setSplitModeActive(false);
+        event->accept();
+        return;
+    }
+
     if (selectedNoteIndex >= 0
         && (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down)) {
         const int step = (event->modifiers() & Qt::ShiftModifier) ? 12 : 1;

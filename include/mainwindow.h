@@ -35,9 +35,9 @@
 #include "pitchdetector.h"
 #include "notepreviewplayer.h"
 #include "spectrogramsettingsdialog.h"
-#include "pitchshiftsettingsdialog.h"
-#include "granularpitchshifter_engine.h"
+#include "pitchdetectorsettingsdialog.h"
 #include "pitchgridwidget.h"
+#include "pianoroll_toolbar.h"
 #include "shortcutsdialog.h"
 #include "metronomecontroller.h"
 #include "keyselectionmenu.h"
@@ -96,6 +96,9 @@ private slots:
     void onNotePreviewRequested(int noteIndex);
     void onNotePreviewPitchChanged(int noteIndex, float midiPitch);
     void stopNotePreview();
+    /** Разрез ноты по каретке / клику: splitSample — сэмпл текущего таймлайна. */
+    void onNoteSplitRequested(int noteIndex, qint64 splitSample);
+    void onNoteSplitRejected(PitchGridWidget::SplitRejection reason);
     void onPitchGridAnalyzeClicked();
     void showKeyContextMenu(const QPoint& pos);
     void showKeyContextMenu2(const QPoint& pos);
@@ -131,6 +134,8 @@ private:
     void applyPerBarKeyResult(const KeyAnalyzer::PerBarKeyResult& perBar,
                               const KeyAnalyzer::AnalysisResult& trackKey);
     void layoutPitchGridScrollOverlay();
+    /** Панель кнопок под пианороллом («Разделить», режим реза). */
+    void setupPianoRollToolbar();
     void setupPitchGridAnalyzeOverlay();
     void showPitchGridAnalyzeOverlay();
     void hidePitchGridAnalyzeOverlay();
@@ -197,6 +202,7 @@ private:
     Ui::MainWindow *ui;
     WaveformView *waveformView;
     PitchGridWidget *pitchGridWidget;
+    PianoRollToolbar *pianoRollToolbar;
     QWidget *pitchGridScrollContainer;
     QWidget *pitchGridAnalyzeOverlay;
     QPushButton *pitchGridAnalyzeButton;
@@ -237,9 +243,9 @@ private:
     QAction *waveformSpectrogramAct;
     QAction *spectrogramSettingsAct;
     SpectrogramSettingsDialog* spectrogramSettingsDialog;
-    QAction *pitchShiftSettingsAct;
-    PitchShiftSettingsDialog* pitchShiftSettingsDialog;
-    GranularEngine::Params pitchShiftParams;
+    QAction *pitchDetectorSettingsAct;
+    PitchDetectorSettingsDialog* pitchDetectorSettingsDialog;
+    PitchDetector::Options pitchDetectorOptions;
     QAction *russianAction;
     QAction *englishAction;
     QAction *applyTimeStretchAct;

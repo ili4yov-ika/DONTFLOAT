@@ -292,14 +292,6 @@ void DontfloatPitchEditor::notifyHostAudioAppended()
     }
 }
 
-void DontfloatPitchEditor::setHostPlayhead(qint64 positionMs, bool playing)
-{
-    Q_UNUSED(playing);
-    if (pitchGrid_) {
-        pitchGrid_->setPlaybackPosition(positionMs);
-    }
-}
-
 void DontfloatPitchEditor::setPrimaryKey(const QString& key)
 {
     primaryKey_ = key.isEmpty() ? QStringLiteral("C Major") : key;

@@ -1,0 +1,178 @@
+[
+  {
+    "label": "CMake: Configure (MSVC Debug)",
+    "command": "cmake",
+    "args": ["--preset", "windows-msvc-debug"],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "use_new_terminal": false
+  },
+  {
+    "label": "CMake: Build (MSVC Debug)",
+    "command": "cmake",
+    "args": ["--build", "--preset", "windows-msvc-debug", "--parallel"],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["build"]
+  },
+  {
+    "label": "CMake: Configure + Build (MSVC Debug)",
+    "command": "powershell",
+    "args": [
+      "-NoProfile",
+      "-Command",
+      "cmake --preset windows-msvc-debug; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cmake --build --preset windows-msvc-debug --parallel"
+    ],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["build"]
+  },
+  {
+    "label": "CMake: Configure (MSVC Release)",
+    "command": "cmake",
+    "args": ["--preset", "windows-msvc-release"],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always"
+  },
+  {
+    "label": "CMake: Build (MSVC Release)",
+    "command": "cmake",
+    "args": ["--build", "--preset", "windows-msvc-release", "--parallel"],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["build"]
+  },
+  {
+    "label": "CMake: Configure + Build (MSVC Release)",
+    "command": "powershell",
+    "args": [
+      "-NoProfile",
+      "-Command",
+      "cmake --preset windows-msvc-release; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cmake --build --preset windows-msvc-release --parallel"
+    ],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["build"]
+  },
+  {
+    "label": "CMake: Configure (MinGW Debug)",
+    "command": "cmake",
+    "args": ["--preset", "windows-mingw-debug"],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "env": {
+      "PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.9.3/mingw_64/bin"
+    },
+    "reveal": "always"
+  },
+  {
+    "label": "CMake: Build (MinGW Debug)",
+    "command": "cmake",
+    "args": ["--build", "--preset", "windows-mingw-debug", "--parallel"],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "env": {
+      "PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.9.3/mingw_64/bin"
+    },
+    "reveal": "always",
+    "tags": ["build"]
+  },
+  {
+    "label": "CMake: Configure + Build (MinGW Debug)",
+    "command": "powershell",
+    "args": [
+      "-NoProfile",
+      "-Command",
+      "$env:PATH='C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.9.3/mingw_64/bin;' + $env:PATH; cmake --preset windows-mingw-debug; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cmake --build --preset windows-mingw-debug --parallel"
+    ],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["build"]
+  },
+  {
+    "label": "CMake: Build Tests (MSVC Debug)",
+    "command": "cmake",
+    "args": [
+      "--build",
+      "D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+      "--config",
+      "Debug",
+      "--target",
+      "bpm_analyzer_test"
+    ],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["test"]
+  },
+  {
+    "label": "CMake: Run Tests (MSVC Debug)",
+    "command": "ctest",
+    "args": [
+      "--test-dir",
+      "D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug",
+      "-C",
+      "Debug",
+      "--output-on-failure"
+    ],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "reveal_target": "center",
+    "tags": ["test"]
+  },
+  {
+    "label": "CMake: Full Rebuild (MSVC Debug)",
+    "command": "powershell",
+    "args": [
+      "-NoProfile",
+      "-Command",
+      "Remove-Item -Recurse -Force 'D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug' -ErrorAction SilentlyContinue; cmake --preset windows-msvc-debug; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cmake --build --preset windows-msvc-debug --parallel"
+    ],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["build"]
+  },
+  {
+    "label": "▶️ Запуск DONTFLOAT (MSVC Debug)",
+    "command": "D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/Debug/DONTFLOAT.exe",
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Debug/Debug",
+    "reveal": "always",
+    "use_new_terminal": true
+  },
+  {
+    "label": "▶️ Запуск DONTFLOAT (MSVC Release)",
+    "command": "D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release/Release/DONTFLOAT.exe",
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MSVC2022_64bit-Release/Release",
+    "reveal": "always",
+    "use_new_terminal": true
+  },
+  {
+    "label": "▶️ Запуск DONTFLOAT (MinGW Debug)",
+    "command": "D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug/DONTFLOAT.exe",
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp/build/Desktop_Qt_6_9_3_MinGW_64_bit-Debug",
+    "env": {
+      "PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.9.3/mingw_64/bin"
+    },
+    "reveal": "always",
+    "use_new_terminal": true
+  },
+  {
+    "label": "CMake: Configure + Build (macOS Debug)",
+    "command": "bash",
+    "args": [
+      "-lc",
+      "cmake --preset macos-debug && cmake --build --preset macos-debug --parallel"
+    ],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["build"]
+  },
+  {
+    "label": "CMake: Configure + Build (Linux Debug)",
+    "command": "bash",
+    "args": [
+      "-lc",
+      "cmake --preset linux-debug && cmake --build --preset linux-debug --parallel"
+    ],
+    "cwd": "D:/Devs/C++/DONTFLOAT_exp",
+    "reveal": "always",
+    "tags": ["build"]
+  }
+]

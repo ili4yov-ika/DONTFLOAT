@@ -34,11 +34,17 @@
 - Контент таймлайна: ширина виджета минус колонка легенды (36 px); легенда нот — overlay справа с полупрозрачной подложкой
 - Вертикальный скроллбар (overlay слева) с динамической прозрачностью при приближении каретки
 - Поля ввода тональности над панелью; плашка **«Анализировать»** после загрузки трека
+- Разрез нот: режим «Разделить» и клавиша `S` → сигналы `noteSplitRequested` / `noteSplitRejected`; сам разрез применяет хост (`MainWindow`)
 - **По умолчанию скрыта** (`isPitchGridVisible = false`); переключение `Ctrl+G`, состояние в QSettings
+
+### PianoRollToolbar
+- Панель кнопок под пианороллом (`include/pianoroll_toolbar.h`): «Разделить» + пара «Вдоль сетки» / «Свободный рез»
+- Геометрия — макет `MARKDOWN/example_panel_buttons.svg` × 1.5; иконки — `resources/icons/{trimmer,along_the_grid,free_cut}.svg`, стили — через `setStyleSheet`
+- Только UI: состояние транслируется в `PitchGridWidget` (`setSplitModeActive`, `setCutMode`) сигналами `splitToggled` / `cutModeChanged`
 
 ### PianoRollEngine
 - Статические утилиты для `PitchGridWidget`
-- `Viewport::compute`, `visibleGridLines`, `snapToGrid`, `KeySignature`, `isPitchInKeys`
+- `Viewport::compute`, `visibleGridLines`, `snapToGrid`, `canSplitNoteAt`, `KeySignature`, `isPitchInKeys`
 
 ### BPMAnalyzer
 - Анализ BPM с использованием алгоритмов Mixxx (qm-dsp)

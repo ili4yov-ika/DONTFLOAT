@@ -16,8 +16,6 @@ public:
 
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void notifyHostAudioAppended();
-    /** Sync the editor playback caret with the DAW playhead (position in ms). */
-    void setHostPlayhead(qint64 positionMs, bool playing);
 
 private:
     Dontfloat::PluginCore::PluginProduct product_;

@@ -3,19 +3,43 @@
 #include <QtCore/QtMath>
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace PitchDetector {
 
 namespace {
 
-constexpr int kTargetSampleRate = 11025; // Децимация ускоряет автокорреляцию в ~16 раз
-constexpr int kFrameSize = 1024;
-constexpr int kHopSize = 256;
+// Сколько сэмплов приходится на период самой высокой искомой f0. Целочисленный
+// лаг сам по себе квантует частоту: при 4 сэмплах на период соседние лаги
+// разнесены больше чем на полутон, поэтому берём запас.
+constexpr int kSamplesPerPeriodAtTop = 10;
+
+// Окно должно вмещать два периода самой низкой искомой f0: при лаге в один
+// период на сравнение остаётся ещё столько же сэмплов. Больше — только зря
+// ухудшает временно́е разрешение (короткие ноты смазываются).
+constexpr float kPeriodsPerFrame = 2.0f;
+
+constexpr int kMaxFrameSize = 4096;
+constexpr int kMinFrameSize = 256;
 constexpr int kMedianWindow = 5;
+
+// Порог YIN: первый минимум CMNDF ниже него считаем периодом. Берём именно
+// первый, а не глобальный — иначе выигрывают кратные периоды (октава вниз).
+constexpr float kYinThreshold = 0.15f;
 
 struct FrameEstimate {
     float midi = -1.0f;       // < 0 — кадр невокализованный/тишина
-    float correlation = 0.0f;
+    float confidence = 0.0f;
+};
+
+/// Параметры анализа, выведенные из запрошенного диапазона частот.
+struct Layout {
+    int factor = 1;         ///< Коэффициент децимации исходного аудио
+    double workRate = 0.0;  ///< Частота дискретизации рабочего сигнала
+    int frameSize = 1024;
+    int hopSize = 256;
+    int minLag = 2;
+    int maxLag = 512;
 };
 
 QVector<float> decimate(const QVector<float>& input, int factor)
@@ -25,8 +49,9 @@ QVector<float> decimate(const QVector<float>& input, int factor)
     }
     QVector<float> out;
     out.reserve(input.size() / factor + 1);
-    for (int i = 0; i + factor <= input.size(); i += factor) {
-        // Усреднение блока — простейший антиалиасинг, достаточный для f0 < 1.2 кГц
+    for (qint64 i = 0; i + factor <= input.size(); i += factor) {
+        // Усреднение блока — простейший антиалиасинг. Рабочая частота выбрана
+        // с запасом над верхней f0, поэтому его характеристики достаточно.
         float acc = 0.0f;
         for (int j = 0; j < factor; ++j) {
             acc += input[i + j];
@@ -36,10 +61,68 @@ QVector<float> decimate(const QVector<float>& input, int factor)
     return out;
 }
 
-FrameEstimate estimateFrame(const float* samples, int length, int sampleRate,
-                            const Options& opt)
+int nextPowerOfTwo(int value)
+{
+    int result = 1;
+    while (result < value && result < kMaxFrameSize) {
+        result <<= 1;
+    }
+    return result;
+}
+
+Layout makeLayout(int sampleRate, const Options& opt)
+{
+    Layout layout;
+
+    const double nyquist = 0.5 * sampleRate;
+    const double maxHz = qBound(20.0, double(opt.maxFrequencyHz), nyquist * 0.95);
+    const double requestedMinHz = qBound(4.0, double(opt.minFrequencyHz), maxHz * 0.5);
+
+    // Рабочая частота: запас и по Найквисту, и по разрешению лага сверху.
+    const double desiredRate = maxHz * kSamplesPerPeriodAtTop;
+    layout.factor = qBound(1, int(sampleRate / qMax(1.0, desiredRate)), 64);
+    layout.workRate = double(sampleRate) / layout.factor;
+
+    // Кадр — под самую низкую запрошенную f0, но с потолком: иначе широкий
+    // диапазон (16 Гц … 9 кГц одновременно) делает анализ неподъёмным.
+    const int needed = int(std::ceil(kPeriodsPerFrame * layout.workRate / requestedMinHz));
+    layout.frameSize = qBound(kMinFrameSize, nextPowerOfTwo(needed), kMaxFrameSize);
+    layout.hopSize = qMax(1, layout.frameSize / 4);
+
+    // Реально достижимая нижняя граница при выбранном кадре.
+    const double minHz = qMax(requestedMinHz,
+                              kPeriodsPerFrame * layout.workRate / layout.frameSize);
+
+    layout.minLag = qMax(2, int(std::floor(layout.workRate / maxHz)));
+    layout.maxLag = qMin(layout.frameSize / 2, int(std::ceil(layout.workRate / minHz)));
+    return layout;
+}
+
+/// Параболическое уточнение минимума по трём соседним отсчётам.
+float refineLag(const std::vector<float>& cmnd, int tau)
+{
+    if (tau <= 0 || tau + 1 >= int(cmnd.size())) {
+        return float(tau);
+    }
+    const float a = cmnd[tau - 1];
+    const float b = cmnd[tau];
+    const float c = cmnd[tau + 1];
+    const float denom = a - 2.0f * b + c;
+    if (std::abs(denom) < 1e-12f) {
+        return float(tau);
+    }
+    const float shift = 0.5f * (a - c) / denom;
+    if (!(shift > -1.0f && shift < 1.0f)) {
+        return float(tau);
+    }
+    return float(tau) + shift;
+}
+
+FrameEstimate estimateFrame(const float* samples, const Layout& layout, const Options& opt,
+                            std::vector<float>& diff, std::vector<float>& cmnd)
 {
     FrameEstimate est;
+    const int length = layout.frameSize;
 
     double energy = 0.0;
     for (int i = 0; i < length; ++i) {
@@ -50,65 +133,75 @@ FrameEstimate estimateFrame(const float* samples, int length, int sampleRate,
         return est;
     }
 
-    const int minLag = qMax(2, int(sampleRate / opt.maxFrequencyHz));
-    const int maxLag = qMin(length / 2, int(sampleRate / opt.minFrequencyHz));
-    if (maxLag <= minLag) {
+    const int maxLag = layout.maxLag;
+    if (maxLag <= layout.minLag) {
         return est;
     }
 
-    float bestNorm = -1.0f;
-    int bestLag = 0;
-    for (int lag = minLag; lag <= maxLag; ++lag) {
-        double corr = 0.0;
-        double normA = 0.0;
-        double normB = 0.0;
-        const int n = length - lag;
-        for (int i = 0; i < n; ++i) {
-            const float a = samples[i];
-            const float b = samples[i + lag];
-            corr += double(a) * b;
-            normA += double(a) * a;
-            normB += double(b) * b;
-        }
-        const double denom = std::sqrt(normA * normB);
-        if (denom <= 1e-12) {
+    // Разностная функция YIN. Нормируем на число слагаемых: иначе большие лаги
+    // выигрывают просто потому, что суммируют меньше точек.
+    diff.assign(maxLag + 1, 0.0f);
+    for (int tau = 1; tau <= maxLag; ++tau) {
+        const int n = length - tau;
+        if (n <= 0) {
+            diff[tau] = diff[tau - 1];
             continue;
         }
-        const float norm = float(corr / denom);
-        if (norm > bestNorm) {
-            bestNorm = norm;
-            bestLag = lag;
+        double sum = 0.0;
+        for (int i = 0; i < n; ++i) {
+            const double d = double(samples[i]) - samples[i + tau];
+            sum += d * d;
         }
+        diff[tau] = float(sum / n);
     }
 
-    if (bestLag <= 0 || bestNorm < opt.minCorrelation) {
+    // Кумулятивная нормировка (CMNDF) — она и подавляет кратные периоды.
+    cmnd.assign(maxLag + 1, 1.0f);
+    double running = 0.0;
+    for (int tau = 1; tau <= maxLag; ++tau) {
+        running += diff[tau];
+        cmnd[tau] = running > 1e-20
+            ? float(diff[tau] * tau / running)
+            : 1.0f;
+    }
+
+    // Первый локальный минимум ниже порога — это основной тон, а не его кратное.
+    int bestTau = -1;
+    for (int tau = layout.minLag; tau <= maxLag; ++tau) {
+        if (cmnd[tau] >= kYinThreshold) {
+            continue;
+        }
+        int local = tau;
+        while (local + 1 <= maxLag && cmnd[local + 1] < cmnd[local]) {
+            ++local;
+        }
+        bestTau = local;
+        break;
+    }
+    if (bestTau < 0) {
+        // Порог не пройден — берём глобальный минимум как запасной вариант.
+        int argmin = layout.minLag;
+        for (int tau = layout.minLag + 1; tau <= maxLag; ++tau) {
+            if (cmnd[tau] < cmnd[argmin]) {
+                argmin = tau;
+            }
+        }
+        bestTau = argmin;
+    }
+
+    const float confidence = qBound(0.0f, 1.0f - cmnd[bestTau], 1.0f);
+    if (confidence < opt.minCorrelation) {
         return est;
     }
 
-    // Защита от октавной ошибки: если lag/2 даёт почти такую же корреляцию,
-    // истинный период вдвое короче (нота на октаву выше).
-    const int halfLag = bestLag / 2;
-    if (halfLag >= minLag) {
-        double corr = 0.0;
-        double normA = 0.0;
-        double normB = 0.0;
-        const int n = length - halfLag;
-        for (int i = 0; i < n; ++i) {
-            const float a = samples[i];
-            const float b = samples[i + halfLag];
-            corr += double(a) * b;
-            normA += double(a) * a;
-            normB += double(b) * b;
-        }
-        const double denom = std::sqrt(normA * normB);
-        if (denom > 1e-12 && float(corr / denom) > bestNorm * 0.9f) {
-            bestLag = halfLag;
-        }
+    const float refined = refineLag(cmnd, bestTau);
+    if (refined <= 0.0f) {
+        return est;
     }
 
-    const float hz = float(sampleRate) / float(bestLag);
-    est.midi = frequencyToMidi(hz);
-    est.correlation = bestNorm;
+    const float hz = float(layout.workRate / double(refined));
+    est.midi = frequencyToMidi(hz, opt.referenceHz);
+    est.confidence = confidence;
     return est;
 }
 
@@ -137,14 +230,46 @@ QVector<FrameEstimate> smoothEstimates(const QVector<FrameEstimate>& frames)
     return out;
 }
 
+float medianOf(QVector<float>& values)
+{
+    if (values.isEmpty()) {
+        return 0.0f;
+    }
+    std::sort(values.begin(), values.end());
+    return values[values.size() / 2];
+}
+
 } // namespace
 
-float frequencyToMidi(float hz)
+const TuningStandard* tuningStandards(int& count)
 {
-    if (hz <= 0.0f) {
+    static const TuningStandard kStandards[] = {
+        {"415 Hz — Baroque",        415.0f},
+        {"432 Hz — Verdi",          432.0f},
+        {"435 Hz — Diapason normal", 435.0f},
+        {"440 Hz — ISO 16",         440.0f},
+        {"442 Hz — Orchestral",     442.0f},
+        {"443 Hz — Orchestral",     443.0f},
+        {"444 Hz — Orchestral",     444.0f},
+    };
+    count = int(sizeof(kStandards) / sizeof(kStandards[0]));
+    return kStandards;
+}
+
+float frequencyToMidi(float hz, float referenceHz)
+{
+    if (hz <= 0.0f || referenceHz <= 0.0f) {
         return -1.0f;
     }
-    return 69.0f + 12.0f * std::log2(hz / 440.0f);
+    return 69.0f + 12.0f * std::log2(hz / referenceHz);
+}
+
+float midiToFrequency(float midi, float referenceHz)
+{
+    if (referenceHz <= 0.0f) {
+        return 0.0f;
+    }
+    return referenceHz * std::pow(2.0f, (midi - 69.0f) / 12.0f);
 }
 
 QVector<PitchNote> detectNotes(const QVector<float>& mono,
@@ -157,20 +282,24 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
         return notes;
     }
 
-    const int factor = qMax(1, sampleRate / kTargetSampleRate);
-    const QVector<float> work = decimate(mono, factor);
-    const int workRate = sampleRate / factor;
-    if (work.size() < kFrameSize) {
+    const Layout layout = makeLayout(sampleRate, options);
+    const QVector<float> work = decimate(mono, layout.factor);
+    if (work.size() < layout.frameSize || layout.maxLag <= layout.minLag) {
         return notes;
     }
 
-    const int frameCount = (work.size() - kFrameSize) / kHopSize + 1;
+    const int frameCount = (work.size() - layout.frameSize) / layout.hopSize + 1;
     QVector<FrameEstimate> frames(frameCount);
+
+    std::vector<float> diff;
+    std::vector<float> cmnd;
+    diff.reserve(layout.maxLag + 1);
+    cmnd.reserve(layout.maxLag + 1);
 
     int lastReported = -1;
     for (int f = 0; f < frameCount; ++f) {
-        frames[f] = estimateFrame(work.constData() + qint64(f) * kHopSize,
-                                  kFrameSize, workRate, options);
+        frames[f] = estimateFrame(work.constData() + qint64(f) * layout.hopSize,
+                                  layout, options, diff, cmnd);
         if (onProgress) {
             const int pct = int(qint64(f + 1) * 100 / frameCount);
             if (pct != lastReported) {
@@ -190,22 +319,26 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
     int runPitch = -1;
     double runConfidence = 0.0;
     int runFrames = 0;
+    QVector<float> runPitches;
 
     auto flushRun = [&](int endFrame) {
         if (runStart < 0 || runPitch < 0 || runPitch > 127) {
             return;
         }
-        const qint64 start = qint64(runStart) * kHopSize * factor;
+        const qint64 start = qint64(runStart) * layout.hopSize * layout.factor;
         const qint64 end =
-            (qint64(endFrame - 1) * kHopSize + kFrameSize) * qint64(factor);
+            (qint64(endFrame - 1) * layout.hopSize + layout.frameSize) * qint64(layout.factor);
         if (end - start < minNoteSamples) {
             return;
         }
         PitchNote note;
         note.startSample = start;
         note.endSample = qMin<qint64>(end, mono.size());
-        note.midiPitch = float(runPitch);
-        note.detectedPitch = float(runPitch);
+        // Высота — медиана дробных оценок кадров: сегментация идёт по полутону,
+        // но центы нужны коррекции (сдвиг = midiPitch - detectedPitch).
+        const float pitch = medianOf(runPitches);
+        note.detectedPitch = pitch;
+        note.midiPitch = pitch;
         note.confidence = runFrames > 0 ? float(runConfidence / runFrames) : 0.0f;
         notes.append(note);
     };
@@ -215,8 +348,9 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
         const int pitch = voiced ? int(std::lround(frames[f].midi)) : -1;
 
         if (pitch == runPitch && voiced) {
-            runConfidence += frames[f].correlation;
+            runConfidence += frames[f].confidence;
             ++runFrames;
+            runPitches.append(frames[f].midi);
             continue;
         }
 
@@ -224,13 +358,16 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
         if (voiced) {
             runStart = f;
             runPitch = pitch;
-            runConfidence = frames[f].correlation;
+            runConfidence = frames[f].confidence;
             runFrames = 1;
+            runPitches.clear();
+            runPitches.append(frames[f].midi);
         } else {
             runStart = -1;
             runPitch = -1;
             runConfidence = 0.0;
             runFrames = 0;
+            runPitches.clear();
         }
     }
     flushRun(frames.size());

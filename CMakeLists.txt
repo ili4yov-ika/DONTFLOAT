@@ -115,6 +115,7 @@ set(SOURCES
     src/markerengine.cpp
     src/pitchgridwidget.cpp
     src/pianoroll_engine.cpp
+    src/pianoroll_toolbar.cpp
     src/pitchdetector.cpp
     src/pitchcorrection.cpp
     src/notepreviewplayer.cpp
@@ -137,7 +138,6 @@ set(SOURCES
     src/keyselectionmenu.cpp
     src/keymodulationstrip.cpp
     src/spectrogramsettingsdialog.cpp
-    src/pitchshiftsettingsdialog.cpp
     src/shortcutsdialog.cpp
 )
 
@@ -148,9 +148,11 @@ set(HEADERS
     include/markerengine.h
     include/pitchgridwidget.h
     include/pianoroll_engine.h
+    include/pianoroll_toolbar.h
     include/pitchdetector.h
     include/pitchcorrection.h
     include/pitchnoteeditcommand.h
+    include/pitchnotesplitcommand.h
     include/notepreviewplayer.h
     include/waveformcolors.h
     include/bpmanalyzer.h
@@ -174,7 +176,6 @@ set(HEADERS
     include/spectrogramsettingsdialog.h
     include/fft_engine.h
     include/granularpitchshifter_engine.h
-    include/pitchshiftsettingsdialog.h
     include/shortcutsdialog.h
 )
 
@@ -631,6 +632,20 @@ set_tests_properties(pitch_detector_accuracy_test PROPERTIES
 set_tests_properties(beat_deviation_test PROPERTIES
     LABELS "bpm;deviation;unit"
     DESCRIPTION "Unit tests for beat deviation calculation and unaligned beat detection"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Разрез нот на пианоролле: snap к сетке / свободный рез, undo-команда
+add_qt_test(pianoroll_split_test
+    tests/pianoroll_split_test.cpp
+    include/pitchgridwidget.h
+    src/pitchgridwidget.cpp
+    src/pianoroll_engine.cpp
+)
+
+set_tests_properties(pianoroll_split_test PROPERTIES
+    LABELS "pitch;pianoroll;unit"
+    DESCRIPTION "Note split on the piano roll: grid snap, free cut, undo/redo"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 

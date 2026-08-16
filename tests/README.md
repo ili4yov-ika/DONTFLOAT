@@ -9,9 +9,10 @@
 - **bpm_analyzer_test.cpp** - Интеграционный тест анализатора BPM на реальных аудиофайлах из `source4test/`
 - **beat_deviation_test.cpp** - Юнит-тесты для вычисления отклонений долей и поиска неровных долей (новое с 2026-01-12)
 - **midi_pitch_test.cpp** - Питчер (`PitchDetector`) vs ground truth `tests/midi/test_1.mid` на `test_1.wav`
-- **midi_beat_deviation_test.cpp** - `findUnalignedBeats` / `calculateDeviations` на идеальной сетке `test_1.mid` (140 BPM) и искусственных сдвигах
+- **midi_beat_deviation_test.cpp** - `findUnalignedBeats` / `calculateDeviations` на идеальной сетке `test_1.mid` (140 BPM), искусственных сдвигах, пропущенной и лишней доле
 - **pitch_detector_accuracy_test.cpp** - Точность PitchDetector на синтезированных фикстурах `tests/source4test/pitch/`
 - **key_analyzer_test.cpp** - Потактовый анализ тональности / модуляций
+- **pianoroll_split_test.cpp** - Разрез нот на пианоролле: привязка реза к сетке против свободного, допустимость реза, `PitchNoteSplitCommand` (undo/redo) и реакция `PitchGridWidget` на клик / клавишу `S`
 - **ui_responsiveness_test.cpp** - Интеграционный UI-тест: загрузка `example_V80BPM.mp3`, метки выравнивания, перетаскивание меток, `applyTimeStretch`, плавность `QMediaPlayer`
 - **pitch_compensation_file_test.cpp** - Тонкомпенсация на `pitch-test_C140BPM.mp3` (одна нота): сжатие/растяжение метками, проверка высоты тона (автокорреляция)
 
@@ -270,11 +271,23 @@ cmake --build build --target RUN_TESTS
   - Проверяет инициализацию в одиночном `BeatInfo`
   - Проверяет инициализацию в векторе долей
 
+Устойчивость поиска неровных долей к «грязному» списку долей:
+
+- `testMissingBeatDoesNotShiftRest()` - пропущенная детектором доля не сдвигает остальные
+- `testSpuriousBeatIsIsolated()` - ложное срабатывание помечается само по себе, хвост трека остаётся ровным
+- `testShiftedFirstBeatDoesNotFlagTrack()` - сдвинутая первая доля (затакт, шум) не помечает весь трек
+- `testExplicitGridStartIsRespected()` - заданная опорная линия сетки не подменяется автооценкой
+- `testTempoDriftIsCompensatedOnDemand()` - `DeviationOptions::refineTempo` гасит дрейф темпа, не пряча реальный джиттер
+- `testLongTrackKeepsSampleAccuracy()` - точность ожидаемых позиций на 192 kHz / ~14 минут
+- `testDegenerateInputIsSafe()` - пустой вход, одна доля, BPM = 0, NaN-отклонение, порог `minConfidence`
+- `testStatsSummariseDeviations()` - поля `DeviationStats` (среднее / медиана / максимум / RMS, пропуски и дубли)
+
 **Что проверяется:**
 - Правильность вычисления ожидаемых позиций долей
 - Правильность вычисления отклонений в долях (normalized deviation)
 - Корректность определения неровных долей по порогу
 - Инициализация нового поля `expectedPosition` в структуре `BeatInfo`
+- Локальность аномалий: промах или лишняя доля не превращают весь трек в «неровный»
 
 **Примечание**: Это юнит-тест, не требует внешних файлов, работает с синтетическими данными.
 

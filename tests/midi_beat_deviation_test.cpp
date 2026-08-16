@@ -72,6 +72,7 @@ private slots:
     void initTestCase();
     void idealGridHasNoUnalignedBeats();
     void injectedShiftsAreDetected();
+    void missedAndExtraBeatsStayLocal();
     void noteOnsetsAlignToQuarterGrid();
 
 private:
@@ -140,6 +141,36 @@ void MidiBeatDeviationTest::injectedShiftsAreDetected()
     const QVector<int> at10pct = BPMAnalyzer::findUnalignedBeats(beats, 0.10f);
     QVERIFY2(!at10pct.contains(idxLate), "8% late should be under 10% threshold");
     QVERIFY2(!at10pct.contains(idxEarly), "6% early should be under 10% threshold");
+}
+
+void MidiBeatDeviationTest::missedAndExtraBeatsStayLocal()
+{
+    // Пропуск доли и лишнее срабатывание — обычная ситуация для детектора onset'ов.
+    // Ни то, ни другое не должно расходиться по всему треку.
+    auto beats = quarterBeatsFromMidi(song, kWavSampleRate);
+    QVERIFY(beats.size() > 20);
+
+    const float interval = (60.0f * kWavSampleRate) / song.bpm;
+    const int lastIndex = beats.size() - 1;
+
+    BPMAnalyzer::BeatInfo extra = beats[6];
+    extra.position += qint64(interval * 0.5f);
+    beats.insert(7, extra);   // ложная доля между 6 и 7
+    beats.remove(12);         // пропущенная доля
+
+    const BPMAnalyzer::DeviationStats stats =
+        BPMAnalyzer::calculateDeviations(beats, song.bpm, kWavSampleRate,
+                                         BPMAnalyzer::DeviationOptions());
+
+    QCOMPARE(stats.gapCount, 1);
+    QCOMPARE(stats.duplicateCount, 1);
+
+    const QVector<int> unaligned = BPMAnalyzer::findUnalignedBeats(beats, 0.02f);
+    QCOMPARE(unaligned.size(), qsizetype(1));
+    QCOMPARE(unaligned.first(), 7);
+
+    // Хвост трека (после обеих аномалий) остаётся на сетке.
+    QVERIFY2(qAbs(beats[lastIndex].deviation) < 0.001f, "аномалии не должны сдвигать хвост");
 }
 
 void MidiBeatDeviationTest::noteOnsetsAlignToQuarterGrid()

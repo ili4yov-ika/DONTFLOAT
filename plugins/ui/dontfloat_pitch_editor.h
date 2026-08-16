@@ -41,7 +41,6 @@ public:
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void refreshFromSession();
     void notifyHostAudioAppended();
-    void setHostPlayhead(qint64 positionMs, bool playing);
 
 signals:
     void pitchSessionChanged();
