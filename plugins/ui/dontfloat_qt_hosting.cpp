@@ -47,6 +47,14 @@ void ensureWin32QtEventPump()
 }
 #endif
 
+/**
+ * Крутит ли Qt-цикл сам хост. Если QApplication существовал до загрузки
+ * плагина, события уже разбирает хост: свой насос ставить нельзя — WM_TIMER
+ * придёт из его же цикла и processEvents вызовется реентрантно (падения в
+ * Qt6Core / impl-DLL при работе внутри Qt-хоста вроде мини-DAW).
+ */
+bool g_hostOwnsQtLoop = false;
+
 /** Directory of the shared library that contains ensureQtApplication (the
  *  *.impl.dll / plugin module). Qt looks for platforms/ relative to the host
  *  EXE by default — for in-process plugins we must point it at our own dir. */
@@ -109,12 +117,11 @@ void ensureQtApplication(const char* applicationName)
     configureQtPluginSearchPaths();
 
     if (QCoreApplication::instance()) {
+        // QApplication создан не нами — значит хост сам крутит цикл Qt
+        g_hostOwnsQtLoop = true;
         if (applicationName && applicationName[0] != '\0') {
             QCoreApplication::setApplicationName(QString::fromUtf8(applicationName));
         }
-#if defined(_WIN32)
-        ensureWin32QtEventPump();
-#endif
         return;
     }
 
@@ -137,6 +144,11 @@ void ensureQtApplication(const char* applicationName)
 
 void pumpQtEvents(int maxMillis)
 {
+    // В Qt-хосте события уже разбирает его цикл: повторный processEvents
+    // отсюда — это реентрантный вход в чужой цикл (см. g_hostOwnsQtLoop)
+    if (g_hostOwnsQtLoop) {
+        return;
+    }
     if (QApplication* app = qApp) {
         app->sendPostedEvents();
         app->processEvents(QEventLoop::AllEvents, maxMillis);

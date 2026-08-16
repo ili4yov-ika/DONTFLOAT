@@ -101,7 +101,7 @@ std::vector<float> toStdVector(const QVector<float>& samples)
 DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& productName)
     : QWidget(parent)
     , productName_(productName)
-    , analysisWatcher_(new QFutureWatcher<PitchAnalysisOutcome>(this))
+    , analysisWatcher_(new QFutureWatcher<void>(this))
     , notePreviewPlayer_(new NotePreviewPlayer(this))
 {
     setObjectName(QStringLiteral("dontfloatPitchEditor"));
@@ -142,12 +142,12 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     root->addWidget(pitchGrid_, 1);
 
     auto* toolbar = new QHBoxLayout();
-    importButton_ = new QPushButton(tr("Import WAV…"), this);
+    // Аудио приходит с дорожки DAW — собственного импорта у плагина нет
     analyzeButton_ = new QPushButton(tr("Analyze"), this);
+    analyzeButton_->setToolTip(tr("Re-run the analysis of the track captured from the DAW"));
     applyButton_ = new QPushButton(tr("Apply correction"), this);
     exportButton_ = new QPushButton(tr("Export WAV…"), this);
     applyButton_->setEnabled(false);
-    toolbar->addWidget(importButton_);
     toolbar->addWidget(analyzeButton_);
     toolbar->addWidget(applyButton_);
     toolbar->addWidget(exportButton_);
@@ -165,18 +165,17 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
         "background-color: rgba(40, 40, 40, 180); border-radius: 4px;"));
     analyzeOverlay_->hide();
 
+    // Плашка теперь только про прогресс: анализ стартует сам, как только DAW
+    // отдала аудио дорожки — нажимать «Анализировать» не нужно
     auto* overlayLayout = new QVBoxLayout(analyzeOverlay_);
     overlayLayout->setContentsMargins(16, 12, 16, 12);
-    auto* overlayAnalyzeButton = new QPushButton(tr("Analyze"), analyzeOverlay_);
     analyzeProgress_ = new QProgressBar(analyzeOverlay_);
     analyzeProgress_->setRange(0, 100);
     analyzeProgress_->setTextVisible(true);
-    analyzeProgress_->hide();
+    analyzeProgress_->setFormat(tr("Analyzing the track… %p%"));
     overlayLayout->addStretch(1);
-    overlayLayout->addWidget(overlayAnalyzeButton, 0, Qt::AlignHCenter);
     overlayLayout->addWidget(analyzeProgress_);
     overlayLayout->addStretch(1);
-    connect(overlayAnalyzeButton, &QPushButton::clicked, this, &DontfloatPitchEditor::onAnalyzeClicked);
 
     keyMenu_ = new KeySelectionMenu(this);
     keyMenu2_ = new KeySelectionMenu(this);
@@ -195,13 +194,18 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
         }
     });
 
+    // Хост отдаёт аудио блоками; анализ запускаем, когда поток утих
+    autoAnalysisTimer_ = new QTimer(this);
+    autoAnalysisTimer_->setSingleShot(true);
+    autoAnalysisTimer_->setInterval(kAutoAnalysisDelayMs);
+    connect(autoAnalysisTimer_, &QTimer::timeout, this, &DontfloatPitchEditor::startAutoAnalysis);
+
     connect(keyMenu_, &KeySelectionMenu::keySelected, this, &DontfloatPitchEditor::onPrimaryKeySelected);
     connect(keyMenu2_, &KeySelectionMenu::keySelected, this, &DontfloatPitchEditor::onSecondaryKeySelected);
-    connect(importButton_, &QPushButton::clicked, this, &DontfloatPitchEditor::onImportAudioClicked);
     connect(analyzeButton_, &QPushButton::clicked, this, &DontfloatPitchEditor::onAnalyzeClicked);
     connect(applyButton_, &QPushButton::clicked, this, &DontfloatPitchEditor::onApplyCorrectionClicked);
     connect(exportButton_, &QPushButton::clicked, this, &DontfloatPitchEditor::onExportClicked);
-    connect(analysisWatcher_, &QFutureWatcher<PitchAnalysisOutcome>::finished,
+    connect(analysisWatcher_, &QFutureWatcher<void>::finished,
             this, &DontfloatPitchEditor::onPitchAnalysisFinished);
 
     connect(pitchGrid_, &PitchGridWidget::notePitchEdited,
@@ -263,7 +267,8 @@ void DontfloatPitchEditor::refreshFromSession()
         setStatus(tr("audio: %1 samples, %2 Hz")
                       .arg(buffer.frameCount())
                       .arg(buffer.sampleRate));
-        analyzeOverlay_->setVisible(!session_->pitchAnalysis().valid && !analysisRunning_);
+        // Плашка показывается только на время самого анализа
+        analyzeOverlay_->setVisible(analysisRunning_);
     } else {
         pitchGrid_->clearNotes();
         analyzeOverlay_->hide();
@@ -286,10 +291,22 @@ void DontfloatPitchEditor::notifyHostAudioAppended()
         return;
     }
     refreshFromSession();
-    if (!session_->pitchAnalysis().valid && !analysisRunning_) {
-        analyzeOverlay_->show();
-        analyzeOverlay_->raise();
+    // Хост шлёт аудио блоками: перезапускаем таймер, чтобы анализ стартовал
+    // один раз — когда дорожка прогналась целиком и поток прекратился
+    if (!analysisRunning_ && autoAnalysisTimer_) {
+        autoAnalysisTimer_->start();
     }
+}
+
+void DontfloatPitchEditor::startAutoAnalysis()
+{
+    if (!session_ || session_->audioBuffer().empty() || analysisRunning_) {
+        return;
+    }
+    if (session_->pitchAnalysis().valid) {
+        return;  // анализ этой дорожки уже есть
+    }
+    runPitchAnalysis();
 }
 
 void DontfloatPitchEditor::setPrimaryKey(const QString& key)
@@ -311,7 +328,12 @@ void DontfloatPitchEditor::setAnalysisRunning(bool running)
 {
     analysisRunning_ = running;
     analyzeProgress_->setVisible(running);
-    importButton_->setEnabled(!running);
+    if (analyzeOverlay_) {
+        analyzeOverlay_->setVisible(running);
+        if (running) {
+            analyzeOverlay_->raise();
+        }
+    }
     analyzeButton_->setEnabled(!running);
     exportButton_->setEnabled(!running);
     applyButton_->setEnabled(!running && PitchCorrection::hasPendingEdits(baseNotes_));
@@ -366,43 +388,6 @@ void DontfloatPitchEditor::resizeEvent(QResizeEvent* event)
     layoutAnalyzeOverlay();
 }
 
-void DontfloatPitchEditor::onImportAudioClicked()
-{
-    const QString path = QFileDialog::getOpenFileName(
-        this, tr("%1 — audio import").arg(productName_), QString(),
-        tr("Audio Files (*.wav *.mp3 *.flac);;All Files (*)"));
-    if (path.isEmpty() || !session_) {
-        return;
-    }
-
-    const AudioFileService::DecodeResult decoded = AudioFileService::decode(path);
-    if (!decoded.ok) {
-        setStatus(tr("import error: %1").arg(decoded.error));
-        return;
-    }
-
-    TrackAudioBuffer buffer;
-    buffer.sampleRate = decoded.sampleRate;
-    buffer.channelCount = decoded.channels.size();
-    if (!decoded.channels.isEmpty()) {
-        buffer.left = toStdVector(decoded.channels[0]);
-    }
-    if (decoded.channels.size() > 1) {
-        buffer.right = toStdVector(decoded.channels[1]);
-    }
-    buffer.mono = toStdVector(AudioFileService::toMono(decoded.channels));
-
-    session_->setAudioBuffer(buffer);
-    session_->pitchAnalysis() = {};
-    baseNotes_.clear();
-    applyButton_->setEnabled(false);
-    setSecondaryKey(QString());
-    refreshFromSession();
-    analyzeOverlay_->show();
-    analyzeOverlay_->raise();
-    emit pitchSessionChanged();
-}
-
 void DontfloatPitchEditor::runPitchAnalysis()
 {
     if (!session_ || session_->audioBuffer().empty() || analysisRunning_) {
@@ -420,27 +405,30 @@ void DontfloatPitchEditor::runPitchAnalysis()
     analyzeProgress_->setValue(0);
     analysisProgress_ = std::make_shared<std::atomic<int>>(0);
 
-    analysisWatcher_->setFuture(QtConcurrent::run([mono, sampleRate, progress = analysisProgress_]() {
-        PitchAnalysisOutcome outcome;
-        progress->store(2);
-        const KeyAnalyzer::AnalysisResult keyResult = KeyAnalyzer::analyzeKey(mono, sampleRate);
-        outcome.primaryKeyName = keyNameFromInfo(keyResult.primaryKey);
-        if (keyResult.hasKeyChange
-            && keyResult.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
-            && !keyResult.secondaryKey.keyName.isEmpty()) {
-            outcome.secondaryKeyName = keyResult.secondaryKey.keyName;
-        }
-        progress->store(15);
-        const QVector<PitchDetector::PitchNote> notes = PitchDetector::detectNotes(
-            mono, sampleRate, PitchDetector::Options(),
-            [progress](int pct) { progress->store(15 + pct * 85 / 100); });
-        progress->store(100);
+    // Результат не возвращаем через QFuture: после длинного анализа
+    // QFutureWatcher::result() падает в QResultStore/QList::at (MSVC Debug) —
+    // та же грабля, что описана в MainWindow. Отдаём через shared_ptr.
+    pendingOutcome_ = std::make_shared<PitchAnalysisOutcome>();
+    analysisWatcher_->setFuture(QtConcurrent::run(
+        [mono, sampleRate, progress = analysisProgress_, outcome = pendingOutcome_]() {
+            progress->store(2);
+            const KeyAnalyzer::AnalysisResult keyResult = KeyAnalyzer::analyzeKey(mono, sampleRate);
+            outcome->primaryKeyName = keyNameFromInfo(keyResult.primaryKey);
+            if (keyResult.hasKeyChange
+                && keyResult.secondaryKey.key != KeyAnalyzer::UNKNOWN_KEY
+                && !keyResult.secondaryKey.keyName.isEmpty()) {
+                outcome->secondaryKeyName = keyResult.secondaryKey.keyName;
+            }
+            progress->store(15);
+            const QVector<PitchDetector::PitchNote> notes = PitchDetector::detectNotes(
+                mono, sampleRate, PitchDetector::Options(),
+                [progress](int pct) { progress->store(15 + pct * 85 / 100); });
+            progress->store(100);
 
-        outcome.pitch.valid = true;
-        outcome.pitch.notes = toCoreNotes(notes);
-        outcome.pitch.keys.hasKeyChange = keyResult.hasKeyChange;
-        return outcome;
-    }));
+            outcome->pitch.valid = true;
+            outcome->pitch.notes = toCoreNotes(notes);
+            outcome->pitch.keys.hasKeyChange = keyResult.hasKeyChange;
+        }));
 }
 
 void DontfloatPitchEditor::onAnalyzeClicked()
@@ -453,7 +441,11 @@ void DontfloatPitchEditor::onPitchAnalysisFinished()
     setAnalysisRunning(false);
     analyzeProgress_->setValue(100);
 
-    const PitchAnalysisOutcome outcome = analysisWatcher_->result();
+    if (!pendingOutcome_) {
+        return;
+    }
+    const PitchAnalysisOutcome outcome = *pendingOutcome_;
+    pendingOutcome_.reset();
     setPrimaryKey(outcome.primaryKeyName);
     if (!outcome.secondaryKeyName.isEmpty()) {
         setSecondaryKey(outcome.secondaryKeyName);

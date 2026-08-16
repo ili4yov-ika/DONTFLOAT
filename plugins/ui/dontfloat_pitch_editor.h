@@ -17,6 +17,7 @@ class QLineEdit;
 class QProgressBar;
 class QPushButton;
 class QLabel;
+class QTimer;
 class NotePreviewPlayer;
 
 namespace Dontfloat::Plugins::Ui {
@@ -46,8 +47,9 @@ signals:
     void pitchSessionChanged();
 
 private slots:
-    void onImportAudioClicked();
     void onAnalyzeClicked();
+    /** Анализ по приходу аудио от DAW — без нажатия «Анализировать». */
+    void startAutoAnalysis();
     void onApplyCorrectionClicked();
     void onExportClicked();
     void onPitchAnalysisFinished();
@@ -83,7 +85,6 @@ private:
     QWidget* analyzeOverlay_ = nullptr;
     QPushButton* analyzeButton_ = nullptr;
     QProgressBar* analyzeProgress_ = nullptr;
-    QPushButton* importButton_ = nullptr;
     QPushButton* applyButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
@@ -92,10 +93,16 @@ private:
     QString secondaryKey_;
     QVector<PitchDetector::PitchNote> baseNotes_;
 
-    QFutureWatcher<PitchAnalysisOutcome>* analysisWatcher_ = nullptr;
+    QFutureWatcher<void>* analysisWatcher_ = nullptr;
+    /** Результат анализа: мимо QFuture::result() (см. runPitchAnalysis). */
+    std::shared_ptr<PitchAnalysisOutcome> pendingOutcome_;
     std::shared_ptr<std::atomic<int>> analysisProgress_;
     NotePreviewPlayer* notePreviewPlayer_ = nullptr;
+    QTimer* autoAnalysisTimer_ = nullptr;
     bool analysisRunning_ = false;
+
+    /** Пауза в потоке аудио от хоста, после которой стартует авто-анализ. */
+    static constexpr int kAutoAnalysisDelayMs = 400;
 };
 
 } // namespace Dontfloat::Plugins::Ui

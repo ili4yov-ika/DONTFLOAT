@@ -85,8 +85,8 @@ QVector<BPMAnalyzer::BeatInfo> createAlignedBeatGrid(float bpm,
 DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& productName)
     : QWidget(parent)
     , productName_(productName)
-    , bpmWatcher_(new QFutureWatcher<BPMAnalyzer::AnalysisResult>(this))
-    , alignWatcher_(new QFutureWatcher<QVector<QVector<float>>>(this))
+    , bpmWatcher_(new QFutureWatcher<void>(this))
+    , alignWatcher_(new QFutureWatcher<void>(this))
 {
     setObjectName(QStringLiteral("dontfloatScratchEditor"));
     setMinimumSize(900, 480);
@@ -97,12 +97,12 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
     root->setSpacing(6);
 
     auto* toolbar = new QHBoxLayout();
-    importButton_ = new QPushButton(tr("Import WAV…"), this);
+    // Аудио приходит с дорожки DAW — собственного импорта у плагина нет
     analyzeButton_ = new QPushButton(tr("BPM analysis"), this);
+    analyzeButton_->setToolTip(tr("Re-run the analysis of the track captured from the DAW"));
     alignButton_ = new QPushButton(tr("Align beats"), this);
     applyStretchButton_ = new QPushButton(tr("Apply stretch"), this);
     exportButton_ = new QPushButton(tr("Export WAV…"), this);
-    toolbar->addWidget(importButton_);
     toolbar->addWidget(analyzeButton_);
     toolbar->addWidget(alignButton_);
     toolbar->addWidget(applyStretchButton_);
@@ -121,14 +121,19 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
     root->addWidget(statusLabel_);
     setStatus(tr("load audio or play a track in the DAW to capture the signal."));
 
-    connect(importButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onImportAudioClicked);
+    // Хост отдаёт аудио блоками; анализ запускаем, когда поток утих
+    autoAnalysisTimer_ = new QTimer(this);
+    autoAnalysisTimer_->setSingleShot(true);
+    autoAnalysisTimer_->setInterval(kAutoAnalysisDelayMs);
+    connect(autoAnalysisTimer_, &QTimer::timeout, this, &DontfloatScratchEditor::startAutoAnalysis);
+
     connect(analyzeButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onAnalyzeBpmClicked);
     connect(alignButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onAlignBeatsClicked);
     connect(applyStretchButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onApplyStretchClicked);
     connect(exportButton_, &QPushButton::clicked, this, &DontfloatScratchEditor::onExportClicked);
-    connect(bpmWatcher_, &QFutureWatcher<BPMAnalyzer::AnalysisResult>::finished,
+    connect(bpmWatcher_, &QFutureWatcher<void>::finished,
             this, &DontfloatScratchEditor::onBpmAnalysisFinished);
-    connect(alignWatcher_, &QFutureWatcher<QVector<QVector<float>>>::finished,
+    connect(alignWatcher_, &QFutureWatcher<void>::finished,
             this, &DontfloatScratchEditor::onAlignFinished);
     connect(waveform_, &WaveformView::markersChanged, this, &DontfloatScratchEditor::onMarkersChanged);
 
@@ -176,6 +181,10 @@ void DontfloatScratchEditor::refreshFromSession()
 void DontfloatScratchEditor::notifyHostAudioAppended()
 {
     refreshFromSession();
+    // Анализ дорожки стартует сам, как только DAW перестала слать блоки
+    if (!analysisRunning_ && autoAnalysisTimer_ && session_ && !session_->audioBuffer().empty()) {
+        autoAnalysisTimer_->start();
+    }
 }
 
 void DontfloatScratchEditor::refreshWaveform()
@@ -231,31 +240,15 @@ void DontfloatScratchEditor::writeChannelsToSession(const QVector<QVector<float>
     session_->setAudioBuffer(buffer);
 }
 
-void DontfloatScratchEditor::onImportAudioClicked()
+void DontfloatScratchEditor::startAutoAnalysis()
 {
-    if (!session_) {
+    if (!session_ || session_->audioBuffer().empty() || analysisRunning_) {
         return;
     }
-    const QString path = QFileDialog::getOpenFileName(
-        this, tr("%1 — audio import").arg(productName_), QString(),
-        tr("Audio Files (*.wav *.mp3 *.flac);;All Files (*)"));
-    if (path.isEmpty()) {
-        return;
+    if (lastAnalysis_.bpm > 0.0f) {
+        return;  // дорожка уже проанализирована
     }
-
-    const AudioFileService::DecodeResult decoded = AudioFileService::decode(path);
-    if (!decoded.ok) {
-        setStatus(tr("import error: %1").arg(decoded.error));
-        return;
-    }
-
-    lastAnalysis_ = {};
-    writeChannelsToSession(decoded.channels, decoded.sampleRate);
-    if (waveform_) {
-        waveform_->clearMarkers();
-        waveform_->setBeatsAligned(false);
-    }
-    refreshFromSession();
+    runBpmAnalysis();
 }
 
 void DontfloatScratchEditor::runBpmAnalysis()
@@ -274,8 +267,11 @@ void DontfloatScratchEditor::runBpmAnalysis()
     updateActionButtons();
     setStatus(tr("analyzing BPM…"));
 
-    bpmWatcher_->setFuture(QtConcurrent::run([mono, sampleRate]() {
-        return BPMAnalyzer::analyzeBPM(mono, sampleRate);
+    // Результат мимо QFuture::result(): после длинного анализа он падает в
+    // QResultStore/QList::at (MSVC Debug) — как и в MainWindow / питч-редакторе
+    pendingBpm_ = std::make_shared<BPMAnalyzer::AnalysisResult>();
+    bpmWatcher_->setFuture(QtConcurrent::run([mono, sampleRate, result = pendingBpm_]() {
+        *result = BPMAnalyzer::analyzeBPM(mono, sampleRate);
     }));
 }
 
@@ -287,7 +283,12 @@ void DontfloatScratchEditor::onAnalyzeBpmClicked()
 void DontfloatScratchEditor::onBpmAnalysisFinished()
 {
     analysisRunning_ = false;
-    lastAnalysis_ = bpmWatcher_->result();
+    if (!pendingBpm_) {
+        updateActionButtons();
+        return;
+    }
+    lastAnalysis_ = *pendingBpm_;
+    pendingBpm_.reset();
 
     if (lastAnalysis_.bpm <= 0.0f) {
         setStatus(tr("could not detect BPM"));
@@ -379,14 +380,16 @@ void DontfloatScratchEditor::runBeatAlign()
 
     const BPMAnalyzer::AnalysisResult analysis = lastAnalysis_;
     const int sampleRate = session_->audioBuffer().sampleRate;
-    alignWatcher_->setFuture(QtConcurrent::run([source, analysis, sampleRate]() {
-        QVector<QVector<float>> fixed = source;
-        for (int ch = 0; ch < fixed.size(); ++ch) {
-            fixed[ch] = BPMAnalyzer::alignToBeatGrid(
-                source[ch], sampleRate, analysis.bpm, analysis.gridStartSample);
-        }
-        return fixed;
-    }));
+    pendingAligned_ = std::make_shared<QVector<QVector<float>>>();
+    alignWatcher_->setFuture(
+        QtConcurrent::run([source, analysis, sampleRate, out = pendingAligned_]() {
+            QVector<QVector<float>> fixed = source;
+            for (int ch = 0; ch < fixed.size(); ++ch) {
+                fixed[ch] = BPMAnalyzer::alignToBeatGrid(
+                    source[ch], sampleRate, analysis.bpm, analysis.gridStartSample);
+            }
+            *out = fixed;
+        }));
 }
 
 void DontfloatScratchEditor::onAlignBeatsClicked()
@@ -397,7 +400,9 @@ void DontfloatScratchEditor::onAlignBeatsClicked()
 void DontfloatScratchEditor::onAlignFinished()
 {
     alignRunning_ = false;
-    const QVector<QVector<float>> fixed = alignWatcher_->result();
+    const QVector<QVector<float>> fixed = pendingAligned_ ? *pendingAligned_
+                                                          : QVector<QVector<float>>();
+    pendingAligned_.reset();
     if (fixed.isEmpty() || !waveform_ || !session_) {
         setStatus(tr("beat alignment error"));
         updateActionButtons();

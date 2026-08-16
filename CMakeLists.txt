@@ -245,6 +245,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 dontfloat_link_rubberband(${PROJECT_NAME})
 
+# windeployqt-хелпер нужен целям плагинов и мини-DAW, которые создаются ниже
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/WinDeployQt.cmake)
+
 if(DONTFLOAT_BUILD_PLUGINS)
     add_library(dontfloat_plugin_core STATIC
         plugins/core/dontfloat_plugin_core.cpp
@@ -372,8 +375,6 @@ else()
     message(WARNING "qm-dsp not found at ${QM_DSP_ROOT}, using simplified BPM analyzer")
     message(STATUS "Building with simplified BPM analyzer (qm-dsp not found)")
 endif()
-
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/WinDeployQt.cmake)
 
 # Платформенные свойства исполняемого файла
 if(WIN32)
