@@ -70,6 +70,7 @@ flowchart TB
     subgraph WIDGETS["Виджеты"]
         WV[WaveformView]
         PG[PitchGridWidget]
+        PT[PianoRollToolbar]
         HSB[horizontalScrollBar]
         PVSB[pitchGridVerticalScrollBar]
         MS[QSplitter]
@@ -100,6 +101,7 @@ flowchart TB
 - **MainWindow** — центр приложения: создаёт и держит все виджеты, плеер, таймер, стек отмены, метроном, читает/пишет QSettings.
 - **WaveformView** — основная область: волна, метки A/B, метки растяжения, синхронизация с позицией воспроизведения.
 - **PitchGridWidget** — питч-сетка (видна по умолчанию, `Ctrl+G`); `PianoRollEngine`; синхронизация zoom/offset/каретки с WaveformView; легенда нот справа, плашка «Анализировать»; полоса модуляций `KeyModulationStrip`.
+- **PianoRollToolbar** — панель под пианороллом: «Разделить» и режим реза «Вдоль сетки» / «Свободный рез»; сам разрез применяет MainWindow (`PitchNoteSplitCommand`).
 
 ---
 
@@ -305,11 +307,12 @@ flowchart LR
 | **main.cpp** | Точка входа: парсинг аргументов, GUI или консоль, создание MainWindow / runConsoleMode |
 | **MainWindow** | Окно, меню, виджеты, плеер, таймер, QSettings, QUndoStack, MetronomeController |
 | **WaveformView** | Волна, метки A/B, метки растяжения, биты, зум, вызов TimeStretchProcessor и визуализации |
-| **PitchGridWidget** | Piano roll (скрыта по умолчанию, Ctrl+G), PianoRollEngine, синхронизация с WaveformView |
+| **PitchGridWidget** | Piano roll (видна по умолчанию, Ctrl+G), PianoRollEngine, синхронизация с WaveformView, разрез нот |
+| **PianoRollToolbar** | Панель под пианороллом: «Разделить», режим реза «Вдоль сетки» / «Свободный рез» |
 | **MarkerEngine** | MarkerData / Marker — данные и UI меток для растяжения |
 | **TimeStretchProcessor** | Алгоритмы сжатия/растяжения по меткам (Rubber Band R3 через `RubberBandOffline`) |
 | **BPMAnalyzer** | BPM, биты, отклонения, fixBeats; опционально qm-dsp |
-| **QUndoStack** | AudioCommand, BeatFixCommand, TimeStretchCommand — отмена/повтор |
+| **QUndoStack** | AudioCommand, BeatFixCommand, TimeStretchCommand, PitchNoteEditCommand, PitchNoteSplitCommand — отмена/повтор |
 | **LoadFileDialog** | Диалог при открытии файла: анализ и выравнивание долей, создание BeatFixCommand |
 | **MetronomeController** | Метроном, синхрон с BPM, настройки громкости |
 

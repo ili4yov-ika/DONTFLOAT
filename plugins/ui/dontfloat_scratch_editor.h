@@ -8,10 +8,12 @@
 #include <QFutureWatcher>
 #include <QString>
 #include <QWidget>
+#include <memory>
 
 class WaveformView;
 class QLabel;
 class QPushButton;
+class QTimer;
 
 namespace Dontfloat::Plugins::Ui {
 
@@ -30,8 +32,9 @@ public:
     void notifyHostAudioAppended();
 
 private slots:
-    void onImportAudioClicked();
     void onAnalyzeBpmClicked();
+    /** Анализ по приходу аудио от DAW — без нажатия кнопки. */
+    void startAutoAnalysis();
     void onAlignBeatsClicked();
     void onApplyStretchClicked();
     void onExportClicked();
@@ -53,18 +56,24 @@ private:
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QString productName_;
     WaveformView* waveform_ = nullptr;
-    QPushButton* importButton_ = nullptr;
     QPushButton* analyzeButton_ = nullptr;
     QPushButton* alignButton_ = nullptr;
     QPushButton* applyStretchButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
-    QFutureWatcher<BPMAnalyzer::AnalysisResult>* bpmWatcher_ = nullptr;
-    QFutureWatcher<QVector<QVector<float>>>* alignWatcher_ = nullptr;
+    QFutureWatcher<void>* bpmWatcher_ = nullptr;
+    QFutureWatcher<void>* alignWatcher_ = nullptr;
+    /** Результаты мимо QFuture::result() (см. runBpmAnalysis). */
+    std::shared_ptr<BPMAnalyzer::AnalysisResult> pendingBpm_;
+    std::shared_ptr<QVector<QVector<float>>> pendingAligned_;
     BPMAnalyzer::AnalysisResult lastAnalysis_;
+    QTimer* autoAnalysisTimer_ = nullptr;
     bool analysisRunning_ = false;
     bool alignRunning_ = false;
     int beatsPerBar_ = 4;
+
+    /** Пауза в потоке аудио от хоста, после которой стартует авто-анализ. */
+    static constexpr int kAutoAnalysisDelayMs = 400;
 };
 
 } // namespace Dontfloat::Plugins::Ui
