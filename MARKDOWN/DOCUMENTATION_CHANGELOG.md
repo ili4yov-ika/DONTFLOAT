@@ -1,5 +1,24 @@
 # История изменений документации
 
+## 2026-08-16 (пианоролл: панель кнопок и разрез нот)
+
+- Под пианороллом — панель `PianoRollToolbar` (`include/pianoroll_toolbar.h`, `src/pianoroll_toolbar.cpp`): кнопка «Разделить» + пара «Вдоль сетки» / «Свободный рез»; геометрия — макет `MARKDOWN/example_panel_buttons.svg`, увеличенный в 1,5 раза (полоса 34 px, капсула 30 px, ножницы 26 px, переключатели 27 px; нажатое состояние темнее отпущенного), иконки — `resources/icons/{trimmer,along_the_grid,free_cut}.svg`, режим реза сохраняется в `QSettings` (`pianoRollCutSnapToGrid`).
+- Разрез ноты: клавиша `S` по каретке воспроизведения (перехват у «Стоп» через `QEvent::ShortcutOverride`, пока фокус на пианоролле) и клик по ноте в режиме «Разделить»; режим держится до повторного нажатия кнопки или `Esc`.
+- `PitchGridWidget`: `CutMode`, `setSplitModeActive`, подсветка будущего реза под курсором, сигналы `noteSplitRequested` / `noteSplitRejected` / `splitModeChanged`; сам разрез применяет `MainWindow`.
+- Undo/redo разреза — `PitchNoteSplitCommand` (`include/pitchnotesplitcommand.h`); координаты реза переводятся из таймлайна в исходное аудио обратным отображением по меткам.
+- Новый тест `tests/pianoroll_split_test.cpp` (snap к сетке против свободного реза, `canSplitNoteAt`, undo/redo, клик и `S` в виджете).
+- Диалог горячих клавиш: пункт `SplitNote` (по умолчанию `S`).
+- Переводы пересобраны (`lupdate -no-obsolete`, `lrelease`): 428 строк, добавлены контексты `PianoRollToolbar` и `PitchDetectorSettingsDialog`.
+- Обновлены: `docs/features.md`, `docs/shortcuts.md`, `docs/architecture.md`, `MARKDOWN/ARCHITECTURE.md`, `MARKDOWN/SHORTCUTS.md`, `tests/README.md`.
+
+## 2026-07-31 (Windows plugins / installer)
+
+- LV2 UI: `ui:parent` на Windows — HWND как значение `feature->data` (не `HWND*`); иначе пустое окно в REAPER.
+- Qt в DAW: `ensureQtApplication` задаёт `QT_PLUGIN_PATH` / `platforms` рядом с `*.impl.dll` и Win32-таймер для `processEvents` (без `exec()` VST3 зависал в `attached()`).
+- VST3: stub+impl бандлы + Qt в `Contents\x86_64-win\`; инсталлятор авто-детектит `C:\SDKs\vst3sdk`.
+- `tools/build_windows_installer.bat`: без tests/mini-DAW; Qt deploy обязателен (`Qt6Core` + `qwindows.dll`); CLAP/LV2/VST3 — `required`; при SDK отсутствие VST3 — ошибка.
+- Обновлены: `cmake/DeployPluginQt.cmake`, `tools/nsis_installer.nsi`, `tools/repair_installed_plugins.ps1`, `tools/README.md`.
+
 ## 2026-07-30 (i18n: English source в коде и .ts)
 
 - UI msgid переведён на английский (`tr()` / `.ui` / плагины UI); автоним «Русский» сохранён.

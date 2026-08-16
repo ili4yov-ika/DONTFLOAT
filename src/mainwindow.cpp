@@ -1,12 +1,12 @@
 #include "../include/mainwindow.h"
 #include "../include/uiconstants.h"
 #include "../include/spectrogramsettingsdialog.h"
-#include "../include/pitchshiftsettingsdialog.h"
 #include "../include/beatfixcommand.h"
 #include "../include/timestretchcommand.h"
 #include "../include/timestretchprocessor.h"
 #include "../include/pitchcorrection.h"
 #include "../include/pitchnoteeditcommand.h"
+#include "../include/pitchnotesplitcommand.h"
 #include "ui_mainwindow.h"
 #include <QtWidgets/QApplication>
 #include <QtCore/QFileInfo>
@@ -137,6 +137,39 @@ qint64 mapSampleThroughMarkers(qint64 sample, const QVector<Marker>& sorted)
     return sample + (sorted.last().position - sorted.last().originalPosition);
 }
 
+/**
+ * Обратное к mapSampleThroughMarkers: сэмпл текущего таймлайна → координаты
+ * исходного аудио (position → originalPosition).
+ */
+qint64 mapSampleFromTimeline(qint64 sample, QVector<Marker> markers)
+{
+    if (markers.isEmpty()) {
+        return sample;
+    }
+    std::sort(markers.begin(), markers.end(),
+              [](const Marker& a, const Marker& b) {
+                  return a.position < b.position;
+              });
+
+    if (sample <= markers.first().position) {
+        return sample + (markers.first().originalPosition - markers.first().position);
+    }
+    for (int i = 0; i + 1 < markers.size(); ++i) {
+        const Marker& a = markers[i];
+        const Marker& b = markers[i + 1];
+        if (sample <= b.position) {
+            const qint64 span = b.position - a.position;
+            if (span <= 0) {
+                return b.originalPosition;
+            }
+            const double t = double(sample - a.position) / double(span);
+            return a.originalPosition
+                + qint64(t * double(b.originalPosition - a.originalPosition) + 0.5);
+        }
+    }
+    return sample + (markers.last().originalPosition - markers.last().position);
+}
+
 /** Warp координат нот через метки: ноты остаются в порядке исходного вектора. */
 QVector<PitchDetector::PitchNote> warpNotesThroughMarkers(
     const QVector<PitchDetector::PitchNote>& notes, QVector<Marker> markers)
@@ -166,6 +199,7 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
     , waveformView(nullptr)
     , pitchGridWidget(nullptr)
+    , pianoRollToolbar(nullptr)
     , pitchGridScrollContainer(nullptr)
     , pitchGridAnalyzeOverlay(nullptr)
     , pitchGridAnalyzeButton(nullptr)
@@ -224,8 +258,6 @@ MainWindow::MainWindow(QWidget *parent)
     , waveformSpectrogramAct(nullptr)
     , spectrogramSettingsAct(nullptr)
     , spectrogramSettingsDialog(nullptr)
-    , pitchShiftSettingsAct(nullptr)
-    , pitchShiftSettingsDialog(nullptr)
     , russianAction(nullptr)
     , englishAction(nullptr)
     , applyTimeStretchAct(nullptr)
@@ -432,6 +464,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     pitchGridVerticalScrollBar->setFixedWidth(UiConstants::kScrollBarWidthPx);
     layoutPitchGridScrollOverlay();
+    setupPianoRollToolbar();
     setupPitchGridAnalyzeOverlay();
     setupKeyModulationStrip();
 
@@ -717,7 +750,6 @@ void MainWindow::retranslateMenus()
     if (waveformPeaksAct) waveformPeaksAct->setText(tr("Wave peaks"));
     if (waveformSpectrogramAct) waveformSpectrogramAct->setText(tr("Spectrogram"));
     if (spectrogramSettingsAct) { spectrogramSettingsAct->setText(tr("Spectrogram display settings...")); spectrogramSettingsAct->setStatusTip(tr("Spectrogram options (window, bands, color)")); }
-    if (pitchShiftSettingsAct) { pitchShiftSettingsAct->setText(tr("Pitch shift settings...")); pitchShiftSettingsAct->setStatusTip(tr("Granular pitch shift after stretch (Ctrl+T)")); }
     if (pitchGridAnalyzeButton) pitchGridAnalyzeButton->setText(tr("Analyze"));
     if (pitchGridAnalyzeProgress) pitchGridAnalyzeProgress->setFormat(tr("Analyzing... %p%"));
 }
@@ -1413,24 +1445,6 @@ void MainWindow::createActions()
     });
     spectrogramSettingsDialog = nullptr;
 
-    // Pitch shift settings action
-    pitchShiftSettingsAct = new QAction(tr("Pitch shift settings..."), this);
-    pitchShiftSettingsAct->setStatusTip(tr("Granular pitch shift after stretch (Ctrl+T)"));
-    connect(pitchShiftSettingsAct, &QAction::triggered, this, [this]() {
-        if (!pitchShiftSettingsDialog) {
-            pitchShiftSettingsDialog = new PitchShiftSettingsDialog(this);
-            connect(pitchShiftSettingsDialog, &PitchShiftSettingsDialog::paramsChanged,
-                    this, [this](const GranularEngine::Params& p) {
-                pitchShiftParams = p;
-            });
-        }
-        pitchShiftSettingsDialog->setParams(pitchShiftParams);
-        pitchShiftSettingsDialog->show();
-        pitchShiftSettingsDialog->raise();
-        pitchShiftSettingsDialog->activateWindow();
-    });
-    pitchShiftSettingsDialog = nullptr;
-
     // Time stretch action
     applyTimeStretchAct = new QAction(tr("Apply time stretch"), this);
     applyTimeStretchAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_T));
@@ -1490,7 +1504,6 @@ void MainWindow::createMenus()
     settingsMenu->addAction(keyboardShortcutsAct);
     settingsMenu->addSeparator();
     settingsMenu->addAction(spectrogramSettingsAct);
-    settingsMenu->addAction(pitchShiftSettingsAct);
 
     // Language submenu in Settings menu
     languageMenu = settingsMenu->addMenu(tr("Language"));
@@ -1568,6 +1581,13 @@ void MainWindow::applyShortcuts()
     if (redoAct)    redoAct->setShortcut(key("Redo", QKeySequence::Redo));
     if (togglePitchGridAct) togglePitchGridAct->setShortcut(key("PitchGrid", QKeySequence(Qt::CTRL | Qt::Key_G)));
     if (markerShortcut) markerShortcut->setKey(key("AddMarker", QKeySequence(Qt::Key_M)));
+    // Разрез ноты: пианоролл перехватывает клавишу, пока он в фокусе (по
+    // умолчанию S — та же клавиша, что «Стоп» вне пианоролла).
+    const QKeySequence splitKey = key("SplitNote", QKeySequence(Qt::Key_S));
+    if (pitchGridWidget) pitchGridWidget->setSplitShortcut(splitKey);
+    if (pianoRollToolbar) {
+        pianoRollToolbar->setSplitShortcutText(splitKey.toString(QKeySequence::NativeText));
+    }
     if (applyTimeStretchAct) applyTimeStretchAct->setShortcut(key("TimeStretch", QKeySequence(Qt::CTRL | Qt::Key_T)));
     if (applyPitchCorrectionAct) applyPitchCorrectionAct->setShortcut(key("PitchCorrection", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T)));
 
@@ -2271,6 +2291,11 @@ void MainWindow::setColorScheme(const QString& scheme)
         pitchGridWidget->setColorScheme(scheme);
     }
 
+    // Панель кнопок под пианороллом
+    if (pianoRollToolbar) {
+        pianoRollToolbar->setColorScheme(scheme);
+    }
+
     // Фон виджетов и стили скроллбаров — единые helpers (см. :/styles/*.qss).
     applyWidgetBackgrounds(scheme);
     applyScrollBarStyles(scheme);
@@ -2464,8 +2489,11 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
         return;
     }
 
-    // Вычисляем отклонения для всех долей
-    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate);
+    // Вычисляем отклонения относительно той же сетки, что нарисована на волне:
+    // иначе ожидаемые позиции меток разойдутся с видимыми линиями тактов.
+    BPMAnalyzer::DeviationOptions deviationOptions;
+    deviationOptions.gridStartSample = waveformView->getGridStartSample();
+    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate, deviationOptions);
 
     // Находим неровные доли
     float deviationThreshold = tolerancePercent / 100.0f; // Преобразуем проценты в доли
@@ -2491,6 +2519,15 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
 
         const BPMAnalyzer::BeatInfo& prevBeat = beats[idx - 1];
         const BPMAnalyzer::BeatInfo& currentBeat = beats[idx];
+
+        // Вырожденный сегмент (доли совпали или сели на одну линию сетки) дал бы
+        // метки с одинаковой originalPosition и сегмент нулевой длины при растяжении.
+        if (currentBeat.position <= prevBeat.position) {
+            continue;
+        }
+        if (!neutralMarkers && currentBeat.expectedPosition <= prevBeat.expectedPosition) {
+            continue;
+        }
 
         // Метки коррекции: position = фактическая доля.
         // Если neutralMarkers — originalPosition = position (сегменты не сжимаются/не растягиваются).
@@ -2806,6 +2843,41 @@ void MainWindow::stopNotePreview()
     if (notePreviewPlayer) {
         notePreviewPlayer->stop();
     }
+}
+
+void MainWindow::onNoteSplitRequested(int noteIndex, qint64 splitSample)
+{
+    if (!undoStack || noteIndex < 0 || noteIndex >= basePitchNotes.size()) {
+        return;
+    }
+
+    // Каретка и клик приходят в координатах текущего таймлайна, а модель нот
+    // живёт в координатах исходного аудио — отображаем рез обратно по меткам.
+    const QVector<Marker> markers = waveformView ? waveformView->getMarkers() : QVector<Marker>();
+    qint64 sourceSample = mapSampleFromTimeline(splitSample, markers);
+
+    const PitchDetector::PitchNote& note = basePitchNotes[noteIndex];
+    constexpr qint64 minPart = PianoRollEngine::kMinNotePartSamples;
+    if (note.endSample - note.startSample < 2 * minPart) {
+        statusBar()->showMessage(tr("The note is too short to split"), 3000);
+        return;
+    }
+    // Обратное отображение округляет: подтягиваем рез внутрь ноты
+    sourceSample = qBound(note.startSample + minPart, sourceSample, note.endSample - minPart);
+
+    undoStack->push(new PitchNoteSplitCommand(
+        &basePitchNotes, noteIndex, sourceSample, tr("Split note"),
+        [this]() { refreshPitchGridNotes(); }));
+
+    statusBar()->showMessage(tr("Note split"), 2000);
+}
+
+void MainWindow::onNoteSplitRejected(PitchGridWidget::SplitRejection reason)
+{
+    const QString message = (reason == PitchGridWidget::SplitRejection::NoNoteAtCursor)
+        ? tr("No note at the cut position")
+        : tr("The cut point is outside the note — use \"Free cut\" or move the cursor");
+    statusBar()->showMessage(message, 3000);
 }
 
 void MainWindow::applyPitchCorrection()
@@ -3185,6 +3257,65 @@ void MainWindow::layoutPitchGridScrollOverlay()
     layoutPitchGridAnalyzeOverlay();
 }
 
+void MainWindow::setupPianoRollToolbar()
+{
+    if (!ui->pitchGridWidget || !pitchGridWidget) {
+        return;
+    }
+    auto* internalLayout = qobject_cast<QVBoxLayout*>(ui->pitchGridWidget->layout());
+    if (!internalLayout) {
+        return;
+    }
+
+    // Панель — последний элемент внутреннего layout: полоса под пианороллом
+    pianoRollToolbar = new PianoRollToolbar(ui->pitchGridWidget);
+    internalLayout->addWidget(pianoRollToolbar);
+
+    connect(pianoRollToolbar, &PianoRollToolbar::splitToggled, this, [this](bool active) {
+        if (!pitchGridWidget) {
+            return;
+        }
+        pitchGridWidget->setSplitModeActive(active);
+        if (!active) {
+            statusBar()->showMessage(tr("Split tool off"), 3000);
+            return;
+        }
+        // Фокус на пианоролл: клавиша реза работает сразу, без клика по сетке
+        pitchGridWidget->setFocus(Qt::OtherFocusReason);
+        statusBar()->showMessage(
+            tr("Split tool on: click a note, or %1 — cut at the playback cursor (Esc — off)")
+                .arg(pitchGridWidget->splitShortcutKey().toString(QKeySequence::NativeText)),
+            4000);
+    });
+
+    connect(pianoRollToolbar, &PianoRollToolbar::cutModeChanged, this,
+        [this](PitchGridWidget::CutMode mode) {
+            if (pitchGridWidget) {
+                pitchGridWidget->setCutMode(mode);
+            }
+            settings.setValue("pianoRollCutSnapToGrid",
+                              mode == PitchGridWidget::CutMode::SnapToGrid);
+        });
+
+    // Пианоролл может выключить режим сам (Esc) — кнопка следует за ним
+    connect(pitchGridWidget, &PitchGridWidget::splitModeChanged,
+            pianoRollToolbar, &PianoRollToolbar::setSplitActive);
+    connect(pitchGridWidget, &PitchGridWidget::noteSplitRequested,
+            this, &MainWindow::onNoteSplitRequested);
+    connect(pitchGridWidget, &PitchGridWidget::noteSplitRejected,
+            this, &MainWindow::onNoteSplitRejected);
+
+    pianoRollToolbar->setColorScheme(settings.value("colorScheme", "dark").toString());
+
+    // Режим реза запоминается между сессиями (сам инструмент — нет)
+    const bool snapToGrid = settings.value("pianoRollCutSnapToGrid", true).toBool();
+    const PitchGridWidget::CutMode cutMode = snapToGrid
+        ? PitchGridWidget::CutMode::SnapToGrid
+        : PitchGridWidget::CutMode::Free;
+    pianoRollToolbar->setCutMode(cutMode);
+    pitchGridWidget->setCutMode(cutMode);
+}
+
 void MainWindow::setupPitchGridAnalyzeOverlay()
 {
     if (!ui->pitchGridWidget) {
@@ -3258,7 +3389,12 @@ void MainWindow::layoutPitchGridAnalyzeOverlay()
         return;
     }
 
-    pitchGridAnalyzeOverlay->setGeometry(ui->pitchGridWidget->rect());
+    // Плашка «Анализировать» не перекрывает панель кнопок под пианороллом
+    QRect overlayRect = ui->pitchGridWidget->rect();
+    if (pianoRollToolbar && pianoRollToolbar->isVisible()) {
+        overlayRect.setBottom(overlayRect.bottom() - pianoRollToolbar->height());
+    }
+    pitchGridAnalyzeOverlay->setGeometry(overlayRect);
     if (pitchGridAnalyzePending) {
         pitchGridAnalyzeOverlay->raise();
     }
@@ -3501,11 +3637,6 @@ void MainWindow::applyTimeStretch()
     // Применяем сжатие-растяжение (теперь возвращает структуру с данными и метками)
     TimeStretchProcessor::StretchResult stretchResult = waveformView->applyTimeStretch(currentMarkers);
     QVector<QVector<float>> newData = stretchResult.audioData;
-
-    // Применяем гранулярный питч-шифт (если включён)
-    if (pitchShiftParams.enabled && !newData.isEmpty()) {
-        newData = GranularEngine::applyPitchShiftQt(newData, waveformView->getSampleRate(), pitchShiftParams);
-    }
 
     // Конвертируем MarkerData → Marker для WaveformView
     QVector<Marker> newMarkers = MarkerUtils::toMarkers(stretchResult.newMarkers);

@@ -181,10 +181,12 @@ void PitchDetectorAccuracyTest::detectsDetunedE3WithinTolerance()
     const auto note = nearestNote(notes, expected, 0.75f);
     QVERIFY2(note.has_value(), "detuned E3 not found");
 
-    // Segmentation currently snaps to integer MIDI; accept nearest integer E3
-    // but keep room for future fractional detection.
-    QVERIFY(std::abs(note->detectedPitch - 64.0f) < 0.75f
-            || std::abs(note->detectedPitch - expected) < 0.75f);
+    // Высота отдаётся дробной (медиана оценок кадров), поэтому расстройка
+    // должна быть видна в центах, а не съедена округлением до полутона.
+    const float centsError = std::abs(note->detectedPitch - expected) * 100.0f;
+    QVERIFY2(centsError < 15.0f,
+             qPrintable(QStringLiteral("detected=%1, cents error=%2")
+                            .arg(note->detectedPitch).arg(centsError)));
 }
 
 QTEST_MAIN(PitchDetectorAccuracyTest)

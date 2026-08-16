@@ -33,6 +33,7 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
         { "Redo",           tr("Redo"),             QKeySequence::Redo },
         { "PitchGrid",      tr("Toggle pitch grid"), QKeySequence(Qt::CTRL | Qt::Key_G) },
         { "AddMarker",      tr("Add marker"),        QKeySequence(Qt::Key_M) },
+        { "SplitNote",      tr("Split note at the playback cursor (piano roll)"), QKeySequence(Qt::Key_S) },
         { "TimeStretch",    tr("Apply time stretch"), QKeySequence(Qt::CTRL | Qt::Key_T) },
         { "PitchCorrection", tr("Apply note pitch correction"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T) },
     };

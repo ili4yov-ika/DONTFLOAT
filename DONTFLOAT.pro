@@ -95,6 +95,7 @@ SOURCES += \
         src/markerengine.cpp \
         src/pitchgridwidget.cpp \
         src/pianoroll_engine.cpp \
+        src/pianoroll_toolbar.cpp \
         src/pitchdetector.cpp \
         src/pitchcorrection.cpp \
         src/notepreviewplayer.cpp \
@@ -125,9 +126,11 @@ HEADERS += \
         include/markerengine.h \
         include/pitchgridwidget.h \
         include/pianoroll_engine.h \
+        include/pianoroll_toolbar.h \
         include/pitchdetector.h \
         include/pitchcorrection.h \
         include/pitchnoteeditcommand.h \
+        include/pitchnotesplitcommand.h \
         include/notepreviewplayer.h \
         include/waveformcolors.h \
         include/bpmanalyzer.h \

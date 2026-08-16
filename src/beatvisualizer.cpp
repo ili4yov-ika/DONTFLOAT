@@ -276,13 +276,13 @@ void BeatVisualizer::drawBeatDeviations(QPainter& painter,
                                        const VisualizationSettings& settings,
                                        const BeatDeviationColors& colors)
 {
+    Q_UNUSED(sampleRate);  // интервал сетки больше не пересчитывается здесь
+
     // Быстрый выход если нечего рисовать
     if (beats.isEmpty() || !settings.showBeatDeviations || bpm <= 0.0f) {
         return;
     }
 
-    // Вычисляем ожидаемый интервал между битами на основе BPM
-    const float expectedBeatInterval = (60.0f * sampleRate) / bpm;
     const float deviationThreshold = settings.deviationThreshold;
     const qreal rectX = rect.x();
     const qreal rectWidth = rect.width();
@@ -306,18 +306,15 @@ void BeatVisualizer::drawBeatDeviations(QPainter& painter,
             continue;
         }
 
-        // Используем ожидаемую позицию из анализатора (база для deviation), иначе — от предыдущего бита
-        float expectedPosition;
-        if (beat.expectedPosition != beat.position) {
-            expectedPosition = float(beat.expectedPosition);
-        } else {
-            expectedPosition = float(beats[i - 1].position) + expectedBeatInterval;
-        }
-        float actualPosition = float(beat.position);
+        // Ожидаемая позиция приходит из BPMAnalyzer::calculateDeviations вместе с deviation.
+        // Координаты считаем в double: на 192 kHz позиции длинного трека уже не влезают
+        // в точные целые float, и треугольник уезжает от бита.
+        const double expectedPosition = double(beat.expectedPosition);
+        const double actualPosition = double(beat.position);
 
         // Вычисляем координаты для отрисовки
-        const float expectedX = float(expectedPosition - startSample) / samplesPerPixel;
-        const float actualX = float(actualPosition - startSample) / samplesPerPixel;
+        const float expectedX = float((expectedPosition - startSample) / samplesPerPixel);
+        const float actualX = float((actualPosition - startSample) / samplesPerPixel);
 
         // Проверяем видимость: рисуем только когда обе точки внутри канала
         if (expectedX < 0.0f || expectedX > rectWidth || actualX < 0.0f || actualX > rectWidth) {

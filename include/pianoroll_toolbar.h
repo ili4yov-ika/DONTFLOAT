@@ -1,0 +1,86 @@
+#ifndef PIANOROLL_TOOLBAR_H
+#define PIANOROLL_TOOLBAR_H
+
+/**
+ * Панель кнопок под пианороллом: инструмент «Разделить» и переключатель
+ * режима реза («Вдоль сетки» / «Свободный рез»).
+ *
+ * Разметка повторяет макет MARKDOWN/example_panel_buttons.svg, увеличенный в
+ * полтора раза: полоса с капсулой, в ней квадратная кнопка ножниц и пара
+ * круглых взаимоисключающих переключателей режима. Иконки — SVG из
+ * `resources/icons/` (`trimmer`, `along_the_grid`, `free_cut`).
+ */
+
+#include <QtCore/QString>
+#include <QtGui/QIcon>
+#include <QtWidgets/QWidget>
+
+#include "pitchgridwidget.h"
+
+QT_BEGIN_NAMESPACE
+class QToolButton;
+QT_END_NAMESPACE
+
+class PianoRollToolbar : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit PianoRollToolbar(QWidget *parent = nullptr);
+
+    /** Состояние инструмента «Разделить» (без испускания сигнала). */
+    void setSplitActive(bool active);
+    bool isSplitActive() const;
+
+    /** Режим реза (без испускания сигнала). */
+    void setCutMode(PitchGridWidget::CutMode mode);
+    PitchGridWidget::CutMode cutMode() const { return currentCutMode; }
+
+    /** Цветовая схема: "dark" | "light" (прочее — тёмная). */
+    void setColorScheme(const QString& scheme);
+
+    /** Подсказка кнопки «Разделить» с актуальной горячей клавишей. */
+    void setSplitShortcutText(const QString& shortcutText);
+
+    // Геометрия: макет (20 / 18 / 1 px) × 1.5; ножницы чуть меньше высоты
+    // капсулы, как на макете, где иконка вписана внутрь кнопки
+    static constexpr int kCapsuleHeightPx = 30;
+    static constexpr int kSplitButtonSizePx = 26;
+    /** Скругление подложки ножниц: rx=3 при 18 px в макете. */
+    static constexpr int kSplitButtonRadiusPx = 4;
+    static constexpr int kCutModeButtonSizePx = 27;
+    static constexpr int kPanelMarginPx = 2;
+    static constexpr int kPanelHeightPx = kCapsuleHeightPx + 2 * kPanelMarginPx;
+
+signals:
+    void splitToggled(bool active);
+    void cutModeChanged(PitchGridWidget::CutMode mode);
+
+protected:
+    void changeEvent(QEvent *event) override;
+
+private:
+    void buildUi();
+    void applyStyle();
+    void refreshIcons();
+    void retranslateUi();
+
+    /**
+     * SVG-иконка нужного размера. \a tintOnLightScheme перекрашивает белую
+     * графику макета в тёмную для светлой схемы: это нужно ножницам, лежащим
+     * прямо на капсуле, но не переключателям — их фон тёмный в любой схеме.
+     */
+    QIcon loadIcon(const QString& resourcePath, int sizePx, bool tintOnLightScheme) const;
+
+    QWidget* cutGroup = nullptr;
+    QWidget* cutModeGroup = nullptr;
+    QToolButton* splitButton = nullptr;
+    QToolButton* gridCutButton = nullptr;
+    QToolButton* freeCutButton = nullptr;
+
+    PitchGridWidget::CutMode currentCutMode = PitchGridWidget::CutMode::SnapToGrid;
+    QString colorScheme = QStringLiteral("dark");
+    QString splitShortcutText;
+};
+
+#endif // PIANOROLL_TOOLBAR_H

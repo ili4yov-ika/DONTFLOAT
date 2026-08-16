@@ -1,6 +1,40 @@
 #include <QtTest/QTest>
 #include <QtCore/QVector>
+
+#include <cmath>
+#include <limits>
+
 #include "../include/bpmanalyzer.h"
+
+namespace {
+
+/** Идеальная сетка из n долей с шагом interval сэмплов. */
+QVector<BPMAnalyzer::BeatInfo> makeGrid(int n, double interval, qint64 origin = 0)
+{
+    QVector<BPMAnalyzer::BeatInfo> beats;
+    beats.reserve(n);
+    for (int i = 0; i < n; ++i) {
+        BPMAnalyzer::BeatInfo beat;
+        beat.position = origin + qint64(std::llround(i * interval));
+        beat.expectedPosition = 0;
+        beat.confidence = 1.0f;
+        beat.deviation = 0.0f;
+        beat.energy = 1.0f;
+        beats.append(beat);
+    }
+    return beats;
+}
+
+float maxAbsDeviation(const QVector<BPMAnalyzer::BeatInfo>& beats)
+{
+    float worst = 0.0f;
+    for (const auto& beat : beats) {
+        worst = qMax(worst, qAbs(beat.deviation));
+    }
+    return worst;
+}
+
+} // namespace
 
 class BeatDeviationTest : public QObject
 {
@@ -17,6 +51,16 @@ private slots:
     void testCalculateDeviations();
     void testFindUnalignedBeats();
     void testExpectedPositionInitialization();
+
+    // Устойчивость поиска неровных долей
+    void testMissingBeatDoesNotShiftRest();
+    void testSpuriousBeatIsIsolated();
+    void testShiftedFirstBeatDoesNotFlagTrack();
+    void testExplicitGridStartIsRespected();
+    void testTempoDriftIsCompensatedOnDemand();
+    void testLongTrackKeepsSampleAccuracy();
+    void testDegenerateInputIsSafe();
+    void testStatsSummariseDeviations();
 };
 
 void BeatDeviationTest::initTestCase()
@@ -216,6 +260,195 @@ void BeatDeviationTest::testExpectedPositionInitialization()
     }
 
     qDebug() << "  ✓ Вектор долей инициализирован корректно";
+}
+
+void BeatDeviationTest::testMissingBeatDoesNotShiftRest()
+{
+    // Детектор не нашёл одну долю. Сопоставление по порядковому номеру сдвигало
+    // бы всю оставшуюся часть трека на целый интервал.
+    const int sampleRate = 44100;
+    const float bpm = 120.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(64, interval);
+    beats.remove(20);
+
+    const BPMAnalyzer::DeviationStats stats =
+        BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate, BPMAnalyzer::DeviationOptions());
+
+    QVERIFY2(maxAbsDeviation(beats) < 0.001f, "пропуск доли не должен сдвигать сетку");
+    QCOMPARE(BPMAnalyzer::findUnalignedBeats(beats, 0.02f).size(), qsizetype(0));
+    QCOMPARE(stats.gapCount, 1);
+    QCOMPARE(stats.duplicateCount, 0);
+}
+
+void BeatDeviationTest::testSpuriousBeatIsIsolated()
+{
+    // Ложное срабатывание между долями: неровной считается только сама лишняя доля.
+    const int sampleRate = 44100;
+    const float bpm = 120.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(64, interval);
+    BPMAnalyzer::BeatInfo spurious = beats[20];
+    spurious.position += qint64(interval / 2);
+    beats.insert(21, spurious);
+
+    const BPMAnalyzer::DeviationStats stats =
+        BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate, BPMAnalyzer::DeviationOptions());
+
+    const QVector<int> unaligned = BPMAnalyzer::findUnalignedBeats(beats, 0.02f);
+    QCOMPARE(unaligned.size(), qsizetype(1));
+    QCOMPARE(unaligned.first(), 21);
+    QCOMPARE(stats.duplicateCount, 1);
+    QVERIFY2(qAbs(beats.last().deviation) < 0.001f, "хвост трека должен остаться ровным");
+}
+
+void BeatDeviationTest::testShiftedFirstBeatDoesNotFlagTrack()
+{
+    // Первая доля — затакт/шум со сдвигом 10%. Опора на неё раньше объявляла
+    // неровным весь трек; фаза сетки берётся по медиане остатков.
+    const int sampleRate = 44100;
+    const float bpm = 120.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(64, interval);
+    beats[0].position += qint64(interval * 0.10);
+
+    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate);
+
+    const QVector<int> unaligned = BPMAnalyzer::findUnalignedBeats(beats, 0.02f);
+    QCOMPARE(unaligned.size(), qsizetype(1));
+    QCOMPARE(unaligned.first(), 0);
+    QVERIFY(qAbs(beats[0].deviation - 0.10f) < 0.005f);
+}
+
+void BeatDeviationTest::testExplicitGridStartIsRespected()
+{
+    // Заданная опорная линия (та, что нарисована на волне) не подменяется
+    // автоматической оценкой: ожидаемые позиции ложатся ровно на сетку.
+    const int sampleRate = 44100;
+    const float bpm = 120.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+    const qint64 gridStart = 5000;
+
+    // Все доли равномерно опаздывают на 4% — сетка при этом не должна «подъехать».
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(32, interval, gridStart + qint64(interval * 0.04));
+
+    BPMAnalyzer::DeviationOptions options;
+    options.gridStartSample = gridStart;
+    const BPMAnalyzer::DeviationStats stats =
+        BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate, options);
+
+    QCOMPARE(stats.gridStartSample, gridStart);
+    QCOMPARE(beats[0].expectedPosition, gridStart);
+    QCOMPARE(beats[10].expectedPosition, gridStart + qint64(std::llround(10 * interval)));
+    for (const auto& beat : beats) {
+        QVERIFY(qAbs(beat.deviation - 0.04f) < 0.005f);
+    }
+    QCOMPARE(BPMAnalyzer::findUnalignedBeats(beats, 0.02f).size(), qsizetype(beats.size()));
+}
+
+void BeatDeviationTest::testTempoDriftIsCompensatedOnDemand()
+{
+    // Ровный трек на 120.5 BPM при сетке 120: без уточнения темпа отклонения
+    // растут линейно и «неровным» становится весь конец трека.
+    const int sampleRate = 44100;
+    const float gridBPM = 120.0f;
+    const double realInterval = (60.0 * sampleRate) / 120.5;
+
+    QVector<BPMAnalyzer::BeatInfo> drifting = makeGrid(64, realInterval);
+    BPMAnalyzer::calculateDeviations(drifting, gridBPM, sampleRate);
+    QVERIFY2(BPMAnalyzer::findUnalignedBeats(drifting, 0.02f).size() > 10,
+             "без уточнения темпа дрейф ожидаемо виден");
+
+    QVector<BPMAnalyzer::BeatInfo> refined = makeGrid(64, realInterval);
+    refined[30].position += qint64(realInterval * 0.09);  // настоящая неровность
+
+    BPMAnalyzer::DeviationOptions options;
+    options.refineTempo = true;
+    const BPMAnalyzer::DeviationStats stats =
+        BPMAnalyzer::calculateDeviations(refined, gridBPM, sampleRate, options);
+
+    QVERIFY2(qAbs(stats.gridBPM - 120.5f) < 0.05f, "темп сетки должен уточниться до реального");
+
+    const QVector<int> unaligned = BPMAnalyzer::findUnalignedBeats(refined, 0.02f);
+    QCOMPARE(unaligned.size(), qsizetype(1));
+    QCOMPARE(unaligned.first(), 30);  // джиттер не растворился в уточнении темпа
+}
+
+void BeatDeviationTest::testLongTrackKeepsSampleAccuracy()
+{
+    // 192 kHz, ~14 минут: позиции выходят за диапазон точных целых float.
+    const int sampleRate = 192000;
+    const float bpm = 140.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(2000, interval);
+    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate);
+
+    for (int i = 0; i < beats.size(); ++i) {
+        const double ideal = i * interval;
+        QVERIFY2(qAbs(double(beats[i].expectedPosition) - ideal) <= 1.0,
+                 qPrintable(QStringLiteral("beat %1: expected=%2 ideal=%3")
+                                .arg(i)
+                                .arg(beats[i].expectedPosition)
+                                .arg(ideal)));
+    }
+    QCOMPARE(BPMAnalyzer::findUnalignedBeats(beats, 0.001f).size(), qsizetype(0));
+}
+
+void BeatDeviationTest::testDegenerateInputIsSafe()
+{
+    // Пустой вход и некорректные параметры не должны ничего портить.
+    QVector<BPMAnalyzer::BeatInfo> empty;
+    QCOMPARE(BPMAnalyzer::calculateDeviations(empty, 120.0f, 44100, BPMAnalyzer::DeviationOptions()).beatCount, 0);
+    QCOMPARE(BPMAnalyzer::findUnalignedBeats(empty, 0.02f).size(), qsizetype(0));
+
+    QVector<BPMAnalyzer::BeatInfo> single = makeGrid(1, 22050.0, 12345);
+    single[0].expectedPosition = -999;
+    single[0].deviation = 7.0f;
+    BPMAnalyzer::calculateDeviations(single, 120.0f, 44100);
+    QCOMPARE(single[0].expectedPosition, qint64(12345));
+    QCOMPARE(single[0].deviation, 0.0f);
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(8, 22050.0);
+    BPMAnalyzer::calculateDeviations(beats, 0.0f, 44100);   // BPM не определён
+    BPMAnalyzer::calculateDeviations(beats, 120.0f, 0);     // нет частоты дискретизации
+    QCOMPARE(beats[3].deviation, 0.0f);
+
+    // Нечисловое отклонение не должно попадать в список неровных долей.
+    beats[4].deviation = std::numeric_limits<float>::quiet_NaN();
+    QCOMPARE(BPMAnalyzer::findUnalignedBeats(beats, 0.02f).size(), qsizetype(0));
+
+    // Доля с низкой уверенностью отсеивается порогом minConfidence.
+    beats[4].deviation = 0.2f;
+    beats[4].confidence = 0.1f;
+    QCOMPARE(BPMAnalyzer::findUnalignedBeats(beats, 0.02f).size(), qsizetype(1));
+    QCOMPARE(BPMAnalyzer::findUnalignedBeats(beats, 0.02f, 0.5f).size(), qsizetype(0));
+}
+
+void BeatDeviationTest::testStatsSummariseDeviations()
+{
+    const int sampleRate = 44100;
+    const float bpm = 120.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(16, interval);
+    beats[5].position += qint64(interval * 0.08);
+    beats[9].position -= qint64(interval * 0.04);
+
+    const BPMAnalyzer::DeviationStats stats =
+        BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate, BPMAnalyzer::DeviationOptions());
+
+    QCOMPARE(stats.beatCount, 16);
+    QCOMPARE(stats.gapCount, 0);
+    QCOMPARE(stats.duplicateCount, 0);
+    QVERIFY(qAbs(stats.maxAbsDeviation - 0.08f) < 0.005f);
+    QVERIFY2(stats.medianAbsDeviation < 0.001f, "медиана устойчива к двум выбросам");
+    QVERIFY(stats.meanAbsDeviation > 0.0f && stats.meanAbsDeviation < stats.maxAbsDeviation);
+    QVERIFY(stats.rmsDeviation > 0.0f && stats.rmsDeviation < stats.maxAbsDeviation);
+    QVERIFY(qAbs(stats.gridBPM - bpm) < 0.001f);
 }
 
 QTEST_MAIN(BeatDeviationTest)

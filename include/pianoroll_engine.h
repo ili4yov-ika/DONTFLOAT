@@ -72,6 +72,18 @@ qint64 snapToGrid(qint64 sample,
                   qint64 gridStartSample,
                   bool enabled);
 
+/** Минимальная длина каждой части при разрезе ноты (сэмплы, ~1 мс при 44.1 кГц). */
+constexpr qint64 kMinNotePartSamples = 48;
+
+/**
+ * Проверяет, что рез делит ноту [startSample, endSample) на две части,
+ * каждая не короче \a minPartSamples. Рез ровно по краю ноты — не делит.
+ */
+bool canSplitNoteAt(qint64 startSample,
+                    qint64 endSample,
+                    qint64 cutSample,
+                    qint64 minPartSamples = kMinNotePartSamples);
+
 bool isBlackKey(int midiNote);
 
 /** Тональность вида «C Major» / «A Minor»; пустая строка — не задана. */

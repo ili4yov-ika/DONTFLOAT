@@ -102,18 +102,4 @@ void DontfloatPluginEditorShell::notifyHostAudioAppended()
 #endif
 }
 
-void DontfloatPluginEditorShell::setHostPlayhead(qint64 positionMs, bool playing)
-{
-    if (!content_) {
-        return;
-    }
-#if DONTFLOAT_PLUGIN_PRODUCT_INDEX == 0
-    static_cast<DontfloatFullEditor*>(content_)->setHostPlayhead(positionMs, playing);
-#elif DONTFLOAT_PLUGIN_PRODUCT_INDEX == 1
-    static_cast<DontfloatScratchEditor*>(content_)->setHostPlayhead(positionMs, playing);
-#elif DONTFLOAT_PLUGIN_PRODUCT_INDEX == 2
-    static_cast<DontfloatPitchEditor*>(content_)->setHostPlayhead(positionMs, playing);
-#endif
-}
-
 } // namespace Dontfloat::Plugins::Ui

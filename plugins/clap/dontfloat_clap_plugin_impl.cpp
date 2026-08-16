@@ -10,7 +10,6 @@
 #include <QWindow>
 
 #include <algorithm>
-#include <atomic>
 #include <cstring>
 #include <memory>
 
@@ -28,7 +27,6 @@ using Dontfloat::PluginHost::desc;
 using Dontfloat::PluginHost::product;
 using Dontfloat::Plugins::Ui::DontfloatPluginEditorShell;
 using Dontfloat::Plugins::Ui::ensureQtApplication;
-using Dontfloat::Plugins::Ui::pumpQtEvents;
 
 namespace {
 
@@ -45,13 +43,18 @@ struct ClapPluginInstance {
     uint32_t editorHeight = kEditorHeight;
     clap_id guiTimerId = 0;
     bool guiTimerRegistered = false;
-    double sampleRate = 44100.0;
-
-    // Written on the audio thread (process), read on the GUI thread (on_timer).
-    std::atomic<int64_t> playheadFrames{0};
-    std::atomic<bool> hostPlaying{false};
-    std::atomic<bool> audioDirty{false};
 };
+
+// Pump the Qt event loop from the host timer so the editor stays responsive
+// inside non-Qt DAW hosts (Reaper, Bitwig, Ardour, …).
+void pumpQtEvents()
+{
+    if (QApplication* app = qApp) {
+        app->sendPostedEvents();
+        app->processEvents(QEventLoop::AllEvents, 8);
+        app->sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    }
+}
 
 const clap_host_timer_support_t* hostTimerSupport(ClapPluginInstance* s)
 {
@@ -116,7 +119,6 @@ bool pluginActivate(const clap_plugin_t* plugin, double sampleRate, uint32_t, ui
     if (!s || sampleRate <= 0.0) {
         return false;
     }
-    s->sampleRate = sampleRate;
     return s->session.prepare(TrackAudioInfo{int(sampleRate), 2, std::max<uint32_t>(maxFrames, 1)})
         == TrackToolStatus::Ok;
 }
@@ -145,26 +147,11 @@ clap_process_status pluginProcess(const clap_plugin_t* plugin, const clap_proces
     clap_audio_buffer_t& out = process->audio_outputs[0];
     copyOrClear(in, out, process->frames_count);
 
-    // Follow the host transport so the editor caret stays in sync with the DAW.
-    if (process->transport) {
-        const auto* t = reinterpret_cast<const clap_event_transport_t*>(process->transport);
-        s->hostPlaying.store((t->flags & CLAP_TRANSPORT_IS_PLAYING) != 0,
-                             std::memory_order_relaxed);
-        if (t->flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE) {
-            const double seconds = double(t->song_pos_seconds) / double(CLAP_SECTIME_FACTOR);
-            s->playheadFrames.store(int64_t(seconds * s->sampleRate), std::memory_order_relaxed);
-        } else if ((t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE) && t->tempo > 0.0) {
-            const double beats = double(t->song_pos_beats) / double(CLAP_BEATTIME_FACTOR);
-            const double seconds = beats * 60.0 / t->tempo;
-            s->playheadFrames.store(int64_t(seconds * s->sampleRate), std::memory_order_relaxed);
-        }
-    }
-
-    // Audio-thread safe: only capture samples and flag the GUI thread. The
-    // editor is refreshed from the host timer callback (never from here).
     if (process->audio_inputs && process->frames_count > 0) {
         s->session.appendHostFrames(in.data32, int(in.channel_count), int(process->frames_count));
-        s->audioDirty.store(true, std::memory_order_release);
+        if (s->editor) {
+            s->editor->notifyHostAudioAppended();
+        }
     }
 
     return CLAP_PROCESS_CONTINUE;
@@ -401,21 +388,6 @@ void pluginOnTimer(const clap_plugin_t* plugin, clap_id timerId)
         return;
     }
     pumpQtEvents();
-
-    if (!s->editor) {
-        return;
-    }
-    // Push freshly captured host audio into the editor (GUI thread).
-    if (s->audioDirty.exchange(false, std::memory_order_acquire)) {
-        s->editor->notifyHostAudioAppended();
-    }
-    // Keep the editor playback caret synced with the DAW playhead.
-    const int64_t frames = s->playheadFrames.load(std::memory_order_relaxed);
-    const bool playing = s->hostPlaying.load(std::memory_order_relaxed);
-    const qint64 positionMs = s->sampleRate > 0.0
-        ? qint64((double(frames) * 1000.0) / s->sampleRate)
-        : 0;
-    s->editor->setHostPlayhead(positionMs, playing);
 }
 
 const clap_plugin_timer_support_t kTimerSupportExtension = { pluginOnTimer };

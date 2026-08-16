@@ -72,44 +72,6 @@ struct clap_event_param_value_t {
     double value;
 };
 
-// Host transport (musical timeline). Layout matches the official CLAP
-// clap_event_transport so that process->transport can be read in real hosts.
-#define CLAP_SECTIME_FACTOR  (INT64_C(1) << 31)
-#define CLAP_BEATTIME_FACTOR (INT64_C(1) << 31)
-
-enum clap_transport_flags {
-    CLAP_TRANSPORT_HAS_TEMPO = 1u << 0,
-    CLAP_TRANSPORT_HAS_BEATS_TIMELINE = 1u << 1,
-    CLAP_TRANSPORT_HAS_SECONDS_TIMELINE = 1u << 2,
-    CLAP_TRANSPORT_HAS_TIME_SIGNATURE = 1u << 3,
-    CLAP_TRANSPORT_IS_PLAYING = 1u << 4,
-    CLAP_TRANSPORT_IS_RECORDING = 1u << 5,
-    CLAP_TRANSPORT_IS_LOOP_ACTIVE = 1u << 6,
-    CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL = 1u << 7,
-};
-
-struct clap_event_transport_t {
-    clap_event_header_t header;
-    uint32_t flags;
-
-    int64_t song_pos_beats;   // clap_beattime, position in beats (* 2^31)
-    int64_t song_pos_seconds; // clap_sectime, position in seconds (* 2^31)
-
-    double tempo;     // in bpm
-    double tempo_inc; // tempo increment per sample until the next event
-
-    int64_t loop_start_beats;
-    int64_t loop_end_beats;
-    int64_t loop_start_seconds;
-    int64_t loop_end_seconds;
-
-    int64_t bar_start;  // start pos of the current bar
-    int32_t bar_number; // bar at song pos 0 has the number 0
-
-    uint16_t tsig_num;   // time signature numerator
-    uint16_t tsig_denom; // time signature denominator
-};
-
 struct clap_audio_buffer_t {
     float** data32;
     double** data64;

@@ -113,6 +113,7 @@ private slots:
     void parsesMidiGroundTruth();
     void detectsDurationLadderC4();
     void detectsLowAndMidRegisters();
+    void doesNotInventSubharmonicNotes();
 
 private:
     QString midPath;
@@ -151,8 +152,11 @@ void MidiPitchTest::initTestCase()
         mono.resize(maxSamples);
     }
 
+    // Материал участка — ladder C4 и педаль C3 (130 Гц). Нижнюю границу держим
+    // на 60 Гц: она задаёт длину окна анализа, а ноты ladder'а длятся 107 мс,
+    // поэтому запрашивать 16 Гц (окно ~200 мс) здесь физически бессмысленно.
     PitchDetector::Options opt;
-    opt.minFrequencyHz = 16.0f;
+    opt.minFrequencyHz = 60.0f;
     opt.maxFrequencyHz = 2000.0f;
     opt.minNoteDurationMs = 80;
     detected = PitchDetector::detectNotes(mono, analysisSampleRate, opt);
@@ -217,6 +221,37 @@ void MidiPitchTest::detectsLowAndMidRegisters()
     const auto c4 = bestPitchNear(detected, 60.0f, 0.75f);
     QVERIFY2(c4.has_value(), "expected C4 in duration ladder");
     QVERIFY(c4->confidence > 0.1f);
+}
+
+/**
+ * Регрессия: разностная функция без кумулятивной нормировки одинаково хорошо
+ * «объясняет» сигнал периодом T и любым кратным ему (2T, 3T…), из-за чего на
+ * чистом ladder'е C4 появлялись ноты на октаву-две ниже (29, 32, 36, 41…).
+ * Внутри первых 5 секунд звучат только C4…D#4, значит ничего ниже C3 быть не
+ * должно.
+ */
+void MidiPitchTest::doesNotInventSubharmonicNotes()
+{
+    const qint64 ladderEnd = qint64(5.0 * analysisSampleRate);
+
+    QVector<float> offenders;
+    for (const PitchDetector::PitchNote& note : detected) {
+        if (note.startSample >= ladderEnd) {
+            continue;
+        }
+        // C3 (48) — с запасом ниже реального минимума участка (C4 = 60).
+        if (note.detectedPitch < 48.0f) {
+            offenders.append(note.detectedPitch);
+        }
+    }
+
+    QStringList shown;
+    for (float p : offenders) {
+        shown << QString::number(p, 'f', 1);
+    }
+    QVERIFY2(offenders.isEmpty(),
+             qPrintable(QStringLiteral("субгармонические ноты в ladder C4: %1")
+                            .arg(shown.join(' '))));
 }
 
 QTEST_MAIN(MidiPitchTest)

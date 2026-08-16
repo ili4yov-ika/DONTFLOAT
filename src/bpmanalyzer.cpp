@@ -87,15 +87,8 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
         return createBeatGridFromBPM(samples, sampleRate, options.fileBPM, options);
     }
 
-    // Улучшенный алгоритм анализа BPM
+    // Улучшенный алгоритм анализа BPM (поля AnalysisResult инициализированы по умолчанию)
     AnalysisResult result;
-    result.confidence = 0.0f;
-    result.hasIrregularBeats = false;
-    result.averageDeviation = 0.0f;
-    result.isFixedTempo = true;
-    result.gridStartSample = 0;
-    result.preliminaryBPM = 0.0f;
-    result.hasPreliminaryBPM = false;
 
     if (samples.isEmpty()) {
         qDebug() << "No samples provided for BPM analysis";
@@ -599,13 +592,6 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPMUsingMixxx(const QVector<floa
                                                             int sampleRate,
                                                             const AnalysisOptions& options) {
     AnalysisResult result;
-    result.confidence = 0.0f;
-    result.hasIrregularBeats = false;
-    result.averageDeviation = 0.0f;
-    result.isFixedTempo = true;
-    result.gridStartSample = 0;
-    result.preliminaryBPM = 0.0f;
-    result.hasPreliminaryBPM = false;
 
     if (samples.isEmpty() || sampleRate <= 0) {
         qDebug() << "Invalid input for Mixxx BPM analysis";
@@ -952,10 +938,6 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::createBeatGridFromBPM(const QVector<flo
     AnalysisResult result;
     result.bpm = bpm;
     result.confidence = 1.0f; // Высокая уверенность для предварительно определенного BPM
-    result.hasIrregularBeats = false;
-    result.averageDeviation = 0.0f;
-    result.isFixedTempo = true;
-    result.gridStartSample = 0;
 
     if (samples.isEmpty() || bpm <= 0.0f) {
         qDebug() << "Invalid parameters for beat grid creation";
@@ -1040,44 +1022,205 @@ QVector<float> BPMAnalyzer::alignToBeatGrid(const QVector<float>& samples,
 }
 
 // ============================================================================
-// НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С ОТКЛОНЕНИЯМИ (план замены визуализации)
+// ПОИСК НЕРОВНЫХ ДОЛЕЙ
 // ============================================================================
+
+namespace {
+
+// Медиана in-place (порядок элементов не сохраняется).
+double medianInPlace(std::vector<double>& values)
+{
+    if (values.empty()) {
+        return 0.0;
+    }
+    const size_t mid = values.size() / 2;
+    std::nth_element(values.begin(), values.begin() + mid, values.end());
+    const double upper = values[mid];
+    if (values.size() % 2 != 0) {
+        return upper;
+    }
+    const double lower = *std::max_element(values.begin(), values.begin() + mid);
+    return 0.5 * (lower + upper);
+}
+
+} // namespace
 
 void BPMAnalyzer::calculateDeviations(QVector<BeatInfo>& beats, float bpm, int sampleRate)
 {
-    if (beats.size() < 2 || bpm <= 0 || sampleRate <= 0) {
-        return;
-    }
-
-    // Ожидаемый интервал между долями в сэмплах
-    float expectedInterval = (60.0f * sampleRate) / bpm;
-
-    // Используем первый бит как опорную точку
-    qint64 firstBeatPos = beats[0].position;
-
-    // Вычисляем отклонение для каждого бита относительно первого
-    for (int i = 0; i < beats.size(); ++i) {
-        // Ожидаемая позиция относительно первого бита
-        qint64 expectedPos = firstBeatPos + qint64(i * expectedInterval);
-
-        // Фактическое отклонение в сэмплах
-        qint64 actualDeviation = beats[i].position - expectedPos;
-
-        // Нормализованное отклонение (0.0 = точно, ±1.0 = один такт)
-        beats[i].deviation = float(actualDeviation) / expectedInterval;
-
-        // Сохраняем ожидаемую позицию для создания меток
-        beats[i].expectedPosition = expectedPos;
-    }
+    calculateDeviations(beats, bpm, sampleRate, DeviationOptions());
 }
 
-QVector<int> BPMAnalyzer::findUnalignedBeats(const QVector<BeatInfo>& beats, float deviationThreshold)
+BPMAnalyzer::DeviationStats BPMAnalyzer::calculateDeviations(QVector<BeatInfo>& beats,
+                                                            float bpm,
+                                                            int sampleRate,
+                                                            const DeviationOptions& options)
+{
+    DeviationStats stats;
+    if (beats.isEmpty() || bpm <= 0.0f || sampleRate <= 0) {
+        return stats;
+    }
+
+    // Всё считаем в double: на 192 kHz позиции длинного трека выходят за диапазон
+    // целых, представимых во float точно (2^24), и сетка «уезжает» на десятки сэмплов.
+    const double nominalInterval = (60.0 * double(sampleRate)) / double(bpm);
+    if (nominalInterval < 1.0) {
+        return stats;
+    }
+
+    const int beatCount = int(beats.size());
+    std::vector<double> gridIndex(size_t(beatCount), 0.0);
+    double interval = nominalInterval;
+    double origin = (options.gridStartSample >= 0) ? double(options.gridStartSample)
+                                                   : double(beats.first().position);
+
+    // Каждая доля сопоставляется ближайшей линии сетки, а не своему порядковому
+    // номеру: пропуск или лишнее срабатывание детектора тогда портит одну долю,
+    // а не весь хвост трека (раньше отклонение уходило в ±1 интервал до конца).
+    auto assignGridIndices = [&]() {
+        for (int i = 0; i < beatCount; ++i) {
+            gridIndex[size_t(i)] = options.snapToNearestGrid
+                ? std::round((double(beats[i].position) - origin) / interval)
+                : double(i);
+        }
+    };
+
+    auto residuals = [&]() {
+        std::vector<double> values(size_t(beatCount), 0.0);
+        for (int i = 0; i < beatCount; ++i) {
+            values[size_t(i)] = double(beats[i].position) - (origin + gridIndex[size_t(i)] * interval);
+        }
+        return values;
+    };
+
+    assignGridIndices();
+
+    // Фаза сетки — медиана остатков, а не позиция первой доли. Иначе сдвинутая
+    // первая доля (затакт, шум, ложный onset) объявляет неровным весь трек.
+    if (options.gridStartSample < 0) {
+        for (int pass = 0; pass < 3; ++pass) {
+            std::vector<double> values = residuals();
+            const double shift = medianInPlace(values);
+            origin += shift;
+            assignGridIndices();
+            if (std::abs(shift) < 0.5) {  // сошлось до долей сэмпла
+                break;
+            }
+        }
+    }
+
+    // Уточнение интервала: если реальный темп чуть отличается от номинального,
+    // отклонения растут линейно и «неровным» становится весь конец трека.
+    // Регрессия по инлаерам отделяет такой дрейф от настоящего джиттера.
+    if (options.refineTempo && beatCount >= 3) {
+        std::vector<double> values = residuals();
+        std::vector<double> magnitudes(values.size());
+        for (size_t i = 0; i < values.size(); ++i) {
+            magnitudes[i] = std::abs(values[i]);
+        }
+        // Порог инлаера: не уже четверти интервала, чтобы выборка не выродилась.
+        const double inlierLimit = std::max(3.0 * medianInPlace(magnitudes), 0.25 * interval);
+
+        double sumX = 0.0, sumY = 0.0;
+        int inliers = 0;
+        for (int i = 0; i < beatCount; ++i) {
+            const double predicted = origin + gridIndex[size_t(i)] * interval;
+            if (std::abs(double(beats[i].position) - predicted) > inlierLimit) {
+                continue;
+            }
+            sumX += gridIndex[size_t(i)];
+            sumY += double(beats[i].position);
+            ++inliers;
+        }
+
+        if (inliers >= 3) {
+            const double meanX = sumX / inliers;
+            const double meanY = sumY / inliers;
+            double covXY = 0.0, varX = 0.0;
+            for (int i = 0; i < beatCount; ++i) {
+                const double predicted = origin + gridIndex[size_t(i)] * interval;
+                if (std::abs(double(beats[i].position) - predicted) > inlierLimit) {
+                    continue;
+                }
+                const double dx = gridIndex[size_t(i)] - meanX;
+                covXY += dx * (double(beats[i].position) - meanY);
+                varX += dx * dx;
+            }
+
+            if (varX > 0.0) {
+                const double limit = double(std::max(0.0f, options.maxTempoCorrection));
+                const double refined = std::min(std::max(covXY / varX, nominalInterval * (1.0 - limit)),
+                                                nominalInterval * (1.0 + limit));
+                if (refined > 1.0) {
+                    interval = refined;
+                    origin = meanY - interval * meanX;
+                    assignGridIndices();
+                }
+            }
+        }
+    }
+
+    stats.beatCount = beatCount;
+    stats.gridStartSample = qint64(std::llround(origin));
+    stats.gridBPM = float((60.0 * double(sampleRate)) / interval);
+
+    double sumAbs = 0.0;
+    double sumSquares = 0.0;
+    std::vector<double> absDeviations(size_t(beatCount), 0.0);
+
+    for (int i = 0; i < beatCount; ++i) {
+        const double expected = origin + gridIndex[size_t(i)] * interval;
+        const double deviation = (double(beats[i].position) - expected) / interval;
+
+        beats[i].expectedPosition = qint64(std::llround(expected));
+        beats[i].deviation = float(deviation);
+
+        const double magnitude = std::abs(deviation);
+        absDeviations[size_t(i)] = magnitude;
+        sumAbs += magnitude;
+        sumSquares += deviation * deviation;
+        stats.maxAbsDeviation = std::max(stats.maxAbsDeviation, float(magnitude));
+
+        if (i > 0) {
+            const double step = gridIndex[size_t(i)] - gridIndex[size_t(i - 1)];
+            if (step > 1.0) {
+                stats.gapCount += int(step) - 1;  // детектор пропустил доли
+            } else if (step <= 0.0) {
+                ++stats.duplicateCount;           // две доли на одной линии сетки
+            }
+        }
+    }
+
+    stats.meanAbsDeviation = float(sumAbs / beatCount);
+    stats.rmsDeviation = float(std::sqrt(sumSquares / beatCount));
+    stats.medianAbsDeviation = float(medianInPlace(absDeviations));
+
+    return stats;
+}
+
+QVector<int> BPMAnalyzer::findUnalignedBeats(const QVector<BeatInfo>& beats,
+                                             float deviationThreshold,
+                                             float minConfidence)
 {
     QVector<int> unalignedIndices;
+    if (beats.isEmpty()) {
+        return unalignedIndices;
+    }
+
+    const float threshold = std::max(0.0f, deviationThreshold);
+    unalignedIndices.reserve(beats.size() / 8 + 1);
 
     for (int i = 0; i < beats.size(); ++i) {
-        // Проверяем абсолютное значение отклонения
-        if (std::abs(beats[i].deviation) > deviationThreshold) {
+        const BeatInfo& beat = beats[i];
+
+        // Мусорное отклонение (нет сетки / деление на ноль) — не повод для метки.
+        if (!std::isfinite(beat.deviation)) {
+            continue;
+        }
+        // Доля, в которой не уверен сам детектор, даёт ложные срабатывания.
+        if (beat.confidence < minConfidence) {
+            continue;
+        }
+        if (std::abs(beat.deviation) > threshold) {
             unalignedIndices.append(i);
         }
     }

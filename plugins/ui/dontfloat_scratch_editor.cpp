@@ -178,14 +178,6 @@ void DontfloatScratchEditor::notifyHostAudioAppended()
     refreshFromSession();
 }
 
-void DontfloatScratchEditor::setHostPlayhead(qint64 positionMs, bool playing)
-{
-    Q_UNUSED(playing);
-    if (waveform_) {
-        waveform_->setPlaybackPosition(positionMs);
-    }
-}
-
 void DontfloatScratchEditor::refreshWaveform()
 {
     if (!session_ || !waveform_) {
@@ -303,8 +295,12 @@ void DontfloatScratchEditor::onBpmAnalysisFinished()
         return;
     }
 
-    BPMAnalyzer::calculateDeviations(lastAnalysis_.beats, lastAnalysis_.bpm,
-                                     session_ ? session_->audioBuffer().sampleRate : 44100);
+    // Отклонения считаем по той же сетке, которую показывает волна.
+    BPMAnalyzer::DeviationOptions deviationOptions;
+    deviationOptions.gridStartSample = lastAnalysis_.gridStartSample;
+    const BPMAnalyzer::DeviationStats deviationStats = BPMAnalyzer::calculateDeviations(
+        lastAnalysis_.beats, lastAnalysis_.bpm,
+        session_ ? session_->audioBuffer().sampleRate : 44100, deviationOptions);
 
     if (waveform_) {
         waveform_->setBeatInfo(lastAnalysis_.beats);
@@ -316,11 +312,12 @@ void DontfloatScratchEditor::onBpmAnalysisFinished()
         waveform_->update();
     }
 
-    const int unaligned = BPMAnalyzer::findUnalignedBeats(lastAnalysis_.beats).size();
-    setStatus(tr("BPM %1 · beats %2 · deviations %3")
+    const int unaligned = int(BPMAnalyzer::findUnalignedBeats(lastAnalysis_.beats).size());
+    setStatus(tr("BPM %1 · beats %2 · deviations %3 · avg %4%")
                   .arg(double(lastAnalysis_.bpm), 0, 'f', 2)
                   .arg(lastAnalysis_.beats.size())
-                  .arg(unaligned));
+                  .arg(unaligned)
+                  .arg(double(deviationStats.meanAbsDeviation) * 100.0, 0, 'f', 1));
     updateActionButtons();
 }
 

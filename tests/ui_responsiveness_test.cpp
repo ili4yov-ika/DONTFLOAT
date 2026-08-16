@@ -90,7 +90,9 @@ int createCorrectionMarkers(WaveformView* view, float tolerancePercent, bool neu
     if (bpm <= 0 || sampleRate <= 0)
         return 0;
 
-    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate);
+    BPMAnalyzer::DeviationOptions deviationOptions;
+    deviationOptions.gridStartSample = view->getGridStartSample();
+    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate, deviationOptions);
     const float deviationThreshold = tolerancePercent / 100.0f;
     const QVector<int> unalignedIndices = BPMAnalyzer::findUnalignedBeats(beats, deviationThreshold);
     if (unalignedIndices.isEmpty())
@@ -105,6 +107,11 @@ int createCorrectionMarkers(WaveformView* view, float tolerancePercent, bool neu
 
         const BPMAnalyzer::BeatInfo& prevBeat = beats[idx - 1];
         const BPMAnalyzer::BeatInfo& currentBeat = beats[idx];
+
+        if (currentBeat.position <= prevBeat.position)
+            continue;
+        if (!neutralMarkers && currentBeat.expectedPosition <= prevBeat.expectedPosition)
+            continue;
 
         if (!addedPositions.contains(prevBeat.position)) {
             Marker startMarker(prevBeat.position, sampleRate);

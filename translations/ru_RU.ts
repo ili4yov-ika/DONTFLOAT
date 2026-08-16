@@ -4,27 +4,27 @@
 <context>
     <name>AudioFileService</name>
     <message>
-        <location filename="../src/audiofileservice.cpp" line="69"/>
+        <location filename="../src/audiofileservice.cpp" line="+69"/>
         <source>file not found or inaccessible</source>
         <translation>файл не найден или недоступен</translation>
     </message>
     <message>
-        <location filename="../src/audiofileservice.cpp" line="71"/>
+        <location line="+2"/>
         <source>unsupported format</source>
         <translation>неподдерживаемый формат</translation>
     </message>
     <message>
-        <location filename="../src/audiofileservice.cpp" line="73"/>
+        <location line="+2"/>
         <source>no file access</source>
         <translation>нет доступа к файлу</translation>
     </message>
     <message>
-        <location filename="../src/audiofileservice.cpp" line="75"/>
+        <location line="+2"/>
         <source>unknown error</source>
         <translation>неизвестная ошибка</translation>
     </message>
     <message>
-        <location filename="../src/audiofileservice.cpp" line="164"/>
+        <location line="+89"/>
         <source>failed to decode audio data</source>
         <translation>не удалось декодировать аудиоданные</translation>
     </message>
@@ -32,12 +32,12 @@
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatFullEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_full_editor.cpp" line="30"/>
+        <location filename="../plugins/ui/dontfloat_full_editor.cpp" line="+30"/>
         <source>Rhythm / BPM / stretch</source>
         <translation>Ритм / BPM / stretch</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_full_editor.cpp" line="32"/>
+        <location line="+2"/>
         <source>Pitch / notes / key</source>
         <translation>Питч / ноты / тональность</translation>
     </message>
@@ -45,114 +45,114 @@
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatPitchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="120"/>
+        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+120"/>
         <source>Undefined</source>
         <translation>Не определена</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="129"/>
+        <location line="+9"/>
         <source>Modulation</source>
         <translation>Модуляция</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="145"/>
+        <location line="+16"/>
         <source>Import WAV…</source>
         <translation>Импорт WAV…</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="146"/>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="170"/>
+        <location line="+1"/>
+        <location line="+24"/>
         <source>Analyze</source>
         <translation>Анализировать</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="147"/>
+        <location line="-23"/>
         <source>Apply correction</source>
         <translation>Применить коррекцию</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="148"/>
+        <location line="+1"/>
         <source>Export WAV…</source>
         <translation>Экспорт WAV…</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="161"/>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="270"/>
+        <location line="+13"/>
+        <location line="+109"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>загрузите аудио или воспроизведите трек в DAW для захвата сигнала.</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="263"/>
+        <location line="-7"/>
         <source>audio: %1 samples, %2 Hz</source>
         <translation>аудио: %1 сэмплов, %2 Гц</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="372"/>
+        <location line="+109"/>
         <source>%1 — audio import</source>
         <translation>%1 — импорт аудио</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="373"/>
+        <location line="+1"/>
         <source>Audio Files (*.wav *.mp3 *.flac);;All Files (*)</source>
         <translation>Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="380"/>
+        <location line="+7"/>
         <source>import error: %1</source>
         <translation>ошибка импорта: %1</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="415"/>
+        <location line="+35"/>
         <source>no audio data for analysis</source>
         <translation>нет аудиоданных для анализа</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="475"/>
+        <location line="+60"/>
         <source>analysis done: %1, notes found: %2</source>
         <translation>анализ завершён: %1, найдено нот: %2</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="489"/>
+        <location line="+14"/>
         <source>no source audio for correction</source>
         <translation>нет исходного аудио для коррекции</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="495"/>
+        <location line="+6"/>
         <source>no modified notes for correction</source>
         <translation>нет изменённых нот для коррекции</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="499"/>
+        <location line="+4"/>
         <source>applying pitch correction…</source>
         <translation>применение коррекции высоты…</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="505"/>
+        <location line="+6"/>
         <source>correction failed</source>
         <translation>коррекция не удалась</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="522"/>
+        <location line="+17"/>
         <source>correction applied — processed audio is in the plugin session</source>
         <translation>коррекция применена — обработанное аудио в сессии плагина</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="533"/>
+        <location line="+11"/>
         <source>%1 — WAV export</source>
         <translation>%1 — экспорт WAV</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="534"/>
+        <location line="+1"/>
         <source>WAV (*.wav)</source>
         <translation>WAV (*.wav)</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="552"/>
+        <location line="+18"/>
         <source>export error: %1</source>
         <translation>ошибка экспорта: %1</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="555"/>
+        <location line="+3"/>
         <source>exported: %1</source>
         <translation>экспортировано: %1</translation>
     </message>
@@ -160,123 +160,123 @@
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatScratchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="100"/>
+        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="+100"/>
         <source>Import WAV…</source>
         <translation>Импорт WAV…</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="101"/>
+        <location line="+1"/>
         <source>BPM analysis</source>
         <translation>Анализ BPM</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="102"/>
+        <location line="+1"/>
         <source>Align beats</source>
         <translation>Выровнять доли</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="103"/>
+        <location line="+1"/>
         <source>Apply stretch</source>
         <translation>Применить stretch</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="104"/>
+        <location line="+1"/>
         <source>Export WAV…</source>
         <translation>Экспорт WAV…</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="122"/>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="191"/>
+        <location line="+18"/>
+        <location line="+69"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>загрузите аудио или воспроизведите трек в DAW для захвата сигнала.</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="204"/>
+        <location line="+13"/>
         <source>audio %1 samples @ %2 Hz · BPM %3</source>
         <translation>аудио %1 сэмплов @ %2 Гц · BPM %3</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="209"/>
+        <location line="+5"/>
         <source>audio: %1 samples, %2 Hz — click “BPM analysis”</source>
         <translation>аудио: %1 сэмплов, %2 Гц — нажмите «Анализ BPM»</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="240"/>
+        <location line="+31"/>
         <source>%1 — audio import</source>
         <translation>%1 — импорт аудио</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="241"/>
+        <location line="+1"/>
         <source>Audio Files (*.wav *.mp3 *.flac);;All Files (*)</source>
         <translation>Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="248"/>
+        <location line="+7"/>
         <source>import error: %1</source>
         <translation>ошибка импорта: %1</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="269"/>
+        <location line="+21"/>
         <source>no audio data for BPM analysis</source>
         <translation>нет аудиоданных для анализа BPM</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="275"/>
+        <location line="+6"/>
         <source>analyzing BPM…</source>
         <translation>анализ BPM…</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="293"/>
+        <location line="+18"/>
         <source>could not detect BPM</source>
         <translation>не удалось определить BPM</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="312"/>
-        <source>BPM %1 · beats %2 · deviations %3</source>
-        <translation>BPM %1 · долей %2 · отклонений %3</translation>
+        <location line="+23"/>
+        <source>BPM %1 · beats %2 · deviations %3 · avg %4%</source>
+        <translation>BPM %1 · долей %2 · отклонений %3 · среднее %4%</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="373"/>
+        <location line="+62"/>
         <source>aligning beats…</source>
         <translation>выравнивание долей…</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="397"/>
+        <location line="+24"/>
         <source>beat alignment error</source>
         <translation>ошибка выравнивания долей</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="425"/>
+        <location line="+28"/>
         <source>beats aligned (BPM %1). Drag stretch markers if needed.</source>
         <translation>доли выровнены (BPM %1). Перетащите метки stretch при необходимости.</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="439"/>
+        <location line="+14"/>
         <source>failed to apply stretch</source>
         <translation>не удалось применить stretch</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="453"/>
+        <location line="+14"/>
         <source>stretch applied · %1 samples</source>
         <translation>stretch применён · %1 сэмплов</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="464"/>
+        <location line="+11"/>
         <source>%1 — WAV export</source>
         <translation>%1 — экспорт WAV</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="465"/>
+        <location line="+1"/>
         <source>WAV (*.wav)</source>
         <translation>WAV (*.wav)</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="473"/>
+        <location line="+8"/>
         <source>export error: %1</source>
         <translation>ошибка экспорта: %1</translation>
     </message>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="476"/>
+        <location line="+3"/>
         <source>exported: %1</source>
         <translation>экспортировано: %1</translation>
     </message>
@@ -284,18 +284,18 @@
 <context>
     <name>KeyModulationStrip</name>
     <message>
-        <location filename="../src/keymodulationstrip.cpp" line="82"/>
-        <location filename="../src/keymodulationstrip.cpp" line="152"/>
+        <location filename="../src/keymodulationstrip.cpp" line="+82"/>
+        <location line="+70"/>
         <source>Undefined</source>
         <translation>Не определена</translation>
     </message>
     <message>
-        <location filename="../src/keymodulationstrip.cpp" line="154"/>
+        <location line="+2"/>
         <source>Key for bars %1–%2</source>
         <translation>Тональность тактов %1–%2</translation>
     </message>
     <message>
-        <location filename="../src/keymodulationstrip.cpp" line="157"/>
+        <location line="+3"/>
         <source>%1 (bars %2–%3)</source>
         <translation>%1 (такты %2–%3)</translation>
     </message>
@@ -303,17 +303,17 @@
 <context>
     <name>KeySelectionMenu</name>
     <message>
-        <location filename="../src/keyselectionmenu.cpp" line="30"/>
+        <location filename="../src/keyselectionmenu.cpp" line="+30"/>
         <source>Major</source>
         <translation>Мажорные</translation>
     </message>
     <message>
-        <location filename="../src/keyselectionmenu.cpp" line="31"/>
+        <location line="+1"/>
         <source>Minor</source>
         <translation>Минорные</translation>
     </message>
     <message>
-        <location filename="../src/keyselectionmenu.cpp" line="34"/>
+        <location line="+3"/>
         <source>Undefined</source>
         <translation>Не определена</translation>
     </message>
@@ -321,23 +321,23 @@
 <context>
     <name>LoadFileDialog</name>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="14"/>
+        <location filename="../ui/loadfiledialog.ui" line="+14"/>
         <source>Analysis and Beat Alignment</source>
         <translation>Анализ и выравнивание долей</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="41"/>
-        <location filename="../src/loadfiledialog.cpp" line="36"/>
+        <location line="+27"/>
+        <location filename="../src/loadfiledialog.cpp" line="+36"/>
         <source>Audio analysis...</source>
         <translation>Анализ аудио...</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="44"/>
+        <location line="+3"/>
         <source>font-size: 14px; font-weight: bold; color: white;</source>
         <translation>font-size: 14px; font-weight: bold; color: white;</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="54"/>
+        <location line="+10"/>
         <source>QProgressBar {
                             border: 2px solid palette(mid);
                             border-radius: 5px;
@@ -364,94 +364,94 @@
                         </translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="78"/>
-        <location filename="../ui/loadfiledialog.ui" line="185"/>
+        <location line="+24"/>
+        <location line="+107"/>
         <source>font-size: 12px; color: white; padding: 5px;</source>
         <translation>font-size: 12px; color: white; padding: 5px;</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="85"/>
-        <location filename="../src/loadfiledialog.cpp" line="63"/>
+        <location line="-100"/>
+        <location filename="../src/loadfiledialog.cpp" line="+27"/>
         <source>Preliminary BPM (based on Mixxx): -- BPM</source>
         <translation>Предварительный BPM (на основе Mixxx): -- BPM</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="88"/>
-        <location filename="../ui/loadfiledialog.ui" line="98"/>
-        <location filename="../ui/loadfiledialog.ui" line="108"/>
-        <location filename="../ui/loadfiledialog.ui" line="123"/>
+        <location line="+3"/>
+        <location line="+10"/>
+        <location line="+10"/>
+        <location line="+15"/>
         <source>font-size: 11px; color: white; padding: 2px;</source>
         <translation>font-size: 11px; color: white; padding: 2px;</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="95"/>
+        <location line="-28"/>
         <source>Computed BPM (confidence --%): -- BPM</source>
         <translation>Вычисленный BPM (уверенность --%): -- BPM</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="105"/>
+        <location line="+10"/>
         <source>Average deviation: --%</source>
         <translation>Среднее отклонение: --%</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="120"/>
+        <location line="+15"/>
         <source>Time signature:</source>
         <translation>Размер такта:</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="136"/>
+        <location line="+16"/>
         <source>Time signature (change before alignment).</source>
         <translation>Размер такта. Перед выравниванием можно изменить.</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="139"/>
+        <location line="+3"/>
         <source>font-size: 11px; color: white; padding: 4px; background: palette(base);
                                 </source>
         <translation>font-size: 11px; color: white; padding: 4px; background: palette(base);
                                 </translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="144"/>
+        <location line="+5"/>
         <source>4/4</source>
         <translation>4/4</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="149"/>
+        <location line="+5"/>
         <source>3/4</source>
         <translation>3/4</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="154"/>
+        <location line="+5"/>
         <source>1/4</source>
         <translation>1/4</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="159"/>
+        <location line="+5"/>
         <source>2/4</source>
         <translation>2/4</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="164"/>
+        <location line="+5"/>
         <source>6/8</source>
         <translation>6/8</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="169"/>
+        <location line="+5"/>
         <source>12/8</source>
         <translation>12/8</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="179"/>
+        <location line="+10"/>
         <source>Keep markers when skipping alignment</source>
         <translation>Оставить метки даже в случае пропуска самовыровнения</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="223"/>
+        <location line="+44"/>
         <source>Align</source>
         <translation>Выровнять</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="229"/>
+        <location line="+6"/>
         <source>QPushButton {
                                     background-color: #4CAF50;
                                     color: white;
@@ -488,13 +488,13 @@
                                 </translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="252"/>
-        <location filename="../src/loadfiledialog.cpp" line="90"/>
+        <location line="+23"/>
+        <location filename="../src/loadfiledialog.cpp" line="+27"/>
         <source>Skip</source>
         <translation>Пропустить</translation>
     </message>
     <message>
-        <location filename="../ui/loadfiledialog.ui" line="258"/>
+        <location line="+6"/>
         <source>QPushButton {
                                     background-color: #f44336;
                                     color: white;
@@ -531,27 +531,27 @@
                                 </translation>
     </message>
     <message>
-        <location filename="../src/loadfiledialog.cpp" line="55"/>
+        <location filename="../src/loadfiledialog.cpp" line="-35"/>
         <source>Analysis completed.</source>
         <translation>Анализ завершён.</translation>
     </message>
     <message>
-        <location filename="../src/loadfiledialog.cpp" line="60"/>
+        <location line="+5"/>
         <source>Preliminary BPM (based on Mixxx): %1 BPM</source>
         <translation>Предварительный BPM (на основе Mixxx): %1 BPM</translation>
     </message>
     <message>
-        <location filename="../src/loadfiledialog.cpp" line="68"/>
+        <location line="+8"/>
         <source>Calculated BPM (confidence %1%): %2 BPM</source>
         <translation>Вычисленный BPM (уверенность %1%): %2 BPM</translation>
     </message>
     <message>
-        <location filename="../src/loadfiledialog.cpp" line="74"/>
+        <location line="+6"/>
         <source>Average deviation: %1%</source>
         <translation>Среднее отклонение: %1%</translation>
     </message>
     <message>
-        <location filename="../src/loadfiledialog.cpp" line="88"/>
+        <location line="+14"/>
         <source>Skip (beats are regular)</source>
         <translation>Пропустить (доли ровные)</translation>
     </message>
@@ -559,151 +559,151 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../ui/mainwindow.ui" line="14"/>
-        <location filename="../src/mainwindow.cpp" line="1688"/>
-        <location filename="../src/mainwindow.cpp" line="1938"/>
+        <location filename="../ui/mainwindow.ui" line="+14"/>
+        <location filename="../src/mainwindow.cpp" line="+1702"/>
+        <location line="+250"/>
         <source>DONTFLOAT</source>
         <translation>DONTFLOAT</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="90"/>
+        <location line="+76"/>
         <source>Open file</source>
         <translation>Открыть файл</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="123"/>
+        <location line="+33"/>
         <source>Save file</source>
         <translation>Сохранить файл</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="144"/>
+        <location line="+21"/>
         <source>00:00:000 | 1.1.1</source>
         <translation>00:00:000 | 1.1.1</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="154"/>
+        <location line="+10"/>
         <source>BPM:</source>
         <translation>BPM:</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="173"/>
+        <location line="+19"/>
         <source>120.00</source>
         <translation>120.00</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="183"/>
+        <location line="+10"/>
         <source>Time signature:</source>
         <translation>Размер такта:</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="196"/>
+        <location line="+13"/>
         <source>Time signature</source>
         <translation>Размер такта</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="200"/>
+        <location line="+4"/>
         <source>4/4</source>
         <translation>4/4</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="205"/>
+        <location line="+5"/>
         <source>3/4</source>
         <translation>3/4</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="210"/>
+        <location line="+5"/>
         <source>1/4</source>
         <translation>1/4</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="215"/>
+        <location line="+5"/>
         <source>2/4</source>
         <translation>2/4</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="220"/>
+        <location line="+5"/>
         <source>6/8</source>
         <translation>6/8</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="225"/>
+        <location line="+5"/>
         <source>12/8</source>
         <translation>12/8</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="245"/>
+        <location line="+20"/>
         <source>Auto markers (onset detection)</source>
         <translation>Авто-метки по транзиентам (Onset detection)</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="248"/>
+        <location line="+3"/>
         <source>OD</source>
         <translation>OD</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="267"/>
+        <location line="+19"/>
         <source>Shift beat grid one beat back</source>
         <translation>Сдвинуть тактовую сетку на один удар назад</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="270"/>
+        <location line="+3"/>
         <source>&lt;</source>
         <translation>&lt;</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="289"/>
+        <location line="+19"/>
         <source>Snap all markers to BPM grid</source>
         <translation>Привязать все метки к тактовой сетке BPM</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="292"/>
+        <location line="+3"/>
         <source>BG</source>
         <translation>BG</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="311"/>
+        <location line="+19"/>
         <source>Shift beat grid one beat forward</source>
         <translation>Сдвинуть тактовую сетку на один удар вперёд</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="314"/>
+        <location line="+3"/>
         <source>&gt;</source>
         <translation>&gt;</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="382"/>
-        <location filename="../src/mainwindow.cpp" line="711"/>
-        <location filename="../src/mainwindow.cpp" line="1332"/>
+        <location line="+68"/>
+        <location filename="../src/mainwindow.cpp" line="-1214"/>
+        <location line="+620"/>
         <source>Metronome</source>
         <translation>Метроном</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="418"/>
+        <location line="+36"/>
         <source>Set loop start A</source>
         <translation>Установить точку A (начало цикла)</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="421"/>
+        <location line="+3"/>
         <source>A</source>
         <translation>A</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="446"/>
+        <location line="+25"/>
         <source>Set loop end B</source>
         <translation>Установить точку B (конец цикла)</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="449"/>
+        <location line="+3"/>
         <source>B</source>
         <translation>B</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="474"/>
+        <location line="+25"/>
         <source>Toggle loop</source>
         <translation>Включить/выключить цикл</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="684"/>
+        <location line="+210"/>
         <source>QWidget {
                                                                         background-color: #1a1a1a;
                                                                         border-bottom: 1px solid
@@ -716,8 +716,8 @@
                                                                         }</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="712"/>
-        <location filename="../ui/mainwindow.ui" line="754"/>
+        <location line="+28"/>
+        <location line="+42"/>
         <source>QLineEdit {
                                                                                     background-color:
                                                                                     #2b2b2b;
@@ -770,19 +770,19 @@
                                                                                     }</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="744"/>
+        <location line="-10"/>
         <source>Not
                                                                                     defined</source>
         <translation>Не
                                                                                     определена</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="786"/>
+        <location line="+42"/>
         <source>Modulation</source>
         <translation>Модуляция</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="824"/>
+        <location line="+38"/>
         <source>QWidget {
                                                                         background-color: #2b2b2b;
                                                                         }</source>
@@ -791,307 +791,295 @@
                                                                         }</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="852"/>
+        <location line="+28"/>
         <source>background-color: rgb(33, 33, 33);
                     color: rgb(255, 255, 255);</source>
         <translation>background-color: rgb(33, 33, 33);
                     color: rgb(255, 255, 255);</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="694"/>
-        <location filename="../src/mainwindow.cpp" line="1455"/>
+        <location filename="../src/mainwindow.cpp" line="-637"/>
+        <location line="+742"/>
         <source>&amp;File</source>
         <translation>&amp;Файл</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="695"/>
-        <location filename="../src/mainwindow.cpp" line="1462"/>
+        <location line="-741"/>
+        <location line="+748"/>
         <source>&amp;Edit</source>
         <translation>&amp;Правка</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="696"/>
-        <location filename="../src/mainwindow.cpp" line="1471"/>
+        <location line="-747"/>
+        <location line="+756"/>
         <source>&amp;View</source>
         <translation>&amp;Вид</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="697"/>
-        <location filename="../src/mainwindow.cpp" line="1474"/>
+        <location line="-755"/>
+        <location line="+758"/>
         <source>Themes</source>
         <translation>Темы</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="698"/>
-        <location filename="../src/mainwindow.cpp" line="1478"/>
+        <location line="-757"/>
+        <location line="+761"/>
         <source>&amp;Color Scheme</source>
         <translation>&amp;Цветовая схема</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="699"/>
-        <location filename="../src/mainwindow.cpp" line="1494"/>
+        <location line="-760"/>
+        <location line="+776"/>
         <source>&amp;Settings</source>
         <translation>&amp;Настройки</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="700"/>
-        <location filename="../src/mainwindow.cpp" line="1502"/>
+        <location line="-775"/>
+        <location line="+782"/>
         <source>Language</source>
         <translatorcomment>DONTFLOAT policy: submenu title stays the literal string «Language» in every locale (do not translate to «Язык», etc.).</translatorcomment>
         <translation>Language</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="701"/>
-        <location filename="../src/mainwindow.cpp" line="1287"/>
+        <location line="-781"/>
+        <location line="+585"/>
         <source>&amp;Open...</source>
         <translation>&amp;Открыть...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="702"/>
-        <location filename="../src/mainwindow.cpp" line="1291"/>
+        <location line="-584"/>
+        <location line="+588"/>
         <source>&amp;Save</source>
         <translation>&amp;Сохранить</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="703"/>
-        <location filename="../src/mainwindow.cpp" line="1295"/>
+        <location line="-587"/>
+        <location line="+591"/>
         <source>&amp;Exit</source>
         <translation>&amp;Выход</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="704"/>
-        <location filename="../src/mainwindow.cpp" line="1301"/>
+        <location line="-590"/>
+        <location line="+596"/>
         <source>Use default theme</source>
         <translation>Использовать тему по умолчанию</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="704"/>
-        <location filename="../src/mainwindow.cpp" line="1300"/>
+        <location line="-596"/>
+        <location line="+595"/>
         <source>Reset to default</source>
         <translation>По умолчанию</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="705"/>
-        <location filename="../src/mainwindow.cpp" line="1305"/>
+        <location line="-594"/>
+        <location line="+599"/>
         <source>Dark</source>
         <translation>Тёмная</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="705"/>
-        <location filename="../src/mainwindow.cpp" line="1306"/>
+        <location line="-599"/>
+        <location line="+600"/>
         <source>Use dark theme</source>
         <translation>Использовать тёмную тему</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="706"/>
-        <location filename="../src/mainwindow.cpp" line="1309"/>
+        <location line="-599"/>
+        <location line="+602"/>
         <source>Light</source>
         <translation>Светлая</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="706"/>
-        <location filename="../src/mainwindow.cpp" line="1310"/>
+        <location line="-602"/>
+        <location line="+603"/>
         <source>Use light theme</source>
         <translation>Использовать светлую тему</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="707"/>
-        <location filename="../src/mainwindow.cpp" line="1314"/>
+        <location line="-602"/>
+        <location line="+606"/>
         <source>&amp;Metronome Settings...</source>
         <translation>Настройки &amp;метронома...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="707"/>
-        <location filename="../src/mainwindow.cpp" line="1315"/>
+        <location line="-606"/>
+        <location line="+607"/>
         <source>Metronome Settings</source>
         <translation>Настройки метронома</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="708"/>
-        <location filename="../src/mainwindow.cpp" line="1318"/>
+        <location line="-606"/>
+        <location line="+609"/>
         <source>&amp;Hotkeys...</source>
         <translation>&amp;Горячие клавиши...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="708"/>
-        <location filename="../src/mainwindow.cpp" line="1319"/>
+        <location line="-609"/>
+        <location line="+610"/>
         <source>Configure hotkeys</source>
         <translation>Настройка горячих клавиш</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="709"/>
-        <location filename="../src/mainwindow.cpp" line="1323"/>
+        <location line="-609"/>
+        <location line="+613"/>
         <source>Play/Pause</source>
         <translation>Воспроизведение/Пауза</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="710"/>
-        <location filename="../src/mainwindow.cpp" line="1327"/>
+        <location line="-612"/>
+        <location line="+616"/>
         <source>Stop</source>
         <translation>Стоп</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="712"/>
-        <location filename="../src/mainwindow.cpp" line="1338"/>
+        <location line="-614"/>
+        <location line="+625"/>
         <source>Set loop start</source>
         <translation>Установить начало цикла</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="713"/>
-        <location filename="../src/mainwindow.cpp" line="1342"/>
+        <location line="-624"/>
+        <location line="+628"/>
         <source>Set loop end</source>
         <translation>Установить конец цикла</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="714"/>
-        <location filename="../src/mainwindow.cpp" line="1349"/>
+        <location line="-627"/>
+        <location line="+634"/>
         <source>Toggle pitch grid visibility</source>
         <translation>Переключить видимость питч-сетки</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="714"/>
-        <location filename="../src/mainwindow.cpp" line="774"/>
-        <location filename="../src/mainwindow.cpp" line="1347"/>
-        <location filename="../src/mainwindow.cpp" line="2562"/>
+        <location line="-634"/>
+        <location line="+59"/>
+        <location line="+573"/>
+        <location line="+1220"/>
         <source>Hide Pitch Grid</source>
         <translation>Убрать питч-сетку</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="714"/>
-        <location filename="../src/mainwindow.cpp" line="775"/>
-        <location filename="../src/mainwindow.cpp" line="2563"/>
+        <location line="-1852"/>
+        <location line="+60"/>
+        <location line="+1793"/>
         <source>Show Pitch Grid</source>
         <translation>Показать питч-сетку</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="715"/>
-        <location filename="../src/mainwindow.cpp" line="1353"/>
+        <location line="-1852"/>
+        <location line="+637"/>
         <source>Beat Waveform</source>
         <translation>Силуэт ударных</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="715"/>
-        <location filename="../src/mainwindow.cpp" line="1356"/>
+        <location line="-637"/>
+        <location line="+640"/>
         <source>Toggle beat waveform overlay</source>
         <translation>Переключить отображение силуэта ударных поверх волны</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="716"/>
-        <location filename="../src/mainwindow.cpp" line="1383"/>
+        <location line="-639"/>
+        <location line="+666"/>
         <source>&amp;Undo</source>
         <translation>&amp;Отменить</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="717"/>
-        <location filename="../src/mainwindow.cpp" line="1387"/>
+        <location line="-665"/>
+        <location line="+669"/>
         <source>&amp;Redo</source>
         <translation>&amp;Повторить</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="718"/>
-        <location filename="../src/mainwindow.cpp" line="1391"/>
+        <location line="-668"/>
+        <location line="+672"/>
         <source>Русский</source>
         <translatorcomment>Language name autonym: keep Cyrillic «Русский» in the English .ts as well (do not use «Russian» here).</translatorcomment>
         <translation>Русский</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="719"/>
-        <location filename="../src/mainwindow.cpp" line="1396"/>
+        <location line="-671"/>
+        <location line="+676"/>
         <source>English</source>
         <translatorcomment>Language name autonym: keep «English» (do not translate to localized demonyms).</translatorcomment>
         <translation>English</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="720"/>
-        <location filename="../src/mainwindow.cpp" line="1441"/>
-        <location filename="../src/mainwindow.cpp" line="3509"/>
+        <location line="-675"/>
+        <location line="+702"/>
+        <location line="+2230"/>
         <source>Apply time stretch</source>
         <translation>Применить сжатие-растяжение</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="720"/>
-        <location filename="../src/mainwindow.cpp" line="1443"/>
+        <location line="-2932"/>
+        <location line="+704"/>
         <source>Apply time stretch with pitch compensation</source>
         <translation>Применить сжатие-растяжение аудио по меткам с тонкомпенсацией</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="721"/>
-        <location filename="../src/mainwindow.cpp" line="1446"/>
-        <location filename="../src/mainwindow.cpp" line="2829"/>
+        <location line="-703"/>
+        <location line="+706"/>
+        <location line="+1489"/>
         <source>Apply note pitch correction</source>
         <translation>Применить коррекцию высоты нот</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="721"/>
-        <location filename="../src/mainwindow.cpp" line="1448"/>
+        <location line="-2195"/>
+        <location line="+708"/>
         <source>Re-render audio using the edited piano roll notes</source>
         <translation>Пересчитать звук по изменённым нотам пианоролла</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="722"/>
-        <location filename="../src/mainwindow.cpp" line="1483"/>
+        <location line="-707"/>
+        <location line="+742"/>
         <source>Waveform view</source>
         <translation>Вид звуковой волны</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="723"/>
-        <location filename="../src/mainwindow.cpp" line="1360"/>
+        <location line="-741"/>
+        <location line="+636"/>
         <source>Wave peaks</source>
         <translation>Звуковые пики</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="724"/>
-        <location filename="../src/mainwindow.cpp" line="1371"/>
+        <location line="-635"/>
+        <location line="+646"/>
         <source>Spectrogram</source>
         <translation>Спектрограмма</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="725"/>
-        <location filename="../src/mainwindow.cpp" line="1401"/>
+        <location line="-645"/>
+        <location line="+675"/>
         <source>Spectrogram display settings...</source>
         <translation>Настройки отображения спектрограммы...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="725"/>
-        <location filename="../src/mainwindow.cpp" line="1402"/>
+        <location line="-675"/>
+        <location line="+676"/>
         <source>Spectrogram options (window, bands, color)</source>
         <translation>Настроить параметры спектрограммы (размер окна, полосы, цвет)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="726"/>
-        <location filename="../src/mainwindow.cpp" line="1423"/>
-        <source>Pitch shift settings...</source>
-        <translation>Настройки питч-шифтера...</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="726"/>
-        <location filename="../src/mainwindow.cpp" line="1424"/>
-        <source>Granular pitch shift after stretch (Ctrl+T)</source>
-        <translation>Настроить гранулярный питч-шифтер, применяемый после растяжения (Ctrl+T)</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow.cpp" line="728"/>
-        <location filename="../src/mainwindow.cpp" line="3179"/>
+        <location line="-674"/>
+        <location line="+2595"/>
         <source>Analyzing... %p%</source>
         <translation>Анализ... %p%</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="835"/>
+        <location line="-2488"/>
         <source>Time signature set to %1</source>
         <translation>Размер такта изменен на %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="855"/>
+        <location line="+20"/>
         <source>Playback completed</source>
         <translation>Воспроизведение завершено</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1030"/>
+        <location line="+175"/>
         <source>Auto-place markers from transients (LMMS onset detection)</source>
         <translation>Автоматически создать метки по транзиентам (Onset detection из LMMS)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1068"/>
+        <location line="+38"/>
         <source>LMB: Set point A (loop start)
 RMB: Remove point A
 A: Set point A
@@ -1102,7 +1090,7 @@ A: Установить точку A
 Shift+A: Удалить точку A</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1069"/>
+        <location line="+1"/>
         <source>LMB: Set point B (loop end)
 RMB: Remove point B
 B: Set point B
@@ -1113,505 +1101,545 @@ B: Установить точку B
 Shift+B: Удалить точку B</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1073"/>
+        <location line="+4"/>
         <source>Point A: %1</source>
         <translation>Точка A: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1079"/>
+        <location line="+6"/>
         <source>Point B: %1</source>
         <translation>Точка B: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1136"/>
+        <location line="+57"/>
         <source>Playing...</source>
         <translation>Воспроизведение...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1147"/>
+        <location line="+11"/>
         <source>Paused</source>
         <translation>Пауза</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1169"/>
+        <location line="+22"/>
         <source>Stopped</source>
         <translation>Остановлено</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1200"/>
+        <location line="+31"/>
         <source>BPM set to: %1</source>
         <translation>BPM установлен: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1203"/>
+        <location line="+3"/>
         <source>Invalid BPM value (valid range: 0.01 - 9999.99)</source>
         <translation>Неверное значение BPM (допустимый диапазон: 0.01 - 9999.99)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1242"/>
-        <location filename="../src/mainwindow.cpp" line="2127"/>
+        <location line="+39"/>
+        <location line="+873"/>
         <source>Loop: %1 - %2</source>
         <translation>Цикл: %1 - %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1264"/>
+        <location line="-851"/>
         <source>Segment: %1 - %2 | Ratio: %3</source>
         <translation>Сегмент: %1 - %2 | Коэффициент: %3</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1529"/>
+        <location line="+246"/>
         <source>Marker added</source>
         <translation>Метка добавлена</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1600"/>
+        <location line="+78"/>
         <source>Point A (loop start) set: %1</source>
         <translation>Установлена точка A (начало цикла): %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1604"/>
-        <location filename="../src/mainwindow.cpp" line="1629"/>
+        <location line="+4"/>
+        <location line="+25"/>
         <source>Loop ready! Press Loop button to enable.</source>
         <translation>Цикл готов! Нажмите кнопку Цикл для включения.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1617"/>
+        <location line="-12"/>
         <source>Error: Point B must be greater than point A!</source>
         <translation>Ошибка: Точка B должна быть больше точки A!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1625"/>
+        <location line="+8"/>
         <source>Point B (loop end) set: %1</source>
         <translation>Установлена точка B (конец цикла): %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1651"/>
+        <location line="+26"/>
         <source>Point A (loop start) removed</source>
         <translation>Точка A (начало цикла) удалена</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1675"/>
+        <location line="+24"/>
         <source>Point B (loop end) removed</source>
         <translation>Точка B (конец цикла) удалена</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1692"/>
+        <location line="+17"/>
         <source>Save</source>
         <translation>Сохранить</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1693"/>
+        <location line="+1"/>
         <source>Don&apos;t save</source>
         <translation>Не сохранять</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1694"/>
+        <location line="+1"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1773"/>
+        <location line="+79"/>
         <source>Open Audio File</source>
         <translation>Открыть аудиофайл</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1774"/>
+        <location line="+1"/>
         <source>Audio Files (*.wav *.mp3 *.flac);;All Files (*)</source>
         <translation>Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1792"/>
-        <location filename="../src/mainwindow.cpp" line="2022"/>
+        <location line="+18"/>
+        <location line="+230"/>
         <source>File loaded: %1</source>
         <translation>Файл загружен: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1802"/>
+        <location line="-220"/>
         <source>Analysis and Beat Alignment</source>
         <translation>Анализ и выравнивание долей</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1804"/>
-        <location filename="../src/mainwindow.cpp" line="1814"/>
+        <location line="+2"/>
+        <location line="+10"/>
         <source>Loading audio...</source>
         <translation>Загрузка аудиофайла...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1826"/>
+        <location line="+12"/>
         <source>Audio analysis...</source>
         <translation>Анализ аудио...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1830"/>
+        <location line="+4"/>
         <source>Analysis completed.</source>
         <translation>Анализ завершён.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1819"/>
+        <location line="-11"/>
         <source>File load error</source>
         <translation>Ошибка загрузки файла</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1910"/>
+        <location line="+91"/>
         <source>Save Audio File</source>
         <translation>Сохранить аудиофайл</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1899"/>
+        <location line="-11"/>
         <source>WAV 32-bit float (*.wav)</source>
         <translation>WAV 32-bit float (*.wav)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1900"/>
+        <location line="+1"/>
         <source>WAV 24-bit PCM (*.wav)</source>
         <translation>WAV 24-bit PCM (*.wav)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1901"/>
+        <location line="+1"/>
         <source>WAV 16-bit PCM (*.wav)</source>
         <translation>WAV 16-bit PCM (*.wav)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1902"/>
+        <location line="+1"/>
         <source>All files (*)</source>
         <translation>Все файлы (*)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1945"/>
+        <location line="+43"/>
         <source>Saved: %1</source>
         <translation>Файл сохранен: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1923"/>
+        <location line="-22"/>
         <source>Error: nothing to save</source>
         <translation>Ошибка: нет данных для сохранения</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1038"/>
+        <location line="-873"/>
         <source>Snap all markers to BPM grid (bar subdivisions)</source>
         <translation>Привязать все метки к тактовой сетке BPM (подразделения такта)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1043"/>
+        <location line="+5"/>
         <source>Shift the bar grid one beat backward (Shift — with markers)
 Shift + LMB drag on waveform — fine grid adjustment</source>
         <translation>Сдвинуть тактовую сетку на один удар назад (Shift — вместе с метками)
 Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1049"/>
+        <location line="+6"/>
         <source>Shift the bar grid one beat forward (Shift — with markers)
 Shift + LMB drag on waveform — fine grid adjustment</source>
         <translation>Сдвинуть тактовую сетку на один удар вперёд (Shift — вместе с метками)
 Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1689"/>
+        <location line="+628"/>
         <source>The audio file has unsaved changes.
 Do you want to save the changes?</source>
         <translation>В аудиофайле есть несохраненные изменения.
 Хотите сохранить изменения?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1879"/>
+        <location line="+190"/>
         <source>Decode error: %1</source>
         <translation>Ошибка декодирования: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1939"/>
+        <location line="+60"/>
         <source>Could not save %1:
 %2.</source>
         <translation>Не удалось сохранить файл %1:
 %2.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2081"/>
+        <location line="+142"/>
         <source>Metronome on</source>
         <translation>Метроном включен</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2083"/>
+        <location line="+2"/>
         <source>Metronome off</source>
         <translation>Метроном выключен</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2091"/>
+        <location line="+8"/>
         <source>Error: Set loop points A and B first!</source>
         <translation>Ошибка: Сначала установите точки A и B для цикла!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2102"/>
+        <location line="+11"/>
         <source>Loop on: %1 - %2</source>
         <translation>Цикл включен: %1 - %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2106"/>
+        <location line="+4"/>
         <source>Loop off</source>
         <translation>Цикл выключен</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2140"/>
+        <location line="+34"/>
         <source>Metronome settings updated</source>
         <translation>Настройки метронома обновлены</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2227"/>
+        <location line="+87"/>
         <source>Theme: %1</source>
         <translation>Тема изменена: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2286"/>
+        <location line="+64"/>
         <source>Color scheme: %1</source>
         <translation>Цветовая схема изменена: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2363"/>
+        <location line="+77"/>
         <source>No beat grid to snap to (BPM or beats not detected).</source>
         <translation>Нет тактовой сетки для привязки (BPM или доли не определены).</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2369"/>
+        <location line="+6"/>
         <source>No markers to snap to the grid.</source>
         <translation>Нет меток для привязки к тактовой сетке.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2375"/>
+        <location line="+6"/>
         <source>Could not snap markers to the grid.</source>
         <translation>Не удалось привязать метки к тактовой сетке.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2390"/>
+        <location line="+15"/>
         <source>Markers snapped to the grid (%1)</source>
         <translation>Метки привязаны к тактовой сетке (%1 шт.)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2393"/>
+        <location line="+3"/>
         <source>All markers are already on the grid.</source>
         <translation>Все метки уже на тактовой сетке.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2423"/>
+        <location line="+30"/>
         <source>No beat grid to shift (BPM not detected).</source>
         <translation>Нет тактовой сетки для сдвига (BPM не определён).</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2437"/>
+        <location line="+14"/>
         <source>Beat grid is already at the file boundary.</source>
         <translation>Тактовая сетка уже на границе аудиофайла.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2444"/>
+        <location line="+7"/>
         <source>back</source>
         <translation>назад</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2444"/>
+        <location line="+0"/>
         <source>forward</source>
         <translation>вперёд</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2445"/>
+        <location line="+1"/>
         <source> (markers moved)</source>
         <translation> (метки сдвинуты)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2447"/>
+        <location line="+2"/>
         <source>Beat grid shifted one beat %1%2</source>
         <translation>Тактовая сетка сдвинута на один удар %1%2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2460"/>
+        <location line="+13"/>
         <source>No beat information</source>
         <translation>Информация о долях отсутствует</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2469"/>
+        <location line="+9"/>
         <source>Invalid BPM or sample rate</source>
         <translation>Некорректные параметры BPM или sampleRate</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2481"/>
+        <location line="+15"/>
         <source>No irregular beats found</source>
         <translation>Неровные доли не найдены</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2526"/>
+        <location line="+54"/>
         <source>Created %1 correction markers for %2 irregular beats</source>
         <translation>Создано %1 меток коррекции для %2 неровных долей</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2621"/>
+        <location line="+106"/>
         <source>Analyzing key and notes...</source>
         <translation>Анализ тональности и нот...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2682"/>
+        <location line="+72"/>
+        <source>Analysis failed</source>
+        <translation>Анализ не удался</translation>
+    </message>
+    <message>
+        <location line="+17"/>
         <source>Analysis finished: %1, notes found: %2</source>
         <translation>Анализ завершён: %1, найдено нот: %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2710"/>
+        <location line="+28"/>
         <source>Change note pitch</source>
         <translation>Изменить высоту ноты</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2785"/>
+        <location line="+82"/>
+        <source>The note is too short to split</source>
+        <translation>Нота слишком короткая для разреза</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Split note</source>
+        <translation>Разделить ноту</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Note split</source>
+        <translation>Нота разделена</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>No note at the cut position</source>
+        <translation>В позиции реза нет ноты</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The cut point is outside the note — use &quot;Free cut&quot; or move the cursor</source>
+        <translation>Точка реза вне ноты — включите «Свободный рез» или сдвиньте каретку</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>Run note analysis first (the &quot;Analyze&quot; button)</source>
         <translation>Сначала выполните анализ нот (кнопка «Анализировать»)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2790"/>
+        <location line="+5"/>
         <source>No edited notes — drag notes on the piano roll</source>
         <translation>Нет изменённых нот — сдвиньте ноты на пианоролле</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2794"/>
+        <location line="+4"/>
         <source>Note pitch correction</source>
         <translation>Коррекция высоты нот</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2795"/>
+        <location line="+1"/>
         <source>Apply time-stretch first (Ctrl+T), then note pitch correction.</source>
         <translation>Сначала примените сжатие-растяжение (Ctrl+T), затем коррекцию высоты нот.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2811"/>
+        <location line="+16"/>
         <source>Applying note pitch correction...</source>
         <translation>Коррекция высоты нот...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2822"/>
+        <location line="+20"/>
         <source>Error while applying note pitch correction</source>
         <translation>Ошибка при коррекции высоты нот</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2837"/>
+        <location line="+15"/>
         <source>Note pitch correction applied</source>
         <translation>Коррекция высоты нот применена</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2601"/>
-        <location filename="../src/mainwindow.cpp" line="2848"/>
+        <location line="-309"/>
+        <location line="+317"/>
         <source>Load an audio file first</source>
         <translation>Сначала загрузите аудиофайл</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2609"/>
-        <location filename="../src/mainwindow.cpp" line="2854"/>
+        <location line="-309"/>
+        <location line="+315"/>
         <source>No audio to analyze</source>
         <translation>Нет аудиоданных для анализа</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2866"/>
+        <location line="+12"/>
         <source>Key analysis...</source>
         <translation>Анализ тональности...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2885"/>
+        <location line="+19"/>
         <source>Key: %1</source>
         <translation>Тональность определена: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="727"/>
-        <location filename="../src/mainwindow.cpp" line="3165"/>
+        <location line="-2243"/>
+        <location line="+2582"/>
         <source>Analyze</source>
         <translation>Анализировать</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3408"/>
+        <location line="-55"/>
+        <source>Split tool off</source>
+        <translation>Инструмент «Разделить» выключен</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Split tool on: click a note, or %1 — cut at the playback cursor (Esc — off)</source>
+        <translation>Инструмент «Разделить» включён: кликните по ноте или %1 — рез по каретке (Esc — выключить)</translation>
+    </message>
+    <message>
+        <location line="+297"/>
         <source>Translation load error</source>
         <translation>Ошибка загрузки перевода</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3417"/>
+        <location line="+9"/>
         <source>Language: Russian</source>
         <translatorcomment>Status after switching UI to Russian: English UI may show a short English gloss; keep clear wording. Autonym policy applies to menu items, not necessarily this status string.</translatorcomment>
         <translation>Язык: Русский</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3433"/>
+        <location line="+16"/>
         <source>Language: English</source>
         <translatorcomment>Status after switching UI to English: keep the same English wording as the source string.</translatorcomment>
         <translation>Language: English</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3439"/>
+        <location line="+6"/>
         <source>Error: WaveformView not initialized</source>
         <translation>Ошибка: WaveformView не инициализирован</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3448"/>
+        <location line="+9"/>
         <source>Not enough markers</source>
         <translation>Недостаточно меток</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3449"/>
+        <location line="+1"/>
         <source>At least 2 markers are required to apply stretch.
 Press M to add markers.</source>
         <translation>Для применения растяжения необходимо минимум 2 метки.
 Используйте клавишу M для добавления меток.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3458"/>
+        <location line="+9"/>
         <source>Error: no audio loaded</source>
         <translation>Ошибка: нет загруженного аудио</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3475"/>
+        <location line="+12"/>
         <source>Audio processing error</source>
         <translation>Ошибка при обработке аудио</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3538"/>
+        <location line="+63"/>
         <source>Stretch applied. Length: %1 → %2 samples</source>
         <translation>Растяжение применено успешно. Размер: %1 → %2 сэмплов</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3795"/>
+        <location line="+299"/>
         <source>Auto markers on transients</source>
         <translation>Авто-метки по транзиентам</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2351"/>
-        <location filename="../src/mainwindow.cpp" line="2410"/>
-        <location filename="../src/mainwindow.cpp" line="3798"/>
+        <location line="-1637"/>
+        <location line="+59"/>
+        <location line="+1581"/>
         <source>Waveform not initialized.</source>
         <translation>Волновая форма не инициализирована.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2357"/>
-        <location filename="../src/mainwindow.cpp" line="2416"/>
-        <location filename="../src/mainwindow.cpp" line="3804"/>
+        <location line="-1634"/>
+        <location line="+59"/>
+        <location line="+1581"/>
         <source>No audio loaded.</source>
         <translation>Аудиоданные не загружены.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3810"/>
+        <location line="+6"/>
         <source>Invalid sample rate.</source>
         <translation>Некорректная частота дискретизации.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3851"/>
+        <location line="+41"/>
         <source>No transients found.</source>
         <translation>Не удалось обнаружить транзиенты в аудиофайле.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3878"/>
+        <location line="+27"/>
         <source>No suitable transients found.</source>
         <translation>Подходящих транзиентов не найдено.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3894"/>
+        <location line="+16"/>
         <source>Created %1 transient markers</source>
         <translation>Создано %1 авто-меток по транзиентам</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3906"/>
+        <location line="+12"/>
         <source>Beat waveform enabled</source>
         <translation>Силуэт ударных включен</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3908"/>
+        <location line="+2"/>
         <source>Beat waveform disabled</source>
         <translation>Силуэт ударных отключен</translation>
     </message>
@@ -1619,206 +1647,206 @@ Press M to add markers.</source>
 <context>
     <name>MarkerTestGenWindow</name>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="55"/>
+        <location filename="../src/markertestgenwindow.cpp" line="+55"/>
         <source>DONTFLOAT — test file marking</source>
         <translation>DONTFLOAT — разметка тестовых файлов</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="65"/>
+        <location line="+10"/>
         <source>&amp;File</source>
         <translation>&amp;Файл</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="66"/>
+        <location line="+1"/>
         <source>&amp;Open...</source>
         <translation>&amp;Открыть...</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="67"/>
+        <location line="+1"/>
         <source>&amp;Save…</source>
         <translation>&amp;Сохранить…</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="69"/>
+        <location line="+2"/>
         <source>E&amp;xit</source>
         <translation>В&amp;ыход</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="71"/>
+        <location line="+2"/>
         <source>&amp;Edit</source>
         <translation>&amp;Правка</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="72"/>
+        <location line="+1"/>
         <source>Snap markers to grid</source>
         <translation>Привязать метки к сетке</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="78"/>
+        <location line="+6"/>
         <source>BPM:</source>
         <translation>BPM:</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="83"/>
+        <location line="+5"/>
         <source>Size:</source>
         <translation>Размер:</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="91"/>
+        <location line="+8"/>
         <source>◀ grid</source>
         <translation>◀ сетка</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="94"/>
+        <location line="+3"/>
         <source>grid ▶</source>
         <translation>сетка ▶</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="92"/>
+        <location line="-2"/>
         <source>Shift the bar grid one beat backward (Shift — with markers)
 Shift + LMB drag on waveform — fine grid adjustment</source>
         <translation>Сдвинуть тактовую сетку на один удар назад (Shift — вместе с метками)
 Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="95"/>
+        <location line="+3"/>
         <source>Shift the bar grid one beat forward (Shift — with markers)
 Shift + LMB drag on waveform — fine grid adjustment</source>
         <translation>Сдвинуть тактовую сетку на один удар вперёд (Shift — вместе с метками)
 Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="100"/>
+        <location line="+5"/>
         <source>Snap markers</source>
         <translation>Привязать метки</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="105"/>
-        <location filename="../src/markertestgenwindow.cpp" line="552"/>
-        <location filename="../src/markertestgenwindow.cpp" line="564"/>
+        <location line="+5"/>
+        <location line="+447"/>
+        <location line="+12"/>
         <source>▶</source>
         <translation>▶</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="107"/>
+        <location line="-457"/>
         <source>■</source>
         <translation>■</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="112"/>
+        <location line="+5"/>
         <source>00:00.0</source>
         <translation>00:00.0</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="126"/>
+        <location line="+14"/>
         <source>Open an audio file with a constant BPM</source>
         <translation>Откройте аудиофайл с постоянным BPM</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="221"/>
+        <location line="+95"/>
         <source>Save changes?</source>
         <translation>Сохранить изменения?</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="222"/>
+        <location line="+1"/>
         <source>Save markers and audio before continuing?</source>
         <translation>Сохранить метки и аудио перед продолжением?</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="242"/>
+        <location line="+20"/>
         <source>Open audio</source>
         <translation>Открыть аудио</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="244"/>
+        <location line="+2"/>
         <source>Audio (*.wav *.mp3 *.flac);;All files (*)</source>
         <translation>Аудио (*.wav *.mp3 *.flac);;Все файлы (*)</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="249"/>
+        <location line="+5"/>
         <source>Decoding…</source>
         <translation>Декодирование…</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="259"/>
-        <location filename="../src/markertestgenwindow.cpp" line="496"/>
-        <location filename="../src/markertestgenwindow.cpp" line="504"/>
-        <location filename="../src/markertestgenwindow.cpp" line="518"/>
+        <location line="+10"/>
+        <location line="+237"/>
+        <location line="+8"/>
+        <location line="+14"/>
         <source>Error</source>
         <translation>Ошибка</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="260"/>
+        <location line="-258"/>
         <source>Failed to decode file: %1</source>
         <translation>Не удалось декодировать файл: %1</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="292"/>
+        <location line="+32"/>
         <source>Loaded markers from %1</source>
         <translation>Загружены метки из %1</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="301"/>
+        <location line="+9"/>
         <source>DONTFLOAT — %1</source>
         <translation>DONTFLOAT — %1</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="318"/>
+        <location line="+17"/>
         <source>BPM analysis</source>
         <translation>Анализ BPM</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="319"/>
+        <location line="+1"/>
         <source>Could not detect BPM. Enter BPM manually.</source>
         <translation>Не удалось определить BPM. Укажите BPM вручную.</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="339"/>
+        <location line="+20"/>
         <source>BPM: %1 — markers on each beat</source>
         <translation>BPM: %1 — метки на каждой доле</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="419"/>
+        <location line="+80"/>
         <source>Grid shifted %1 by 1 beat</source>
         <translation>Сетка сдвинута %1 на 1 удар</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="420"/>
+        <location line="+1"/>
         <source>back</source>
         <translation>назад</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="420"/>
+        <location line="+0"/>
         <source>forward</source>
         <translation>вперёд</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="441"/>
+        <location line="+21"/>
         <source>Markers snapped to the bar grid</source>
         <translation>Метки привязаны к тактовой сетке</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="479"/>
+        <location line="+38"/>
         <source>Save Audio File</source>
         <translation>Сохранить аудиофайл</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="481"/>
+        <location line="+2"/>
         <source>WAV (*.wav);;MP3 — source copy (*.mp3);;All files (*)</source>
         <translation>WAV (*.wav);;MP3 — копия исходника (*.mp3);;Все файлы (*)</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="505"/>
+        <location line="+24"/>
         <source>Failed to copy the audio file.</source>
         <translation>Не удалось скопировать аудиофайл.</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="525"/>
+        <location line="+20"/>
         <source>Saved: %1 and %2</source>
         <translation>Сохранено: %1 и %2</translation>
     </message>
     <message>
-        <location filename="../src/markertestgenwindow.cpp" line="547"/>
+        <location line="+22"/>
         <source>❚❚</source>
         <translation>❚❚</translation>
     </message>
@@ -1826,234 +1854,285 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
 <context>
     <name>MetronomeSettingsDialog</name>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="14"/>
+        <location filename="../ui/metronomesettingsdialog.ui" line="+14"/>
         <source>Metronome Settings</source>
         <translation>Настройки метронома</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="51"/>
+        <location line="+37"/>
         <source>Strong beats:</source>
         <translation>Большие доли:</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="86"/>
+        <location line="+35"/>
         <source>100%</source>
         <translation>100%</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="102"/>
-        <location filename="../ui/metronomesettingsdialog.ui" line="176"/>
+        <location line="+16"/>
+        <location line="+74"/>
         <source>►</source>
         <translation>►</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="105"/>
+        <location line="-71"/>
         <source>Play downbeat at current volume (metronome)</source>
         <translation>Воспроизвести звук большой доли с текущей громкостью для настройки метронома</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="125"/>
+        <location line="+20"/>
         <source>Weak beats:</source>
         <translation>Малые доли:</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="160"/>
+        <location line="+35"/>
         <source>90%</source>
         <translation>90%</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="179"/>
+        <location line="+19"/>
         <source>Play upbeat at current volume (metronome)</source>
         <translation>Воспроизвести звук малой доли с текущей громкостью для настройки метронома</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="201"/>
+        <location line="+22"/>
         <source>Sound:</source>
         <translation>Звук:</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="215"/>
+        <location line="+14"/>
         <source>Click (default)</source>
         <translation>Щелчок (стандартный)</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="218"/>
+        <location line="+3"/>
         <source>click</source>
         <translation>click</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="233"/>
+        <location line="+15"/>
         <source>Choose sound</source>
         <translation>Выбрать звук</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="236"/>
+        <location line="+3"/>
         <source>Choose custom metronome sound</source>
         <translation>Выберите пользовательский звук для метронома</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="258"/>
+        <location line="+22"/>
         <source>Status: loading...</source>
         <translation>Статус: загрузка...</translation>
     </message>
     <message>
-        <location filename="../ui/metronomesettingsdialog.ui" line="264"/>
+        <location line="+6"/>
         <source>color: #888888;</source>
         <translation>color: #888888;</translation>
     </message>
     <message>
-        <location filename="../src/metronomesettingsdialog.cpp" line="239"/>
+        <location filename="../src/metronomesettingsdialog.cpp" line="+239"/>
         <source>Select Metronome Sound</source>
         <translation>Выберите звук метронома</translation>
     </message>
     <message>
-        <location filename="../src/metronomesettingsdialog.cpp" line="239"/>
+        <location line="+0"/>
         <source>Audio files (*.wav *.mp3)</source>
         <translation>Аудиофайлы (*.wav *.mp3)</translation>
     </message>
     <message>
-        <location filename="../src/metronomesettingsdialog.cpp" line="242"/>
+        <location line="+3"/>
         <source>Custom</source>
         <translation>Пользовательский</translation>
     </message>
 </context>
 <context>
-    <name>PitchShiftSettingsDialog</name>
+    <name>PianoRollToolbar</name>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="15"/>
-        <source>Pitch shift settings</source>
-        <translation>Настройки питч-шифтера</translation>
+        <location filename="../src/pianoroll_toolbar.cpp" line="+227"/>
+        <source>Split note at the playback cursor or by clicking on a note</source>
+        <translation>Разрезать ноту по каретке воспроизведения или кликом по ноте</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="24"/>
-        <source>Apply pitch shift after time stretch</source>
-        <translation>Применять питч-шифт после растяжения</translation>
+        <location line="+1"/>
+        <source>Split note at the playback cursor (%1) or by clicking on a note</source>
+        <translation>Разрезать ноту по каретке воспроизведения (%1) или кликом по ноте</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="29"/>
-        <source>Parameters</source>
-        <translation>Параметры</translation>
+        <location line="+3"/>
+        <location line="+1"/>
+        <location line="+1"/>
+        <source>Split</source>
+        <translation>Разделить</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="37"/>
-        <source>Pitch in semitones (−24..+24).</source>
-        <translation>Сдвиг высоты тона в полутонах (−24..+24).</translation>
+        <location line="+2"/>
+        <location line="+2"/>
+        <location line="+1"/>
+        <source>Along the grid</source>
+        <translation>Вдоль сетки</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="38"/>
-        <source>0 st</source>
-        <translation>0 пт</translation>
+        <location line="-1"/>
+        <source>the cut snaps to the nearest beat grid division</source>
+        <translation>рез притягивается к ближайшему делению тактовой сетки</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="43"/>
-        <source>Pitch (st):</source>
-        <translation>Питч (пт):</translation>
+        <location line="+3"/>
+        <location line="+2"/>
+        <location line="+1"/>
+        <source>Free cut</source>
+        <translation>Свободный рез</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="51"/>
-        <source>Grain rate (Hz). Lower = larger grains; higher = smaller, cleaner.</source>
-        <translation>Частота генерации гран (Гц).
-Меньше = крупные граны, мягче. Больше = мелкие граны, чище.</translation>
+        <location line="-1"/>
+        <source>the cut lands exactly where the cursor is</source>
+        <translation>рез точно в позиции курсора</translation>
+    </message>
+</context>
+<context>
+    <name>PitchDetectorSettingsDialog</name>
+    <message>
+        <location filename="../src/pitchdetectorsettingsdialog.cpp" line="+35"/>
+        <source>Pitch detector settings</source>
+        <translation>Настройки детектора нот</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="52"/>
-        <source>8.0 Hz</source>
-        <translation>8.0 Гц</translation>
+        <location line="+11"/>
+        <source>Tuning</source>
+        <translation>Строй</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="57"/>
-        <source>Grain rate (Hz):</source>
-        <translation>Частота гран (Гц):</translation>
+        <location line="+9"/>
+        <source>Custom...</source>
+        <translation>Свой...</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="64"/>
-        <source>Grain envelope. 0 = equal-gain; 100 = equal-power.</source>
-        <translation>Форма огибающей гранулы.
-0 = equal-gain (ровнее), 100 = equal-power (плотнее).</translation>
+        <location line="+1"/>
+        <source>Common tuning standards; pick Custom to enter any value.</source>
+        <translation>Распространённые эталоны строя; «Свой» — ввести любое значение.</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="65"/>
-        <source>50%</source>
-        <translation>50%</translation>
+        <location line="+1"/>
+        <source>Standard:</source>
+        <translation>Эталон:</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="70"/>
-        <source>Envelope:</source>
-        <translation>Форма огибающей:</translation>
+        <location line="+6"/>
+        <location line="+18"/>
+        <location line="+10"/>
+        <source> Hz</source>
+        <translation> Гц</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="77"/>
-        <source>Pitch spread (0..1 octave). Chorus-like.</source>
-        <translation>Разброс питча гран (0..1 октавы).
-Добавляет хорусный/ансамблевый эффект.</translation>
+        <location line="-27"/>
+        <source>Frequency of A4. Shifts the whole pitch scale.</source>
+        <translation>Частота ноты A4. Сдвигает всю шкалу высот.</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="78"/>
-        <source>0%</source>
-        <translation>0%</translation>
+        <location line="+1"/>
+        <source>A4 reference:</source>
+        <translation>Эталон A4:</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="83"/>
-        <source>Pitch spread:</source>
-        <translation>Разброс питча:</translation>
+        <location line="+9"/>
+        <source>Search range</source>
+        <translation>Диапазон поиска</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="90"/>
-        <source>Wet/dry level.</source>
-        <translation>Уровень обработанного сигнала (wet/dry).</translation>
+        <location line="+9"/>
+        <source>Lowest f0 to look for. Lowering it lengthens the analysis window and smears short notes.</source>
+        <translation>Нижняя граница поиска f0. Её снижение удлиняет окно анализа и смазывает короткие ноты.</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="91"/>
-        <source>100%</source>
-        <translation>100%</translation>
+        <location line="+2"/>
+        <source>Lowest pitch:</source>
+        <translation>Нижняя граница:</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="96"/>
-        <source>Wet level:</source>
-        <translation>Уровень (wet):</translation>
+        <location line="+7"/>
+        <source>Highest f0 to look for.</source>
+        <translation>Верхняя граница поиска f0.</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="100"/>
-        <source>Prefilter (reduces aliasing when shifting up)</source>
-        <translation>Предфильтр (убирает алиасинг при сдвиге вверх)</translation>
+        <location line="+1"/>
+        <source>Highest pitch:</source>
+        <translation>Верхняя граница:</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="107"/>
-        <source>&lt;small&gt;&lt;i&gt;Pitch shift applies on Ctrl+T.&lt;/i&gt;&lt;/small&gt;</source>
-        <translation>&lt;small&gt;&lt;i&gt;Питч-шифт применяется к аудио при нажатии Ctrl+T.&lt;/i&gt;&lt;/small&gt;</translation>
+        <location line="+9"/>
+        <source>Note segmentation</source>
+        <translation>Сегментация нот</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="114"/>
+        <location line="+6"/>
+        <source> ms</source>
+        <translation> мс</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shorter runs are discarded as noise.</source>
+        <translation>Более короткие участки отбрасываются как шум.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Minimum note:</source>
+        <translation>Минимальная нота:</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Frames quieter than this are treated as silence.</source>
+        <translation>Кадры тише этого порога считаются тишиной.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Silence threshold:</source>
+        <translation>Порог тишины:</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>How periodic a frame must be to count as pitched. Raise it on noisy material, lower it if quiet notes go missing.</source>
+        <translation>Насколько периодичным должен быть кадр, чтобы считаться тоновым. Повышайте на шумном материале, понижайте, если теряются тихие ноты.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Minimum confidence:</source>
+        <translation>Минимальная уверенность:</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Settings apply to the next analysis; already detected notes are kept.</source>
+        <translation>Настройки применяются к следующему анализу; уже найденные ноты сохраняются.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Restore defaults</source>
+        <translation>Сбросить по умолчанию</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Close</source>
         <translation>Закрыть</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="130"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="175"/>
-        <source>%1 st</source>
-        <translation>%1 пт</translation>
+        <location line="+51"/>
+        <source>Standard concert pitch.</source>
+        <translation>Стандартный концертный строй.</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="134"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="181"/>
-        <source>%1 Hz</source>
-        <translation>%1 Гц</translation>
+        <location line="+1"/>
+        <source>%1 cents relative to 440 Hz.</source>
+        <translation>%1 центов относительно 440 Гц.</translation>
     </message>
     <message>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="138"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="142"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="146"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="184"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="187"/>
-        <location filename="../src/pitchshiftsettingsdialog.cpp" line="190"/>
-        <source>%1%</source>
-        <translation>%1%</translation>
+        <location line="+6"/>
+        <source>Analysis window ≈ %1 ms; notes shorter than that get smeared.</source>
+        <translation>Окно анализа ≈ %1 мс; более короткие ноты будут смазаны.</translation>
     </message>
 </context>
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/beatfixcommand.cpp" line="20"/>
+        <location filename="../src/beatfixcommand.cpp" line="+20"/>
         <source>Beat alignment</source>
         <translation>Выравнивание долей</translation>
     </message>
@@ -2061,107 +2140,112 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
 <context>
     <name>ShortcutsDialog</name>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="17"/>
+        <location filename="../src/shortcutsdialog.cpp" line="+17"/>
         <source>Hotkeys</source>
         <translation>Горячие клавиши</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="37"/>
+        <location line="+21"/>
         <source>Apply note pitch correction</source>
         <translation>Применить коррекцию высоты нот</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="44"/>
+        <location line="+7"/>
         <source>Action</source>
         <translation>Действие</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="44"/>
+        <location line="+0"/>
         <source>Shortcut</source>
         <translation>Сочетание клавиш</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="54"/>
+        <location line="+10"/>
         <source>Reset to default</source>
         <translation>По умолчанию</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="55"/>
+        <location line="+1"/>
         <source>Restore all default shortcuts</source>
         <translation>Восстановить все сочетания по умолчанию</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="22"/>
+        <location line="-34"/>
         <source>Open file</source>
         <translation>Открыть файл</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="23"/>
+        <location line="+1"/>
         <source>Save file</source>
         <translation>Сохранить файл</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="24"/>
+        <location line="+1"/>
         <source>Exit</source>
         <translation>Выход</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="25"/>
+        <location line="+1"/>
         <source>Play/Pause</source>
         <translation>Воспроизведение/Пауза</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="26"/>
+        <location line="+1"/>
         <source>Stop</source>
         <translation>Стоп</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="27"/>
+        <location line="+1"/>
         <source>Metronome</source>
         <translation>Метроном</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="28"/>
+        <location line="+1"/>
         <source>Set loop start (A)</source>
         <translation>Установить начало цикла (A)</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="29"/>
+        <location line="+1"/>
         <source>Set loop end (B)</source>
         <translation>Установить конец цикла (B)</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="30"/>
+        <location line="+1"/>
         <source>Clear point A</source>
         <translation>Удалить точку A</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="31"/>
+        <location line="+1"/>
         <source>Clear point B</source>
         <translation>Удалить точку B</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="32"/>
+        <location line="+1"/>
         <source>Undo</source>
         <translation>Отменить</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="33"/>
+        <location line="+1"/>
         <source>Redo</source>
         <translation>Повторить</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="34"/>
+        <location line="+1"/>
         <source>Toggle pitch grid</source>
         <translation>Переключить питч-сетку</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="35"/>
+        <location line="+1"/>
         <source>Add marker</source>
         <translation>Добавить метку</translation>
     </message>
     <message>
-        <location filename="../src/shortcutsdialog.cpp" line="36"/>
+        <location line="+1"/>
+        <source>Split note at the playback cursor (piano roll)</source>
+        <translation>Разрезать ноту по каретке воспроизведения (пианоролл)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Apply time stretch</source>
         <translation>Применить сжатие-растяжение</translation>
     </message>
@@ -2169,162 +2253,162 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
 <context>
     <name>SpectrogramSettingsDialog</name>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="16"/>
+        <location filename="../src/spectrogramsettingsdialog.cpp" line="+16"/>
         <source>Spectrogram settings</source>
         <translation>Настройки спектрограммы</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="33"/>
+        <location line="+17"/>
         <source>FFT window. Larger = better frequency resolution, lower time resolution.</source>
         <translation>Размер FFT-окна. Больше — выше разрешение по частоте, ниже по времени.</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="34"/>
+        <location line="+1"/>
         <source>FFT window:</source>
         <translation>Размер FFT-окна:</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="38"/>
+        <location line="+4"/>
         <source>Rectangular</source>
         <translation>Прямоугольная</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="39"/>
+        <location line="+1"/>
         <source>Blackman-Harris</source>
         <translation>Blackman-Harris</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="40"/>
+        <location line="+1"/>
         <source>Hamming</source>
         <translation>Hamming</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="41"/>
+        <location line="+1"/>
         <source>Hanning</source>
         <translation>Hanning</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="43"/>
+        <location line="+2"/>
         <source>Window function; Blackman-Harris is a good default.</source>
         <translation>Оконная функция влияет на подавление боковых лепестков.
 Blackman-Harris — лучший выбор для спектрограмм.</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="44"/>
+        <location line="+1"/>
         <source>Window function:</source>
         <translation>Оконная функция:</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="52"/>
+        <location line="+8"/>
         <source>Time frames; more = finer time resolution, slower render.</source>
         <translation>Количество временных кадров. Больше — детальнее по времени, медленнее генерация.</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="53"/>
+        <location line="+1"/>
         <source>512 frames</source>
         <translation>512 кадров</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="58"/>
+        <location line="+5"/>
         <source>Time resolution:</source>
         <translation>Временное разрешение:</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="67"/>
+        <location line="+9"/>
         <source>Number of frequency bands.</source>
         <translation>Число отображаемых частотных полос.</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="68"/>
+        <location line="+1"/>
         <source>256 bands</source>
         <translation>256 полос</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="73"/>
+        <location line="+5"/>
         <source>Frequency bands:</source>
         <translation>Частотные полосы:</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="78"/>
+        <location line="+5"/>
         <source>Heat map</source>
         <translation>Тепловая карта</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="79"/>
+        <location line="+1"/>
         <source>Grayscale</source>
         <translation>Оттенки серого</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="80"/>
+        <location line="+1"/>
         <source>Cool (cyan)</source>
         <translation>Холодная (cyan)</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="81"/>
+        <location line="+1"/>
         <source>Color scheme:</source>
         <translation>Цветовая схема:</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="86"/>
+        <location line="+5"/>
         <source>Scales</source>
         <translation>Шкалы</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="89"/>
+        <location line="+3"/>
         <source>Log frequency scale</source>
         <translation>Логарифмическая шкала частот</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="91"/>
+        <location line="+2"/>
         <source>Log scale (good for music). Linear = equal spacing.</source>
         <translation>Логарифмическая шкала частот (рекомендуется для музыки).
 Линейная показывает равные частотные интервалы.</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="94"/>
+        <location line="+3"/>
         <source>Amplitude (dB)</source>
         <translation>Амплитуда в дБ</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="96"/>
+        <location line="+2"/>
         <source>dB amplitude scale; better for quiet detail.</source>
         <translation>Отображение амплитуды в логарифмическом (дБ) масштабе.
 Лучше показывает слабые детали.</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="103"/>
+        <location line="+7"/>
         <source> dB</source>
         <translation> дБ</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="104"/>
+        <location line="+1"/>
         <source>dB floor; more negative = more quiet detail.</source>
         <translation>Нижняя граница шкалы дБ. Более отрицательное значение — больше деталей в тихих частях.</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="105"/>
+        <location line="+1"/>
         <source>Floor (dB):</source>
         <translation>Нижний порог дБ:</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="111"/>
+        <location line="+6"/>
         <source>&lt;small&gt;&lt;i&gt;Applies when Spectrogram mode is on.&lt;/i&gt;&lt;/small&gt;</source>
         <translation>&lt;small&gt;&lt;i&gt;Изменения применяются сразу, если включён режим «Спектрограмма».&lt;/i&gt;&lt;/small&gt;</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="118"/>
+        <location line="+7"/>
         <source>Close</source>
         <translation>Закрыть</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="129"/>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="170"/>
+        <location line="+11"/>
+        <location line="+41"/>
         <source>%1 frames</source>
         <translation>%1 кадров</translation>
     </message>
     <message>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="133"/>
-        <location filename="../src/spectrogramsettingsdialog.cpp" line="173"/>
+        <location line="-37"/>
+        <location line="+40"/>
         <source>%1 bands</source>
         <translation>%1 полос</translation>
     </message>
@@ -2332,27 +2416,27 @@ Blackman-Harris — лучший выбор для спектрограмм.</tr
 <context>
     <name>WaveformView</name>
     <message>
-        <location filename="../src/waveformview.cpp" line="1424"/>
+        <location filename="../src/waveformview.cpp" line="+1424"/>
         <source>Snap selected markers to grid</source>
         <translation>Переместить выделенные метки на тактовую сетку</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1425"/>
+        <location line="+1"/>
         <source>Snap marker to grid</source>
         <translation>Переместить метку на тактовую сетку</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1428"/>
+        <location line="+3"/>
         <source>Delete selected markers</source>
         <translation>Удалить выделенные метки</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1429"/>
+        <location line="+1"/>
         <source>Delete marker</source>
         <translation>Удалить метку</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1532"/>
+        <location line="+103"/>
         <source>Timeline end
 Time: %1
 Position: %2 samples</source>
@@ -2361,7 +2445,7 @@ Position: %2 samples</source>
 Позиция: %2 сэмплов</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1536"/>
+        <location line="+4"/>
         <source>Timeline start
 Time: %1
 Position: %2 samples</source>
@@ -2370,13 +2454,13 @@ Position: %2 samples</source>
 Позиция: %2 сэмплов</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1556"/>
+        <location line="+20"/>
         <source>Ratio: %1</source>
         <translation>
 Коэффициент: %1</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1560"/>
+        <location line="+4"/>
         <source>Marker
 Time: %1
 Position: %2 samples%3</source>
@@ -2385,14 +2469,14 @@ Position: %2 samples%3</source>
 Позиция: %2 сэмплов%3</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="1574"/>
+        <location line="+14"/>
         <source>Position: %1
 Time: %2</source>
         <translation>Позиция: %1
 Время: %2</translation>
     </message>
     <message>
-        <location filename="../src/waveformview.cpp" line="2729"/>
+        <location line="+1155"/>
         <source>Timeline end</source>
         <translation>Конец таймлайна</translation>
     </message>
