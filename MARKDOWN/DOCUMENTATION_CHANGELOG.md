@@ -1,5 +1,33 @@
 # История изменений документации
 
+## 2026-08-17 (проверка скриптов сборки пакетов)
+
+Проверены `tools/build_windows_installer.bat`, `build_deb.sh`, `build_rpm.sh`,
+`macos_build.sh`, `setup_macos.sh`; найденное исправлено.
+
+- `build_windows_installer.bat`: `%ERRORLEVEL%` внутри блоков `( )` подставлялся до запуска `where` — проверка читала код предыдущей команды (обычно ноль, то есть не проверяла ничего; при ненулевом коде инструмент из `PATH` считался ненайденным). Заменено на `!ERRORLEVEL!`; семантика проверена отдельным тестовым `.bat`, а ветка поиска через `PATH` — прогоном урезанной копии скрипта с подставными `makensis`/`cmake`. Второй `if exist` затирал найденный Qt 6.9.3 путём к 6.8.3 — теперь это fallback. Пути установки (`lib\clap`, `lib\lv2\*.lv2`, `lib\vst3\*.vst3\Contents\x86_64-win`) и имена `*.impl.dll` сверены с `install(...)` в `CMakeLists.txt` / `cmake/PluginProducts.cmake` и с `tools/nsis_installer.nsi` — совпадают.
+- `build_rpm.sh`: архив собирался с корневым каталогом репозитория, а `%setup -q` ждёт `dontfloat-<версия>` (добавлен `--transform`); версия читается из `project(... VERSION ...)` и подставляется в копию spec (раньше `0.0.0.1` был зашит в двух местах, а `--define _version` ничего не менял); убрана лишняя локальная сборка — проект собирался дважды (в `build/` и внутри `rpmbuild`).
+- `tools/rpm/dontfloat.spec`: `%files` не совпадал с тем, что кладёт `make install` — переводы лежат в `/usr/share/DONTFLOAT/` (не `dontfloat`), иконки `dontfloat.png` не было вовсе, плагины и `README.md` не были перечислены; такой пакет падал на «Installed (but unpackaged) files found». Добавлены `%build`-флаги (CLAP/LV2 — ON, VST3/mini-DAW/plugin_tester — OFF, явный `CMAKE_INSTALL_LIBDIR`), `BuildRequires: gcc-c++, make`, `Requires: qt6-qtsvg` (иконки интерфейса — SVG).
+- `build_deb.sh`: убрана лишняя предварительная сборка (`dpkg-buildpackage` собирает сам по `debian/rules`), версия читается из `CMakeLists.txt` и сверяется с `debian/changelog`, `debian/rules` получает бит выполнения. В `debian/rules` добавлены те же флаги конфигурации, в `debian/control` — `libqt6svg6` и `hicolor-icon-theme`.
+- `CMakeLists.txt`: на Linux ставится иконка `resources/icons/logo.svg` → `share/icons/hicolor/scalable/apps/dontfloat.svg` — `Icon=dontfloat` из `.desktop` раньше ни на что не указывал.
+- `macos_build.sh`: `deploy` создавал `.app` без `Info.plist`, из-за чего `macdeployqt` не находил исполняемый файл бандла — plist теперь генерируется (версия из `CMakeLists.txt`). `setup_macos.sh`: убрана вторая строка `export PATH` с зашитыми `/opt/homebrew` и `/usr/local` (перебивала префикс из `brew --prefix qt@6`), добавлена проверка Qt на `QT_MIN_VERSION`.
+- Обновлён `tools/README.md` (состав Linux-пакетов, грабля с `%ERRORLEVEL%`, поведение macOS-скриптов).
+
+> Проверено на Windows: `cmake` конфигурируется с новым правилом установки, `bash -n` для четырёх shell-скриптов, тестовый `.bat` на `%ERRORLEVEL%`. `dpkg-buildpackage` / `rpmbuild` / `macdeployqt` на этой машине не запускались.
+
+## 2026-08-17 (мини-DAW по макету, аудио с дорожки, авто-анализ)
+
+- Новая цель `dontfloat_mini_daw` (`tools/mini_daw/mini_daw_{window,player,plugin_host,gui_main}.*`) — GUI-хост по макету `MARKDOWN/example_window_minidaw.svg`: списки формата и редакции, поля BPM и размера такта, дорожка со звуковой волной и тактовой сеткой (проигранное — красным), плагин в панели с красной рамкой.
+- Плагин грузится **в рантайме** (`LoadLibrary` + пути из `plugin_host_probe`), редактор встраивается в нативное окно: CLAP — `clap.gui` win32, LV2 — `lv2ui` с `ui:parent`, VST3 — `IPlugView::attached` (Steinberg SDK, цель `sdk_hosting`; модуль и фабрику берём сами: загрузчик SDK отказывал без описания, а `PluginFactory::classInfos()` при неудачном `getClassInfo` зовёт `back()` на пустом векторе — из-за этого падала редакция Full). Работают все девять комбинаций формат × редакция.
+- Поля BPM и размера такта задают темп хоста: сетка на дорожке и транспорт плагина (`clap_event_transport` / `ProcessContext`).
+- **Каретки DAW и плагина синхронны**: во время воспроизведения хост шлёт позицию **пустым** блоком `process()` (аудио в сессию не попадает, читается только транспорт), плагин двигает каретку пианоролла/волны через `setHostPlayhead()` на редакторах (`DontfloatPluginEditorShell` → Full / Scratch / Pitch). Позиция уходит в UI очередью Qt со склейкой — `process()` в реальной DAW идёт из аудиопотока. Для LV2 нужен `time:Position` — не реализовано.
+- В мини-DAW добавлен ключ `--autoplay` (транспорт стартует сразу после загрузки трека), самопроверка `--selftest` прогоняет каретку по треку.
+- VST3-обёртка плагина теперь сообщает своему редактору о приходе аудио (`notifyEditorsHostAudioAppended`): процессор и вьюха — разные объекты VST3, без этого редактор не видел дорожку и не запускал анализ.
+- Плагины больше **не грузят аудио сами**: кнопки «Import WAV…» убраны, звук приходит с дорожки DAW, а по приходу аудио запускается **авто-анализ** (Pitcher — ноты и тональность без нажатия «Анализировать», Scratch — BPM); пианоролл сам подстраивает диапазон высот под найденные ноты.
+- Исправлены падения при работе плагина внутри Qt-хоста: свой насос событий больше не ставится, если цикл Qt крутит хост (`ensureQtApplication`); результаты фоновых анализов идут мимо `QFutureWatcher::result()` (та же грабля, что в `MainWindow`); модули плагинов не выгружаются из процесса; `QAudioSink` не разрушается изнутри своего `stateChanged`.
+- Тесты: `mini_daw_gui_<format>_<kind>` — самопроверка `--selftest` того же рантайм-пути (декод → загрузка модуля → редактор → блоки через `process()`), 6 комбинаций CLAP/LV2.
+- Обновлён `tools/mini_daw/README.md`.
+
 ## 2026-08-16 (пианоролл: панель кнопок и разрез нот)
 
 - Под пианороллом — панель `PianoRollToolbar` (`include/pianoroll_toolbar.h`, `src/pianoroll_toolbar.cpp`): кнопка «Разделить» + пара «Вдоль сетки» / «Свободный рез»; режим реза сохраняется в `QSettings` (`pianoRollCutSnapToGrid`).

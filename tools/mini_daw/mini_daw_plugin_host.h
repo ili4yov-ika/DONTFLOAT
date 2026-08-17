@@ -44,6 +44,15 @@ public:
     /** Прогоняет блок стерео-аудио через плагин (обработка на месте). */
     virtual void process(float* left, float* right, int frames) = 0;
 
+    /** Транспорт хоста: темп и размер такта из полей панели. */
+    virtual void setTransport(double bpm, int beatsPerBar) = 0;
+
+    /**
+     * Позиция каретки транспорта: плагин двигает свою каретку синхронно с DAW.
+     * Отправляется пустым блоком process() — аудио в сессию при этом не идёт.
+     */
+    virtual void setPlayhead(qint64 frame, bool playing) = 0;
+
     /** Выгружает редактор и экземпляр плагина. */
     virtual void unload() = 0;
 

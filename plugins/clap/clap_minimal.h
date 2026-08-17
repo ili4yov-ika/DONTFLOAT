@@ -80,10 +80,54 @@ struct clap_audio_buffer_t {
     uint64_t constant_mask;
 };
 
+// Транспорт хоста (подмножество clap_event_transport_t из спецификации):
+// нужен, чтобы каретка воспроизведения плагина шла синхронно с DAW.
+using clap_beattime = int64_t;
+using clap_sectime = int64_t;
+
+enum : int64_t {
+    CLAP_BEATTIME_FACTOR = 1LL << 31,
+    CLAP_SECTIME_FACTOR = 1LL << 31,
+};
+
+enum : uint32_t {
+    CLAP_TRANSPORT_HAS_TEMPO = 1u << 0,
+    CLAP_TRANSPORT_HAS_BEATS_TIMELINE = 1u << 1,
+    CLAP_TRANSPORT_HAS_SECONDS_TIMELINE = 1u << 2,
+    CLAP_TRANSPORT_HAS_TIME_SIGNATURE = 1u << 3,
+    CLAP_TRANSPORT_IS_PLAYING = 1u << 4,
+    CLAP_TRANSPORT_IS_RECORDING = 1u << 5,
+    CLAP_TRANSPORT_IS_LOOP_ACTIVE = 1u << 6,
+    CLAP_TRANSPORT_IS_WITHIN_PRE_ROLL = 1u << 7,
+};
+
+struct clap_event_transport_t {
+    clap_event_header_t header;
+
+    uint32_t flags;
+
+    clap_beattime song_pos_beats;   ///< позиция в тактовой сетке
+    clap_sectime song_pos_seconds;  ///< позиция во времени
+
+    double tempo;
+    double tempo_inc;
+
+    clap_beattime loop_start_beats;
+    clap_beattime loop_end_beats;
+    clap_sectime loop_start_seconds;
+    clap_sectime loop_end_seconds;
+
+    clap_beattime bar_start;
+    int32_t bar_number;
+
+    uint16_t tsig_num;
+    uint16_t tsig_denom;
+};
+
 struct clap_process_t {
     int64_t steady_time;
     uint32_t frames_count;
-    const void* transport;
+    const clap_event_transport_t* transport;
     const clap_audio_buffer_t* audio_inputs;
     clap_audio_buffer_t* audio_outputs;
     const clap_input_events_t* in_events;

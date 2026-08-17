@@ -8,9 +8,17 @@ export CMAKE_BUILD_TYPE = Release
 	dh $@
 
 override_dh_auto_configure:
+	# mini-DAW и plugin_tester — инструменты разработчика, в пакет не идут.
+	# VST3 требует проприетарный Steinberg SDK, поэтому OFF.
 	dh_auto_configure -- \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DCMAKE_INSTALL_PREFIX=/usr
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DDONTFLOAT_BUILD_PLUGINS=ON \
+		-DDONTFLOAT_BUILD_CLAP=ON \
+		-DDONTFLOAT_BUILD_LV2=ON \
+		-DDONTFLOAT_BUILD_VST3=OFF \
+		-DDONTFLOAT_BUILD_MINI_DAW=OFF \
+		-DDONTFLOAT_BUILD_PLUGIN_TESTER=OFF
 
 override_dh_auto_build:
 	dh_auto_build

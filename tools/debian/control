@@ -20,7 +20,9 @@ Depends: ${shlibs:Depends},
          libqt6gui6 (>= 6.8.0),
          libqt6widgets6 (>= 6.8.0),
          libqt6multimedia6 (>= 6.8.0),
-         libqt6multimediawidgets6 (>= 6.8.0)
+         libqt6multimediawidgets6 (>= 6.8.0),
+         libqt6svg6 (>= 6.8.0),
+         hicolor-icon-theme
 Description: Аудиоредактор для выравнивания BPM
  DONTFLOAT - это аудиоредактор для анализа и выравнивания BPM аудиофайлов.
  .

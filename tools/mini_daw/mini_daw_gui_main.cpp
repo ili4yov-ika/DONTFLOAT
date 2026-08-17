@@ -69,12 +69,12 @@ int runSelfTest(const Selection& selection, const QString& input, double maxSeco
 {
     const QString formatName = Dontfloat::PluginTester::formatLabel(selection.format);
     std::printf("=== mini-DAW selftest: %s / %d ===\n",
-                formatName.toLocal8Bit().constData(), int(selection.product));
+                formatName.toUtf8().constData(), int(selection.product));
 
     const auto decoded = AudioFileService::decode(input);
     if (!decoded.ok || decoded.channels.isEmpty()) {
-        std::printf("[FAIL] декод %s: %s\n", input.toLocal8Bit().constData(),
-                    decoded.error.toLocal8Bit().constData());
+        std::printf("[FAIL] декод %s: %s\n", input.toUtf8().constData(),
+                    decoded.error.toUtf8().constData());
         return 2;
     }
     const int sampleRate = decoded.sampleRate > 0 ? decoded.sampleRate : 44100;
@@ -93,7 +93,7 @@ int runSelfTest(const Selection& selection, const QString& input, double maxSeco
 
     const QString path =
         Dontfloat::PluginTester::resolvePluginPath(selection.format, selection.product);
-    std::printf("[..] модуль: %s\n", QFileInfo(path).absoluteFilePath().toLocal8Bit().constData());
+    std::printf("[..] модуль: %s\n", QFileInfo(path).absoluteFilePath().toUtf8().constData());
 
     auto host = MiniDaw::createPluginHost(selection.format);
     if (!host) {
@@ -102,10 +102,10 @@ int runSelfTest(const Selection& selection, const QString& input, double maxSeco
     }
     QString error;
     if (!host->load(path, selection.product, sampleRate, 512, &error)) {
-        std::printf("[FAIL] загрузка плагина: %s\n", error.toLocal8Bit().constData());
+        std::printf("[FAIL] загрузка плагина: %s\n", error.toUtf8().constData());
         return 3;
     }
-    std::printf("[ok] плагин загружен: %s\n", host->displayName().toLocal8Bit().constData());
+    std::printf("[ok] плагин загружен: %s\n", host->displayName().toUtf8().constData());
 
     // Редактор встраиваем в скрытое нативное окно — как это делает окно мини-DAW
     QWidget surface;
@@ -115,7 +115,7 @@ int runSelfTest(const Selection& selection, const QString& input, double maxSeco
     if (host->embedEditor(surface.winId(), &editorSize, &error)) {
         std::printf("[ok] редактор встроен (%dx%d)\n", editorSize.width(), editorSize.height());
     } else {
-        std::printf("[warn] редактор не открылся: %s\n", error.toLocal8Bit().constData());
+        std::printf("[warn] редактор не открылся: %s\n", error.toUtf8().constData());
     }
 
     for (int pos = 0; pos < frames; pos += 512) {
@@ -124,6 +124,16 @@ int runSelfTest(const Selection& selection, const QString& input, double maxSeco
     }
     std::printf("[ok] прогнано %d кадров через process(), выход RMS %.4f\n",
                 frames, rms(left, frames));
+
+    // Каретка транспорта: пустые блоки process() с позицией — плагин двигает
+    // свою каретку синхронно с DAW (см. setHostPlayhead в редакторах)
+    host->setTransport(120.0, 4);
+    for (int step = 0; step <= 10; ++step) {
+        host->setPlayhead(qint64(frames) * step / 10, step < 10);
+        QCoreApplication::processEvents();
+    }
+    host->setPlayhead(0, false);
+    std::printf("[ok] каретка транспорта прогнана по треку (11 позиций)\n");
 
     host->unload();
     std::printf("=== selftest OK ===\n");
@@ -156,6 +166,9 @@ int main(int argc, char** argv)
                                      QStringLiteral("s"), QStringLiteral("4"));
     QCommandLineOption selfTestOption(QStringLiteral("selftest"),
                                       QStringLiteral("Headless check: load plugin, embed editor, process"));
+    QCommandLineOption autoPlayOption(QStringLiteral("autoplay"),
+                                      QStringLiteral("Start the transport as soon as the track is loaded"));
+    parser.addOption(autoPlayOption);
     parser.addOption(inputOption);
     parser.addOption(formatOption);
     parser.addOption(productOption);
@@ -183,6 +196,7 @@ int main(int argc, char** argv)
     }
 
     MiniDaw::Window window;
+    window.setAutoPlay(parser.isSet(autoPlayOption));
     // --format/--product работают и в окне: выбираем плагин до первой загрузки
     Selection selection;
     if (parseFormat(parser.value(formatOption), &selection.format)

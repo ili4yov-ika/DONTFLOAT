@@ -397,10 +397,16 @@ install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-# Установка desktop файла (Linux)
+# Установка desktop файла и иконки (Linux)
 if(UNIX AND NOT APPLE)
     install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/tools/dontfloat.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+    )
+    # Icon=dontfloat в .desktop ищется в hicolor: без этой установки
+    # значок в меню и в .deb/.rpm пакетах отсутствовал
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/logo.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+        RENAME dontfloat.svg
     )
 endif()
 

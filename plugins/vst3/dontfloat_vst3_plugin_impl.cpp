@@ -3,16 +3,21 @@
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
 
+#include <QMetaObject>
 #include <QString>
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <vector>
 
 #if defined(DONTFLOAT_HAS_VST3_SDK)
 #include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/gui/iplugview.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "public.sdk/source/common/pluginview.h"
 #include "public.sdk/source/main/pluginfactory.h"
 #include "public.sdk/source/vst/vstaudioeffect.h"
@@ -64,6 +69,86 @@ namespace {
 
 constexpr Steinberg::int32 kEditorWidth = 960;
 constexpr Steinberg::int32 kEditorHeight = 640;
+
+/**
+ * Открытые редакторы этого модуля. Процессор и вьюха — разные объекты VST3,
+ * поэтому о приходе аудио редактор узнаёт через этот список (в CLAP плагин
+ * держит редактор прямо в экземпляре). Уведомление уходит очередью Qt:
+ * process() зовётся из аудиопотока хоста.
+ */
+std::mutex& editorsMutex()
+{
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::vector<DontfloatPluginEditorShell*>& openEditors()
+{
+    static std::vector<DontfloatPluginEditorShell*> editors;
+    return editors;
+}
+
+void registerEditor(DontfloatPluginEditorShell* editor)
+{
+    if (!editor) {
+        return;
+    }
+    const std::lock_guard<std::mutex> lock(editorsMutex());
+    openEditors().push_back(editor);
+}
+
+void unregisterEditor(DontfloatPluginEditorShell* editor)
+{
+    const std::lock_guard<std::mutex> lock(editorsMutex());
+    auto& editors = openEditors();
+    editors.erase(std::remove(editors.begin(), editors.end(), editor), editors.end());
+}
+
+/**
+ * Каретка DAW → каретки редакторов. process() зовётся из аудиопотока, поэтому
+ * позиция уходит в UI очередью Qt и склеивается: одно уведомление за раз.
+ */
+void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition)
+{
+    static std::atomic_bool pending { false };
+    if (pending.exchange(true)) {
+        return;
+    }
+
+    const std::lock_guard<std::mutex> lock(editorsMutex());
+    if (openEditors().empty()) {
+        pending.store(false);
+        return;
+    }
+    for (DontfloatPluginEditorShell* editor : openEditors()) {
+        QMetaObject::invokeMethod(editor, [editor, samplePosition]() {
+            pending.store(false);
+            editor->setHostPlayhead(static_cast<qint64>(samplePosition));
+        }, Qt::QueuedConnection);
+    }
+}
+
+void notifyEditorsHostAudioAppended()
+{
+    // Склейка: пока предыдущее уведомление не разобрано, новых не ставим —
+    // иначе очередь UI забивается одним уведомлением на каждый блок аудио
+    static std::atomic_bool pending { false };
+    if (pending.exchange(true)) {
+        return;
+    }
+
+    const std::lock_guard<std::mutex> lock(editorsMutex());
+    if (openEditors().empty()) {
+        pending.store(false);
+        return;
+    }
+    for (DontfloatPluginEditorShell* editor : openEditors()) {
+        QMetaObject::invokeMethod(editor, [editor]() {
+            pending.store(false);
+            editor->notifyHostAudioAppended();
+        }, Qt::QueuedConnection);
+    }
+}
 
 } // namespace
 
@@ -117,6 +202,7 @@ public:
         MoveWindow(child, 0, 0, kEditorWidth, kEditorHeight, TRUE);
         ShowWindow(child, SW_SHOW);
         editor_->show();
+        registerEditor(editor_.get());
         Dontfloat::Plugins::Ui::pumpQtEvents(8);
 
         return Steinberg::CPluginView::attached(parent, type);
@@ -131,6 +217,7 @@ public:
     {
 #if defined(_WIN32)
         if (editor_) {
+            unregisterEditor(editor_.get());
             editor_->hide();
             SetParent(reinterpret_cast<HWND>(editor_->winId()), nullptr);
             editor_.reset();
@@ -220,6 +307,13 @@ public:
 
     Steinberg::tresult PLUGIN_API process(Steinberg::Vst::ProcessData& data) override
     {
+        // Транспорт читаем и на пустых блоках: так хост шлёт чистые тики
+        // позиции каретки, не добавляя аудио в сессию
+        if (data.processContext
+            && (data.processContext->state & Steinberg::Vst::ProcessContext::kPlaying)) {
+            notifyEditorsHostPlayhead(data.processContext->projectTimeSamples);
+        }
+
         if (data.numSamples <= 0 || data.numOutputs <= 0 || data.outputs[0].numChannels <= 0) {
             return Steinberg::kResultOk;
         }
@@ -250,6 +344,9 @@ public:
                 const_cast<const float* const*>(data.inputs[0].channelBuffers32),
                 channelCount,
                 data.numSamples);
+            // Редактор — отдельный объект VST3: сообщаем ему о новом аудио,
+            // иначе он не покажет дорожку и не запустит анализ
+            notifyEditorsHostAudioAppended();
         }
 
         return Steinberg::kResultOk;

@@ -30,8 +30,10 @@ if exist "C:\Program Files (x86)\NSIS\makensis.exe" (
 ) else if exist "C:\Program Files\NSIS\makensis.exe" (
     set "MAKENSIS=C:\Program Files\NSIS\makensis.exe"
 ) else (
+    REM Delayed expansion is required here: inside a block percent expansion
+    REM happens at parse time - before `where` runs - and reads a stale exit code
     where makensis >nul 2>&1
-    if %ERRORLEVEL% EQU 0 (
+    if !ERRORLEVEL! EQU 0 (
         for /f "delims=" %%i in ('where makensis 2^>nul') do set "MAKENSIS=%%i" & goto :makensis_ok
     )
 )
@@ -56,7 +58,7 @@ if exist "C:\Program Files\CMake\bin\cmake.exe" (
     set "CMAKE_CMD=C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 ) else (
     where cmake >nul 2>&1
-    if %ERRORLEVEL% EQU 0 set "CMAKE_CMD=cmake"
+    if !ERRORLEVEL! EQU 0 set "CMAKE_CMD=cmake"
 )
 if "%CMAKE_CMD%"=="" (
     echo [ERROR] CMake not found! Add CMake to PATH or install it.
@@ -124,10 +126,13 @@ if not exist "%INSTALL_DIR%\bin\DONTFLOAT.exe" (
 )
 set "WINDEPLOYQT="
 if exist "C:\Qt\6.9.3\msvc2022_64\bin\windeployqt.exe" set "WINDEPLOYQT=C:\Qt\6.9.3\msvc2022_64\bin\windeployqt.exe"
-if exist "C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe" set "WINDEPLOYQT=C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe"
+REM Older Qt only as a fallback - the plain second `if exist` overwrote 6.9.3 with 6.8.3
+if not defined WINDEPLOYQT (
+    if exist "C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe" set "WINDEPLOYQT=C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe"
+)
 if not defined WINDEPLOYQT (
     where windeployqt >nul 2>&1
-    if %ERRORLEVEL% EQU 0 (
+    if !ERRORLEVEL! EQU 0 (
         for /f "delims=" %%i in ('where windeployqt 2^>nul') do set "WINDEPLOYQT=%%i" & goto :wdq_ok
     )
 )

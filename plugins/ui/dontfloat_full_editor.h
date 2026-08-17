@@ -18,6 +18,8 @@ public:
 
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void notifyHostAudioAppended();
+    /** Каретка DAW (сэмплы дорожки) — в обе секции. */
+    void setHostPlayhead(qint64 samplePosition);
 
 private:
     DontfloatScratchEditor* scratch_ = nullptr;

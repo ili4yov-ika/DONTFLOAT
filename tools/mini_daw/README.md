@@ -1,7 +1,64 @@
 # DONTFLOAT mini-DAW hosts
 
-Minimal in-process plugin hosts ("mini-DAWs") for every plugin **format** and
-**product kind**. Each host loads an audio file (default `tests/midi/test_1.wav`),
+Два вида хостов:
+
+- **`dontfloat_mini_daw`** — GUI-окно по макету `MARKDOWN/example_window_minidaw.svg`:
+  одно окно на все девять комбинаций, плагин грузится **в рантайме** (как в
+  настоящей DAW). См. раздел «GUI mini-DAW» ниже.
+- **`mini_daw_<format>_<kind>`** — headless-хосты, где плагин влинкован на этапе
+  сборки; используются как регрессионные тесты (см. «Targets»).
+
+## GUI mini-DAW (`dontfloat_mini_daw`, Windows)
+
+Верхняя панель: кнопка открытия файла, список **формата** (CLAP / VST3 / LV2),
+список **редакции** (DONTFLOAT / Scratch / Pitcher), поле **BPM**, **размер
+такта**, воспроизведение и стоп. Под ними — дорожка со звуковой волной и
+тактовой сеткой: проигранная часть залита красным, каретка идёт по дорожке,
+слева/справа время. Ниже — область плагина в красной рамке, куда встраивается
+его редактор.
+
+Как это работает:
+
+1. При выборе формата/редакции модуль плагина ищется (`resolvePluginPath`:
+   сборочное дерево, затем установленные в Common Files) и грузится
+   `LoadLibrary`; редактор встраивается в нативное окно панели
+   (CLAP — `clap.gui` win32, LV2 — `lv2ui` с фичей `ui:parent`,
+   VST3 — `IPlugView::attached` с `kPlatformTypeHWND`).
+2. Открытый трек прогоняется через `process()` плагина — плагин видит аудио
+   **с дорожки DAW** (собственного импорта у плагинов больше нет), а транспорт
+   играет то, что вернул плагин.
+3. Получив аудио, плагин **сам запускает анализ** — Pitcher показывает ноты без
+   нажатия «Анализировать», Scratch считает BPM.
+4. Пока идёт воспроизведение, хост шлёт плагину позицию каретки — **пустым**
+   блоком `process()` (аудио в сессию не добавляется, читается только
+   транспорт): CLAP — `clap_event_transport_t`, VST3 — `ProcessContext`.
+   Каретка в пианоролле и на волне плагина идёт синхронно с кареткой DAW.
+   Для LV2 нужен `time:Position` — не реализовано.
+
+```powershell
+# окно с Pitcher на CLAP и загруженным треком
+.\dontfloat_mini_daw.exe --format clap --product pitcher --input tests\midi\test_1.wav
+
+# то же, но транспорт стартует сам (удобно для проверки синхронной каретки)
+.\dontfloat_mini_daw.exe --format vst3 --product full --autoplay --input tests\midi\test_1.wav
+
+# самопроверка без окна: модуль + редактор + прогон блоков (код возврата 0/2/3)
+.\dontfloat_mini_daw.exe --selftest --format lv2 --product full --seconds 2
+```
+
+VST3 хостится через Steinberg SDK (`sdk_hosting`): модуль грузится своим
+`LoadLibrary` + `GetPluginFactory` (загрузчик SDK отказывал без описания),
+классы перебираются сырым `IPluginFactory` (в `VST3::Hosting::PluginFactory
+::classInfos()` есть ошибка — `back()` на пустом векторе), компонент и
+контроллер соединяются `IConnectionPoint`, аудио идёт через
+`IAudioProcessor::process`, темп и размер такта — в `ProcessContext`.
+
+Поля BPM и размера такта задают темп хоста: по ним строится сетка на дорожке
+и заполняется транспорт плагина (CLAP/VST3; для LV2 нужен `time:Position`).
+
+## Headless-хосты
+
+Each host loads an audio file (default `tests/midi/test_1.wav`),
 instantiates the DONTFLOAT plugin for its product, streams the whole file through
 the plugin, writes the processed output to a WAV, and exercises the shared plugin
 core session (prepare + analyze). These are headless command-line hosts.

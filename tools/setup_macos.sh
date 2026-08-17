@@ -28,12 +28,13 @@ brew install cmake ninja pkg-config qt@6
 QT_PREFIX="$(brew --prefix qt@6)"
 echo
 echo "[2/3] Запись окружения в $ENV_FILE ..."
+# Только префикс из brew: вторая строка с /opt/homebrew + /usr/local ставила
+# в начало PATH чужой Qt (на Intel/ARM с двумя установками брался не тот)
 cat >"$ENV_FILE" <<EOF
 # DONTFLOAT macOS (сгенерировано tools/setup_macos.sh)
 export PATH="${QT_PREFIX}/bin:\$PATH"
 export CMAKE_PREFIX_PATH="${QT_PREFIX}"
 export QT_PLUGIN_PATH="${QT_PREFIX}/plugins"
-export PATH="/opt/homebrew/opt/qt@6/bin:/usr/local/opt/qt@6/bin:\$PATH"
 EOF
 
 # shellcheck disable=SC1090
@@ -48,6 +49,18 @@ fi
 if [[ ! -f "${QT_PREFIX}/lib/cmake/Qt6/Qt6Config.cmake" ]]; then
     echo "[ОШИБКА] Qt6 не найден в ${QT_PREFIX}"
     exit 1
+fi
+
+# Проект требует Qt >= QT_MIN_VERSION из CMakeLists.txt
+QT_MIN_VERSION="$(sed -n 's/^set(QT_MIN_VERSION "\([0-9.]*\)").*/\1/p' "${PROJECT_ROOT}/CMakeLists.txt" | head -n 1)"
+QT_VERSION="$(qmake6 -query QT_VERSION 2>/dev/null || qmake -query QT_VERSION 2>/dev/null || true)"
+if [[ -n "$QT_MIN_VERSION" && -n "$QT_VERSION" ]]; then
+    OLDEST="$(printf '%s\n%s\n' "$QT_MIN_VERSION" "$QT_VERSION" | sort -V | head -n 1)"
+    if [[ "$OLDEST" != "$QT_MIN_VERSION" ]]; then
+        echo "[ПРЕДУПРЕЖДЕНИЕ] Qt ${QT_VERSION} старее требуемой ${QT_MIN_VERSION} — CMake откажется конфигурировать"
+    else
+        echo "Qt ${QT_VERSION} (требуется >= ${QT_MIN_VERSION})"
+    fi
 fi
 
 echo

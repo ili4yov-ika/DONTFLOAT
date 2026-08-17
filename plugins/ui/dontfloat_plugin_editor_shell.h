@@ -16,6 +16,8 @@ public:
 
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void notifyHostAudioAppended();
+    /** Позиция каретки DAW (сэмплы дорожки) — двигает каретку редактора. */
+    void setHostPlayhead(qint64 samplePosition);
 
 private:
     Dontfloat::PluginCore::PluginProduct product_;

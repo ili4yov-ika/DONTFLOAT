@@ -5,6 +5,7 @@
 #include "../../include/bpmanalyzer.h"
 #include "../../include/markerengine.h"
 
+#include <QElapsedTimer>
 #include <QFutureWatcher>
 #include <QString>
 #include <QWidget>
@@ -30,6 +31,8 @@ public:
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void refreshFromSession();
     void notifyHostAudioAppended();
+    /** Каретка DAW (сэмплы дорожки) — синхронизирует каретку волны. */
+    void setHostPlayhead(qint64 samplePosition);
 
 private slots:
     void onAnalyzeBpmClicked();
@@ -68,12 +71,15 @@ private:
     std::shared_ptr<QVector<QVector<float>>> pendingAligned_;
     BPMAnalyzer::AnalysisResult lastAnalysis_;
     QTimer* autoAnalysisTimer_ = nullptr;
+    QElapsedTimer hostRefreshClock_;
     bool analysisRunning_ = false;
     bool alignRunning_ = false;
     int beatsPerBar_ = 4;
 
     /** Пауза в потоке аудио от хоста, после которой стартует авто-анализ. */
     static constexpr int kAutoAnalysisDelayMs = 400;
+    /** Минимальный интервал перерисовки волны при потоке блоков от хоста. */
+    static constexpr int kHostRefreshIntervalMs = 200;
 };
 
 } // namespace Dontfloat::Plugins::Ui
