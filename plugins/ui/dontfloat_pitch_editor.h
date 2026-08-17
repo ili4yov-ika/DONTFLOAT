@@ -4,6 +4,7 @@
 #include "../core/dontfloat_plugin_core.h"
 #include "../../include/pitchdetector.h"
 
+#include <QElapsedTimer>
 #include <QFutureWatcher>
 #include <QString>
 #include <QWidget>
@@ -42,6 +43,8 @@ public:
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void refreshFromSession();
     void notifyHostAudioAppended();
+    /** Каретка DAW (сэмплы дорожки) — синхронизирует каретку пианоролла. */
+    void setHostPlayhead(qint64 samplePosition);
 
 signals:
     void pitchSessionChanged();
@@ -70,6 +73,8 @@ private:
     void setAnalysisRunning(bool running);
     void layoutAnalyzeOverlay();
     void refreshPitchGrid();
+    /** Подгоняет диапазон высот пианоролла под найденные ноты. */
+    void fitPitchRangeToNotes();
     void runPitchAnalysis();
     void syncNotesToSession();
     void setStatus(const QString& text);
@@ -99,10 +104,13 @@ private:
     std::shared_ptr<std::atomic<int>> analysisProgress_;
     NotePreviewPlayer* notePreviewPlayer_ = nullptr;
     QTimer* autoAnalysisTimer_ = nullptr;
+    QElapsedTimer hostRefreshClock_;
     bool analysisRunning_ = false;
 
     /** Пауза в потоке аудио от хоста, после которой стартует авто-анализ. */
     static constexpr int kAutoAnalysisDelayMs = 400;
+    /** Минимальный интервал перерисовки вида при потоке блоков от хоста. */
+    static constexpr int kHostRefreshIntervalMs = 200;
 };
 
 } // namespace Dontfloat::Plugins::Ui

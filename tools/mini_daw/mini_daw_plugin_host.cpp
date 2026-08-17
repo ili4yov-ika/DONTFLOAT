@@ -5,11 +5,26 @@
 #include "plugin_product.h"
 
 #include <QtCore/QDir>
+#include <QtCore/QHash>
+#include <QtCore/QSet>
 #include <QtCore/QFileInfo>
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
+#include <string>
 #include <vector>
+
+#if defined(DONTFLOAT_HAS_VST3_SDK)
+#include "pluginterfaces/gui/iplugview.h"
+#include "pluginterfaces/vst/ivstaudioprocessor.h"
+#include "pluginterfaces/vst/ivstcomponent.h"
+#include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstprocesscontext.h"
+#include "public.sdk/source/vst/hosting/hostclasses.h"
+#include "public.sdk/source/vst/hosting/module.h"
+#include "public.sdk/source/vst/hosting/parameterchanges.h"
+#endif
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -30,33 +45,43 @@ const Dontfloat::PluginCore::PluginProductDesc& descFor(PluginProduct product)
 
 #if defined(_WIN32)
 
-/** Модуль плагина: держим загруженным на всё время жизни экземпляра. */
+/**
+ * Модуль плагина. Загруженные модули кэшируются и НЕ выгружаются: плагин
+ * тянет за собой Qt-DLL с мета-объектами и регистрациями типов, а выгрузка
+ * такого модуля из Qt-хоста оставляет в Qt висячие указатели (падение в
+ * Qt6Core при повторной загрузке — например при смене редакции плагина).
+ */
 class Module {
 public:
     bool open(const QString& path, QString* error)
     {
-        close();
+        handle_ = nullptr;
+        const QString key = QFileInfo(path).absoluteFilePath();
+        auto& cache = loadedModules();
+        const auto it = cache.find(key);
+        if (it != cache.end()) {
+            handle_ = it.value();
+            return true;
+        }
+
         SetLastError(0);
         // ALTERED_SEARCH_PATH: рядом с плагином лежат его impl-DLL и Qt
-        handle_ = LoadLibraryExW(reinterpret_cast<LPCWSTR>(path.utf16()), nullptr,
-                                 LOAD_WITH_ALTERED_SEARCH_PATH);
-        if (!handle_) {
+        HMODULE module = LoadLibraryExW(reinterpret_cast<LPCWSTR>(path.utf16()), nullptr,
+                                        LOAD_WITH_ALTERED_SEARCH_PATH);
+        if (!module) {
             if (error) {
                 *error = QStringLiteral("LoadLibrary(%1) не удался: %2")
                              .arg(QDir::toNativeSeparators(path), lastErrorText());
             }
             return false;
         }
+        cache.insert(key, module);
+        handle_ = module;
         return true;
     }
 
-    void close()
-    {
-        if (handle_) {
-            FreeLibrary(handle_);
-            handle_ = nullptr;
-        }
-    }
+    /** Отпускает ссылку на модуль; сам модуль остаётся в процессе (см. выше). */
+    void close() { handle_ = nullptr; }
 
     template <typename T>
     T symbol(const char* name) const
@@ -66,9 +91,13 @@ public:
 
     bool isOpen() const { return handle_ != nullptr; }
 
-    ~Module() { close(); }
-
 private:
+    static QHash<QString, HMODULE>& loadedModules()
+    {
+        static QHash<QString, HMODULE> cache;
+        return cache;
+    }
+
     static QString lastErrorText()
     {
         const DWORD code = GetLastError();
@@ -86,6 +115,13 @@ private:
 
     HMODULE handle_ = nullptr;
 };
+
+/** Инициализированные точки входа CLAP: deinit не зовём (см. Module). */
+QSet<const clap_plugin_entry_t*>& initialisedClapEntries()
+{
+    static QSet<const clap_plugin_entry_t*> entries;
+    return entries;
+}
 
 // ---------------------------------------------------------------- CLAP ----
 
@@ -105,12 +141,15 @@ public:
             fail(error, QStringLiteral("в модуле нет экспорта clap_entry"));
             return false;
         }
-        if (!entry_->init(path.toUtf8().constData())) {
-            fail(error, QStringLiteral("clap_entry.init() вернул false"));
-            entry_ = nullptr;
-            return false;
+        // init() зовём один раз на модуль: парный deinit выгружает impl-DLL
+        if (!initialisedClapEntries().contains(entry_)) {
+            if (!entry_->init(path.toUtf8().constData())) {
+                fail(error, QStringLiteral("clap_entry.init() вернул false"));
+                entry_ = nullptr;
+                return false;
+            }
+            initialisedClapEntries().insert(entry_);
         }
-        initialised_ = true;
 
         const auto* factory = static_cast<const clap_plugin_factory_t*>(
             entry_->get_factory(CLAP_PLUGIN_FACTORY_ID));
@@ -152,7 +191,15 @@ public:
             fail(error, QStringLiteral("activate/start_processing не удался"));
             return false;
         }
+        // Сессия продукта в impl-DLL переживает пересоздание экземпляра —
+        // чистим её, иначе прошлый трек дособерётся к новому
+        if (plugin_->reset) {
+            plugin_->reset(plugin_);
+        }
         processing_ = true;
+        sampleRate_ = sampleRate;
+        transport_ = {};
+        setTransport(bpm_, beatsPerBar_);
         return true;
     }
 
@@ -219,8 +266,46 @@ public:
         process.audio_outputs = &output;
         process.frames_count = uint32_t(frames);
         process.steady_time = steadyTime_;
+        process.transport = &transport_;
         plugin_->process(plugin_, &process);
         steadyTime_ += frames;
+    }
+
+    void setTransport(double bpm, int beatsPerBar) override
+    {
+        bpm_ = bpm > 0.0 ? bpm : 120.0;
+        beatsPerBar_ = std::max(1, beatsPerBar);
+        transport_.tempo = bpm_;
+        transport_.tsig_num = uint16_t(beatsPerBar_);
+        transport_.tsig_denom = 4;
+    }
+
+    void setPlayhead(qint64 frame, bool playing) override
+    {
+        if (!plugin_ || !processing_ || sampleRate_ <= 0.0) {
+            return;
+        }
+        const double seconds = double(frame) / sampleRate_;
+        transport_.flags = CLAP_TRANSPORT_HAS_TEMPO | CLAP_TRANSPORT_HAS_TIME_SIGNATURE
+            | CLAP_TRANSPORT_HAS_SECONDS_TIMELINE | CLAP_TRANSPORT_HAS_BEATS_TIMELINE;
+        if (playing) {
+            transport_.flags |= CLAP_TRANSPORT_IS_PLAYING;
+        }
+        transport_.song_pos_seconds = clap_sectime(seconds * CLAP_SECTIME_FACTOR);
+        transport_.song_pos_beats = clap_beattime(seconds * (bpm_ / 60.0) * CLAP_BEATTIME_FACTOR);
+
+        // Пустой блок: плагин прочитает транспорт, но аудио не получит
+        clap_audio_buffer_t input {};
+        input.channel_count = 2;
+        clap_audio_buffer_t output {};
+        output.channel_count = 2;
+        clap_process_t process {};
+        process.audio_inputs = &input;
+        process.audio_outputs = &output;
+        process.frames_count = 0;
+        process.steady_time = steadyTime_;
+        process.transport = &transport_;
+        plugin_->process(plugin_, &process);
     }
 
     void unload() override
@@ -240,11 +325,8 @@ public:
             plugin_ = nullptr;
         }
         processing_ = false;
-        if (entry_ && initialised_) {
-            entry_->deinit();
-        }
+        // entry_->deinit() не зовём: он выгрузит impl-DLL вместе с Qt-объектами
         entry_ = nullptr;
-        initialised_ = false;
         steadyTime_ = 0;
         module_.close();
     }
@@ -265,10 +347,13 @@ private:
     const clap_plugin_t* plugin_ = nullptr;
     const clap_plugin_gui_t* gui_ = nullptr;
     clap_host_t host_ {};
-    bool initialised_ = false;
     bool processing_ = false;
     bool guiCreated_ = false;
     int64_t steadyTime_ = 0;
+    double sampleRate_ = 0.0;
+    double bpm_ = 120.0;
+    int beatsPerBar_ = 4;
+    clap_event_transport_t transport_ {};
     QString displayName_;
 };
 
@@ -398,6 +483,16 @@ public:
         }
     }
 
+    void setTransport(double, int) override
+    {
+        // LV2-транспорт идёт atom-событиями time:Position — пока не реализовано
+    }
+
+    void setPlayhead(qint64, bool) override
+    {
+        // Каретка LV2 приедет тем же time:Position (см. setTransport)
+    }
+
     void process(float* left, float* right, int frames) override
     {
         if (!instance_ || !active_ || frames <= 0) {
@@ -467,18 +562,413 @@ private:
 
 // ---------------------------------------------------------------- VST3 ----
 
+#if defined(DONTFLOAT_HAS_VST3_SDK)
+
+/** Минимальный IPlugFrame: плагин просит изменить размер своего окна. */
+class HostPlugFrame final : public Steinberg::IPlugFrame {
+public:
+    Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID iid, void** obj) override
+    {
+        if (Steinberg::FUnknownPrivate::iidEqual(iid, Steinberg::IPlugFrame::iid)
+            || Steinberg::FUnknownPrivate::iidEqual(iid, Steinberg::FUnknown::iid)) {
+            addRef();
+            *obj = static_cast<Steinberg::IPlugFrame*>(this);
+            return Steinberg::kResultOk;
+        }
+        *obj = nullptr;
+        return Steinberg::kNoInterface;
+    }
+    Steinberg::uint32 PLUGIN_API addRef() override { return ++refCount_; }
+    Steinberg::uint32 PLUGIN_API release() override
+    {
+        if (--refCount_ == 0) {
+            delete this;
+            return 0;
+        }
+        return refCount_;
+    }
+
+    Steinberg::tresult PLUGIN_API resizeView(Steinberg::IPlugView* view,
+                                             Steinberg::ViewRect* newSize) override
+    {
+        if (view && newSize) {
+            view->onSize(newSize);
+        }
+        return Steinberg::kResultTrue;
+    }
+
+private:
+    std::atomic<Steinberg::uint32> refCount_ { 1 };
+};
+
 /**
- * VST3 требует COM-интерфейсов Steinberg SDK (IComponent / IEditController /
- * IPlugView). Пока хост честно сообщает об этом вместо тихого простоя.
+ * VST3-хост поверх Steinberg SDK: модуль грузится через VST3::Hosting::Module,
+ * компонент и контроллер создаются фабрикой и соединяются, редактор
+ * (IPlugView) прикрепляется к HWND панели, аудио идёт через IAudioProcessor.
  */
+class Vst3Host final : public PluginHost {
+public:
+    ~Vst3Host() override { unload(); }
+
+    bool load(const QString& path, PluginProduct product,
+              double sampleRate, int blockSize, QString* error) override
+    {
+        unload();
+
+        // Модуль грузим сами (как probe и остальные бэкенды): загрузчик SDK
+        // возвращает отказ без описания, а нам нужен ещё и кэш модулей
+        const QFileInfo bundleInfo(path);
+        const QString modulePath = bundleInfo.isDir()
+            ? QDir(path).filePath(QStringLiteral("Contents/x86_64-win/%1").arg(bundleInfo.fileName()))
+            : path;
+        if (!QFileInfo::exists(modulePath)) {
+            fail(error, QStringLiteral("модуль не найден: %1")
+                            .arg(QDir::toNativeSeparators(modulePath)));
+            return false;
+        }
+        if (!module_.open(modulePath, error)) {
+            return false;
+        }
+
+        using InitDllFn = bool (*)();
+        using GetFactoryFn = Steinberg::IPluginFactory* (*)();
+        auto initDll = module_.symbol<InitDllFn>("InitDll");
+        auto getFactory = module_.symbol<GetFactoryFn>("GetPluginFactory");
+        if (!getFactory) {
+            fail(error, QStringLiteral("в модуле нет экспорта GetPluginFactory"));
+            return false;
+        }
+        if (initDll && !initDll()) {
+            fail(error, QStringLiteral("InitDll() вернул false"));
+            return false;
+        }
+        Steinberg::IPluginFactory* rawFactory = getFactory();
+        if (!rawFactory) {
+            fail(error, QStringLiteral("GetPluginFactory() вернул null"));
+            return false;
+        }
+
+        // Классы перебираем сырым IPluginFactory: VST3::Hosting::PluginFactory
+        // ::classInfos() при неудачном getClassInfo зовёт back() на пустом
+        // векторе и пишет в мусор — на редакции Full это валило хост
+        factory_ = Steinberg::owned(rawFactory);
+        Steinberg::PClassInfo effectInfo {};
+        bool found = false;
+        const Steinberg::int32 classCount = factory_->countClasses();
+        for (Steinberg::int32 i = 0; i < classCount; ++i) {
+            Steinberg::PClassInfo info {};
+            if (factory_->getClassInfo(i, &info) != Steinberg::kResultOk) {
+                continue;
+            }
+            if (std::strcmp(info.category, kVstAudioEffectClass) == 0) {
+                effectInfo = info;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            fail(error, QStringLiteral("в фабрике нет класса аудио-эффекта (классов: %1)")
+                            .arg(classCount));
+            return false;
+        }
+        // name — фиксированный ASCII-буфер PClassInfo, читаем его безопасно
+        displayName_ = QString::fromUtf8(
+            effectInfo.name, int(qstrnlen(effectInfo.name, sizeof(effectInfo.name))));
+        if (displayName_.isEmpty()) {
+            displayName_ = QString::fromUtf8(descFor(product).vst3DisplayName);
+        }
+
+        Steinberg::Vst::IComponent* rawComponent = nullptr;
+        if (factory_->createInstance(effectInfo.cid, Steinberg::Vst::IComponent::iid,
+                                     reinterpret_cast<void**>(&rawComponent)) != Steinberg::kResultOk
+            || !rawComponent) {
+            fail(error, QStringLiteral("не создался IComponent"));
+            return false;
+        }
+        component_ = Steinberg::owned(rawComponent);
+        if (component_->initialize(hostContext_) != Steinberg::kResultOk) {
+            fail(error, QStringLiteral("IComponent::initialize не удался"));
+            return false;
+        }
+        componentInitialised_ = true;
+
+        processor_ = Steinberg::FUnknownPtr<Steinberg::Vst::IAudioProcessor>(component_);
+        if (!processor_) {
+            fail(error, QStringLiteral("компонент не отдал IAudioProcessor"));
+            return false;
+        }
+
+        // Контроллер: отдельный класс (как у DONTFLOAT) либо сам компонент
+        Steinberg::TUID controllerCid {};
+        if (component_->getControllerClassId(controllerCid) == Steinberg::kResultTrue) {
+            Steinberg::Vst::IEditController* rawController = nullptr;
+            if (factory_->createInstance(controllerCid, Steinberg::Vst::IEditController::iid,
+                                         reinterpret_cast<void**>(&rawController))
+                    == Steinberg::kResultOk
+                && rawController) {
+                controller_ = Steinberg::owned(rawController);
+            }
+            if (controller_ && controller_->initialize(hostContext_) == Steinberg::kResultOk) {
+                controllerInitialised_ = true;
+                connectComponentAndController();
+            }
+        }
+        if (!controller_) {
+            controller_ = Steinberg::FUnknownPtr<Steinberg::Vst::IEditController>(component_);
+        }
+
+        Steinberg::Vst::ProcessSetup setup {};
+        setup.processMode = Steinberg::Vst::kRealtime;
+        setup.symbolicSampleSize = Steinberg::Vst::kSample32;
+        setup.maxSamplesPerBlock = std::max(16, blockSize);
+        setup.sampleRate = sampleRate;
+        if (processor_->setupProcessing(setup) != Steinberg::kResultOk) {
+            fail(error, QStringLiteral("setupProcessing не удался"));
+            return false;
+        }
+
+        component_->activateBus(Steinberg::Vst::kAudio, Steinberg::Vst::kInput, 0, true);
+        component_->activateBus(Steinberg::Vst::kAudio, Steinberg::Vst::kOutput, 0, true);
+        if (component_->setActive(true) != Steinberg::kResultOk) {
+            fail(error, QStringLiteral("setActive не удался"));
+            return false;
+        }
+        processor_->setProcessing(true);
+        processing_ = true;
+
+        context_ = {};
+        context_.sampleRate = sampleRate;
+        context_.state = Steinberg::Vst::ProcessContext::kPlaying
+            | Steinberg::Vst::ProcessContext::kTempoValid
+            | Steinberg::Vst::ProcessContext::kTimeSigValid;
+        setTransport(bpm_, beatsPerBar_);
+        Q_UNUSED(product);
+        return true;
+    }
+
+    bool embedEditor(WId parent, QSize* editorSize, QString* error) override
+    {
+        if (!controller_) {
+            fail(error, QStringLiteral("плагин не отдал IEditController"));
+            return false;
+        }
+        view_ = controller_->createView(Steinberg::Vst::ViewType::kEditor);
+        if (!view_) {
+            fail(error, QStringLiteral("createView(editor) вернул null"));
+            return false;
+        }
+        if (view_->isPlatformTypeSupported(Steinberg::kPlatformTypeHWND) != Steinberg::kResultTrue) {
+            fail(error, QStringLiteral("редактор не поддерживает HWND"));
+            return false;
+        }
+
+        frame_ = new HostPlugFrame();
+        view_->setFrame(frame_);
+        if (view_->attached(reinterpret_cast<void*>(parent), Steinberg::kPlatformTypeHWND)
+            != Steinberg::kResultOk) {
+            fail(error, QStringLiteral("IPlugView::attached не удался"));
+            return false;
+        }
+        attached_ = true;
+
+        Steinberg::ViewRect rect {};
+        if (view_->getSize(&rect) == Steinberg::kResultOk && editorSize) {
+            *editorSize = QSize(rect.getWidth(), rect.getHeight());
+        }
+        return true;
+    }
+
+    void resizeEditor(QSize size) override
+    {
+        if (!view_ || !attached_ || !size.isValid()) {
+            return;
+        }
+        Steinberg::ViewRect rect(0, 0, size.width(), size.height());
+        // checkSizeConstraint только уточняет размер: гейтить им onSize нельзя,
+        // иначе вьюхи без этой проверки остаются в геометрии момента attached()
+        view_->checkSizeConstraint(&rect);
+        view_->onSize(&rect);
+    }
+
+    void process(float* left, float* right, int frames) override
+    {
+        if (!processor_ || !processing_ || frames <= 0) {
+            return;
+        }
+        float* channels[2] = { left, right };
+        Steinberg::Vst::AudioBusBuffers input {};
+        input.numChannels = 2;
+        input.channelBuffers32 = channels;
+        Steinberg::Vst::AudioBusBuffers output {};
+        output.numChannels = 2;
+        output.channelBuffers32 = channels;  // обработка на месте
+
+        Steinberg::Vst::ProcessData data {};
+        data.processMode = Steinberg::Vst::kRealtime;
+        data.symbolicSampleSize = Steinberg::Vst::kSample32;
+        data.numSamples = frames;
+        data.numInputs = 1;
+        data.numOutputs = 1;
+        data.inputs = &input;
+        data.outputs = &output;
+        data.inputParameterChanges = &parameterChanges_;
+        data.outputParameterChanges = &outputParameterChanges_;
+        data.processContext = &context_;
+
+        processor_->process(data);
+        outputParameterChanges_.clearQueue();
+
+        context_.projectTimeSamples += frames;
+        context_.continousTimeSamples += frames;
+    }
+
+    void setTransport(double bpm, int beatsPerBar) override
+    {
+        bpm_ = bpm > 0.0 ? bpm : 120.0;
+        beatsPerBar_ = std::max(1, beatsPerBar);
+        context_.tempo = bpm_;
+        context_.timeSigNumerator = beatsPerBar_;
+        context_.timeSigDenominator = 4;
+    }
+
+    void setPlayhead(qint64 frame, bool playing) override
+    {
+        if (!processor_ || !processing_) {
+            return;
+        }
+        context_.projectTimeSamples = frame;
+        context_.continousTimeSamples = frame;
+        if (playing) {
+            context_.state |= Steinberg::Vst::ProcessContext::kPlaying;
+        } else {
+            context_.state &= ~Steinberg::Vst::ProcessContext::kPlaying;
+        }
+
+        // Пустой блок: плагин прочитает ProcessContext, но аудио не получит
+        Steinberg::Vst::ProcessData data {};
+        data.processMode = Steinberg::Vst::kRealtime;
+        data.symbolicSampleSize = Steinberg::Vst::kSample32;
+        data.numSamples = 0;
+        data.numInputs = 0;
+        data.numOutputs = 0;
+        data.inputParameterChanges = &parameterChanges_;
+        data.outputParameterChanges = &outputParameterChanges_;
+        data.processContext = &context_;
+        processor_->process(data);
+        outputParameterChanges_.clearQueue();
+    }
+
+    void unload() override
+    {
+        if (view_) {
+            if (attached_) {
+                view_->removed();
+            }
+            view_->setFrame(nullptr);
+            view_->release();
+            view_ = nullptr;
+        }
+        attached_ = false;
+        if (frame_) {
+            frame_->release();
+            frame_ = nullptr;
+        }
+
+        if (processor_ && processing_) {
+            processor_->setProcessing(false);
+        }
+        processing_ = false;
+        if (component_) {
+            component_->setActive(false);
+        }
+        disconnectComponentAndController();
+        if (controller_ && controllerInitialised_) {
+            controller_->terminate();
+        }
+        controllerInitialised_ = false;
+        controller_ = nullptr;
+        processor_ = nullptr;
+        if (component_ && componentInitialised_) {
+            component_->terminate();
+        }
+        componentInitialised_ = false;
+        component_ = nullptr;
+        factory_ = nullptr;
+        // Модуль остаётся в процессе (кэш Module) — он тянет Qt-DLL плагина
+        module_.close();
+    }
+
+    QString displayName() const override { return displayName_; }
+
+private:
+    void connectComponentAndController()
+    {
+        componentConnection_ =
+            Steinberg::FUnknownPtr<Steinberg::Vst::IConnectionPoint>(component_);
+        controllerConnection_ =
+            Steinberg::FUnknownPtr<Steinberg::Vst::IConnectionPoint>(controller_);
+        if (componentConnection_ && controllerConnection_) {
+            componentConnection_->connect(controllerConnection_);
+            controllerConnection_->connect(componentConnection_);
+        }
+    }
+
+    void disconnectComponentAndController()
+    {
+        if (componentConnection_ && controllerConnection_) {
+            componentConnection_->disconnect(controllerConnection_);
+            controllerConnection_->disconnect(componentConnection_);
+        }
+        componentConnection_ = nullptr;
+        controllerConnection_ = nullptr;
+    }
+
+    void fail(QString* error, const QString& text)
+    {
+        if (error) {
+            *error = text;
+        }
+        unload();
+    }
+
+    Module module_;
+    /**
+     * Контекст хоста — COM-объект со счётчиком ссылок: плагин его удерживает и
+     * освобождает, поэтому он живёт в куче под IPtr, а не полем по значению
+     * (иначе release() удаляет объект-член и рушит кучу).
+     */
+    Steinberg::IPtr<Steinberg::Vst::HostApplication> hostContext_ {
+        Steinberg::owned(new Steinberg::Vst::HostApplication) };
+    Steinberg::IPtr<Steinberg::IPluginFactory> factory_;
+    Steinberg::IPtr<Steinberg::Vst::IComponent> component_;
+    Steinberg::IPtr<Steinberg::Vst::IEditController> controller_;
+    Steinberg::FUnknownPtr<Steinberg::Vst::IAudioProcessor> processor_;
+    Steinberg::FUnknownPtr<Steinberg::Vst::IConnectionPoint> componentConnection_;
+    Steinberg::FUnknownPtr<Steinberg::Vst::IConnectionPoint> controllerConnection_;
+    Steinberg::IPlugView* view_ = nullptr;
+    HostPlugFrame* frame_ = nullptr;
+    Steinberg::Vst::ProcessContext context_ {};
+    Steinberg::Vst::ParameterChanges parameterChanges_;
+    Steinberg::Vst::ParameterChanges outputParameterChanges_;
+    QString displayName_;
+    double bpm_ = 120.0;
+    int beatsPerBar_ = 4;
+    bool processing_ = false;
+    bool attached_ = false;
+    bool componentInitialised_ = false;
+    bool controllerInitialised_ = false;
+};
+
+#else  // DONTFLOAT_HAS_VST3_SDK
+
+/** Без Steinberg SDK VST3 не хостится — честно сообщаем об этом. */
 class Vst3Host final : public PluginHost {
 public:
     bool load(const QString& path, PluginProduct, double, int, QString* error) override
     {
         if (error) {
-            *error = QStringLiteral(
-                "VST3-хостинг ещё не реализован (нужны IComponent / IPlugView из Steinberg SDK).\n"
-                "Модуль: %1").arg(QDir::toNativeSeparators(path));
+            *error = QStringLiteral("сборка без Steinberg VST3 SDK — модуль %1 не загрузить")
+                         .arg(QDir::toNativeSeparators(path));
         }
         return false;
     }
@@ -486,16 +976,19 @@ public:
     bool embedEditor(WId, QSize*, QString* error) override
     {
         if (error) {
-            *error = QStringLiteral("VST3-хостинг ещё не реализован");
+            *error = QStringLiteral("сборка без Steinberg VST3 SDK");
         }
         return false;
     }
 
     void resizeEditor(QSize) override {}
     void process(float*, float*, int) override {}
+    void setTransport(double, int) override {}
     void unload() override {}
     QString displayName() const override { return QStringLiteral("VST3"); }
 };
+
+#endif // DONTFLOAT_HAS_VST3_SDK
 
 #endif // _WIN32
 

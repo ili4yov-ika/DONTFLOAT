@@ -22,6 +22,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 namespace Dontfloat::Plugins::Ui {
@@ -290,7 +291,13 @@ void DontfloatPitchEditor::notifyHostAudioAppended()
     if (!session_ || session_->audioBuffer().empty()) {
         return;
     }
-    refreshFromSession();
+    // Хост зовёт это на каждый блок: полное обновление вида слишком дорого,
+    // поэтому не чаще kHostRefreshIntervalMs (анализ всё равно ждёт таймера)
+    if (!hostRefreshClock_.isValid()
+        || hostRefreshClock_.elapsed() >= kHostRefreshIntervalMs) {
+        hostRefreshClock_.restart();
+        refreshFromSession();
+    }
     // Хост шлёт аудио блоками: перезапускаем таймер, чтобы анализ стартовал
     // один раз — когда дорожка прогналась целиком и поток прекратился
     if (!analysisRunning_ && autoAnalysisTimer_) {
@@ -298,11 +305,29 @@ void DontfloatPitchEditor::notifyHostAudioAppended()
     }
 }
 
+void DontfloatPitchEditor::setHostPlayhead(qint64 samplePosition)
+{
+    if (!pitchGrid_ || !session_) {
+        return;
+    }
+    const int sampleRate = session_->audioBuffer().sampleRate;
+    if (sampleRate <= 0) {
+        return;
+    }
+    // Пианоролл живёт в миллисекундах дорожки: каретка встаёт туда же, где
+    // каретка DAW (setPlaybackPosition сам пересчитает её в пиксели)
+    const qint64 clamped = std::clamp<qint64>(
+        samplePosition, 0, qint64(session_->audioBuffer().frameCount()));
+    pitchGrid_->setPlaybackPosition((clamped * 1000) / sampleRate);
+}
+
 void DontfloatPitchEditor::startAutoAnalysis()
 {
     if (!session_ || session_->audioBuffer().empty() || analysisRunning_) {
         return;
     }
+    // Поток аудио утих — показываем дорожку целиком и считаем ноты
+    refreshFromSession();
     if (session_->pitchAnalysis().valid) {
         return;  // анализ этой дорожки уже есть
     }
@@ -352,6 +377,35 @@ void DontfloatPitchEditor::layoutAnalyzeOverlay()
 void DontfloatPitchEditor::refreshPitchGrid()
 {
     pitchGrid_->setNotes(baseNotes_);
+    fitPitchRangeToNotes();
+}
+
+void DontfloatPitchEditor::fitPitchRangeToNotes()
+{
+    if (baseNotes_.isEmpty()) {
+        return;
+    }
+    // Без подгонки найденные ноты могут оказаться ниже видимых строк, и после
+    // авто-анализа пианоролл выглядит пустым
+    float lowest = baseNotes_.first().midiPitch;
+    float highest = lowest;
+    for (const PitchDetector::PitchNote& note : baseNotes_) {
+        lowest = std::min(lowest, note.midiPitch);
+        highest = std::max(highest, note.midiPitch);
+    }
+
+    constexpr int kPadding = 3;
+    constexpr int kMinSpan = 24;  // не меньше двух октав в кадре
+    int minPitch = int(std::floor(lowest)) - kPadding;
+    int maxPitch = int(std::ceil(highest)) + kPadding;
+    if (maxPitch - minPitch < kMinSpan) {
+        const int extra = (kMinSpan - (maxPitch - minPitch) + 1) / 2;
+        minPitch -= extra;
+        maxPitch += extra;
+    }
+    minPitch = std::clamp(minPitch, 0, 120);
+    maxPitch = std::clamp(maxPitch, minPitch + 12, 127);
+    pitchGrid_->setPitchRange(minPitch, maxPitch);
 }
 
 void DontfloatPitchEditor::syncNotesToSession()

@@ -180,7 +180,13 @@ void DontfloatScratchEditor::refreshFromSession()
 
 void DontfloatScratchEditor::notifyHostAudioAppended()
 {
-    refreshFromSession();
+    // Хост зовёт это на каждый блок: перерисовку волны тормозим, иначе поток
+    // блоков забивает UI (анализ всё равно ждёт паузы в потоке)
+    if (!hostRefreshClock_.isValid()
+        || hostRefreshClock_.elapsed() >= kHostRefreshIntervalMs) {
+        hostRefreshClock_.restart();
+        refreshFromSession();
+    }
     // Анализ дорожки стартует сам, как только DAW перестала слать блоки
     if (!analysisRunning_ && autoAnalysisTimer_ && session_ && !session_->audioBuffer().empty()) {
         autoAnalysisTimer_->start();
@@ -240,11 +246,28 @@ void DontfloatScratchEditor::writeChannelsToSession(const QVector<QVector<float>
     session_->setAudioBuffer(buffer);
 }
 
+void DontfloatScratchEditor::setHostPlayhead(qint64 samplePosition)
+{
+    if (!waveform_ || !session_) {
+        return;
+    }
+    const int sampleRate = session_->audioBuffer().sampleRate;
+    if (sampleRate <= 0) {
+        return;
+    }
+    // Волна принимает позицию в миллисекундах — там же, где каретка DAW
+    const qint64 clamped = std::clamp<qint64>(
+        samplePosition, 0, qint64(session_->audioBuffer().frameCount()));
+    waveform_->setPlaybackPosition((clamped * 1000) / sampleRate);
+}
+
 void DontfloatScratchEditor::startAutoAnalysis()
 {
     if (!session_ || session_->audioBuffer().empty() || analysisRunning_) {
         return;
     }
+    // Поток аудио утих — показываем дорожку целиком и считаем BPM
+    refreshFromSession();
     if (lastAnalysis_.bpm > 0.0f) {
         return;  // дорожка уже проанализирована
     }

@@ -74,4 +74,14 @@ void DontfloatFullEditor::notifyHostAudioAppended()
     }
 }
 
+void DontfloatFullEditor::setHostPlayhead(qint64 samplePosition)
+{
+    if (scratch_) {
+        scratch_->setHostPlayhead(samplePosition);
+    }
+    if (pitch_) {
+        pitch_->setHostPlayhead(samplePosition);
+    }
+}
+
 } // namespace Dontfloat::Plugins::Ui

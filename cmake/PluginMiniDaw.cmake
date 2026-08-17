@@ -108,6 +108,8 @@ function(dontfloat_add_mini_daw_gui)
         tools/plugin_tester/plugin_host_probe.cpp
         tools/plugin_tester/plugin_host_probe.h
         src/audiofileservice.cpp
+        # Огибающая волны и тактовая сетка дорожки — те же, что в приложении
+        src/pianoroll_engine.cpp
     )
     set_target_properties(dontfloat_mini_daw PROPERTIES
         AUTOMOC ON
@@ -132,6 +134,21 @@ function(dontfloat_add_mini_daw_gui)
     target_compile_definitions(dontfloat_mini_daw PRIVATE
         "DONTFLOAT_PLUGIN_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\""
     )
+
+    # VST3-хостинг: sdk_hosting даёт загрузчик модулей и host-классы, но
+    # платформенный module_win32.cpp хост подключает сам (так же в примерах SDK)
+    if(DONTFLOAT_BUILD_VST3)
+        dontfloat_ensure_vst3_sdk()
+    endif()
+    if(TARGET sdk_hosting)
+        # Загрузчик модулей SDK не используем: LoadLibrary + GetPluginFactory
+        # делаем сами (кэш модулей общий с CLAP/LV2, см. mini_daw_plugin_host.cpp)
+        target_include_directories(dontfloat_mini_daw PRIVATE ${DONTFLOAT_VST3_SDK_ROOT})
+        target_link_libraries(dontfloat_mini_daw PRIVATE sdk_hosting)
+        target_compile_definitions(dontfloat_mini_daw PRIVATE DONTFLOAT_HAS_VST3_SDK)
+    else()
+        message(STATUS "mini-DAW: VST3 SDK недоступен — VST3-хостинг выключен")
+    endif()
     if(MSVC)
         target_link_options(dontfloat_mini_daw PRIVATE /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup)
     endif()
@@ -139,11 +156,10 @@ function(dontfloat_add_mini_daw_gui)
 
     # Самопроверка того же рантайм-пути без окна: декод → загрузка модуля →
     # редактор в скрытое нативное окно → блоки через process().
-    # VST3 не включён: хостинг требует IComponent / IPlugView (см. README).
-    foreach(_test_format clap lv2)
-        string(TOUPPER ${_test_format} _format_upper)
+    foreach(_test_format clap lv2 vst3)
         if((_test_format STREQUAL "clap" AND NOT DONTFLOAT_BUILD_CLAP)
-           OR (_test_format STREQUAL "lv2" AND NOT DONTFLOAT_BUILD_LV2))
+           OR (_test_format STREQUAL "lv2" AND NOT DONTFLOAT_BUILD_LV2)
+           OR (_test_format STREQUAL "vst3" AND NOT TARGET sdk_hosting))
             continue()
         endif()
         foreach(_test_kind IN LISTS _DONTFLOAT_PRODUCT_KINDS)

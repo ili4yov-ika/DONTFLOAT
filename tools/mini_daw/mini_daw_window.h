@@ -16,39 +16,67 @@
 QT_BEGIN_NAMESPACE
 class QComboBox;
 class QLabel;
+class QLineEdit;
 class QTimer;
 class QToolButton;
 QT_END_NAMESPACE
 
 namespace MiniDaw {
 
-/** Полоска плейбека: время слева/справа, линия трека и красная каретка. */
+/**
+ * Дорожка плейбека по макету: звуковая волна с тактовой сеткой, проигранная
+ * часть залита красным, каретка-треугольник над дорожкой и время под ней.
+ */
 class PlaybackBar : public QWidget {
     Q_OBJECT
 
 public:
     explicit PlaybackBar(QWidget* parent = nullptr);
 
-    void setDuration(qint64 frames, int sampleRate);
+    /** Аудио дорожки; пустое — рисуется пустая дорожка. */
+    void setTrack(const QVector<float>& left, const QVector<float>& right, int sampleRate);
+    void clearTrack();
     void setPosition(qint64 frames);
+    /** Тактовая сетка: темп и размер такта из полей панели. */
+    void setBeatGrid(float bpm, int beatsPerBar);
+    /** Имя трека, подписанное на дорожке. */
+    void setTrackName(const QString& name);
+
     qint64 position() const { return position_; }
+    qint64 totalFrames() const { return totalFrames_; }
+
+    static constexpr int kTrackHeight = 52;
+    static constexpr int kCaretHeight = 8;
+    static constexpr int kTimeRowHeight = 15;
+    static constexpr int kBarHeight = kCaretHeight + kTrackHeight + kTimeRowHeight;
 
 signals:
-    /** Пользователь ткнул в полоску — перемотка. */
+    /** Пользователь ткнул в дорожку — перемотка. */
     void seekRequested(qint64 frame);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
 
 private:
+    QRect trackRect() const;
     qint64 frameAtX(int x) const;
+    void rebuildEnvelope();
+    void drawWaveform(QPainter& painter, const QRect& area) const;
+    void drawBeatGrid(QPainter& painter, const QRect& area) const;
     static QString formatTime(qint64 frames, int sampleRate);
 
+    QVector<QVector<float>> channels_;
+    QVector<int> envelopeUpper_;   ///< верхняя огибающая, пиксели по Y
+    QVector<int> envelopeLower_;
+    QString trackName_;
     qint64 totalFrames_ = 0;
     qint64 position_ = 0;
     int sampleRate_ = 44100;
+    float bpm_ = 120.0f;
+    int beatsPerBar_ = 4;
 };
 
 class Window : public QWidget {
@@ -62,6 +90,8 @@ public:
     bool openAudio(const QString& path);
     /** Выбирает плагин в списках (для запуска с ключами --format/--product). */
     void selectPlugin(PluginFormat format, PluginProduct product);
+    /** Запускать транспорт сразу после загрузки трека (ключ --autoplay). */
+    void setAutoPlay(bool enabled) { autoPlay_ = enabled; }
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -74,6 +104,7 @@ private slots:
     void onStopClicked();
     void onSelectionChanged();
     void onSeekRequested(qint64 frame);
+    void onBeatGridChanged();
     void tickPosition();
 
 private:
@@ -93,6 +124,8 @@ private:
     QToolButton* openButton_ = nullptr;
     QComboBox* formatCombo_ = nullptr;
     QComboBox* productCombo_ = nullptr;
+    QLineEdit* bpmEdit_ = nullptr;      ///< темп хоста
+    QComboBox* beatsCombo_ = nullptr;   ///< размер такта
     QToolButton* playButton_ = nullptr;
     QToolButton* stopButton_ = nullptr;
     PlaybackBar* playbackBar_ = nullptr;
@@ -108,6 +141,7 @@ private:
     QVector<float> sourceLeft_;
     QVector<float> sourceRight_;
     int sampleRate_ = 44100;
+    bool autoPlay_ = false;
 };
 
 } // namespace MiniDaw

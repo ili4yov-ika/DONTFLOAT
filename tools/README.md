@@ -30,12 +30,20 @@ bash tools/macos_build.sh release deploy  # + macdeployqt → build/macos/DONTFL
 Требуется: macOS 11+, Xcode CLT, Homebrew. CMake Presets: `macos-debug`, `macos-release` (`CMakePresets.json`).
 Поиск Qt: `cmake/PlatformQt.cmake` (Homebrew, `~/Qt/6.x/macos`).
 
+Цель собирается как обычный исполняемый файл (`MACOSX_BUNDLE FALSE`), поэтому
+`deploy` сам создаёт `DONTFLOAT.app` и пишет минимальный `Contents/Info.plist`
+(версия — из `project(... VERSION ...)`): без него `macdeployqt` не находит
+исполняемый файл бандла. `setup_macos.sh` пишет в `~/.dontfloat_macos_env.sh`
+только префикс из `brew --prefix qt@6` и предупреждает, если Qt старее
+`QT_MIN_VERSION` из `CMakeLists.txt`.
+
 ## Структура (установщики)
 
 - `build_windows_installer.bat` — сборка Windows installer (NSIS) вместе с
-  CLAP/LV2 plugin targets
+  CLAP/LV2/VST3 plugin targets
 - `build_deb.sh` — сборка Debian/Ubuntu пакета (.deb)
 - `build_rpm.sh` — сборка Fedora/RHEL пакета (.rpm)
+- `setup_macos.sh` / `macos_build.sh` — окружение и сборка на macOS (см. выше)
 - `nsis_installer.nsi` — скрипт NSIS для Windows installer и опциональных
   секций DAW-плагинов
 - `debian/` — файлы для сборки .deb пакета
@@ -85,6 +93,13 @@ Windows installer включает страницу компонентов. Ос
 или `C:\SDKs\vst3sdk`. Без SDK VST3 **не** собираются (WARN), CLAP/LV2
 продолжают собираться; при наличии SDK отсутствие VST3 — **ошибка**.
 
+Грабля cmd: внутри блока `( ... )` запись `%ERRORLEVEL%` подставляется на этапе
+разбора блока — **до** запуска команды. Поиск `makensis` / `cmake` /
+`windeployqt` через `where` читал код возврата предыдущей команды: обычно там
+ноль, и проверка просто ничего не проверяла, а при ненулевом коде инструмент,
+стоящий только в `PATH`, объявлялся ненайденным. Проверки переведены на
+`!ERRORLEVEL!` (`setlocal enabledelayedexpansion` в скрипте уже был).
+
 Если плагины «пропали» после установки, пересоберите installer или запустите
 от администратора:
 
@@ -107,6 +122,12 @@ tools/build_deb.sh
 - dpkg-buildpackage или debuild
 - devscripts
 
+Скрипт копирует `tools/debian/` в корень проекта и отдаёт сборку
+`dpkg-buildpackage` — конфигурация и компиляция описаны в `debian/rules`
+(своей сборки в `build/` скрипт больше не делает, иначе проект собирался дважды).
+Версия пакета берётся из `debian/changelog`; скрипт сверяет её с
+`project(... VERSION ...)` в `CMakeLists.txt` и предупреждает о расхождении.
+
 ### Linux (Fedora/RHEL)
 
 ```bash
@@ -119,6 +140,35 @@ tools/build_rpm.sh
 - Qt6
 - rpmbuild
 - rpmdevtools
+
+Скрипт собирает tarball с корневым каталогом `dontfloat-<версия>` (этого ждёт
+`%setup -q`), подставляет версию из `CMakeLists.txt` в копию spec-файла и
+запускает `rpmbuild -ba`; сборка целиком описана в `%build`
+(`tools/rpm/dontfloat.spec`).
+
+### Что попадает в Linux-пакеты
+
+`debian/rules` и `%build` конфигурируют одинаково: приложение + CLAP/LV2,
+`DONTFLOAT_BUILD_VST3=OFF` (нужен проприетарный Steinberg SDK),
+`DONTFLOAT_BUILD_MINI_DAW=OFF`, `DONTFLOAT_BUILD_PLUGIN_TESTER=OFF`.
+
+| Что | Куда |
+| --- | --- |
+| Приложение | `/usr/bin/DONTFLOAT` |
+| `.desktop` | `/usr/share/applications/dontfloat.desktop` |
+| Иконка | `/usr/share/icons/hicolor/scalable/apps/dontfloat.svg` |
+| Переводы `.qm` | `/usr/share/DONTFLOAT/translations/` |
+| CLAP | `<libdir>/clap/dontfloat*.clap` |
+| LV2 | `<libdir>/lv2/dontfloat*.lv2/` |
+
+Иконка ставится из `resources/icons/logo.svg` (`Icon=dontfloat` в `.desktop`
+искал её в `hicolor`, а установки не было). SVG-иконки интерфейса требуют
+плагин `qsvg` — он в `libqt6svg6` / `qt6-qtsvg`, зависимость прописана в
+`debian/control` и в spec.
+
+> В `%files` перечислено **всё**, что кладёт `make install`: непокрытый файл
+> валит `rpmbuild` («Installed (but unpackaged) files found»), поэтому при
+> добавлении новых `install(...)` правил обновляйте и spec.
 
 ## Локализация (i18n)
 

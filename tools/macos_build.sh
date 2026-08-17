@@ -67,8 +67,29 @@ if [[ "$DEPLOY" -eq 1 ]]; then
         echo "[ПРЕДУПРЕЖДЕНИЕ] macdeployqt не найден — пропуск deploy"
     else
         APP_DIR="${BUILD_DIR}/DONTFLOAT.app"
-        mkdir -p "${APP_DIR}/Contents/MacOS"
+        VERSION="$(sed -n 's/^project(.*VERSION \([0-9.]*\).*/\1/p' "${PROJECT_ROOT}/CMakeLists.txt" | head -n 1)"
+        mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"
         cp "$APP_BIN" "${APP_DIR}/Contents/MacOS/DONTFLOAT"
+        # Цель собирается как обычный исполняемый файл (MACOSX_BUNDLE FALSE),
+        # поэтому Info.plist пишем сами — без него macdeployqt не находит
+        # исполняемый файл бандла и падает.
+        cat >"${APP_DIR}/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key><string>DONTFLOAT</string>
+    <key>CFBundleIdentifier</key><string>org.dontfloat.DONTFLOAT</string>
+    <key>CFBundleName</key><string>DONTFLOAT</string>
+    <key>CFBundleDisplayName</key><string>DONTFLOAT</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>${VERSION:-0.0.0.1}</string>
+    <key>CFBundleVersion</key><string>${VERSION:-0.0.0.1}</string>
+    <key>LSMinimumSystemVersion</key><string>11.0</string>
+    <key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
+EOF
         "$MACDEPLOYQT" "$APP_DIR"
         echo "Развёрнуто: $APP_DIR"
     fi

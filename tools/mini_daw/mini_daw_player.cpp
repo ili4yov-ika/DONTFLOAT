@@ -100,11 +100,18 @@ void Player::play()
     device_ = new StreamDevice(this);
     device_->open(QIODevice::ReadOnly);
     connect(sink_, &QAudioSink::stateChanged, this, [this](QAudio::State state) {
-        if (state == QAudio::IdleState || state == QAudio::StoppedState) {
-            if (position_.load() >= totalFrames_) {
-                emit finished();
-            }
+        if (state != QAudio::IdleState && state != QAudio::StoppedState) {
+            return;
         }
+        if (position_.load() < totalFrames_) {
+            return;
+        }
+        // Разрушать QAudioSink изнутри его же stateChanged нельзя (падение в
+        // Qt Multimedia) — доигрывание обрабатываем следующим тиком очереди
+        QMetaObject::invokeMethod(this, [this]() {
+            stop();
+            emit finished();
+        }, Qt::QueuedConnection);
     });
     sink_->start(device_);
 }

@@ -6,10 +6,12 @@
 
 #include <QApplication>
 #include <QEventLoop>
+#include <QMetaObject>
 #include <QString>
 #include <QWindow>
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <memory>
 
@@ -136,12 +138,47 @@ void pluginReset(const clap_plugin_t* plugin)
     }
 }
 
+/**
+ * Каретка DAW → каретка редактора. Хост зовёт process() из аудиопотока, поэтому
+ * позицию отдаём в UI очередью Qt и склеиваем: одно уведомление за раз.
+ */
+void syncEditorPlayhead(ClapPluginInstance* s, const clap_process_t* process)
+{
+    if (!s || !s->editor || !process || !process->transport) {
+        return;
+    }
+    const clap_event_transport_t& transport = *process->transport;
+    if (!(transport.flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE)) {
+        return;
+    }
+    const double seconds = double(transport.song_pos_seconds) / double(CLAP_SECTIME_FACTOR);
+    const int sampleRate = s->session.audioBuffer().sampleRate;
+    if (sampleRate <= 0 || seconds < 0.0) {
+        return;
+    }
+    const qint64 samplePosition = qint64(seconds * sampleRate);
+
+    static std::atomic_bool pending { false };
+    if (pending.exchange(true)) {
+        return;
+    }
+    DontfloatPluginEditorShell* editor = s->editor.get();
+    QMetaObject::invokeMethod(editor, [editor, samplePosition]() {
+        pending.store(false);
+        editor->setHostPlayhead(samplePosition);
+    }, Qt::QueuedConnection);
+}
+
 clap_process_status pluginProcess(const clap_plugin_t* plugin, const clap_process_t* process)
 {
     ClapPluginInstance* s = self(plugin);
     if (!s || !process || !process->audio_outputs) {
         return CLAP_PROCESS_ERROR;
     }
+
+    // Транспорт читаем всегда, в том числе на пустых блоках: хост так шлёт
+    // чистые тики позиции, не добавляя аудио в сессию
+    syncEditorPlayhead(s, process);
 
     const clap_audio_buffer_t& in = process->audio_inputs ? process->audio_inputs[0] : clap_audio_buffer_t{};
     clap_audio_buffer_t& out = process->audio_outputs[0];
