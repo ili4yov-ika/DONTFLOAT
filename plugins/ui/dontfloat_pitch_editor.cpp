@@ -56,6 +56,9 @@ TrackPitchNote toCoreNote(const PitchDetector::PitchNote& note)
     out.midiPitch = note.midiPitch;
     out.detectedPitch = note.detectedPitch;
     out.confidence = note.confidence;
+    // Без этого перенос ноты терялся бы на круге «редактор → сессия → редактор»
+    out.sourceStartSample = note.sourceStartSample;
+    out.sourceEndSample = note.sourceEndSample;
     return out;
 }
 
@@ -67,6 +70,8 @@ PitchDetector::PitchNote fromCoreNote(const TrackPitchNote& note)
     out.midiPitch = note.midiPitch;
     out.detectedPitch = note.detectedPitch;
     out.confidence = note.confidence;
+    out.sourceStartSample = note.sourceStartSample;
+    out.sourceEndSample = note.sourceEndSample;
     return out;
 }
 
@@ -603,6 +608,12 @@ void DontfloatPitchEditor::shiftNotes(qint64 deltaSamples)
     for (PitchDetector::PitchNote& note : baseNotes_) {
         note.startSample = std::max<qint64>(0, note.startSample + deltaSamples);
         note.endSample = std::max<qint64>(note.startSample + 1, note.endSample + deltaSamples);
+        // Клип переехал целиком — вместе с ним едет и исходный отрезок ноты
+        if (note.sourceStartSample >= 0) {
+            note.sourceStartSample = std::max<qint64>(0, note.sourceStartSample + deltaSamples);
+            note.sourceEndSample =
+                std::max<qint64>(note.sourceStartSample + 1, note.sourceEndSample + deltaSamples);
+        }
     }
     refreshPitchGrid();
     syncNotesToSession();
@@ -1045,8 +1056,9 @@ void DontfloatPitchEditor::onNotePreviewRequested(int noteIndex)
     }
     const PitchDetector::PitchNote& note = baseNotes_[noteIndex];
     const QVector<float> mono = toQVector(buffer.mono);
-    const qint64 length = qMax<qint64>(1, note.endSample - note.startSample);
-    const QVector<float> segment = mono.mid(int(note.startSample), int(length));
+    // Звук ноты — с её исходного места (после переноса там уже другое)
+    const qint64 length = qMax<qint64>(1, note.sourceEnd() - note.sourceStart());
+    const QVector<float> segment = mono.mid(int(note.sourceStart()), int(length));
     notePreviewPlayer_->start(segment, buffer.sampleRate, note.midiPitch - note.detectedPitch);
 }
 

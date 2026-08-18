@@ -631,6 +631,26 @@ set_tests_properties(timestretchprocessor_test PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# Перестановка нот слышна: коррекция переносит звук вместе с нотой
+add_qt_test(note_move_render_test
+    tests/note_move_render_test.cpp
+    src/pitchcorrection.cpp
+    src/timestretchprocessor.cpp
+    src/rubberband_offline.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+    include/pitchgridwidget.h
+    src/pitchgridwidget.cpp
+    src/pianoroll_engine.cpp
+)
+dontfloat_link_rubberband(note_move_render_test)
+
+set_tests_properties(note_move_render_test PROPERTIES
+    LABELS "unit;pitch;pianoroll"
+    DESCRIPTION "Moved notes are rendered at their new position"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # Тонкомпенсация на реальном файле с одной нотой (pitch-test_C140BPM.mp3)
 add_qt_test(pitch_compensation_file_test
     tests/pitch_compensation_file_test.cpp

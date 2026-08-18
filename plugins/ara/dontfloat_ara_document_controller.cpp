@@ -168,7 +168,7 @@ private:
 
 /** Формат архива разметки: свой, простой и версионируемый. */
 constexpr std::uint32_t kArchiveMagic = 0x444E4641;  // "DNFA"
-constexpr std::uint32_t kArchiveVersion = 1;
+constexpr std::uint32_t kArchiveVersion = 2;  // v2: + исходный отрезок ноты
 
 /** Последовательная запись в архив хоста. */
 class ArchiveWriteCursor {
@@ -713,7 +713,8 @@ bool AraDocumentController::doRestoreObjectsFromArchive(
         for (TrackPitchNote& note : noteSet.notes) {
             if (!cursor.read(note.startSample) || !cursor.read(note.endSample)
                 || !cursor.read(note.midiPitch) || !cursor.read(note.detectedPitch)
-                || !cursor.read(note.confidence)) {
+                || !cursor.read(note.confidence) || !cursor.read(note.sourceStartSample)
+                || !cursor.read(note.sourceEndSample)) {
                 return false;
             }
         }
@@ -768,6 +769,8 @@ bool AraDocumentController::doStoreObjectsToArchive(
             cursor.write(note.midiPitch);
             cursor.write(note.detectedPitch);
             cursor.write(note.confidence);
+            cursor.write(note.sourceStartSample);
+            cursor.write(note.sourceEndSample);
         }
     }
     return cursor.ok();

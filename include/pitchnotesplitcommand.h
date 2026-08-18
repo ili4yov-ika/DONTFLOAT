@@ -47,6 +47,13 @@ public:
 
         m_originalNote = head;
         PitchDetector::PitchNote tail = head;
+        // Отрезок исходного звука делится в той же точке, что и сама нота:
+        // иначе половинки после разреза звучали бы не своими кусками
+        const qint64 sourceCut = head.sourceStart() + (m_splitSample - head.startSample);
+        head.sourceStartSample = head.sourceStart();
+        head.sourceEndSample = sourceCut;
+        tail.sourceStartSample = sourceCut;
+        tail.sourceEndSample = m_originalNote.sourceEnd();
         head.endSample = m_splitSample;
         tail.startSample = m_splitSample;
         m_baseNotes->insert(m_noteIndex + 1, tail);

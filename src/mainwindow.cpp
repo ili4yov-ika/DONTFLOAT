@@ -189,6 +189,14 @@ QVector<PitchDetector::PitchNote> warpNotesThroughMarkers(
     for (PitchDetector::PitchNote& note : out) {
         const qint64 start = mapSampleThroughMarkers(note.startSample, markers);
         const qint64 end = mapSampleThroughMarkers(note.endSample, markers);
+        // Исходный отрезок ноты тянется теми же метками — иначе после
+        // растяжения перенесённая нота брала бы звук не оттуда
+        if (note.sourceStartSample >= 0) {
+            const qint64 sourceStart = mapSampleThroughMarkers(note.sourceStartSample, markers);
+            const qint64 sourceEnd = mapSampleThroughMarkers(note.sourceEndSample, markers);
+            note.sourceStartSample = qMin(sourceStart, sourceEnd);
+            note.sourceEndSample = qMax(sourceStart, sourceEnd);
+        }
         note.startSample = qMin(start, end);
         note.endSample = qMax(start, end);
     }
@@ -2859,8 +2867,10 @@ void MainWindow::onNotePreviewRequested(int noteIndex)
 
     const PitchDetector::PitchNote& note = basePitchNotes[noteIndex];
     const qint64 total = source[0].size();
-    const qint64 start = qBound<qint64>(0, note.startSample, total);
-    const qint64 end = qBound<qint64>(start, note.endSample, total);
+    // Звук ноты лежит там, где она была найдена: после переноса по времени
+    // на её нынешнем месте уже чужой материал
+    const qint64 start = qBound<qint64>(0, note.sourceStart(), total);
+    const qint64 end = qBound<qint64>(start, note.sourceEnd(), total);
     if (end - start < 256) {
         return;
     }

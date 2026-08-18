@@ -20,11 +20,29 @@ namespace PitchDetector {
 
 /** Нота, найденная в аудио. Координаты — сэмплы исходного аудио. */
 struct PitchNote {
-    qint64 startSample = 0;   ///< Начало ноты (включительно)
-    qint64 endSample = 0;     ///< Конец ноты (исключительно)
+    qint64 startSample = 0;   ///< Начало ноты на таймлайне (включительно)
+    qint64 endSample = 0;     ///< Конец ноты на таймлайне (исключительно)
     float midiPitch = 60.0f;      ///< Текущая (редактируемая) высота, MIDI (дробная — cents)
     float detectedPitch = 60.0f;  ///< Высота, определённая анализом, MIDI
     float confidence = 0.0f;  ///< Уверенность 0..1 (средняя автокорреляция)
+
+    /**
+     * Откуда берётся звук ноты — её место в исходном аудио.
+     *
+     * Пока ноту не двигали по времени, поля равны −1: звук лежит там же, где
+     * нота нарисована. После сдвига по горизонтали (`startSample` изменился)
+     * здесь остаётся исходный отрезок, и коррекция переносит звук оттуда на
+     * новое место — иначе перестановка нот была бы не слышна.
+     */
+    qint64 sourceStartSample = -1;
+    qint64 sourceEndSample = -1;
+
+    /** Начало отрезка исходного аудио для этой ноты. */
+    qint64 sourceStart() const { return sourceStartSample >= 0 ? sourceStartSample : startSample; }
+    /** Конец отрезка исходного аудио для этой ноты. */
+    qint64 sourceEnd() const { return sourceEndSample >= 0 ? sourceEndSample : endSample; }
+    /** Ноту передвинули по времени (звук нужно перенести). */
+    bool isMovedInTime() const { return sourceStart() != startSample; }
 };
 
 struct Options {
