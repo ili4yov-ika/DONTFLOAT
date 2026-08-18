@@ -11,6 +11,14 @@
         <file>resources/icons/along_the_grid.svg</file>
         <file>resources/icons/trimmer.svg</file>
         <file>resources/icons/free_cut.svg</file>
+        <file>resources/icons/horizontal-lock.svg</file>
+        <file>resources/icons/horizontal-unlock.svg</file>
+        <file>resources/icons/vertical-lock.svg</file>
+        <file>resources/icons/vertical-unlock.svg</file>
+        <file>resources/icons/horizontal-lock.svg</file>
+        <file>resources/icons/vertical-lock.svg</file>
+        <file>resources/icons/horizontal-unlock.svg</file>
+        <file>resources/icons/vertical-unlock.svg</file>
     </qresource>
     <qresource prefix="/sounds">
         <file>resources/sounds/metronome.wav</file>

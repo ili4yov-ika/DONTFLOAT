@@ -2,11 +2,22 @@
 #include "../core/plugin_host_config.h"
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
+#if defined(DONTFLOAT_WITH_ARA)
+#include "../ara/dontfloat_ara_document_controller.h"
+#include "ARA_API/ARAVST3.h"
+// Идентификаторы интерфейсов ARA для VST3 объявлены в заголовке, а определить
+// их должен тот, кто их использует (как и прочие iid в VST3 SDK)
+DEF_CLASS_IID(ARA::IMainFactory)
+DEF_CLASS_IID(ARA::IPlugInEntryPoint)
+DEF_CLASS_IID(ARA::IPlugInEntryPoint2)
+#endif
 
+#include <QSize>
 #include <QMetaObject>
 #include <QString>
 
 #include <algorithm>
+#include <cmath>
 #include <atomic>
 #include <cstring>
 #include <memory>
@@ -35,16 +46,22 @@ namespace Vst {
 #if DONTFLOAT_PLUGIN_PRODUCT_INDEX == 0
 static const FUID DontfloatProcessorUid (0x7B1F68A1, 0x52D54D80, 0xA69C5B4E, 0xE1DA7201);
 static const FUID DontfloatControllerUid (0xA1BFD4C3, 0x3E2D4E4D, 0x94C94972, 0xA7B31235);
+static const FUID DontfloatAraFactoryUid (0x1D9F5A21, 0x4C8B4E10, 0x9A2F7B33, 0xC5E10001);
+#define DONTFLOAT_VST3_ARA_FACTORY_NAME "DONTFLOAT ARA Factory"
 #define DONTFLOAT_VST3_DISPLAY_NAME "DONTFLOAT"
 #define DONTFLOAT_VST3_CONTROLLER_NAME "DONTFLOAT Controller"
 #elif DONTFLOAT_PLUGIN_PRODUCT_INDEX == 1
 static const FUID DontfloatProcessorUid (0x8C2A79B2, 0x63E65E91, 0xB7AD6C5F, 0xF2EB8312);
 static const FUID DontfloatControllerUid (0xB2C0E5D4, 0x4F3E5F5E, 0xA5DA5A83, 0xB8C42346);
+static const FUID DontfloatAraFactoryUid (0x2E8A6B32, 0x5D9C5F21, 0xAB307C44, 0xD6F20002);
+#define DONTFLOAT_VST3_ARA_FACTORY_NAME "DONTFLOAT Scratch ARA Factory"
 #define DONTFLOAT_VST3_DISPLAY_NAME "DONTFLOAT Scratch"
 #define DONTFLOAT_VST3_CONTROLLER_NAME "DONTFLOAT Scratch Controller"
 #elif DONTFLOAT_PLUGIN_PRODUCT_INDEX == 2
 static const FUID DontfloatProcessorUid (0x9D3B8AC3, 0x74F76FA2, 0xC8BE7D70, 0x03FC9413);
 static const FUID DontfloatControllerUid (0xC3D1F6E5, 0x604F706F, 0xB6EB6B94, 0xC9D53457);
+static const FUID DontfloatAraFactoryUid (0x3F7B7C43, 0x6EAD6032, 0xBC418D55, 0xE7030003);
+#define DONTFLOAT_VST3_ARA_FACTORY_NAME "DONTFLOAT Pitcher ARA Factory"
 #define DONTFLOAT_VST3_DISPLAY_NAME "DONTFLOAT Pitcher"
 #define DONTFLOAT_VST3_CONTROLLER_NAME "DONTFLOAT Pitcher Controller"
 #else
@@ -69,6 +86,9 @@ namespace {
 
 constexpr Steinberg::int32 kEditorWidth = 960;
 constexpr Steinberg::int32 kEditorHeight = 640;
+/** Ниже этого редактор нечитаем — рамку хоста подтягиваем до минимума. */
+constexpr Steinberg::int32 kEditorMinWidth = 640;
+constexpr Steinberg::int32 kEditorMinHeight = 420;
 
 /**
  * Открытые редакторы этого модуля. Процессор и вьюха — разные объекты VST3,
@@ -87,6 +107,19 @@ std::vector<DontfloatPluginEditorShell*>& openEditors()
     static std::vector<DontfloatPluginEditorShell*> editors;
     return editors;
 }
+
+#if defined(DONTFLOAT_WITH_ARA)
+/**
+ * Привязка ARA живёт на процессоре, а редактор — отдельный объект VST3.
+ * Держим последнюю привязку модуля, чтобы окно, открытое позже, тоже
+ * получило модель, а привязка после открытия окна дошла до редакторов.
+ */
+const void*& boundAraExtension()
+{
+    static const void* extension = nullptr;
+    return extension;
+}
+#endif
 
 void registerEditor(DontfloatPluginEditorShell* editor)
 {
@@ -204,6 +237,16 @@ public:
 
         editor_ = std::make_unique<DontfloatPluginEditorShell>(product());
         editor_->bindSession(&sharedSession(product()));
+#if defined(DONTFLOAT_WITH_ARA)
+        if (const void* extension = boundAraExtension()) {
+            // Хост шлёт выбор клипов только при открытом окне редактора
+            if (auto* view = static_cast<const ARA::PlugIn::PlugInExtension*>(extension)
+                                 ->getEditorView<Dontfloat::Ara::AraEditorView>()) {
+                view->setEditorOpenState(true);
+            }
+            editor_->setAraBinding(extension);
+        }
+#endif
         editor_->setWindowTitle(QString::fromUtf8(desc().clapName));
         editor_->setAttribute(Qt::WA_NativeWindow, true);
         editor_->setAttribute(Qt::WA_DontCreateNativeAncestors, true);
@@ -237,6 +280,14 @@ public:
     Steinberg::tresult PLUGIN_API removed() override
     {
 #if defined(_WIN32)
+#if defined(DONTFLOAT_WITH_ARA)
+        if (const void* extension = boundAraExtension()) {
+            if (auto* view = static_cast<const ARA::PlugIn::PlugInExtension*>(extension)
+                                 ->getEditorView<Dontfloat::Ara::AraEditorView>()) {
+                view->setEditorOpenState(false);
+            }
+        }
+#endif
         if (editor_) {
             unregisterEditor(editor_.get());
             editor_->hide();
@@ -247,14 +298,50 @@ public:
         return Steinberg::CPluginView::removed();
     }
 
+    // Окно тянется хостом. Раньше вид был нерастяжимым (CPluginView::canResize
+    // по умолчанию false), и редактор жил в DAW жёстким прямоугольником
+    Steinberg::tresult PLUGIN_API canResize() override { return Steinberg::kResultTrue; }
+
+    Steinberg::tresult PLUGIN_API checkSizeConstraint(Steinberg::ViewRect* rect) override
+    {
+        if (!rect) {
+            return Steinberg::kInvalidArgument;
+        }
+        // Ниже минимума интерфейс нечитаем — подтягиваем рамку до него.
+        // У собранного редактора минимум спрашиваем сам (в пикселях экрана)
+        Steinberg::int32 minWidth = kEditorMinWidth;
+        Steinberg::int32 minHeight = kEditorMinHeight;
+        if (editor_) {
+            const qreal dpr = editor_->devicePixelRatioF() > 0.0
+                ? editor_->devicePixelRatioF()
+                : 1.0;
+            const QSize hint = editor_->minimumSizeHint().expandedTo(editor_->minimumSize());
+            minWidth = Steinberg::int32(std::lround(hint.width() * dpr));
+            minHeight = Steinberg::int32(std::lround(hint.height() * dpr));
+        }
+        if (rect->getWidth() < minWidth) {
+            rect->right = rect->left + minWidth;
+        }
+        if (rect->getHeight() < minHeight) {
+            rect->bottom = rect->top + minHeight;
+        }
+        return Steinberg::kResultTrue;
+    }
+
     Steinberg::tresult PLUGIN_API onSize(Steinberg::ViewRect* newSize) override
     {
         const Steinberg::tresult result = Steinberg::CPluginView::onSize(newSize);
 #if defined(_WIN32)
         if (editor_ && newSize) {
-            const int width = std::max<int>(newSize->getWidth(), 320);
-            const int height = std::max<int>(newSize->getHeight(), 240);
-            editor_->resize(width, height);
+            const int width = std::max<int>(newSize->getWidth(), kEditorMinWidth);
+            const int height = std::max<int>(newSize->getHeight(), kEditorMinHeight);
+            // Хост считает в пикселях экрана, Qt — в логических: на мониторе
+            // с масштабом 125/150% без деления окно вылезает за рамку хоста
+            const qreal dpr = editor_->devicePixelRatioF() > 0.0
+                ? editor_->devicePixelRatioF()
+                : 1.0;
+            editor_->resize(int(std::lround(double(width) / dpr)),
+                            int(std::lround(double(height) / dpr)));
             MoveWindow(reinterpret_cast<HWND>(editor_->winId()), 0, 0, width, height, TRUE);
         }
 #endif
@@ -285,7 +372,12 @@ public:
     }
 };
 
-class ProductProcessorVst3 final : public Steinberg::Vst::AudioEffect {
+class ProductProcessorVst3 final : public Steinberg::Vst::AudioEffect
+#if defined(DONTFLOAT_WITH_ARA)
+    , public ARA::IPlugInEntryPoint
+    , public ARA::IPlugInEntryPoint2
+#endif
+{
 public:
     ProductProcessorVst3()
     {
@@ -296,6 +388,54 @@ public:
     {
         return static_cast<Steinberg::Vst::IAudioProcessor*>(new ProductProcessorVst3());
     }
+
+#if defined(DONTFLOAT_WITH_ARA)
+    // --- ARA 2: хост берёт фабрику и привязывает экземпляр к документу ---
+    const ARA::ARAFactory* PLUGIN_API getFactory() SMTG_OVERRIDE
+    {
+        return Dontfloat::Ara::AraDocumentController::getARAFactory();
+    }
+
+    const ARA::ARAPlugInExtensionInstance* PLUGIN_API bindToDocumentController(
+        ARA::ARADocumentControllerRef documentControllerRef) SMTG_OVERRIDE
+    {
+        // ARA 1 знала только эту форму привязки; роли считаем полными
+        return bindToDocumentControllerWithRoles(documentControllerRef,
+                                                 ARA::kARAPlaybackRendererRole
+                                                     | ARA::kARAEditorRendererRole
+                                                     | ARA::kARAEditorViewRole,
+                                                 ARA::kARAPlaybackRendererRole
+                                                     | ARA::kARAEditorRendererRole
+                                                     | ARA::kARAEditorViewRole);
+    }
+
+    const ARA::ARAPlugInExtensionInstance* PLUGIN_API bindToDocumentControllerWithRoles(
+        ARA::ARADocumentControllerRef documentControllerRef,
+        ARA::ARAPlugInInstanceRoleFlags knownRoles,
+        ARA::ARAPlugInInstanceRoleFlags assignedRoles) SMTG_OVERRIDE
+    {
+        const ARA::ARAPlugInExtensionInstance* instance =
+            araExtension_.bindToARA(documentControllerRef, knownRoles, assignedRoles);
+        if (instance) {
+            boundAraExtension() = &araExtension_;
+            // Окна, открытые до привязки, узнают о модели сразу
+            const std::lock_guard<std::mutex> lock(editorsMutex());
+            for (DontfloatPluginEditorShell* editor : openEditors()) {
+                QMetaObject::invokeMethod(editor, [editor]() {
+                    editor->setAraBinding(boundAraExtension());
+                }, Qt::QueuedConnection);
+            }
+        }
+        return instance;
+    }
+
+    OBJ_METHODS(ProductProcessorVst3, Steinberg::Vst::AudioEffect)
+    DEFINE_INTERFACES
+        DEF_INTERFACE(ARA::IPlugInEntryPoint)
+        DEF_INTERFACE(ARA::IPlugInEntryPoint2)
+    END_DEFINE_INTERFACES(Steinberg::Vst::AudioEffect)
+    REFCOUNT_METHODS(Steinberg::Vst::AudioEffect)
+#endif
 
     Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) override
     {
@@ -416,7 +556,37 @@ public:
 
 private:
     TrackAudioInfo audioInfo_;
+#if defined(DONTFLOAT_WITH_ARA)
+    /** ARA-часть экземпляра: связь с общим document controller проекта. */
+    ARA::PlugIn::PlugInExtension araExtension_;
+#endif
 };
+
+#if defined(DONTFLOAT_WITH_ARA)
+/**
+ * Главная фабрика ARA: отдельный класс VST3-фабрики, по которому хост находит
+ * ARA ещё до создания экземпляра плагина.
+ */
+class ProductAraMainFactoryVst3 final : public ARA::IMainFactory {
+public:
+    ProductAraMainFactoryVst3() { FUNKNOWN_CTOR }
+    virtual ~ProductAraMainFactoryVst3() { FUNKNOWN_DTOR }
+
+    static Steinberg::FUnknown* createInstance(void*)
+    {
+        return static_cast<ARA::IMainFactory*>(new ProductAraMainFactoryVst3());
+    }
+
+    const ARA::ARAFactory* PLUGIN_API getFactory() SMTG_OVERRIDE
+    {
+        return Dontfloat::Ara::AraDocumentController::getARAFactory();
+    }
+
+    DECLARE_FUNKNOWN_METHODS
+};
+
+IMPLEMENT_FUNKNOWN_METHODS(ProductAraMainFactoryVst3, ARA::IMainFactory, ARA::IMainFactory::iid)
+#endif
 
 } // namespace Dontfloat::Vst3
 
@@ -441,6 +611,19 @@ DEF_CLASS2(INLINE_UID_FROM_FUID(Steinberg::Vst::DontfloatControllerUid),
            "0.0.0.1",
            kVstVersionString,
            Dontfloat::Vst3::ProductControllerVst3::createInstance)
+
+#if defined(DONTFLOAT_WITH_ARA)
+// Класс главной фабрики ARA: по нему хост понимает, что плагин ARA-совместим
+DEF_CLASS2(INLINE_UID_FROM_FUID(Steinberg::Vst::DontfloatAraFactoryUid),
+           PClassInfo::kManyInstances,
+           kARAMainFactoryClass,
+           DONTFLOAT_VST3_ARA_FACTORY_NAME,
+           0,
+           "",
+           "0.0.0.1",
+           kVstVersionString,
+           Dontfloat::Vst3::ProductAraMainFactoryVst3::createInstance)
+#endif
 
 END_FACTORY
 

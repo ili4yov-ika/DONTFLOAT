@@ -3,15 +3,20 @@
 #include "../core/plugin_host_config.h"
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
+#if defined(DONTFLOAT_WITH_ARA)
+#include "../ara/dontfloat_ara_document_controller.h"
+#endif
 
 #include <QApplication>
 #include <QEventLoop>
 #include <QMetaObject>
 #include <QString>
+#include <QSize>
 #include <QWindow>
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstring>
 #include <memory>
 
@@ -34,6 +39,9 @@ namespace {
 
 constexpr uint32_t kEditorWidth = 960;
 constexpr uint32_t kEditorHeight = 640;
+/** Ниже этого редактор нечитаем — на меньшее хосту отвечаем отказом. */
+constexpr uint32_t kEditorMinWidth = 640;
+constexpr uint32_t kEditorMinHeight = 420;
 
 struct ClapPluginInstance {
     clap_plugin_t plugin = {};
@@ -45,6 +53,10 @@ struct ClapPluginInstance {
     uint32_t editorHeight = kEditorHeight;
     clap_id guiTimerId = 0;
     bool guiTimerRegistered = false;
+#if defined(DONTFLOAT_WITH_ARA)
+    /** Привязка экземпляра к документу ARA (см. bind_to_document_controller). */
+    ARA::PlugIn::PlugInExtension araExtension;
+#endif
 };
 
 // Pump the Qt event loop from the host timer so the editor stays responsive
@@ -331,6 +343,16 @@ bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
     ensureQtApplication(desc().clapName);
     s->editor = std::make_unique<DontfloatPluginEditorShell>(product());
     s->editor->bindSession(&s->session);
+#if defined(DONTFLOAT_WITH_ARA)
+    // Экземпляр уже мог быть привязан к документу ARA до создания окна —
+    // тогда редактор сразу берёт ноты и сетку из модели
+    if (s->araExtension.isBoundToARA()) {
+        if (auto* view = s->araExtension.getEditorView<Dontfloat::Ara::AraEditorView>()) {
+            view->setEditorOpenState(true);  // теперь хост шлёт нам выбор клипов
+        }
+        s->editor->setAraBinding(&s->araExtension);
+    }
+#endif
     // Каретку двинули в плагине → просим DAW встать туда же. В CLAP нет
     // стандартного способа управлять транспортом хоста, поэтому идём через
     // своё расширение: хосты без него просто вернут nullptr (мини-DAW отдаёт)
@@ -381,6 +403,13 @@ void guiDestroy(const clap_plugin_t* plugin)
             }
             s->guiTimerRegistered = false;
         }
+#if defined(DONTFLOAT_WITH_ARA)
+        if (s->araExtension.isBoundToARA()) {
+            if (auto* view = s->araExtension.getEditorView<Dontfloat::Ara::AraEditorView>()) {
+                view->setEditorOpenState(false);
+            }
+        }
+#endif
         if (s->editor) {
             s->editor->hide();
         }
@@ -402,17 +431,43 @@ bool guiGetSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height)
     return true;
 }
 
-bool guiCanResize(const clap_plugin_t*) { return false; }
+// Окно тянется хостом: раньше редактор был жёстко 960x640 и в DAW не
+// подстраивался под панель, куда его встроили
+bool guiCanResize(const clap_plugin_t*) { return true; }
 
-bool guiGetResizeHints(const clap_plugin_t*, void*) { return false; }
+bool guiGetResizeHints(const clap_plugin_t*, clap_gui_resize_hints_t* hints)
+{
+    if (!hints) {
+        return false;
+    }
+    hints->can_resize_horizontally = true;
+    hints->can_resize_vertically = true;
+    hints->preserve_aspect_ratio = false;
+    hints->aspect_ratio_width = 0;
+    hints->aspect_ratio_height = 0;
+    return true;
+}
 
-bool guiAdjustSize(const clap_plugin_t*, uint32_t* width, uint32_t* height)
+/** Минимум редактора в пикселях экрана: у собранного окна спрашиваем его сами. */
+QSize minimumEditorSizePx(const ClapPluginInstance* s)
+{
+    if (!s || !s->editor) {
+        return QSize(int(kEditorMinWidth), int(kEditorMinHeight));
+    }
+    const qreal dpr = s->editor->devicePixelRatioF() > 0.0 ? s->editor->devicePixelRatioF() : 1.0;
+    const QSize hint = s->editor->minimumSizeHint().expandedTo(s->editor->minimumSize());
+    return QSize(int(std::lround(hint.width() * dpr)), int(std::lround(hint.height() * dpr)));
+}
+
+bool guiAdjustSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height)
 {
     if (!width || !height) {
         return false;
     }
-    *width = kEditorWidth;
-    *height = kEditorHeight;
+    // Меньше минимума интерфейс уже не читается — остальное отдаём хосту
+    const QSize minimum = minimumEditorSizePx(self(plugin));
+    *width = std::max<uint32_t>(*width, uint32_t(minimum.width()));
+    *height = std::max<uint32_t>(*height, uint32_t(minimum.height()));
     return true;
 }
 
@@ -422,10 +477,22 @@ bool guiSetSize(const clap_plugin_t* plugin, uint32_t width, uint32_t height)
     if (!s) {
         return false;
     }
-    s->editorWidth = width;
-    s->editorHeight = height;
+    // Размер хоста слушаемся как есть: свой минимум мы уже назвали в
+    // adjust_size, а спорить в set_size — значит вылезти за рамку окна DAW
+    s->editorWidth = std::max<uint32_t>(width, 200);
+    s->editorHeight = std::max<uint32_t>(height, 120);
     if (s->editor) {
-        s->editor->resize(int(width), int(height));
+        // Хост считает в пикселях экрана, Qt — в логических: на мониторе со
+        // масштабом 125/150% без деления окно вылезает за рамку хоста
+        const qreal dpr = s->editor->devicePixelRatioF() > 0.0
+            ? s->editor->devicePixelRatioF()
+            : 1.0;
+        s->editor->resize(int(std::lround(double(s->editorWidth) / dpr)),
+                          int(std::lround(double(s->editorHeight) / dpr)));
+#if defined(_WIN32)
+        MoveWindow(reinterpret_cast<HWND>(s->editor->winId()), 0, 0,
+                   int(s->editorWidth), int(s->editorHeight), TRUE);
+#endif
     }
     return true;
 }
@@ -531,8 +598,67 @@ void pluginOnTimer(const clap_plugin_t* plugin, clap_id timerId)
 
 const clap_plugin_timer_support_t kTimerSupportExtension = { pluginOnTimer };
 
+#if defined(DONTFLOAT_WITH_ARA)
+
+const void* araGetFactory(const clap_plugin_t*)
+{
+    return Dontfloat::Ara::AraDocumentController::getARAFactory();
+}
+
+const void* araBindToDocumentController(const clap_plugin_t* plugin, void* documentControllerRef,
+                                        uint64_t knownRoles, uint64_t assignedRoles)
+{
+    ClapPluginInstance* s = self(plugin);
+    if (!s) {
+        return nullptr;
+    }
+    // С этого момента экземпляр работает в режиме ARA: звук и разметка идут
+    // через общую с хостом модель, а не через захват блоков в process()
+    const ARA::ARAPlugInExtensionInstance* instance = s->araExtension.bindToARA(
+        static_cast<ARA::ARADocumentControllerRef>(documentControllerRef),
+        static_cast<ARA::ARAPlugInInstanceRoleFlags>(knownRoles),
+        static_cast<ARA::ARAPlugInInstanceRoleFlags>(assignedRoles));
+    if (instance && s->editor) {
+        if (auto* view = s->araExtension.getEditorView<Dontfloat::Ara::AraEditorView>()) {
+            view->setEditorOpenState(true);
+        }
+        s->editor->setAraBinding(&s->araExtension);
+    }
+    return instance;
+}
+
+const clap_ara_plugin_extension_t kAraPluginExtension = {
+    araGetFactory,
+    araBindToDocumentController,
+};
+
+uint32_t araFactoryGetCount(const clap_ara_factory_t*) { return 1; }
+
+const void* araFactoryGetAraFactory(const clap_ara_factory_t*, uint32_t index)
+{
+    return index == 0 ? Dontfloat::Ara::AraDocumentController::getARAFactory() : nullptr;
+}
+
+const char* araFactoryGetPluginId(const clap_ara_factory_t*, uint32_t index)
+{
+    return index == 0 ? desc().clapId : nullptr;
+}
+
+const clap_ara_factory_t kAraFactory = {
+    araFactoryGetCount,
+    araFactoryGetAraFactory,
+    araFactoryGetPluginId,
+};
+
+#endif // DONTFLOAT_WITH_ARA
+
 const void* pluginGetExtension(const clap_plugin_t*, const char* id)
 {
+#if defined(DONTFLOAT_WITH_ARA)
+    if (id && std::strcmp(id, CLAP_EXT_ARA_PLUGINEXTENSION) == 0) {
+        return &kAraPluginExtension;
+    }
+#endif
     if (id && std::strcmp(id, CLAP_EXT_AUDIO_PORTS) == 0) {
         return &kAudioPortsExtension;
     }
@@ -592,6 +718,12 @@ const void* entryGetFactory(const char* factoryId)
     if (factoryId && std::strcmp(factoryId, CLAP_PLUGIN_FACTORY_ID) == 0) {
         return &kFactory;
     }
+#if defined(DONTFLOAT_WITH_ARA)
+    // Хост может строить модель ARA и без единого экземпляра плагина
+    if (factoryId && std::strcmp(factoryId, CLAP_EXT_ARA_FACTORY) == 0) {
+        return &kAraFactory;
+    }
+#endif
     return nullptr;
 }
 

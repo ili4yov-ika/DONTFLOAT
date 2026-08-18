@@ -91,7 +91,7 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
     , alignWatcher_(new QFutureWatcher<void>(this))
 {
     setObjectName(QStringLiteral("dontfloatScratchEditor"));
-    setMinimumSize(720, 200);
+    setMinimumSize(480, 180);
     setWindowTitle(productName_);
 
     // Разметка как в главном окне: волна во всю ширину, под ней скроллбар,

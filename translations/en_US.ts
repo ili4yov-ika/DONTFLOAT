@@ -32,7 +32,7 @@
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatPitchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+144"/>
+        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+152"/>
         <source>Undefined</source>
         <translation>Undefined</translation>
     </message>
@@ -48,22 +48,42 @@
     </message>
     <message>
         <location line="+7"/>
-        <location line="+186"/>
+        <location line="+222"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>load audio or play a track in the DAW to capture the signal.</translation>
     </message>
     <message>
-        <location line="-172"/>
+        <location line="-208"/>
         <source>Analyzing the track… %p%</source>
         <translation>Analyzing the track… %p%</translation>
     </message>
     <message>
-        <location line="+114"/>
+        <location line="+80"/>
+        <source>move note</source>
+        <translation>move note</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>undo: %1</source>
+        <translation>undo: %1</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>redo: %1</source>
+        <translation>redo: %1</translation>
+    </message>
+    <message>
+        <location line="+48"/>
         <source>the note is too short to split</source>
         <translation>the note is too short to split</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+7"/>
+        <source>split note</source>
+        <translation>split note</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>note split</source>
         <translation>note split</translation>
     </message>
@@ -130,12 +150,12 @@
     </message>
     <message>
         <location line="+2"/>
-        <location line="+222"/>
+        <location line="+303"/>
         <source>undefined</source>
         <translation>undefined</translation>
     </message>
     <message>
-        <location line="-216"/>
+        <location line="-297"/>
         <source>there are no notes to export</source>
         <translation>there are no notes to export</translation>
     </message>
@@ -160,7 +180,17 @@
         <translation>MIDI exported: %1 (notes: %2)</translation>
     </message>
     <message>
-        <location line="+190"/>
+        <location line="+162"/>
+        <source>ARA: bound to the host document</source>
+        <translation>ARA: bound to the host document</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>ARA: %1 notes from the host document</source>
+        <translation>ARA: %1 notes from the host document</translation>
+    </message>
+    <message>
+        <location line="+67"/>
         <source>reference from another track (%1): %2 notes, key %3</source>
         <translation>reference from another track (%1): %2 notes, key %3</translation>
     </message>
@@ -199,11 +229,16 @@
         <source>correction applied — the DAW now plays the corrected audio</source>
         <translation>correction applied — the DAW now plays the corrected audio</translation>
     </message>
+    <message>
+        <location line="+23"/>
+        <source>note pitch</source>
+        <translation>note pitch</translation>
+    </message>
 </context>
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatPluginEditorShell</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_plugin_editor_shell.cpp" line="+109"/>
+        <location filename="../plugins/ui/dontfloat_plugin_editor_shell.cpp" line="+131"/>
         <source>Play the track in the DAW — the plugin will pick up the audio.</source>
         <translation>Play the track in the DAW — the plugin will pick up the audio.</translation>
     </message>
@@ -258,7 +293,7 @@
         <translation>Toggle loop</translation>
     </message>
     <message>
-        <location line="+91"/>
+        <location line="+102"/>
         <source>No audio captured from the DAW yet.</source>
         <translation>No audio captured from the DAW yet.</translation>
     </message>
@@ -732,7 +767,7 @@
     <name>MainWindow</name>
     <message>
         <location filename="../ui/mainwindow.ui" line="+14"/>
-        <location filename="../src/mainwindow.cpp" line="+1736"/>
+        <location filename="../src/mainwindow.cpp" line="+1737"/>
         <location line="+254"/>
         <source>DONTFLOAT</source>
         <translation>DONTFLOAT</translation>
@@ -1176,12 +1211,12 @@
     <message>
         <location line="-686"/>
         <location line="+713"/>
-        <location line="+2447"/>
+        <location line="+2484"/>
         <source>Apply time stretch</source>
         <translation>Apply time stretch</translation>
     </message>
     <message>
-        <location line="-3160"/>
+        <location line="-3197"/>
         <location line="+715"/>
         <source>Apply time stretch with pitch compensation</source>
         <translation>Apply time stretch with pitch compensation</translation>
@@ -1189,12 +1224,12 @@
     <message>
         <location line="-714"/>
         <location line="+717"/>
-        <location line="+1530"/>
+        <location line="+1544"/>
         <source>Apply note pitch correction</source>
         <translation>Apply note pitch correction</translation>
     </message>
     <message>
-        <location line="-2247"/>
+        <location line="-2261"/>
         <location line="+719"/>
         <source>Re-render audio using the edited piano roll notes</source>
         <translation>Re-render audio using the edited piano roll notes</translation>
@@ -1231,12 +1266,12 @@
     </message>
     <message>
         <location line="-685"/>
-        <location line="+2823"/>
+        <location line="+2860"/>
         <source>Analyzing... %p%</source>
         <translation>Analyzing... %p%</translation>
     </message>
     <message>
-        <location line="-2716"/>
+        <location line="-2753"/>
         <source>Time signature set to %1</source>
         <translation>Time signature set to %1</translation>
     </message>
@@ -1640,6 +1675,11 @@ Do you want to save the changes?</translation>
         <translation>Change note pitch</translation>
     </message>
     <message>
+        <location line="+14"/>
+        <source>Move note</source>
+        <translation>Move note</translation>
+    </message>
+    <message>
         <location line="+82"/>
         <source>The note is too short to split</source>
         <translation>The note is too short to split</translation>
@@ -1672,12 +1712,12 @@ Do you want to save the changes?</translation>
     <message>
         <location line="-10"/>
         <location line="+21"/>
-        <location line="+573"/>
+        <location line="+596"/>
         <source>Run note analysis first (the &quot;Analyze&quot; button)</source>
         <translation>Run note analysis first (the &quot;Analyze&quot; button)</translation>
     </message>
     <message>
-        <location line="-568"/>
+        <location line="-591"/>
         <source>No edited notes — drag notes on the piano roll</source>
         <translation>No edited notes — drag notes on the piano roll</translation>
     </message>
@@ -1707,14 +1747,14 @@ Do you want to save the changes?</translation>
         <translation>Note pitch correction applied</translation>
     </message>
     <message>
-        <location line="-326"/>
-        <location line="+334"/>
+        <location line="-340"/>
+        <location line="+348"/>
         <source>Load an audio file first</source>
         <translation>Load an audio file first</translation>
     </message>
     <message>
-        <location line="-326"/>
-        <location line="+332"/>
+        <location line="-340"/>
+        <location line="+346"/>
         <source>No audio to analyze</source>
         <translation>No audio to analyze</translation>
     </message>
@@ -1729,13 +1769,13 @@ Do you want to save the changes?</translation>
         <translation>Key: %1</translation>
     </message>
     <message>
-        <location line="-2295"/>
-        <location line="+2810"/>
+        <location line="-2309"/>
+        <location line="+2847"/>
         <source>Analyze</source>
         <translation>Analyze</translation>
     </message>
     <message>
-        <location line="-225"/>
+        <location line="-248"/>
         <source>Split tool off</source>
         <translation>Split tool off</translation>
     </message>
@@ -1745,7 +1785,7 @@ Do you want to save the changes?</translation>
         <translation>Split tool on: click a note, or %1 — cut at the playback cursor (Esc — off)</translation>
     </message>
     <message>
-        <location line="+96"/>
+        <location line="+119"/>
         <location line="+7"/>
         <location line="+27"/>
         <source>Import reference MIDI</source>
@@ -1862,16 +1902,16 @@ Press M to add markers.</translation>
         <translation>Auto markers on transients</translation>
     </message>
     <message>
-        <location line="-1830"/>
+        <location line="-1867"/>
         <location line="+59"/>
-        <location line="+1774"/>
+        <location line="+1811"/>
         <source>Waveform not initialized.</source>
         <translation>Waveform not initialized.</translation>
     </message>
     <message>
-        <location line="-1827"/>
+        <location line="-1864"/>
         <location line="+59"/>
-        <location line="+1774"/>
+        <location line="+1811"/>
         <source>No audio loaded.</source>
         <translation>No audio loaded.</translation>
     </message>
@@ -2205,7 +2245,7 @@ Shift + LMB drag on waveform — fine grid adjustment</translation>
 <context>
     <name>PianoRollToolbar</name>
     <message>
-        <location filename="../src/pianoroll_toolbar.cpp" line="+257"/>
+        <location filename="../src/pianoroll_toolbar.cpp" line="+306"/>
         <source>Split note at the playback cursor or by clicking on a note</source>
         <translation>Split note at the playback cursor or by clicking on a note</translation>
     </message>
@@ -2246,7 +2286,47 @@ Shift + LMB drag on waveform — fine grid adjustment</translation>
         <translation>the cut lands exactly where the cursor is</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
+        <source>Horizontal move locked</source>
+        <translation>Horizontal move locked</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Horizontal move allowed</source>
+        <translation>Horizontal move allowed</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>notes cannot be dragged along the timeline</source>
+        <translation>notes cannot be dragged along the timeline</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>notes can be dragged along the timeline</source>
+        <translation>notes can be dragged along the timeline</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Vertical move locked</source>
+        <translation>Vertical move locked</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Vertical move allowed</source>
+        <translation>Vertical move allowed</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>note pitch cannot be changed by dragging</source>
+        <translation>note pitch cannot be changed by dragging</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>dragging a note changes its pitch</source>
+        <translation>dragging a note changes its pitch</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <location line="+2"/>
         <location line="+1"/>
         <source>Import MIDI</source>

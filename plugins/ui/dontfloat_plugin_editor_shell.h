@@ -18,6 +18,7 @@
 
 QT_BEGIN_NAMESPACE
 class QLabel;
+class QScrollArea;
 class QPushButton;
 QT_END_NAMESPACE
 
@@ -40,6 +41,11 @@ public:
     /** Позиция каретки DAW (сэмплы дорожки) — двигает каретку редактора. */
     void setHostPlayhead(qint64 samplePosition);
     /** Тактовая сетка DAW: темп, доли в такте и граница такта в сэмплах. */
+#if defined(DONTFLOAT_WITH_ARA)
+    /** Проброс привязки ARA в содержимое редактора (см. DontfloatEditorContent). */
+    void setAraBinding(const void* extension);
+#endif
+
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample);
     /**
      * Обработчик «переставить каретку DAW»: редактор зовёт его, когда каретку
@@ -81,6 +87,8 @@ private:
     Dontfloat::PluginCore::PluginProduct product_;
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QWidget* contentWidget_ = nullptr;
+    /** Содержимое прокручивается, когда хост сжал окно (см. конструктор). */
+    QScrollArea* contentScroll_ = nullptr;
     DontfloatEditorContent* content_ = nullptr;
 
     QLabel* statusBar_ = nullptr;

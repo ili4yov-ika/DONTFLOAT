@@ -72,11 +72,17 @@ if(NOT EXISTS "${PLUGIN_DIR}/platforms/qwindows.dll")
         "DeployPluginQt: platforms/qwindows.dll missing in ${PLUGIN_DIR}\n"
         "Without it hosts report: no Qt platform plugin could be initialized")
 endif()
-# Иконки шапки и панели разреза — SVG: без плагина qsvg кнопки будут пустыми
-if(NOT EXISTS "${PLUGIN_DIR}/imageformats/qsvg.dll")
+# Библиотека Qt6Svg обязательна: иконки шапки и панели разреза рисуются
+# QSvgRenderer, а модуль плагина грузится с LOAD_WITH_ALTERED_SEARCH_PATH
+# и ищет её рядом с собой — без неё плагин не загрузится вовсе.
+if(NOT EXISTS "${PLUGIN_DIR}/Qt6Svg.dll")
     message(FATAL_ERROR
-        "DeployPluginQt: imageformats/qsvg.dll missing in ${PLUGIN_DIR}\n"
-        "Without it the plugin UI shows empty icons (toolbar, split panel)")
+        "DeployPluginQt: Qt6Svg.dll missing in ${PLUGIN_DIR}\n"
+        "Without it the plugin module fails to load (icons use QSvgRenderer)")
+endif()
+# Плагин qsvg уже не обязателен, но с ним SVG читает и обычный QIcon
+if(NOT EXISTS "${PLUGIN_DIR}/imageformats/qsvg.dll")
+    message(WARNING "DeployPluginQt: imageformats/qsvg.dll missing in ${PLUGIN_DIR}")
 endif()
 
-message(STATUS "DeployPluginQt OK: Qt6Core.dll + platforms/qwindows.dll + imageformats/qsvg.dll in ${PLUGIN_DIR}")
+message(STATUS "DeployPluginQt OK: Qt6Core.dll + platforms/qwindows.dll + Qt6Svg.dll in ${PLUGIN_DIR}")

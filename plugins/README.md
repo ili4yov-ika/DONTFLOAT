@@ -127,6 +127,16 @@ undo, live preview при редактировании, offline pitch-корре
   полю на регион тактов, так что модуляция стоит на своих тактах.
 - **Статусбар** — один на редактор, внизу оболочки: секции шлют текст сигналом
   `statusMessage`.
+- **Размер окна**: редактор тянется хостом (CLAP — `gui.can_resize` + `get_resize_hints`,
+  VST3 — `IPlugView::canResize` / `checkSizeConstraint`). Минимум хосту сообщается
+  из самого редактора (`minimumSizeHint`), размеры переводятся из пикселей экрана
+  в логические по `devicePixelRatio` — на мониторе с масштабом 125/150% окно
+  больше не вылезает за рамку. Содержимое лежит в области прокрутки: если хост
+  сжал окно сильнее разметки, появляются полосы прокрутки, а не обрезанный хвост.
+- **Иконки** рисуются `QSvgRenderer` (`include/svgiconloader.h`), а не движком
+  иконок Qt: у плагина внутри DAW путь поиска плагинов Qt чужой, и кнопки
+  транспорта и панели разреза оставались пустыми. Рядом с бинарником плагина
+  обязана лежать `Qt6Svg.dll` — это проверяет `cmake/DeployPluginQt.cmake`.
 
 Что делают кнопки шапки: `OD` — метки по транзиентам (общий алгоритм
 `MarkerUtils::detectOnsetSamples`), `<` / `>` — сдвиг тактовой сетки на долю
@@ -139,6 +149,83 @@ A—B), метроном тикает во время прослушивания
 > нажатию: их инициализация при построении редактора проворачивает вложенный
 > цикл событий хоста — в мини-DAW это приводило к повторному входу в загрузку
 > плагина и падению.
+
+### ARA 2 (Audio Random Access)
+
+Слой ARA живёт в `plugins/ara/`, SDK подключается через `cmake/AraSdk.cmake`
+(`DONTFLOAT_ARA_SDK_ROOT`, по умолчанию `C:/SDKs/ARA_SDK`; нет SDK — цели ARA
+просто не собираются). Что это даёт по сравнению с обычным плагином:
+
+- **звук читается целиком и в любой момент** (`ARA::PlugIn::HostAudioReader`),
+  а не копится по блокам во время проигрывания — анализ идёт сразу после
+  загрузки проекта, без прогона дорожки;
+- **разметка живёт в общей с хостом модели**: наши ноты хост читает сам через
+  `kARAContentTypeNotes` (`AraNoteContentReader`), а темп и тактовую сетку
+  плагин берёт из musical context хоста;
+- **один document controller на весь проект**: экземпляры на разных дорожках
+  видят источники друг друга — на этом строится показ нот соседней дорожки
+  референсом (`AraDocumentController::referenceNotesExcluding`).
+
+Разбор запускается сам, как только хост открыл доступ к сэмплам
+(`didEnableAudioSourceSamplesAccess`), идёт в фоне и по готовности сообщает
+хосту `notifyAudioSourceContentChanged`.
+
+Проверка — `tests/ara_document_controller_test.cpp`: тест играет роль DAW
+(`ARA_Host_Library`), заводит документ с двумя источниками, даёт доступ к
+сэмплам, дожидается разбора и читает ноты обратно контент-ридером ARA.
+
+**Привязка к форматам** (по ней DAW понимает, что плагин ARA-совместим):
+
+- **CLAP**: `clap_entry.get_factory(CLAP_EXT_ARA_FACTORY)` отдаёт `clap_ara_factory_t`
+  (модель можно строить и без экземпляра), а экземпляр — `clap_ara_plugin_extension_t`
+  с `bind_to_document_controller`. Структуры объявлены в `plugins/clap/clap_minimal.h`
+  вручную, как и остальной наш минимальный CLAP.
+- **VST3**: процессор реализует `ARA::IPlugInEntryPoint` и `IPlugInEntryPoint2`
+  (`bindToDocumentControllerWithRoles`), плюс отдельный класс фабрики категории
+  `ARA Main Factory Class` (`ARA::IMainFactory`) — свой UID на каждую редакцию.
+
+**Персистентность**: разметка пишется в архив проекта (`doStoreObjectsToArchive` /
+`doRestoreObjectsFromArchive`, свой версионируемый формат «DNFA») — при повторном
+открытии проекта дорожки не разбираются заново.
+
+**Темп и тактовая сетка** берутся из musical context хоста
+(`AraDocumentController::hostBeatGrid()`: `kARAContentTypeTempoEntries` +
+`kARAContentTypeBarSignatures`).
+
+**Мини-DAW как ARA-хост**: `tools/mini_daw/mini_daw_ara_host.*` реализует пять
+интерфейсов хоста и собирает документ (musical context из полей BPM и размера
+такта, region sequence, audio source на загруженный WAV, audio modification,
+playback region на всю длину). `dontfloat_mini_daw --selftest` проходит весь путь:
+загрузка модуля → документ → привязка экземпляра → разбор → чтение нот обратно.
+
+**Клипы дорожки** приходят в плагин как playback regions, и все правки клипа
+разбираются одинаково:
+
+- **добавили клип** — `didAddPlaybackRegionToRegionSequence` / `didAddAudioSourceToDocument`
+  сами ставят участок в разбор, ждать проигрывания не нужно;
+- **разрезали, подвинули, обрезали, растянули** — `didUpdatePlaybackRegionProperties`:
+  звук не изменился, поэтому разбор не перезапускается, а ноты клипа отдаются уже
+  в новых координатах (`doCreatePlaybackRegionContentReader` учитывает смещение,
+  границы куска источника и коэффициент растяжения);
+- фабрика объявляет `kARAPlaybackTransformationTimestretch` (и вариант с учётом
+  темпа) — без этого DAW считает плагин нерастяжимым и запрещает сжатие клипа;
+- `AraDocumentController::clipsForAudioSource()` отдаёт редактору все клипы
+  источника, `modelRevision()` растёт на каждую правку модели.
+
+**Undo/redo** работает на двух уровнях: у хоста — через архивы ARA
+(`doStoreObjectsToArchive` / `doRestoreObjectsFromArchive`, DAW так и делает
+отмену), внутри плагина — свой `QUndoStack` в редакторе: правка высоты ноты и
+разрез идут командами (`PitchNoteEditCommand`, `PitchNoteSplitCommand`),
+`Ctrl+Z` / `Ctrl+Y` ловятся только при фокусе в редакторе, чтобы не отбирать
+отмену у DAW.
+
+**Роли экземпляра**: `AraPlaybackRenderer` и `AraEditorView` — по ним экземпляр
+находит свои клипы и свой источник (`audioSourceForInstance`); на этом же
+document controller строится показ нот соседней дорожки.
+
+**Чего пока нет**: редактор плагина всё ещё берёт звук и ноты из захвата блоками —
+переключение его на модель ARA (свои ноты и серые ноты соседей прямо из документа)
+осталось последним шагом.
 
 ### Захват дорожки по таймлайну и перенос клипа
 
@@ -362,6 +449,23 @@ ctest --test-dir build/plugins -R plugin_core_track_tool_test --output-on-failur
 - CLAP: `${CMAKE_INSTALL_LIBDIR}/clap`.
 - LV2: `${CMAKE_INSTALL_LIBDIR}/lv2/dontfloat_track_tool.lv2`.
 - VST3: `${CMAKE_INSTALL_LIBDIR}/vst3`, если доступен `DONTFLOAT_VST3_SDK_ROOT`.
+
+### Обновить уже установленные плагины
+
+После пересборки DAW продолжает грузить **старые** копии из
+`%CommonProgramFiles%\CLAP|VST3|LV2` — новые кнопки и правки там не появятся.
+Свежие бинарники раскладывает `tools/install_plugins_windows.ps1` (PowerShell
+**от имени администратора**, Program Files иначе закрыт на запись):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\install_plugins_windows.ps1
+```
+
+Скрипт копирует CLAP-стабы с impl-модулями и бандлы VST3/LV2 из каталога сборки
+(по умолчанию `build\Desktop_Qt_6_9_3_MSVC2022_64bit-Release`, конфигурация
+`Release`). Qt-рантайм он не трогает — его кладёт установщик; ключ `-DeployQt`
+дополнительно прогоняет `cmake/DeployPluginQt.cmake` рядом с CLAP. После копирования
+перезапустите DAW и пересканируйте плагины.
 
 ### Windows NSIS
 

@@ -276,6 +276,15 @@ struct clap_plugin_timer_support_t {
     void (*on_timer)(const clap_plugin_t* plugin, clap_id timer_id);
 };
 
+/** Подсказки хосту о том, как можно менять размер окна редактора. */
+struct clap_gui_resize_hints_t {
+    bool can_resize_horizontally;
+    bool can_resize_vertically;
+    bool preserve_aspect_ratio;
+    uint32_t aspect_ratio_width;
+    uint32_t aspect_ratio_height;
+};
+
 struct clap_plugin_gui_t {
     bool (*is_api_supported)(const clap_plugin_t* plugin, const char* api, bool is_floating);
     bool (*get_preferred_api)(const clap_plugin_t* plugin, const char** api, bool* is_floating);
@@ -284,7 +293,7 @@ struct clap_plugin_gui_t {
     bool (*set_scale)(const clap_plugin_t* plugin, double scale);
     bool (*get_size)(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height);
     bool (*can_resize)(const clap_plugin_t* plugin);
-    bool (*get_resize_hints)(const clap_plugin_t* plugin, void* hints);
+    bool (*get_resize_hints)(const clap_plugin_t* plugin, clap_gui_resize_hints_t* hints);
     bool (*adjust_size)(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height);
     bool (*set_size)(const clap_plugin_t* plugin, uint32_t width, uint32_t height);
     bool (*set_parent)(const clap_plugin_t* plugin, const clap_window_t* window);
@@ -292,6 +301,36 @@ struct clap_plugin_gui_t {
     void (*suggest_title)(const clap_plugin_t* plugin, const char* title);
     bool (*show)(const clap_plugin_t* plugin);
     bool (*hide)(const clap_plugin_t* plugin);
+};
+
+/* ---------------------------------------------------------------------------
+ * ARA 2 поверх CLAP (org.ara-audio.ara.*): те же структуры, что в ARACLAP.h.
+ * Объявлены вручную — у нас свой минимальный заголовок CLAP, полный SDK не
+ * подключён. Указатели на объекты ARA держим как void*: их типы знает только
+ * реализация, которая включает заголовки ARA.
+ * ------------------------------------------------------------------------ */
+
+#define CLAP_EXT_ARA_FACTORY "org.ara-audio.ara.factory/2"
+#define CLAP_EXT_ARA_PLUGINEXTENSION "org.ara-audio.ara.pluginextension/2"
+#define CLAP_PLUGIN_FEATURE_ARA_SUPPORTED "ara:supported"
+
+/** Фабрика ARA на уровне модуля: хост берёт её из clap_entry.get_factory(). */
+struct clap_ara_factory_t {
+    uint32_t (*get_factory_count)(const struct clap_ara_factory_t* factory);
+    /** const ARA::ARAFactory* */
+    const void* (*get_ara_factory)(const struct clap_ara_factory_t* factory, uint32_t index);
+    const char* (*get_plugin_id)(const struct clap_ara_factory_t* factory, uint32_t index);
+};
+
+/** ARA-расширение экземпляра: привязка к document controller. */
+struct clap_ara_plugin_extension_t {
+    /** const ARA::ARAFactory* */
+    const void* (*get_factory)(const clap_plugin_t* plugin);
+    /** const ARA::ARAPlugInExtensionInstance* */
+    const void* (*bind_to_document_controller)(const clap_plugin_t* plugin,
+                                               void* documentControllerRef,
+                                               uint64_t knownRoles,
+                                               uint64_t assignedRoles);
 };
 
 #endif // DONTFLOAT_CLAP_MINIMAL_H

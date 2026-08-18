@@ -4,6 +4,7 @@
 #include "../ui/dontfloat_track_tool_editor.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <memory>
 
@@ -24,6 +25,8 @@ namespace {
 
 constexpr const char* kPluginId = "com.dontfloat.track-tool";
 constexpr uint32_t kEditorWidth = 960;
+constexpr uint32_t kEditorMinWidth = 640;
+constexpr uint32_t kEditorMinHeight = 420;
 constexpr uint32_t kEditorHeight = 640;
 
 struct ClapTrackTool {
@@ -234,12 +237,20 @@ bool guiGetSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height)
 
 bool guiCanResize(const clap_plugin_t*)
 {
-    return false;
+    return true;
 }
 
-bool guiGetResizeHints(const clap_plugin_t*, void*)
+bool guiGetResizeHints(const clap_plugin_t*, clap_gui_resize_hints_t* hints)
 {
-    return false;
+    if (!hints) {
+        return false;
+    }
+    hints->can_resize_horizontally = true;
+    hints->can_resize_vertically = true;
+    hints->preserve_aspect_ratio = false;
+    hints->aspect_ratio_width = 0;
+    hints->aspect_ratio_height = 0;
+    return true;
 }
 
 bool guiAdjustSize(const clap_plugin_t*, uint32_t* width, uint32_t* height)
@@ -247,8 +258,8 @@ bool guiAdjustSize(const clap_plugin_t*, uint32_t* width, uint32_t* height)
     if (!width || !height) {
         return false;
     }
-    *width = kEditorWidth;
-    *height = kEditorHeight;
+    *width = std::max<uint32_t>(*width, kEditorMinWidth);
+    *height = std::max<uint32_t>(*height, kEditorMinHeight);
     return true;
 }
 
@@ -258,10 +269,15 @@ bool guiSetSize(const clap_plugin_t* plugin, uint32_t width, uint32_t height)
     if (!s) {
         return false;
     }
-    s->editorWidth = width;
-    s->editorHeight = height;
+    s->editorWidth = std::max<uint32_t>(width, kEditorMinWidth);
+    s->editorHeight = std::max<uint32_t>(height, kEditorMinHeight);
     if (s->editor) {
-        s->editor->resize(int(width), int(height));
+        // Хост меряет в пикселях экрана, Qt — в логических (см. impl-плагин)
+        const qreal dpr = s->editor->devicePixelRatioF() > 0.0
+            ? s->editor->devicePixelRatioF()
+            : 1.0;
+        s->editor->resize(int(std::lround(double(s->editorWidth) / dpr)),
+                          int(std::lround(double(s->editorHeight) / dpr)));
     }
     return true;
 }

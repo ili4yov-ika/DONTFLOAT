@@ -1,5 +1,7 @@
 #include "../include/pianoroll_toolbar.h"
 
+#include "../include/svgiconloader.h"
+
 #include <QtCore/QEvent>
 #include <QtCore/QSignalBlocker>
 #include <QtGui/QPainter>
@@ -12,6 +14,10 @@ namespace {
 const QString kSplitIconPath = QStringLiteral(":/icons/resources/icons/trimmer.svg");
 const QString kGridCutIconPath = QStringLiteral(":/icons/resources/icons/along_the_grid.svg");
 const QString kFreeCutIconPath = QStringLiteral(":/icons/resources/icons/free_cut.svg");
+const QString kHorizontalLockIconPath = QStringLiteral(":/icons/resources/icons/horizontal-lock.svg");
+const QString kHorizontalUnlockIconPath = QStringLiteral(":/icons/resources/icons/horizontal-unlock.svg");
+const QString kVerticalLockIconPath = QStringLiteral(":/icons/resources/icons/vertical-lock.svg");
+const QString kVerticalUnlockIconPath = QStringLiteral(":/icons/resources/icons/vertical-unlock.svg");
 
 } // namespace
 
@@ -85,6 +91,35 @@ void PianoRollToolbar::buildUi()
 
     groupLayout->addWidget(cutModeGroup);
     root->addWidget(cutGroup);
+
+    // Замки перемещения нот. По умолчанию горизонталь закрыта: ноту не увести
+    // по времени случайным движением, а высота правится как раньше
+    const auto makeLockButton = [this](const QString& objectName, bool checkedByDefault) {
+        auto* button = new QToolButton(this);
+        button->setObjectName(objectName);
+        button->setCheckable(true);
+        button->setChecked(checkedByDefault);
+        button->setFixedSize(kCapsuleHeightPx, kCapsuleHeightPx);
+        button->setIconSize(QSize(kCutModeButtonSizePx, kCutModeButtonSizePx));
+        button->setCursor(Qt::PointingHandCursor);
+        button->setFocusPolicy(Qt::NoFocus);
+        return button;
+    };
+    horizontalLockButton = makeLockButton(QStringLiteral("pianoRollHorizontalLockButton"), true);
+    verticalLockButton = makeLockButton(QStringLiteral("pianoRollVerticalLockButton"), false);
+    root->addWidget(horizontalLockButton, 0, Qt::AlignVCenter);
+    root->addWidget(verticalLockButton, 0, Qt::AlignVCenter);
+    connect(horizontalLockButton, &QToolButton::toggled, this, [this](bool locked) {
+        refreshIcons();
+        retranslateUi();
+        emit horizontalMoveLockChanged(locked);
+    });
+    connect(verticalLockButton, &QToolButton::toggled, this, [this](bool locked) {
+        refreshIcons();
+        retranslateUi();
+        emit verticalMoveLockChanged(locked);
+    });
+
     root->addStretch(1);
 
     // Импорт референсного MIDI — рядом с экспортом, тем же прямоугольником
@@ -227,13 +262,27 @@ void PianoRollToolbar::refreshIcons()
     splitButton->setIcon(loadIcon(kSplitIconPath, kSplitButtonSizePx, true));
     gridCutButton->setIcon(loadIcon(kGridCutIconPath, kCutModeButtonSizePx, false));
     freeCutButton->setIcon(loadIcon(kFreeCutIconPath, kCutModeButtonSizePx, false));
+    if (horizontalLockButton) {
+        horizontalLockButton->setIcon(loadIcon(horizontalLockButton->isChecked()
+                                                   ? kHorizontalLockIconPath
+                                                   : kHorizontalUnlockIconPath,
+                                               kCutModeButtonSizePx, true));
+    }
+    if (verticalLockButton) {
+        verticalLockButton->setIcon(loadIcon(verticalLockButton->isChecked()
+                                                 ? kVerticalLockIconPath
+                                                 : kVerticalUnlockIconPath,
+                                             kCutModeButtonSizePx, true));
+    }
 }
 
 QIcon PianoRollToolbar::loadIcon(const QString& resourcePath, int sizePx,
                                  bool tintOnLightScheme) const
 {
+    // Через QSvgRenderer, а не QIcon: в DAW плагин движка иконок Qt не находится
+    // и кнопки панели разреза оставались пустыми
     const qreal dpr = devicePixelRatioF();
-    QPixmap pixmap = QIcon(resourcePath).pixmap(QSize(sizePx, sizePx), dpr);
+    QPixmap pixmap = SvgIcons::renderPixmap(resourcePath, QSize(sizePx, sizePx), dpr);
     if (pixmap.isNull() || !tintOnLightScheme || colorScheme != QStringLiteral("light")) {
         return QIcon(pixmap);
     }
@@ -272,6 +321,23 @@ void PianoRollToolbar::retranslateUi()
         .arg(tr("Free cut"), tr("the cut lands exactly where the cursor is")));
     freeCutButton->setAccessibleName(tr("Free cut"));
 
+    if (horizontalLockButton) {
+        const bool locked = horizontalLockButton->isChecked();
+        const QString name = locked ? tr("Horizontal move locked") : tr("Horizontal move allowed");
+        horizontalLockButton->setToolTip(QStringLiteral("%1 — %2").arg(
+            name, locked ? tr("notes cannot be dragged along the timeline")
+                         : tr("notes can be dragged along the timeline")));
+        horizontalLockButton->setAccessibleName(name);
+    }
+    if (verticalLockButton) {
+        const bool locked = verticalLockButton->isChecked();
+        const QString name = locked ? tr("Vertical move locked") : tr("Vertical move allowed");
+        verticalLockButton->setToolTip(QStringLiteral("%1 — %2").arg(
+            name, locked ? tr("note pitch cannot be changed by dragging")
+                         : tr("dragging a note changes its pitch")));
+        verticalLockButton->setAccessibleName(name);
+    }
+
     importMidiButton->setText(tr("Import MIDI"));
     importMidiButton->setToolTip(QStringLiteral("%1 — %2")
         .arg(tr("Import MIDI"), tr("show notes from a .mid file as a grey reference")));
@@ -281,6 +347,30 @@ void PianoRollToolbar::retranslateUi()
     exportMidiButton->setToolTip(QStringLiteral("%1 — %2")
         .arg(tr("Export MIDI"), tr("save the piano roll notes as a .mid file")));
     exportMidiButton->setAccessibleName(tr("Export MIDI"));
+}
+
+void PianoRollToolbar::setMoveLocks(bool horizontalLocked, bool verticalLocked)
+{
+    if (horizontalLockButton) {
+        const QSignalBlocker blocker(horizontalLockButton);
+        horizontalLockButton->setChecked(horizontalLocked);
+    }
+    if (verticalLockButton) {
+        const QSignalBlocker blocker(verticalLockButton);
+        verticalLockButton->setChecked(verticalLocked);
+    }
+    refreshIcons();
+    retranslateUi();
+}
+
+bool PianoRollToolbar::isHorizontalMoveLocked() const
+{
+    return horizontalLockButton && horizontalLockButton->isChecked();
+}
+
+bool PianoRollToolbar::isVerticalMoveLocked() const
+{
+    return verticalLockButton && verticalLockButton->isChecked();
 }
 
 void PianoRollToolbar::setExportMidiEnabled(bool enabled)

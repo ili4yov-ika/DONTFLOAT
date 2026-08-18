@@ -92,6 +92,8 @@ private slots:
     void analyzeKey();
     void startPitchAnalysis();
     void onNotePitchEdited(int noteIndex, float oldPitch, float newPitch);
+    /** Ноту сдвинули по времени (drag, если горизонталь разблокирована). */
+    void onNoteTimeEdited(int noteIndex, qint64 oldStartSample, qint64 newStartSample);
     void applyPitchCorrection();
     void onNotePreviewRequested(int noteIndex);
     void onNotePreviewPitchChanged(int noteIndex, float midiPitch);

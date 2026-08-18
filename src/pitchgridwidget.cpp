@@ -274,6 +274,30 @@ void PitchGridWidget::setPitchRange(int min, int max)
     update();
 }
 
+Qt::CursorShape PitchGridWidget::noteDragCursor() const
+{
+    if (!horizontalMoveLocked && !verticalMoveLocked) {
+        return Qt::SizeAllCursor;
+    }
+    if (!horizontalMoveLocked) {
+        return Qt::SizeHorCursor;
+    }
+    if (!verticalMoveLocked) {
+        return Qt::SizeVerCursor;
+    }
+    return Qt::ForbiddenCursor;  // оба замка закрыты — ноту не сдвинуть
+}
+
+void PitchGridWidget::setHorizontalMoveLocked(bool locked)
+{
+    horizontalMoveLocked = locked;
+}
+
+void PitchGridWidget::setVerticalMoveLocked(bool locked)
+{
+    verticalMoveLocked = locked;
+}
+
 void PitchGridWidget::setBeatGridSnapEnabled(bool enabled)
 {
     beatGridSnap = enabled;
@@ -866,7 +890,9 @@ void PitchGridWidget::mousePressEvent(QMouseEvent *event)
             isNoteDragging = true;
             noteDragFreePitch = (event->modifiers() & Qt::AltModifier) != 0;
             noteDragStartPitch = pitchNotes[noteIndex].midiPitch;
-            setCursor(Qt::SizeVerCursor);
+            noteDragStartSample = pitchNotes[noteIndex].startSample;
+            noteDragGrabSample = cutSampleFromX(event->pos().x());
+            setCursor(noteDragCursor());
             update();
             emit notePreviewRequested(noteIndex);
             return;
@@ -910,16 +936,38 @@ void PitchGridWidget::mouseMoveEvent(QMouseEvent *event)
     if (isNoteDragging && (event->buttons() & Qt::LeftButton)) {
         if (selectedNoteIndex >= 0 && selectedNoteIndex < pitchNotes.size()) {
             // Alt можно зажать/отпустить во время drag.
-            noteDragFreePitch = (event->modifiers() & Qt::AltModifier) != 0;
-            float targetPitch = getContinuousPitchFromY(float(event->pos().y()));
-            if (!noteDragFreePitch) {
-                targetPitch = std::round(targetPitch);
+            // Вертикаль — высота ноты, горизонталь — её позиция во времени;
+            // каждое направление работает, только если замок открыт
+            if (!verticalMoveLocked) {
+                noteDragFreePitch = (event->modifiers() & Qt::AltModifier) != 0;
+                float targetPitch = getContinuousPitchFromY(float(event->pos().y()));
+                if (!noteDragFreePitch) {
+                    targetPitch = std::round(targetPitch);
+                }
+                targetPitch = qBound(0.0f, targetPitch, 127.0f);
+                if (std::abs(targetPitch - pitchNotes[selectedNoteIndex].midiPitch) > 1.0e-4f) {
+                    pitchNotes[selectedNoteIndex].midiPitch = targetPitch;
+                    update();
+                    emit notePreviewPitchChanged(selectedNoteIndex, targetPitch);
+                }
             }
-            targetPitch = qBound(0.0f, targetPitch, 127.0f);
-            if (std::abs(targetPitch - pitchNotes[selectedNoteIndex].midiPitch) > 1.0e-4f) {
-                pitchNotes[selectedNoteIndex].midiPitch = targetPitch;
-                update();
-                emit notePreviewPitchChanged(selectedNoteIndex, targetPitch);
+            if (!horizontalMoveLocked) {
+                const qint64 cursorSample = cutSampleFromX(event->pos().x());
+                qint64 targetStart = noteDragStartSample + (cursorSample - noteDragGrabSample);
+                if (noteCutMode == CutMode::SnapToGrid) {
+                    const auto metrics = PianoRollEngine::computeBeatGridMetrics(
+                        bpm, beatsPerBar, sampleRate);
+                    targetStart = PianoRollEngine::snapToGrid(targetStart, metrics,
+                                                              gridStartSample, true);
+                }
+                targetStart = qMax<qint64>(0, targetStart);
+                PitchDetector::PitchNote& note = pitchNotes[selectedNoteIndex];
+                const qint64 length = note.endSample - note.startSample;
+                if (targetStart != note.startSample) {
+                    note.startSample = targetStart;
+                    note.endSample = targetStart + length;
+                    update();
+                }
             }
         }
         return;
@@ -937,8 +985,7 @@ void PitchGridWidget::mouseMoveEvent(QMouseEvent *event)
     }
 
     if (!(event->buttons() & Qt::LeftButton) && !(event->buttons() & Qt::RightButton)) {
-        setCursor(noteIndexAt(event->pos()) >= 0 ? Qt::SizeVerCursor
-                                                 : Qt::OpenHandCursor);
+        setCursor(noteIndexAt(event->pos()) >= 0 ? noteDragCursor() : Qt::OpenHandCursor);
     }
 }
 
@@ -954,6 +1001,10 @@ void PitchGridWidget::mouseReleaseEvent(QMouseEvent *event)
                 const float newPitch = pitchNotes[selectedNoteIndex].midiPitch;
                 if (std::abs(newPitch - noteDragStartPitch) > 1.0e-4f) {
                     emit notePitchEdited(selectedNoteIndex, noteDragStartPitch, newPitch);
+                }
+                const qint64 newStart = pitchNotes[selectedNoteIndex].startSample;
+                if (newStart != noteDragStartSample) {
+                    emit noteTimeEdited(selectedNoteIndex, noteDragStartSample, newStart);
                 }
             }
         }

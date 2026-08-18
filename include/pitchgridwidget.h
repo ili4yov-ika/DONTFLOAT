@@ -50,6 +50,15 @@ public:
     void setPitchRange(int minPitch, int maxPitch);
     void setColorScheme(const QString& scheme);
     void setBeatGridSnapEnabled(bool enabled);
+    /**
+     * Замки перемещения нот мышью. По умолчанию горизонталь заблокирована
+     * (ноту нельзя увести по времени случайным движением), вертикаль открыта —
+     * высота правится как раньше.
+     */
+    void setHorizontalMoveLocked(bool locked);
+    void setVerticalMoveLocked(bool locked);
+    bool isHorizontalMoveLocked() const { return horizontalMoveLocked; }
+    bool isVerticalMoveLocked() const { return verticalMoveLocked; }
     void setPrimaryKey(const QString& keyText);
     void setSecondaryKey(const QString& keyText);
 
@@ -91,6 +100,8 @@ signals:
     void timelineZoomRequested(int angleDeltaY, float timelinePixelX);
     /** Пользователь изменил высоту ноты (drag или клавиши). */
     void notePitchEdited(int noteIndex, float oldPitch, float newPitch);
+    /** Ноту передвинули по времени (drag по горизонтали, если он разблокирован). */
+    void noteTimeEdited(int noteIndex, qint64 oldStartSample, qint64 newStartSample);
     /** Блок ноты зажат мышью — начать зацикленное прослушивание. */
     void notePreviewRequested(int noteIndex);
     /** Высота удерживаемой ноты изменилась во время drag. */
@@ -163,6 +174,8 @@ private:
     void clearSplitPreview();
     bool matchesSplitShortcut(const QKeyEvent* keyEvent) const;
     void applyCursorShape();
+    /** Курсор захвата ноты: показывает, какие направления открыты. */
+    Qt::CursorShape noteDragCursor() const;
 
     int getPitchFromY(int y) const;
     float getContinuousPitchFromY(float y) const;
@@ -216,6 +229,12 @@ private:
     bool isNoteDragging;
     float noteDragStartPitch;
     bool noteDragFreePitch;
+    /** Замки перемещения нот: горизонталь по умолчанию закрыта. */
+    bool horizontalMoveLocked = true;
+    bool verticalMoveLocked = false;
+    /** Начало ноты и позиция мыши на момент захвата — для сдвига по времени. */
+    qint64 noteDragStartSample = 0;
+    qint64 noteDragGrabSample = 0;
 
     CutMode noteCutMode;
     bool splitModeActive;

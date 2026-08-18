@@ -10,6 +10,10 @@ set(DONTFLOAT_PLUGIN_SHELL_SOURCES
     plugins/ui/dontfloat_editor_content.h
     plugins/ui/dontfloat_track_tool_editor.cpp
     plugins/ui/dontfloat_track_tool_editor.h
+    # Иконки шапки и панели разреза рисуются QSvgRenderer: движка иконок Qt
+    # рядом с плагином в DAW нет, и кнопки оставались пустыми
+    src/svgiconloader.cpp
+    include/svgiconloader.h
     # Транспорт шапки: прослушивание захваченной дорожки и метроном
     src/notepreviewplayer.cpp
     src/metronomecontroller.cpp
@@ -96,10 +100,16 @@ function(_dontfloat_link_plugin_ui_common target_name)
         Qt6::Widgets
         Qt6::Multimedia
         Qt6::Concurrent
+        Qt6::Svg
     )
     if(TARGET qm_dsp)
         target_link_libraries(${target_name} PRIVATE qm_dsp)
         target_compile_definitions(${target_name} PRIVATE USE_MIXXX_QM_DSP)
+    endif()
+    # ARA 2: слой документа и фабрика (обёртки форматов отдают её хосту)
+    if(TARGET dontfloat_ara)
+        target_link_libraries(${target_name} PRIVATE dontfloat_ara)
+        target_compile_definitions(${target_name} PRIVATE DONTFLOAT_WITH_ARA=1)
     endif()
     dontfloat_link_rubberband(${target_name})
 endfunction()
