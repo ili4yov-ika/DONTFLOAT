@@ -3,10 +3,12 @@
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
 
+#include <QSize>
 #include <QMetaObject>
 #include <QString>
 
 #include <algorithm>
+#include <cmath>
 #include <atomic>
 #include <cstring>
 #include <memory>
@@ -69,6 +71,9 @@ namespace {
 
 constexpr Steinberg::int32 kEditorWidth = 960;
 constexpr Steinberg::int32 kEditorHeight = 640;
+/** Ниже этого редактор нечитаем — рамку хоста подтягиваем до минимума. */
+constexpr Steinberg::int32 kEditorMinWidth = 640;
+constexpr Steinberg::int32 kEditorMinHeight = 420;
 
 /**
  * Открытые редакторы этого модуля. Процессор и вьюха — разные объекты VST3,
@@ -247,14 +252,50 @@ public:
         return Steinberg::CPluginView::removed();
     }
 
+    // Окно тянется хостом. Раньше вид был нерастяжимым (CPluginView::canResize
+    // по умолчанию false), и редактор жил в DAW жёстким прямоугольником
+    Steinberg::tresult PLUGIN_API canResize() override { return Steinberg::kResultTrue; }
+
+    Steinberg::tresult PLUGIN_API checkSizeConstraint(Steinberg::ViewRect* rect) override
+    {
+        if (!rect) {
+            return Steinberg::kInvalidArgument;
+        }
+        // Ниже минимума интерфейс нечитаем — подтягиваем рамку до него.
+        // У собранного редактора минимум спрашиваем сам (в пикселях экрана)
+        Steinberg::int32 minWidth = kEditorMinWidth;
+        Steinberg::int32 minHeight = kEditorMinHeight;
+        if (editor_) {
+            const qreal dpr = editor_->devicePixelRatioF() > 0.0
+                ? editor_->devicePixelRatioF()
+                : 1.0;
+            const QSize hint = editor_->minimumSizeHint().expandedTo(editor_->minimumSize());
+            minWidth = Steinberg::int32(std::lround(hint.width() * dpr));
+            minHeight = Steinberg::int32(std::lround(hint.height() * dpr));
+        }
+        if (rect->getWidth() < minWidth) {
+            rect->right = rect->left + minWidth;
+        }
+        if (rect->getHeight() < minHeight) {
+            rect->bottom = rect->top + minHeight;
+        }
+        return Steinberg::kResultTrue;
+    }
+
     Steinberg::tresult PLUGIN_API onSize(Steinberg::ViewRect* newSize) override
     {
         const Steinberg::tresult result = Steinberg::CPluginView::onSize(newSize);
 #if defined(_WIN32)
         if (editor_ && newSize) {
-            const int width = std::max<int>(newSize->getWidth(), 320);
-            const int height = std::max<int>(newSize->getHeight(), 240);
-            editor_->resize(width, height);
+            const int width = std::max<int>(newSize->getWidth(), kEditorMinWidth);
+            const int height = std::max<int>(newSize->getHeight(), kEditorMinHeight);
+            // Хост считает в пикселях экрана, Qt — в логических: на мониторе
+            // с масштабом 125/150% без деления окно вылезает за рамку хоста
+            const qreal dpr = editor_->devicePixelRatioF() > 0.0
+                ? editor_->devicePixelRatioF()
+                : 1.0;
+            editor_->resize(int(std::lround(double(width) / dpr)),
+                            int(std::lround(double(height) / dpr)));
             MoveWindow(reinterpret_cast<HWND>(editor_->winId()), 0, 0, width, height, TRUE);
         }
 #endif

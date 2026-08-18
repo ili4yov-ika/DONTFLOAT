@@ -126,7 +126,7 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     , notePreviewPlayer_(new NotePreviewPlayer(this))
 {
     setObjectName(QStringLiteral("dontfloatPitchEditor"));
-    setMinimumSize(720, 280);
+    setMinimumSize(480, 220);
     setWindowTitle(productName_);
 
     // Разметка как в главном окне: поля тональностей над пианороллом, под ним

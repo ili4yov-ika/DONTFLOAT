@@ -18,6 +18,7 @@
 
 QT_BEGIN_NAMESPACE
 class QLabel;
+class QScrollArea;
 class QPushButton;
 QT_END_NAMESPACE
 
@@ -81,6 +82,8 @@ private:
     Dontfloat::PluginCore::PluginProduct product_;
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QWidget* contentWidget_ = nullptr;
+    /** Содержимое прокручивается, когда хост сжал окно (см. конструктор). */
+    QScrollArea* contentScroll_ = nullptr;
     DontfloatEditorContent* content_ = nullptr;
 
     QLabel* statusBar_ = nullptr;

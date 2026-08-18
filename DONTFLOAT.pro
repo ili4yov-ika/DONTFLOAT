@@ -1,4 +1,4 @@
-QT       += core gui multimedia concurrent
+QT       += core gui multimedia concurrent svg
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -116,6 +116,8 @@ SOURCES += \
         src/wavwriter.cpp \
         src/audiofileservice.cpp \
         src/keyselectionmenu.cpp \
+        src/keymodulationstrip.cpp \
+        src/svgiconloader.cpp \
         src/beatvisualizer.cpp \
         src/spectrogramsettingsdialog.cpp \
         src/shortcutsdialog.cpp
@@ -150,6 +152,8 @@ HEADERS += \
         include/audiofileservice.h \
         include/uiconstants.h \
         include/keyselectionmenu.h \
+        include/keymodulationstrip.h \
+        include/svgiconloader.h \
         include/beatvisualizer.h \
         include/spectrogramsettingsdialog.h \
         include/shortcutsdialog.h \

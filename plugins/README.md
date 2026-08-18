@@ -127,6 +127,16 @@ undo, live preview при редактировании, offline pitch-корре
   полю на регион тактов, так что модуляция стоит на своих тактах.
 - **Статусбар** — один на редактор, внизу оболочки: секции шлют текст сигналом
   `statusMessage`.
+- **Размер окна**: редактор тянется хостом (CLAP — `gui.can_resize` + `get_resize_hints`,
+  VST3 — `IPlugView::canResize` / `checkSizeConstraint`). Минимум хосту сообщается
+  из самого редактора (`minimumSizeHint`), размеры переводятся из пикселей экрана
+  в логические по `devicePixelRatio` — на мониторе с масштабом 125/150% окно
+  больше не вылезает за рамку. Содержимое лежит в области прокрутки: если хост
+  сжал окно сильнее разметки, появляются полосы прокрутки, а не обрезанный хвост.
+- **Иконки** рисуются `QSvgRenderer` (`include/svgiconloader.h`), а не движком
+  иконок Qt: у плагина внутри DAW путь поиска плагинов Qt чужой, и кнопки
+  транспорта и панели разреза оставались пустыми. Рядом с бинарником плагина
+  обязана лежать `Qt6Svg.dll` — это проверяет `cmake/DeployPluginQt.cmake`.
 
 Что делают кнопки шапки: `OD` — метки по транзиентам (общий алгоритм
 `MarkerUtils::detectOnsetSamples`), `<` / `>` — сдвиг тактовой сетки на долю
@@ -362,6 +372,23 @@ ctest --test-dir build/plugins -R plugin_core_track_tool_test --output-on-failur
 - CLAP: `${CMAKE_INSTALL_LIBDIR}/clap`.
 - LV2: `${CMAKE_INSTALL_LIBDIR}/lv2/dontfloat_track_tool.lv2`.
 - VST3: `${CMAKE_INSTALL_LIBDIR}/vst3`, если доступен `DONTFLOAT_VST3_SDK_ROOT`.
+
+### Обновить уже установленные плагины
+
+После пересборки DAW продолжает грузить **старые** копии из
+`%CommonProgramFiles%\CLAP|VST3|LV2` — новые кнопки и правки там не появятся.
+Свежие бинарники раскладывает `tools/install_plugins_windows.ps1` (PowerShell
+**от имени администратора**, Program Files иначе закрыт на запись):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\install_plugins_windows.ps1
+```
+
+Скрипт копирует CLAP-стабы с impl-модулями и бандлы VST3/LV2 из каталога сборки
+(по умолчанию `build\Desktop_Qt_6_9_3_MSVC2022_64bit-Release`, конфигурация
+`Release`). Qt-рантайм он не трогает — его кладёт установщик; ключ `-DeployQt`
+дополнительно прогоняет `cmake/DeployPluginQt.cmake` рядом с CLAP. После копирования
+перезапустите DAW и пересканируйте плагины.
 
 ### Windows NSIS
 

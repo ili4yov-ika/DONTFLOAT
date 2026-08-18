@@ -22,7 +22,10 @@
 
 #include <QHBoxLayout>
 #include <QIcon>
+
+#include "../../include/svgiconloader.h"
 #include <QLabel>
+#include <QScrollArea>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
@@ -39,6 +42,9 @@ constexpr int kToolIconSizePx = 24;
 constexpr int kHeaderMarginPx = 6;
 constexpr int kGroupSpacingPx = 6;
 constexpr float kFallbackBpm = 120.0f;
+/** Меньше этого окно плагина смысла не имеет: шапка + статусбар. */
+constexpr int kShellMinWidthPx = 360;
+constexpr int kShellMinHeightPx = 220;
 
 } // namespace
 
@@ -57,6 +63,10 @@ DontfloatPluginEditorShell::DontfloatPluginEditorShell(
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
+    // Разметка не запрещает окну быть маленьким — иначе хост не смог бы сжать
+    // редактор, и он вылезал бы за свою рамку
+    root->setSizeConstraint(QLayout::SetNoConstraint);
+    setMinimumSize(kShellMinWidthPx, kShellMinHeightPx);
 
     root->addWidget(buildHeader());
 
@@ -86,7 +96,19 @@ DontfloatPluginEditorShell::DontfloatPluginEditorShell(
     });
     content_ = editor;
     contentWidget_ = editor;
-    root->addWidget(contentWidget_, 1);
+
+    // Окно в DAW тянут как угодно, в том числе меньше, чем требует разметка.
+    // Содержимое живёт в области прокрутки: пока места хватает — растягивается
+    // как раньше, когда перестаёт — появляются полосы прокрутки, а не обрезанный
+    // хвост интерфейса за рамкой окна хоста
+    contentScroll_ = new QScrollArea(this);
+    contentScroll_->setObjectName(QStringLiteral("dontfloatPluginContentScroll"));
+    contentScroll_->setFrameShape(QFrame::NoFrame);
+    contentScroll_->setWidgetResizable(true);
+    contentScroll_->setWidget(contentWidget_);
+    contentScroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    contentScroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    root->addWidget(contentScroll_, 1);
 
     statusBar_ = new QLabel(this);
     statusBar_->setObjectName(QStringLiteral("dontfloatPluginStatus"));
@@ -228,7 +250,9 @@ QPushButton* DontfloatPluginEditorShell::makeToolButton(QWidget* parent, const Q
     button->setToolTip(tooltip);
     button->setCheckable(checkable);
     if (!iconPath.isEmpty()) {
-        button->setIcon(QIcon(iconPath));
+        // SVG рисуем сами (QSvgRenderer): в DAW путь к плагинам Qt чужой, и
+        // движок иконок не находится — транспорт оставался без значков
+        button->setIcon(SvgIcons::load(iconPath, kToolIconSizePx, button->devicePixelRatioF()));
         button->setIconSize(QSize(kToolIconSizePx, kToolIconSizePx));
     }
     return button;

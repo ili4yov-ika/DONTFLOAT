@@ -8,10 +8,12 @@
 #include <QEventLoop>
 #include <QMetaObject>
 #include <QString>
+#include <QSize>
 #include <QWindow>
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstring>
 #include <memory>
 
@@ -34,6 +36,9 @@ namespace {
 
 constexpr uint32_t kEditorWidth = 960;
 constexpr uint32_t kEditorHeight = 640;
+/** Ниже этого редактор нечитаем — на меньшее хосту отвечаем отказом. */
+constexpr uint32_t kEditorMinWidth = 640;
+constexpr uint32_t kEditorMinHeight = 420;
 
 struct ClapPluginInstance {
     clap_plugin_t plugin = {};
@@ -402,17 +407,43 @@ bool guiGetSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height)
     return true;
 }
 
-bool guiCanResize(const clap_plugin_t*) { return false; }
+// Окно тянется хостом: раньше редактор был жёстко 960x640 и в DAW не
+// подстраивался под панель, куда его встроили
+bool guiCanResize(const clap_plugin_t*) { return true; }
 
-bool guiGetResizeHints(const clap_plugin_t*, void*) { return false; }
+bool guiGetResizeHints(const clap_plugin_t*, clap_gui_resize_hints_t* hints)
+{
+    if (!hints) {
+        return false;
+    }
+    hints->can_resize_horizontally = true;
+    hints->can_resize_vertically = true;
+    hints->preserve_aspect_ratio = false;
+    hints->aspect_ratio_width = 0;
+    hints->aspect_ratio_height = 0;
+    return true;
+}
 
-bool guiAdjustSize(const clap_plugin_t*, uint32_t* width, uint32_t* height)
+/** Минимум редактора в пикселях экрана: у собранного окна спрашиваем его сами. */
+QSize minimumEditorSizePx(const ClapPluginInstance* s)
+{
+    if (!s || !s->editor) {
+        return QSize(int(kEditorMinWidth), int(kEditorMinHeight));
+    }
+    const qreal dpr = s->editor->devicePixelRatioF() > 0.0 ? s->editor->devicePixelRatioF() : 1.0;
+    const QSize hint = s->editor->minimumSizeHint().expandedTo(s->editor->minimumSize());
+    return QSize(int(std::lround(hint.width() * dpr)), int(std::lround(hint.height() * dpr)));
+}
+
+bool guiAdjustSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height)
 {
     if (!width || !height) {
         return false;
     }
-    *width = kEditorWidth;
-    *height = kEditorHeight;
+    // Меньше минимума интерфейс уже не читается — остальное отдаём хосту
+    const QSize minimum = minimumEditorSizePx(self(plugin));
+    *width = std::max<uint32_t>(*width, uint32_t(minimum.width()));
+    *height = std::max<uint32_t>(*height, uint32_t(minimum.height()));
     return true;
 }
 
@@ -422,10 +453,22 @@ bool guiSetSize(const clap_plugin_t* plugin, uint32_t width, uint32_t height)
     if (!s) {
         return false;
     }
-    s->editorWidth = width;
-    s->editorHeight = height;
+    // Размер хоста слушаемся как есть: свой минимум мы уже назвали в
+    // adjust_size, а спорить в set_size — значит вылезти за рамку окна DAW
+    s->editorWidth = std::max<uint32_t>(width, 200);
+    s->editorHeight = std::max<uint32_t>(height, 120);
     if (s->editor) {
-        s->editor->resize(int(width), int(height));
+        // Хост считает в пикселях экрана, Qt — в логических: на мониторе со
+        // масштабом 125/150% без деления окно вылезает за рамку хоста
+        const qreal dpr = s->editor->devicePixelRatioF() > 0.0
+            ? s->editor->devicePixelRatioF()
+            : 1.0;
+        s->editor->resize(int(std::lround(double(s->editorWidth) / dpr)),
+                          int(std::lround(double(s->editorHeight) / dpr)));
+#if defined(_WIN32)
+        MoveWindow(reinterpret_cast<HWND>(s->editor->winId()), 0, 0,
+                   int(s->editorWidth), int(s->editorHeight), TRUE);
+#endif
     }
     return true;
 }

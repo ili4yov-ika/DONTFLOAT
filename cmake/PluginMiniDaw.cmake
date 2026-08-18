@@ -134,6 +134,11 @@ function(dontfloat_add_mini_daw_gui)
         Qt6::Gui
         Qt6::Widgets
         Qt6::Multimedia
+        # Иконки плагина рисуются через QSvgRenderer. Модуль плагина грузится
+        # с LOAD_WITH_ALTERED_SEARCH_PATH, поэтому Qt6Svg ищется не рядом с
+        # хостом, а по PATH: без ссылки отсюда windeployqt его не положит и
+        # загрузка плагина в мини-DAW падает на InitDll
+        Qt6::Svg
     )
     target_compile_definitions(dontfloat_mini_daw PRIVATE
         "DONTFLOAT_PLUGIN_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\""
@@ -175,10 +180,17 @@ function(dontfloat_add_mini_daw_gui)
                     --seconds 2
                     --input ${CMAKE_CURRENT_SOURCE_DIR}/tests/midi/test_1.wav
             )
+            # Модуль плагина грузится с LOAD_WITH_ALTERED_SEARCH_PATH: его Qt-DLL
+            # ищутся не рядом с хостом, а по PATH — добавляем туда bin Qt, как
+            # это делает RunQtTest.cmake для остальных тестов
+            set(_gui_test_env "DONTFLOAT_PLUGIN_BUILD_ROOT=${CMAKE_BINARY_DIR}")
+            if(WIN32 AND DEFINED QT_ROOT_DIR)
+                list(APPEND _gui_test_env "PATH=${QT_ROOT_DIR}/bin\;$ENV{PATH}")
+            endif()
             set_tests_properties(${_test_name} PROPERTIES
                 LABELS "plugins;mini-daw;gui;${_test_format};${_test_kind}"
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                ENVIRONMENT "DONTFLOAT_PLUGIN_BUILD_ROOT=${CMAKE_BINARY_DIR}"
+                ENVIRONMENT "${_gui_test_env}"
             )
         endforeach()
     endforeach()

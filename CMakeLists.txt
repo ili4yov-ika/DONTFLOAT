@@ -93,6 +93,7 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Multimedia
     MultimediaWidgets
     Concurrent
+    Svg
     Test
 )
 
@@ -139,6 +140,7 @@ set(SOURCES
     src/audiofileservice.cpp
     src/keyselectionmenu.cpp
     src/keymodulationstrip.cpp
+    src/svgiconloader.cpp
     src/spectrogramsettingsdialog.cpp
     src/shortcutsdialog.cpp
 )
@@ -177,6 +179,7 @@ set(HEADERS
     include/uiconstants.h
     include/keyselectionmenu.h
     include/keymodulationstrip.h
+    include/svgiconloader.h
     include/spectrogramsettingsdialog.h
     include/fft_engine.h
     include/granularpitchshifter_engine.h
@@ -246,6 +249,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Multimedia
     Qt6::MultimediaWidgets
     Qt6::Concurrent
+    Qt6::Svg
 )
 dontfloat_link_rubberband(${PROJECT_NAME})
 
@@ -459,6 +463,9 @@ if(DONTFLOAT_BUILD_PLUGINS)
             Qt6::Core
             Qt6::Gui
             Qt6::Widgets
+            # Qt6Svg нужен модулю плагина (иконки через QSvgRenderer), а он
+            # грузится с LOAD_WITH_ALTERED_SEARCH_PATH — рядом с хостом должен лежать
+            Qt6::Svg
         )
         target_compile_definitions(dontfloat_plugin_tester PRIVATE
             "DONTFLOAT_PLUGIN_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\""
@@ -525,6 +532,7 @@ function(add_qt_test test_name)
         Qt6::Multimedia
         Qt6::MultimediaWidgets
         Qt6::Concurrent
+        Qt6::Svg
         Qt6::Test
     )
 
@@ -825,6 +833,19 @@ target_include_directories(plugin_content_shift_test PRIVATE
 set_tests_properties(plugin_content_shift_test PROPERTIES
     LABELS "unit;plugins"
     DESCRIPTION "Timeline capture and clip-move detection for DAW plugins"
+)
+
+# Иконки кнопок: SVG рисуется без плагина движка иконок Qt
+add_qt_test(svg_icon_test
+    tests/svg_icon_test.cpp
+    src/svgiconloader.cpp
+    include/svgiconloader.h
+    resources.qrc
+)
+
+set_tests_properties(svg_icon_test PROPERTIES
+    LABELS "unit;ui"
+    DESCRIPTION "Toolbar and transport icons render from SVG resources"
 )
 
 # Общая доска нот: ноты одного экземпляра плагина — референс для соседних

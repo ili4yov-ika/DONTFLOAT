@@ -1,5 +1,7 @@
 #include "../include/pianoroll_toolbar.h"
 
+#include "../include/svgiconloader.h"
+
 #include <QtCore/QEvent>
 #include <QtCore/QSignalBlocker>
 #include <QtGui/QPainter>
@@ -232,8 +234,10 @@ void PianoRollToolbar::refreshIcons()
 QIcon PianoRollToolbar::loadIcon(const QString& resourcePath, int sizePx,
                                  bool tintOnLightScheme) const
 {
+    // Через QSvgRenderer, а не QIcon: в DAW плагин движка иконок Qt не находится
+    // и кнопки панели разреза оставались пустыми
     const qreal dpr = devicePixelRatioF();
-    QPixmap pixmap = QIcon(resourcePath).pixmap(QSize(sizePx, sizePx), dpr);
+    QPixmap pixmap = SvgIcons::renderPixmap(resourcePath, QSize(sizePx, sizePx), dpr);
     if (pixmap.isNull() || !tintOnLightScheme || colorScheme != QStringLiteral("light")) {
         return QIcon(pixmap);
     }
