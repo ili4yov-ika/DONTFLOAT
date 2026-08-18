@@ -58,11 +58,14 @@ set(DONTFLOAT_PLUGIN_PITCH_UI_SOURCES
     include/pianoroll_toolbar.h
     src/midiexporter.cpp
     include/midiexporter.h
+    src/midiimporter.cpp
+    include/midiimporter.h
     src/pianoroll_engine.cpp
     src/pitchdetector.cpp
     src/pitchcorrection.cpp
     src/keyanalyzer.cpp
     src/keyselectionmenu.cpp
+    src/keymodulationstrip.cpp
     src/notepreviewplayer.cpp
     src/timestretchprocessor.cpp
     src/markerengine.cpp
@@ -73,6 +76,7 @@ set(DONTFLOAT_PLUGIN_PITCH_UI_SOURCES
     include/pitchcorrection.h
     include/keyanalyzer.h
     include/keyselectionmenu.h
+    include/keymodulationstrip.h
     include/notepreviewplayer.h
     include/timestretchprocessor.h
     include/markerengine.h

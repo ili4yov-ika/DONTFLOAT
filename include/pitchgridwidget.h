@@ -41,6 +41,8 @@ public:
     void setZoomLevel(float zoom);
     void setTimelineReferenceWidth(int widthPx);
     void setTimelineSampleCount(qint64 samples);
+    /** Длина таймлайна в сэмплах — по ней ставятся полосы над пианороллом. */
+    qint64 timelineSamples() const { return timelineSampleCount; }
     float playbackCursorContentX() const;
     void setBPM(float bpm);
     void setBeatsPerBar(int beatsPerBar);
@@ -55,6 +57,14 @@ public:
     void setNotes(const QVector<PitchDetector::PitchNote>& newNotes);
     const QVector<PitchDetector::PitchNote>& notes() const { return pitchNotes; }
     void clearNotes();
+
+    /**
+     * Референсные ноты из импортированного MIDI: рисуются серым позади своих,
+     * не участвуют ни в выделении, ни в разрезе, ни в коррекции.
+     */
+    void setReferenceNotes(const QVector<PitchDetector::PitchNote>& referenceNotes);
+    const QVector<PitchDetector::PitchNote>& referenceNotes() const { return referenceNotes_; }
+    void clearReferenceNotes();
     /** Меняет высоту одной ноты (для undo/redo), без сигналов. */
     void setNotePitch(int noteIndex, float midiPitch);
 
@@ -133,6 +143,7 @@ private:
     void drawBeatGrid(QPainter& painter, const QRect& rect) const;
     void drawSelectedPitchRow(QPainter& painter, const QRect& rect) const;
     void drawNoteBlocks(QPainter& painter, const QRect& rect) const;
+    void drawReferenceNotes(QPainter& painter, const QRect& rect) const;
     void drawSplitPreview(QPainter& painter, const QRect& rect) const;
     void drawPlaybackCursor(QPainter& painter, const QRect& rect) const;
 
@@ -177,6 +188,8 @@ private:
 
     QVector<QVector<float>> audioData;
     QVector<PitchDetector::PitchNote> pitchNotes;
+    /** Ноты референсного MIDI — только фон (см. setReferenceNotes). */
+    QVector<PitchDetector::PitchNote> referenceNotes_;
     PianoRollEngine::KeySignature primaryKey;
     PianoRollEngine::KeySignature secondaryKey;
 

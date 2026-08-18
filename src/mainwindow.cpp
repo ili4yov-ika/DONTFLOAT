@@ -8,6 +8,7 @@
 #include "../include/pitchnoteeditcommand.h"
 #include "../include/pitchnotesplitcommand.h"
 #include "../include/midiexporter.h"
+#include "../include/midiimporter.h"
 #include "ui_mainwindow.h"
 #include <QtWidgets/QApplication>
 #include <QtCore/QFileInfo>
@@ -1325,6 +1326,11 @@ void MainWindow::createActions()
     exportMidiAct->setStatusTip(tr("Save the piano roll notes as a MIDI file"));
     connect(exportMidiAct, &QAction::triggered, this, &MainWindow::exportNotesToMidi);
 
+    // Референсный MIDI: серые ноты на фоне пианоролла для сверки
+    importMidiAct = new QAction(tr("Import reference MI&DI..."), this);
+    importMidiAct->setStatusTip(tr("Show notes from a MIDI file as a grey reference"));
+    connect(importMidiAct, &QAction::triggered, this, &MainWindow::importReferenceMidi);
+
     exitAct = new QAction(tr("&Exit"), this);
     exitAct->setShortcuts(QKeySequence::Quit);
     connect(exitAct, &QAction::triggered, this, &QWidget::close);
@@ -1473,6 +1479,7 @@ void MainWindow::createMenus()
     fileMenu->addAction(saveAct);
     fileMenu->addSeparator();
     fileMenu->addAction(exportMidiAct);
+    fileMenu->addAction(importMidiAct);
     fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
 
@@ -1790,9 +1797,13 @@ void MainWindow::resetAudioState()
     stopNotePreview();
     abortPitchAnalysis();
     basePitchNotes.clear();
+    referenceNotes.clear();
     if (pitchGridWidget) {
         pitchGridWidget->clearNotes();
+        // Референс был привязан к таймлайну прошлого файла
+        pitchGridWidget->clearReferenceNotes();
     }
+    updateReferenceKeyRow({});
 
     hidePitchGridAnalyzeOverlay();
 
@@ -3095,13 +3106,19 @@ void MainWindow::setupKeyModulationStrip()
 
 void MainWindow::syncKeyModulationStripFromWaveform()
 {
-    if (!keyModulationStrip || !waveformView) {
+    if (!waveformView) {
         return;
     }
-    keyModulationStrip->setTimelineSampleCount(waveformView->displaySampleCount());
-    keyModulationStrip->setTimelineReferenceWidth(waveformView->width());
-    keyModulationStrip->setZoomLevel(waveformView->getZoomLevel());
-    keyModulationStrip->setHorizontalOffset(waveformView->getHorizontalOffset());
+    // Полоса референса живёт на том же таймлайне, что и полоса проекта
+    for (KeyModulationStrip* strip : { keyModulationStrip, referenceKeyStrip }) {
+        if (!strip) {
+            continue;
+        }
+        strip->setTimelineSampleCount(waveformView->displaySampleCount());
+        strip->setTimelineReferenceWidth(waveformView->width());
+        strip->setZoomLevel(waveformView->getZoomLevel());
+        strip->setHorizontalOffset(waveformView->getHorizontalOffset());
+    }
 }
 
 void MainWindow::applyPerBarKeyResult(const KeyAnalyzer::PerBarKeyResult& perBar,
@@ -3349,9 +3366,12 @@ void MainWindow::setupPianoRollToolbar()
     connect(pitchGridWidget, &PitchGridWidget::noteSplitRejected,
             this, &MainWindow::onNoteSplitRejected);
 
-    // Кнопка справа на полосе — тот же экспорт, что пункт меню «Файл»
+    // Кнопки справа на полосе — то же, что пункты меню «Файл»
     connect(pianoRollToolbar, &PianoRollToolbar::exportMidiRequested,
             this, &MainWindow::exportNotesToMidi);
+    connect(pianoRollToolbar, &PianoRollToolbar::importMidiRequested,
+            this, &MainWindow::importReferenceMidi);
+    setupReferenceKeyRow();
 
     pianoRollToolbar->setColorScheme(settings.value("colorScheme", "dark").toString());
     updateMidiExportAvailability();
@@ -3363,6 +3383,121 @@ void MainWindow::setupPianoRollToolbar()
         : PitchGridWidget::CutMode::Free;
     pianoRollToolbar->setCutMode(cutMode);
     pitchGridWidget->setCutMode(cutMode);
+}
+
+void MainWindow::setupReferenceKeyRow()
+{
+    if (!ui->keyInputContainer || referenceKeyContainer) {
+        return;
+    }
+    auto* parentLayout = qobject_cast<QVBoxLayout*>(ui->pitchGridWidget->layout());
+    if (!parentLayout) {
+        return;
+    }
+
+    // Полоса референса живёт сразу под полосой тональностей проекта и
+    // появляется только после импорта MIDI
+    referenceKeyContainer = new QWidget(ui->pitchGridWidget);
+    referenceKeyContainer->setObjectName(QStringLiteral("referenceKeyContainer"));
+    referenceKeyContainer->setAttribute(Qt::WA_StyledBackground, true);
+    referenceKeyContainer->setFixedHeight(ui->keyInputContainer->height() > 0
+                                              ? ui->keyInputContainer->height()
+                                              : 25);
+    referenceKeyContainer->setStyleSheet(
+        QStringLiteral("QWidget#referenceKeyContainer { background-color: #161616;"
+                       " border-bottom: 1px solid #333; }"));
+
+    // Поля стоят по тактам, как на полосе тональностей проекта: модуляция
+    // референса читается на той же позиции таймлайна, где она звучит
+    auto* rowLayout = new QHBoxLayout(referenceKeyContainer);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    rowLayout->setSpacing(0);
+
+    referenceKeyStrip = new KeyModulationStrip(referenceKeyContainer);
+    referenceKeyStrip->setReferenceAppearance(true);
+    rowLayout->addWidget(referenceKeyStrip, 1);
+
+    const int keyRowIndex = parentLayout->indexOf(ui->keyInputContainer);
+    parentLayout->insertWidget(keyRowIndex >= 0 ? keyRowIndex + 1 : 0, referenceKeyContainer);
+    referenceKeyContainer->hide();
+}
+
+void MainWindow::updateReferenceKeyRow(const QVector<KeyAnalyzer::KeyRegion>& regions)
+{
+    if (!referenceKeyContainer || !referenceKeyStrip) {
+        return;
+    }
+    if (regions.isEmpty()) {
+        referenceKeyStrip->clearRegions();
+        referenceKeyContainer->hide();
+        return;
+    }
+    referenceKeyStrip->setRegions(regions);
+    referenceKeyContainer->show();
+    syncKeyModulationStripFromWaveform();
+}
+
+void MainWindow::importReferenceMidi()
+{
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Import reference MIDI"), QString(), tr("MIDI files (*.mid *.midi)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    // Как раскладывать ноты по времени — спрашиваем сразу после выбора файла
+    QMessageBox question(this);
+    question.setWindowTitle(tr("Import reference MIDI"));
+    question.setText(tr("How should the reference notes be placed on the timeline?"));
+    question.setIcon(QMessageBox::Question);
+    QPushButton* keepButton = question.addButton(tr("Keep as is"), QMessageBox::AcceptRole);
+    QPushButton* fitButton = question.addButton(tr("Fit to BPM"), QMessageBox::AcceptRole);
+    QPushButton* alignButton =
+        question.addButton(tr("Align and fit to BPM"), QMessageBox::AcceptRole);
+    question.addButton(QMessageBox::Cancel);
+    question.exec();
+
+    MidiImporter::Options options;
+    if (question.clickedButton() == keepButton) {
+        options.mode = MidiImporter::TimingMode::KeepAsIs;
+    } else if (question.clickedButton() == fitButton) {
+        options.mode = MidiImporter::TimingMode::FitToBpm;
+    } else if (question.clickedButton() == alignButton) {
+        options.mode = MidiImporter::TimingMode::AlignAndFitToBpm;
+    } else {
+        return;  // отмена
+    }
+
+    options.projectBpm = waveformView ? waveformView->getBPM() : 120.0f;
+    options.sampleRate = waveformView ? waveformView->getSampleRate() : 44100;
+    options.gridStartSample = waveformView ? waveformView->getGridStartSample() : 0;
+
+    const MidiImporter::Result result = MidiImporter::readFile(path, options);
+    if (!result.ok) {
+        QMessageBox::warning(this, tr("Import reference MIDI"),
+                             tr("Failed to read the MIDI file: %1").arg(result.error));
+        return;
+    }
+
+    referenceNotes = result.notes;
+    if (pitchGridWidget) {
+        pitchGridWidget->setReferenceNotes(referenceNotes);
+    }
+
+    // Тональность референса — потактово, по той же сетке, что и у проекта
+    KeyAnalyzer::BarGrid grid;
+    grid.bpm = options.projectBpm;
+    grid.beatsPerBar = waveformView ? waveformView->getBeatsPerBar() : 4;
+    grid.gridStartSample = options.gridStartSample;
+    const KeyAnalyzer::PerBarKeyResult referenceKeys =
+        MidiImporter::analyzeKeyPerBar(referenceNotes, grid, options.sampleRate);
+    updateReferenceKeyRow(referenceKeys.regions);
+
+    statusBar()->showMessage(
+        tr("Reference MIDI: %1 notes, source tempo %2 BPM")
+            .arg(referenceNotes.size())
+            .arg(double(result.sourceBpm), 0, 'f', 2),
+        5000);
 }
 
 void MainWindow::updateMidiExportAvailability()

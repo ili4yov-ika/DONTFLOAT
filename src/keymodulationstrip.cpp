@@ -84,6 +84,18 @@ void KeyModulationStrip::setRegionKey(int regionIndex, const QString& keyName)
     }
 }
 
+void KeyModulationStrip::setReferenceAppearance(bool reference)
+{
+    if (m_reference == reference) {
+        return;
+    }
+    m_reference = reference;
+    setStyleSheet(reference
+        ? QStringLiteral("QWidget#keyModulationStrip { background-color: #141414; }")
+        : QStringLiteral("QWidget#keyModulationStrip { background-color: #1a1a1a; }"));
+    rebuildFields();
+}
+
 void KeyModulationStrip::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
@@ -98,7 +110,8 @@ bool KeyModulationStrip::eventFilter(QObject* watched, QEvent* event)
     }
 
     const int index = m_fields.indexOf(edit);
-    if (index < 0) {
+    if (index < 0 || m_reference) {
+        // Референс не редактируется: клик по его полю ничего не открывает
         return QWidget::eventFilter(watched, event);
     }
 
@@ -127,37 +140,49 @@ void KeyModulationStrip::rebuildFields()
     }
     m_fields.clear();
 
-    const QString style = QStringLiteral(
-        "QLineEdit {"
-        "  background-color: #2b2b2b;"
-        "  border: 1px solid #42a5f5;"
-        "  border-radius: 2px;"
-        "  padding: 1px 4px;"
-        "  color: white;"
-        "  font-size: 11px;"
-        "}"
-        "QLineEdit:hover {"
-        "  border: 1px solid #64b5f6;"
-        "}");
+    // Серый — тот же цвет, что у референсных нот на пианоролле
+    const QString style = m_reference
+        ? QStringLiteral(
+            "QLineEdit {"
+            "  background-color: #232323;"
+            "  border: 1px solid #8a8a8a;"
+            "  border-radius: 2px;"
+            "  padding: 1px 4px;"
+            "  color: #c8c8c8;"
+            "  font-size: 11px;"
+            "}")
+        : QStringLiteral(
+            "QLineEdit {"
+            "  background-color: #2b2b2b;"
+            "  border: 1px solid #42a5f5;"
+            "  border-radius: 2px;"
+            "  padding: 1px 4px;"
+            "  color: white;"
+            "  font-size: 11px;"
+            "}"
+            "QLineEdit:hover {"
+            "  border: 1px solid #64b5f6;"
+            "}");
 
     m_fields.reserve(m_regions.size());
     for (const KeyAnalyzer::KeyRegion& region : m_regions) {
         auto* edit = new QLineEdit(this);
         edit->setReadOnly(true);
-        edit->setFocusPolicy(Qt::ClickFocus);
-        edit->setCursor(Qt::PointingHandCursor);
+        edit->setFocusPolicy(m_reference ? Qt::NoFocus : Qt::ClickFocus);
+        edit->setCursor(m_reference ? Qt::ArrowCursor : Qt::PointingHandCursor);
         edit->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         edit->setStyleSheet(style);
         edit->setText(region.key.keyName);
         edit->setPlaceholderText(tr("Undefined"));
-        edit->setToolTip(region.key.keyName.isEmpty()
+        const QString tip = region.key.keyName.isEmpty()
             ? tr("Key for bars %1–%2")
                   .arg(region.startBar + 1)
                   .arg(region.endBar + 1)
             : tr("%1 (bars %2–%3)")
                   .arg(region.key.keyName)
                   .arg(region.startBar + 1)
-                  .arg(region.endBar + 1));
+                  .arg(region.endBar + 1);
+        edit->setToolTip(m_reference ? tr("Reference MIDI: %1").arg(tip) : tip);
         edit->installEventFilter(this);
         edit->hide();
         m_fields.push_back(edit);

@@ -100,6 +100,8 @@ private slots:
     void splitNoteAtPlaybackCursor();
     /** Экспорт нот пианоролла в .mid (меню «Файл» и кнопка на панели). */
     void exportNotesToMidi();
+    /** Импорт референсного MIDI: серые ноты на фоне пианоролла. */
+    void importReferenceMidi();
     /** Разрез ноты по каретке / клику: splitSample — сэмпл текущего таймлайна. */
     void onNoteSplitRequested(int noteIndex, qint64 splitSample);
     void onNoteSplitRejected(PitchGridWidget::SplitRejection reason);
@@ -142,6 +144,10 @@ private:
     void setupPianoRollToolbar();
     /** Экспорт MIDI доступен только когда есть проанализированные ноты. */
     void updateMidiExportAvailability();
+    /** Панель референсных тональностей под панелью тональностей проекта. */
+    void setupReferenceKeyRow();
+    /** Показывает/прячет панель и раскладывает по тактам тональности референса. */
+    void updateReferenceKeyRow(const QVector<KeyAnalyzer::KeyRegion>& regions);
     void setupPitchGridAnalyzeOverlay();
     void showPitchGridAnalyzeOverlay();
     void hidePitchGridAnalyzeOverlay();
@@ -209,6 +215,9 @@ private:
     WaveformView *waveformView;
     PitchGridWidget *pitchGridWidget;
     PianoRollToolbar *pianoRollToolbar;
+    /** Панель тональностей референсного MIDI (появляется после импорта). */
+    QWidget *referenceKeyContainer = nullptr;
+    KeyModulationStrip *referenceKeyStrip = nullptr;
     QWidget *pitchGridScrollContainer;
     QWidget *pitchGridAnalyzeOverlay;
     QPushButton *pitchGridAnalyzeButton;
@@ -232,6 +241,8 @@ private:
     QAction *saveAct;
     /** «Экспорт MIDI…» — доступен, когда в пианоролле есть ноты. */
     QAction *exportMidiAct = nullptr;
+    /** «Импорт референсного MIDI…» — доступен всегда. */
+    QAction *importMidiAct = nullptr;
     QAction *exitAct;
     QAction *undoAct;
     QAction *redoAct;
@@ -321,6 +332,8 @@ private:
     bool pitchAnalysisRunning = false;
     qint64 pitchAnalysisEpoch = 0; // инвалидирует устаревшее завершение после abort
     QVector<PitchDetector::PitchNote> basePitchNotes; // координаты аудио на момент анализа
+    /** Ноты импортированного референсного MIDI (серый фон пианоролла). */
+    QVector<PitchDetector::PitchNote> referenceNotes;
     QAction *applyPitchCorrectionAct = nullptr;
 
     void abortPitchAnalysis();
