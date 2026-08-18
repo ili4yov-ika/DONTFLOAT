@@ -41,6 +41,8 @@ public:
     void setBeatGrid(float bpm, int beatsPerBar);
     /** Имя трека, подписанное на дорожке. */
     void setTrackName(const QString& name);
+    /** Границы клипов (кадры) — рисуются линиями поверх дорожки. */
+    void setClipBoundaries(const QVector<qint64>& boundaries);
 
     qint64 position() const { return position_; }
     qint64 totalFrames() const { return totalFrames_; }
@@ -53,15 +55,19 @@ public:
 signals:
     /** Пользователь ткнул в дорожку — перемотка. */
     void seekRequested(qint64 frame);
+    /** Клип тащили правой кнопкой — сдвинуть выбранный клип на столько кадров. */
+    void clipMoveRequested(qint64 deltaFrames);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
     QRect trackRect() const;
+    /** Позиция на дорожке по координате X. */
     qint64 frameAtX(int x) const;
     void rebuildEnvelope();
     void drawWaveform(QPainter& painter, const QRect& area) const;
@@ -77,6 +83,11 @@ private:
     int sampleRate_ = 44100;
     float bpm_ = 120.0f;
     int beatsPerBar_ = 4;
+    /** Границы клипов и состояние перетаскивания правой кнопкой. */
+    QVector<qint64> clipBoundaries_;
+    int dragStartX_ = 0;
+    qint64 dragDeltaFrames_ = 0;
+    bool draggingClip_ = false;
 };
 
 class Window : public QWidget {
@@ -104,14 +115,45 @@ private slots:
     void onStopClicked();
     void onSelectionChanged();
     void onSeekRequested(qint64 frame);
+    /** Клип перетащили мышью — двигаем выбранный клип на дельту. */
+    void onClipMoveRequested(qint64 deltaFrames);
     void onBeatGridChanged();
     void tickPosition();
 
 private:
+    /**
+     * Клип на дорожке: кусок исходного файла со своей позицией, длиной и
+     * коэффициентом растяжения. Так мини-DAW умеет то же, что настоящая DAW —
+     * резать, двигать, укорачивать и растягивать, — а плагин видит результат.
+     */
+    struct Clip {
+        qint64 timelineStart = 0;  ///< позиция на дорожке (кадры)
+        qint64 sourceStart = 0;    ///< откуда берётся материал
+        qint64 sourceLength = 0;   ///< сколько исходных кадров занимает
+        double stretch = 1.0;      ///< >1 — растянут во времени (звучит дольше)
+
+        qint64 timelineLength() const { return qint64(double(sourceLength) * stretch); }
+        qint64 timelineEnd() const { return timelineStart + timelineLength(); }
+    };
+
     void buildUi();
     void applyStyle();
     /** Перезагружает выбранный плагин и встраивает его редактор в панель. */
     void reloadPlugin();
+    /** Сдвиг клипа на \a seconds секунд (Ctrl+←/→). */
+    void nudgeClip(int seconds);
+    /** Разрез клипа под кареткой на два (клавиша S — как в DAW). */
+    void splitClipAtPlayhead();
+    /** Сдвиг края клипа: \a startEdge — левый край, иначе правый. */
+    void trimSelectedClip(bool startEdge, qint64 deltaFrames);
+    /** Растяжение/сжатие клипа во времени (коэффициент умножается). */
+    void stretchSelectedClip(double factor);
+    /** Индекс клипа под позицией; -1 — там пусто. */
+    int clipAt(qint64 frame) const;
+    /** Пересобирает дорожку из клипов (растяжение — линейной интерполяцией). */
+    void renderTimeline();
+    /** Пересборка + прогон через плагин + обновление плеера и дорожки. */
+    void applyClipEdit(const QString& statusText);
     /** Прогоняет загруженный трек через плагин: плагин видит трек, мы — выход. */
     void runTrackThroughPlugin();
     void showPluginMessage(const QString& text, bool isError);
@@ -140,8 +182,15 @@ private:
     QString audioPath_;
     QVector<float> sourceLeft_;
     QVector<float> sourceRight_;
+    /** Дорожка, собранная из клипов: её слышит транспорт и видит плагин. */
+    QVector<float> timelineLeft_;
+    QVector<float> timelineRight_;
+    QVector<Clip> clips_;
+    int selectedClip_ = 0;
     int sampleRate_ = 44100;
     bool autoPlay_ = false;
+    /** Защита от повторного входа в reloadPlugin из вложенного цикла событий. */
+    bool reloadingPlugin_ = false;
 };
 
 } // namespace MiniDaw

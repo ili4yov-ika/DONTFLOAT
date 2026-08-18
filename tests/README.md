@@ -15,6 +15,7 @@
 - **pianoroll_split_test.cpp** - Разрез нот на пианоролле: привязка реза к сетке против свободного, допустимость реза, `PitchNoteSplitCommand` (undo/redo) и реакция `PitchGridWidget` на клик / клавишу `S`
 - **ui_responsiveness_test.cpp** - Интеграционный UI-тест: загрузка `example_V80BPM.mp3`, метки выравнивания, перетаскивание меток, `applyTimeStretch`, плавность `QMediaPlayer`
 - **pitch_compensation_file_test.cpp** - Тонкомпенсация на `pitch-test_C140BPM.mp3` (одна нота): сжатие/растяжение метками, проверка высоты тона (автокорреляция)
+- **plugin_content_shift_test.cpp** - Захват дорожки DAW по позиции таймлайна (`TrackToolSession::writeHostFrames`) и распознавание переноса клипа: тот же материал на новой позиции — сдвиг (метки и ноты едут за клипом), другой материал — полный анализ
 
 ## Тестовые данные
 

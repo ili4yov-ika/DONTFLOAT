@@ -3,6 +3,8 @@
 
 #include "../core/dontfloat_plugin_core.h"
 #include "../../include/pitchdetector.h"
+#include "../../include/pitchgridwidget.h"
+#include "dontfloat_editor_content.h"
 
 #include <QElapsedTimer>
 #include <QFutureWatcher>
@@ -12,8 +14,8 @@
 #include <atomic>
 #include <memory>
 
-class PitchGridWidget;
 class KeySelectionMenu;
+class PianoRollToolbar;
 class QLineEdit;
 class QProgressBar;
 class QPushButton;
@@ -29,7 +31,7 @@ struct PitchAnalysisOutcome {
     QString secondaryKeyName;
 };
 
-class DontfloatPitchEditor final : public QWidget {
+class DontfloatPitchEditor final : public QWidget, public DontfloatEditorContent {
     Q_OBJECT
 
 public:
@@ -40,21 +42,31 @@ public:
     void setProductName(const QString& productName);
     QString productName() const { return productName_; }
 
-    void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
+    QWidget* widget() override { return this; }
+    void bindSession(Dontfloat::PluginCore::TrackToolSession* session) override;
     void refreshFromSession();
-    void notifyHostAudioAppended();
+    void notifyHostAudioAppended() override;
     /** Каретка DAW (сэмплы дорожки) — синхронизирует каретку пианоролла. */
-    void setHostPlayhead(qint64 samplePosition);
+    void setHostPlayhead(qint64 samplePosition) override;
+    /** Тактовая сетка DAW: пианоролл рисует её же сетку. */
+    void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample) override;
 
 signals:
     void pitchSessionChanged();
+    /** Текст для статусбара оболочки плагина. */
+    void statusMessage(const QString& text);
+    /** Каретку двинули в плагине — DAW должна встать туда же. */
+    void seekRequested(qint64 samplePosition);
 
 private slots:
-    void onAnalyzeClicked();
-    /** Анализ по приходу аудио от DAW — без нажатия «Анализировать». */
+    /** Разрез ноты по каретке / клику — как в главном окне. */
+    void onNoteSplitRequested(int noteIndex, qint64 splitSample);
+    void onNoteSplitRejected(PitchGridWidget::SplitRejection reason);
+    /** Анализ при каждом изменении содержимого дорожки — кнопок анализа нет. */
     void startAutoAnalysis();
     void onApplyCorrectionClicked();
-    void onExportClicked();
+    /** Экспорт нот пианоролла в .mid (кнопка справа на панели). */
+    void onExportMidiClicked();
     void onPitchAnalysisFinished();
     void onPrimaryKeySelected(const QString& key);
     void onSecondaryKeySelected(const QString& key);
@@ -78,6 +90,8 @@ private:
     void runPitchAnalysis();
     void syncNotesToSession();
     void setStatus(const QString& text);
+    /** Сдвиг нот вслед за переехавшим клипом (см. detectContentShift). */
+    void shiftNotes(qint64 deltaSamples);
 
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QString productName_;
@@ -88,11 +102,9 @@ private:
     KeySelectionMenu* keyMenu_ = nullptr;
     KeySelectionMenu* keyMenu2_ = nullptr;
     QWidget* analyzeOverlay_ = nullptr;
-    QPushButton* analyzeButton_ = nullptr;
     QProgressBar* analyzeProgress_ = nullptr;
     QPushButton* applyButton_ = nullptr;
-    QPushButton* exportButton_ = nullptr;
-    QLabel* statusLabel_ = nullptr;
+    PianoRollToolbar* pianoRollToolbar_ = nullptr;
 
     QString primaryKey_;
     QString secondaryKey_;
@@ -106,6 +118,14 @@ private:
     QTimer* autoAnalysisTimer_ = nullptr;
     QElapsedTimer hostRefreshClock_;
     bool analysisRunning_ = false;
+    /** Идёт применение каретки от DAW — обратно её не отправляем. */
+    bool applyingHostPlayhead_ = false;
+    /** Отпечаток содержимого, по которому считался последний анализ. */
+    Dontfloat::PluginCore::TrackContentFingerprint analyzedContent_;
+    /** Тактовая сетка, пришедшая от DAW (см. setHostBeatGrid). */
+    double hostBpm_ = 0.0;
+    int hostBeatsPerBar_ = 4;
+    qint64 hostGridStartSample_ = 0;
 
     /** Пауза в потоке аудио от хоста, после которой стартует авто-анализ. */
     static constexpr int kAutoAnalysisDelayMs = 400;

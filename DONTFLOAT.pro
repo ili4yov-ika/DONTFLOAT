@@ -96,6 +96,7 @@ SOURCES += \
         src/pitchgridwidget.cpp \
         src/pianoroll_engine.cpp \
         src/pianoroll_toolbar.cpp \
+        src/midiexporter.cpp \
         src/pitchdetector.cpp \
         src/pitchcorrection.cpp \
         src/notepreviewplayer.cpp \
@@ -117,7 +118,6 @@ SOURCES += \
         src/keyselectionmenu.cpp \
         src/beatvisualizer.cpp \
         src/spectrogramsettingsdialog.cpp \
-        src/pitchshiftsettingsdialog.cpp \
         src/shortcutsdialog.cpp
 
 HEADERS += \
@@ -127,6 +127,7 @@ HEADERS += \
         include/pitchgridwidget.h \
         include/pianoroll_engine.h \
         include/pianoroll_toolbar.h \
+        include/midiexporter.h \
         include/pitchdetector.h \
         include/pitchcorrection.h \
         include/pitchnoteeditcommand.h \
@@ -151,7 +152,6 @@ HEADERS += \
         include/keyselectionmenu.h \
         include/beatvisualizer.h \
         include/spectrogramsettingsdialog.h \
-        include/pitchshiftsettingsdialog.h \
         include/shortcutsdialog.h \
         include/fft_engine.h \
         include/granularpitchshifter_engine.h

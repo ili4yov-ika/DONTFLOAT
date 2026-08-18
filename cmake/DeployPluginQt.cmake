@@ -72,5 +72,11 @@ if(NOT EXISTS "${PLUGIN_DIR}/platforms/qwindows.dll")
         "DeployPluginQt: platforms/qwindows.dll missing in ${PLUGIN_DIR}\n"
         "Without it hosts report: no Qt platform plugin could be initialized")
 endif()
+# Иконки шапки и панели разреза — SVG: без плагина qsvg кнопки будут пустыми
+if(NOT EXISTS "${PLUGIN_DIR}/imageformats/qsvg.dll")
+    message(FATAL_ERROR
+        "DeployPluginQt: imageformats/qsvg.dll missing in ${PLUGIN_DIR}\n"
+        "Without it the plugin UI shows empty icons (toolbar, split panel)")
+endif()
 
-message(STATUS "DeployPluginQt OK: Qt6Core.dll + platforms/qwindows.dll in ${PLUGIN_DIR}")
+message(STATUS "DeployPluginQt OK: Qt6Core.dll + platforms/qwindows.dll + imageformats/qsvg.dll in ${PLUGIN_DIR}")

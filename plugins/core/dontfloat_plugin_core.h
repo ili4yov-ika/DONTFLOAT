@@ -174,7 +174,16 @@ public:
     TrackToolStatus render(const TrackRenderRequest& request, TrackRenderResult* result);
 
     TrackToolStatus setAudioBuffer(const TrackAudioBuffer& buffer);
+    /** Запись блока в конец захвата (хосты без транспорта, например LV2). */
     TrackToolStatus appendHostFrames(const float* const* inputs, int channelCount, int frameCount);
+    /**
+     * Запись блока по позиции таймлайна DAW: буфер повторяет дорожку, а не
+     * порядок приходов. Благодаря этому сдвиг клипа в DAW виден плагину как
+     * сдвиг содержимого (см. detectContentShift).
+     * @param timelineFrame позиция начала блока; отрицательная — писать в конец.
+     */
+    TrackToolStatus writeHostFrames(const float* const* inputs, int channelCount, int frameCount,
+                                    std::int64_t timelineFrame);
     void clearHostCapture();
 
     const TrackAudioBuffer& audioBuffer() const { return audioBuffer_; }
@@ -204,6 +213,8 @@ private:
     TrackAudioBuffer audioBuffer_;
     TrackPitchAnalysis pitchAnalysis_;
 
+    /** Конец последней записи по таймлайну: по нему видно новый проход DAW. */
+    std::int64_t lastWriteEndFrame_ = 0;
     std::uint32_t version_ = 1;
     bool prepared_ = false;
     bool analysisValid_ = false;
@@ -214,6 +225,31 @@ bool isValidAudioInfo(const TrackAudioInfo& audioInfo);
 TrackAnalysisOptions sanitizeAnalysisOptions(const TrackAnalysisOptions& options);
 TrackAlignmentOptions sanitizeAlignmentOptions(const TrackAlignmentOptions& options);
 TrackRenderOptions sanitizeRenderOptions(const TrackRenderOptions& options);
+
+/**
+ * Отпечаток содержимого дорожки: где лежит звук и что это за звук.
+ * `hash` считается по самому содержимому и не зависит от его позиции —
+ * поэтому перемещение клипа в DAW отличимо от смены материала.
+ */
+struct TrackContentFingerprint {
+    std::int64_t startFrame = 0;   ///< первый незвенящий кадр (тишина в начале отброшена)
+    std::int64_t lengthFrames = 0; ///< длина содержимого без тишины по краям
+    std::uint64_t hash = 0;        ///< хеш содержимого; 0 — тишина/пусто
+    bool empty() const { return lengthFrames <= 0; }
+};
+
+/** Отпечаток захваченного буфера (тишина по краям отбрасывается). */
+TrackContentFingerprint computeContentFingerprint(const TrackAudioBuffer& buffer);
+
+/**
+ * Тот же материал, но на другой позиции? Так плагин узнаёт о перемещении
+ * клипа: метки растяжения и ноты нужно сдвинуть, а не пересчитывать.
+ * @return true и \a deltaFrames (новая позиция минус старая), если содержимое
+ *         совпало, а позиция изменилась.
+ */
+bool detectContentShift(const TrackContentFingerprint& before,
+                        const TrackContentFingerprint& after,
+                        std::int64_t* deltaFrames);
 
 } // namespace Dontfloat::PluginCore
 

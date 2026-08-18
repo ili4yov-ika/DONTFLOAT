@@ -5,8 +5,19 @@ set(DONTFLOAT_PLUGIN_SHELL_SOURCES
     plugins/ui/dontfloat_qt_hosting.h
     plugins/ui/dontfloat_plugin_editor_shell.cpp
     plugins/ui/dontfloat_plugin_editor_shell.h
+    plugins/ui/dontfloat_plugin_theme.cpp
+    plugins/ui/dontfloat_plugin_theme.h
+    plugins/ui/dontfloat_editor_content.h
     plugins/ui/dontfloat_track_tool_editor.cpp
     plugins/ui/dontfloat_track_tool_editor.h
+    # Транспорт шапки: прослушивание захваченной дорожки и метроном
+    src/notepreviewplayer.cpp
+    src/metronomecontroller.cpp
+    include/notepreviewplayer.h
+    include/metronomecontroller.h
+    # Иконки шапки и панели разреза (:/icons/...) — в приложении их даёт
+    # тот же resources.qrc, у плагина своих ресурсов не было
+    resources.qrc
 )
 
 set(DONTFLOAT_PLUGIN_SCRATCH_UI_SOURCES
@@ -43,6 +54,10 @@ set(DONTFLOAT_PLUGIN_PITCH_UI_SOURCES
     plugins/ui/dontfloat_pitch_editor.cpp
     plugins/ui/dontfloat_pitch_editor.h
     src/pitchgridwidget.cpp
+    src/pianoroll_toolbar.cpp
+    include/pianoroll_toolbar.h
+    src/midiexporter.cpp
+    include/midiexporter.h
     src/pianoroll_engine.cpp
     src/pitchdetector.cpp
     src/pitchcorrection.cpp

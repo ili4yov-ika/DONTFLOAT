@@ -2,9 +2,11 @@
 
 #include <QtCore/QDir>
 #include <QtCore/QFileInfo>
+#include <QtCore/QScopeGuard>
 #include <QtCore/QTimer>
 #include <QtGui/QDoubleValidator>
 #include <QtGui/QMouseEvent>
+#include <QtGui/QShortcut>
 #include <QtGui/QPainter>
 #include <QtGui/QPixmap>
 #include <QtGui/QPolygonF>
@@ -187,6 +189,12 @@ qint64 PlaybackBar::frameAtX(int x) const
     return qint64(ratio * double(totalFrames_));
 }
 
+void PlaybackBar::setClipBoundaries(const QVector<qint64>& boundaries)
+{
+    clipBoundaries_ = boundaries;
+    update();
+}
+
 void PlaybackBar::drawWaveform(QPainter& painter, const QRect& area) const
 {
     if (envelopeUpper_.isEmpty()) {
@@ -237,11 +245,23 @@ void PlaybackBar::paintEvent(QPaintEvent*)
     // Дорожка: белое поле, волна, тактовая сетка, проигранная часть красным
     painter.fillRect(track, Qt::white);
     drawBeatGrid(painter, track);
-    drawWaveform(painter, track);
 
-    const double playedX = totalFrames_ > 0
-        ? double(position_) / double(totalFrames_) * track.width()
-        : 0.0;
+    // Дорожка уже собрана из клипов: рисуем её целиком, границы клипов —
+    // отдельными линиями (после реза их видно, как в DAW)
+    const auto xForFrame = [&](qint64 frame) {
+        return totalFrames_ > 0 ? double(frame) / double(totalFrames_) * track.width() : 0.0;
+    };
+    drawWaveform(painter, track);
+    painter.setPen(QPen(QColor(0x20, 0x60, 0xC0), 1.0, Qt::DashLine));
+    for (qint64 boundary : clipBoundaries_) {
+        if (boundary <= 0 || boundary >= totalFrames_) {
+            continue;
+        }
+        const double x = track.left() + xForFrame(boundary);
+        painter.drawLine(QPointF(x, track.top()), QPointF(x, track.bottom()));
+    }
+
+    const double playedX = totalFrames_ > 0 ? xForFrame(position_) : 0.0;
     if (playedX > 0.0) {
         painter.fillRect(QRectF(track.left(), track.top(), playedX, track.height()),
                          QColor(0xFF, 0x00, 0x00, 128));
@@ -288,6 +308,12 @@ void PlaybackBar::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && totalFrames_ > 0) {
         emit seekRequested(frameAtX(int(event->position().x())));
+    } else if (event->button() == Qt::RightButton && totalFrames_ > 0) {
+        // ПКМ тащит клип по дорожке — так проверяется перенос клипа в DAW
+        draggingClip_ = true;
+        dragStartX_ = int(event->position().x());
+        dragDeltaFrames_ = 0;
+        setCursor(Qt::ClosedHandCursor);
     }
 }
 
@@ -295,6 +321,25 @@ void PlaybackBar::mouseMoveEvent(QMouseEvent* event)
 {
     if ((event->buttons() & Qt::LeftButton) && totalFrames_ > 0) {
         emit seekRequested(frameAtX(int(event->position().x())));
+        return;
+    }
+    if (draggingClip_ && totalFrames_ > 0) {
+        const QRect track = trackRect();
+        const int dx = int(event->position().x()) - dragStartX_;
+        dragDeltaFrames_ =
+            qint64(double(dx) / std::max(1, track.width()) * double(totalFrames_));
+    }
+}
+
+void PlaybackBar::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::RightButton && draggingClip_) {
+        draggingClip_ = false;
+        unsetCursor();
+        if (dragDeltaFrames_ != 0) {
+            emit clipMoveRequested(dragDeltaFrames_);
+        }
+        dragDeltaFrames_ = 0;
     }
 }
 
@@ -450,6 +495,32 @@ void Window::buildUi()
     connect(playButton_, &QToolButton::clicked, this, &Window::onPlayClicked);
     connect(stopButton_, &QToolButton::clicked, this, &Window::onStopClicked);
     connect(playbackBar_, &PlaybackBar::seekRequested, this, &Window::onSeekRequested);
+    connect(playbackBar_, &PlaybackBar::clipMoveRequested, this, &Window::onClipMoveRequested);
+
+    // Правка клипов с клавиатуры — то же, что делают мышью в DAW:
+    // S — рез по каретке, Ctrl+←/→ — сдвиг, Alt/Shift+←/→ — обрезка краёв,
+    // Ctrl+↑/↓ — растянуть/сжать во времени
+    const auto addShortcut = [this](const QKeySequence& keys, auto slot) {
+        auto* shortcut = new QShortcut(keys, this);
+        // Клавиши правки клипа работают при любом фокусе внутри хоста: фокус
+        // часто у встроенного редактора плагина (это отдельное нативное окно)
+        shortcut->setContext(Qt::ApplicationShortcut);
+        connect(shortcut, &QShortcut::activated, this, slot);
+    };
+    addShortcut(QKeySequence(Qt::Key_S), [this]() { splitClipAtPlayhead(); });
+    addShortcut(QKeySequence(Qt::CTRL | Qt::Key_Right), [this]() { nudgeClip(1); });
+    addShortcut(QKeySequence(Qt::CTRL | Qt::Key_Left), [this]() { nudgeClip(-1); });
+    addShortcut(QKeySequence(Qt::ALT | Qt::Key_Right),
+                [this]() { trimSelectedClip(true, sampleRate_ / 4); });
+    addShortcut(QKeySequence(Qt::ALT | Qt::Key_Left),
+                [this]() { trimSelectedClip(true, -(sampleRate_ / 4)); });
+    addShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Right),
+                [this]() { trimSelectedClip(false, sampleRate_ / 4); });
+    addShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Left),
+                [this]() { trimSelectedClip(false, -(sampleRate_ / 4)); });
+    addShortcut(QKeySequence(Qt::CTRL | Qt::Key_Up), [this]() { stretchSelectedClip(1.05); });
+    addShortcut(QKeySequence(Qt::CTRL | Qt::Key_Down),
+                [this]() { stretchSelectedClip(1.0 / 1.05); });
     connect(formatCombo_, &QComboBox::currentIndexChanged, this, &Window::onSelectionChanged);
     connect(productCombo_, &QComboBox::currentIndexChanged, this, &Window::onSelectionChanged);
     connect(bpmEdit_, &QLineEdit::editingFinished, this, &Window::onBeatGridChanged);
@@ -551,6 +622,15 @@ void Window::showPluginMessage(const QString& text, bool isError)
 
 void Window::reloadPlugin()
 {
+    // Внутри загрузки редактор плагина крутит свой Qt-код (мультимедиа,
+    // ресурсы), и вложенный цикл событий может снова позвать reloadPlugin —
+    // тогда host_ удалялся бы прямо во время embedEditor (падение по feeefeee)
+    if (reloadingPlugin_) {
+        return;
+    }
+    reloadingPlugin_ = true;
+    const QScopeGuard reloadDone([this]() { reloadingPlugin_ = false; });
+
     player_.stop();
     updateTransportUi();
 
@@ -589,6 +669,12 @@ void Window::reloadPlugin()
     // Транспорт хоста — до первого прогона аудио
     onBeatGridChanged();
 
+    // Каретку двигают в плагине — переставляем каретку хоста
+    host_->setSeekRequestHandler([this](qint64 frame) {
+        QMetaObject::invokeMethod(this, [this, frame]() { onSeekRequested(frame); },
+                                  Qt::QueuedConnection);
+    });
+
     QSize editorSize;
     if (host_->embedEditor(pluginSurface_->winId(), &editorSize, &error)) {
         showPluginMessage(QString(), false);
@@ -607,13 +693,16 @@ void Window::reloadPlugin()
 
 void Window::runTrackThroughPlugin()
 {
-    if (sourceLeft_.isEmpty()) {
+    if (timelineLeft_.isEmpty()) {
+        renderTimeline();
+    }
+    if (timelineLeft_.isEmpty()) {
         return;
     }
-    // Прогон трека через process(): плагин видит аудио (его редактор рисует
-    // волну и ноты), а в транспорт кладём то, что плагин вернул на выходе
-    QVector<float> left = sourceLeft_;
-    QVector<float> right = sourceRight_;
+    // Прогон дорожки через process(): плагин видит её так же, как DAW —
+    // с позициями блоков на таймлайне, включая тишину между клипами
+    QVector<float> left = timelineLeft_;
+    QVector<float> right = timelineRight_;
     if (host_) {
         // В Debug прогон длинного трека занимает секунды — предупреждаем
         showPluginMessage(tr("Streaming the track through the plugin…"), false);
@@ -621,7 +710,8 @@ void Window::runTrackThroughPlugin()
         const int frames = int(std::min(left.size(), right.size()));
         for (int pos = 0; pos < frames; pos += kBlockSize) {
             const int n = std::min(kBlockSize, frames - pos);
-            host_->process(left.data() + pos, right.data() + pos, n);
+            // Позиция блока на дорожке: плагин раскладывает захват по таймлайну
+            host_->process(left.data() + pos, right.data() + pos, n, pos);
         }
     }
     player_.setAudio(left, right, sampleRate_);
@@ -664,13 +754,24 @@ bool Window::openAudio(const QString& path)
     sourceLeft_.resize(frames);
     sourceRight_.resize(frames);
 
+    // Дорожка начинается с одного клипа на весь файл (дальше его режут,
+    // двигают, обрезают и растягивают — см. splitClipAtPlayhead и соседей)
+    clips_.clear();
+    Clip whole;
+    whole.timelineStart = 0;
+    whole.sourceStart = 0;
+    whole.sourceLength = frames;
+    clips_.append(whole);
+    selectedClip_ = 0;
+    renderTimeline();
+
     updateWindowTitle();
     // Плагин активируется на частоте трека — перезагружаем его под новый файл
     reloadPlugin();
     if (!host_) {
         // Плагин не поднялся — трек всё равно можно послушать
-        player_.setAudio(sourceLeft_, sourceRight_, sampleRate_);
-        playbackBar_->setTrack(sourceLeft_, sourceRight_, sampleRate_);
+        player_.setAudio(timelineLeft_, timelineRight_, sampleRate_);
+        playbackBar_->setTrack(timelineLeft_, timelineRight_, sampleRate_);
         playbackBar_->setTrackName(QFileInfo(audioPath_).fileName());
         playbackBar_->setPosition(0);
         updateTransportUi();
@@ -738,11 +839,190 @@ void Window::onSelectionChanged()
 
 void Window::onSeekRequested(qint64 frame)
 {
+    // Правки идут по клипу под кареткой — как выделение клипа в DAW
+    const int index = clipAt(frame);
+    if (index >= 0) {
+        selectedClip_ = index;
+    }
     player_.seek(frame);
     playbackBar_->setPosition(frame);
     if (host_) {
         host_->setPlayhead(frame, player_.isPlaying());
     }
+}
+
+int Window::clipAt(qint64 frame) const
+{
+    for (int i = 0; i < clips_.size(); ++i) {
+        if (frame >= clips_[i].timelineStart && frame < clips_[i].timelineEnd()) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void Window::renderTimeline()
+{
+    timelineLeft_.clear();
+    timelineRight_.clear();
+    if (clips_.isEmpty() || sourceLeft_.isEmpty()) {
+        return;
+    }
+
+    qint64 total = 0;
+    for (const Clip& clip : clips_) {
+        total = std::max(total, clip.timelineEnd());
+    }
+    if (total <= 0) {
+        return;
+    }
+    timelineLeft_.assign(int(total), 0.0f);
+    timelineRight_.assign(int(total), 0.0f);
+
+    const int sourceFrames = int(std::min(sourceLeft_.size(), sourceRight_.size()));
+    for (const Clip& clip : clips_) {
+        const qint64 length = clip.timelineLength();
+        for (qint64 i = 0; i < length; ++i) {
+            const qint64 outIndex = clip.timelineStart + i;
+            if (outIndex < 0 || outIndex >= total) {
+                continue;
+            }
+            // Растяжение — линейная интерполяция по исходному материалу
+            const double sourcePos = double(clip.sourceStart) + double(i) / clip.stretch;
+            const int base = int(sourcePos);
+            if (base < 0 || base >= sourceFrames) {
+                continue;
+            }
+            const int next = std::min(base + 1, sourceFrames - 1);
+            const float t = float(sourcePos - double(base));
+            timelineLeft_[int(outIndex)] = sourceLeft_[base] * (1.0f - t) + sourceLeft_[next] * t;
+            timelineRight_[int(outIndex)] = sourceRight_[base] * (1.0f - t) + sourceRight_[next] * t;
+        }
+    }
+
+    QVector<qint64> boundaries;
+    for (const Clip& clip : clips_) {
+        boundaries.append(clip.timelineStart);
+        boundaries.append(clip.timelineEnd());
+    }
+    playbackBar_->setClipBoundaries(boundaries);
+}
+
+void Window::applyClipEdit(const QString& statusText)
+{
+    renderTimeline();
+    if (!statusText.isEmpty()) {
+        showPluginMessage(statusText, false);
+        QApplication::processEvents();
+    }
+    // Прогоняем дорожку заново: плагин увидит новый материал по позициям
+    // таймлайна и сам решит — сдвинуть разметку или пересчитать анализ
+    runTrackThroughPlugin();
+}
+
+void Window::nudgeClip(int seconds)
+{
+    onClipMoveRequested(qint64(seconds) * sampleRate_);
+}
+
+void Window::onClipMoveRequested(qint64 deltaFrames)
+{
+    if (clips_.isEmpty() || deltaFrames == 0) {
+        return;
+    }
+    selectedClip_ = std::clamp(selectedClip_, 0, int(clips_.size()) - 1);
+    Clip& clip = clips_[selectedClip_];
+    clip.timelineStart = std::max<qint64>(0, clip.timelineStart + deltaFrames);
+    applyClipEdit(tr("Clip moved — re-streaming through the plugin..."));
+}
+
+void Window::splitClipAtPlayhead()
+{
+    if (clips_.isEmpty()) {
+        return;
+    }
+    const qint64 position = playbackBar_->position();
+    const int index = clipAt(position);
+    if (index < 0) {
+        showPluginMessage(tr("No clip under the cursor"), false);
+        return;
+    }
+
+    constexpr qint64 kMinClipFrames = 256;
+    Clip& clip = clips_[index];
+    const qint64 offsetInClip = position - clip.timelineStart;
+    if (offsetInClip < kMinClipFrames || clip.timelineLength() - offsetInClip < kMinClipFrames) {
+        showPluginMessage(tr("The cut is too close to the clip edge"), false);
+        return;
+    }
+
+    // Правая половина начинается там, где закончилась левая — и по дорожке,
+    // и по исходному материалу (с учётом растяжения)
+    const qint64 sourceOffset = qint64(double(offsetInClip) / clip.stretch);
+    Clip tail = clip;
+    tail.timelineStart = position;
+    tail.sourceStart = clip.sourceStart + sourceOffset;
+    tail.sourceLength = clip.sourceLength - sourceOffset;
+    clip.sourceLength = sourceOffset;
+    clips_.insert(index + 1, tail);
+    selectedClip_ = index + 1;
+
+    applyClipEdit(tr("Clip split — re-streaming through the plugin..."));
+}
+
+void Window::trimSelectedClip(bool startEdge, qint64 deltaFrames)
+{
+    if (clips_.isEmpty() || deltaFrames == 0) {
+        return;
+    }
+    selectedClip_ = std::clamp(selectedClip_, 0, int(clips_.size()) - 1);
+    Clip& clip = clips_[selectedClip_];
+    constexpr qint64 kMinClipFrames = 256;
+    const qint64 sourceFrames = qint64(std::min(sourceLeft_.size(), sourceRight_.size()));
+
+    if (startEdge) {
+        // Левый край: двигаем и позицию на дорожке, и точку в материале
+        const qint64 sourceDelta = qint64(double(deltaFrames) / clip.stretch);
+        const qint64 newSourceStart =
+            std::clamp<qint64>(clip.sourceStart + sourceDelta, 0, sourceFrames - kMinClipFrames);
+        const qint64 applied = newSourceStart - clip.sourceStart;
+        if (applied == 0 || clip.sourceLength - applied < kMinClipFrames) {
+            return;
+        }
+        clip.sourceStart = newSourceStart;
+        clip.sourceLength -= applied;
+        clip.timelineStart =
+            std::max<qint64>(0, clip.timelineStart + qint64(double(applied) * clip.stretch));
+    } else {
+        // Правый край: меняем только длину куска материала
+        const qint64 sourceDelta = qint64(double(deltaFrames) / clip.stretch);
+        const qint64 maxLength = sourceFrames - clip.sourceStart;
+        const qint64 newLength =
+            std::clamp<qint64>(clip.sourceLength + sourceDelta, kMinClipFrames, maxLength);
+        if (newLength == clip.sourceLength) {
+            return;
+        }
+        clip.sourceLength = newLength;
+    }
+
+    applyClipEdit(startEdge ? tr("Clip start trimmed — re-streaming through the plugin...")
+                            : tr("Clip end trimmed — re-streaming through the plugin..."));
+}
+
+void Window::stretchSelectedClip(double factor)
+{
+    if (clips_.isEmpty() || factor <= 0.0) {
+        return;
+    }
+    selectedClip_ = std::clamp(selectedClip_, 0, int(clips_.size()) - 1);
+    Clip& clip = clips_[selectedClip_];
+    const double stretch = std::clamp(clip.stretch * factor, 0.25, 4.0);
+    if (std::fabs(stretch - clip.stretch) < 1e-6) {
+        return;
+    }
+    clip.stretch = stretch;
+    applyClipEdit(tr("Clip stretched x%1 — re-streaming through the plugin...")
+                      .arg(stretch, 0, 'f', 2));
 }
 
 void Window::tickPosition()

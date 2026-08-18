@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace Dontfloat::PluginCore {
 namespace {
@@ -100,6 +101,15 @@ TrackToolStatus TrackToolSession::appendHostFrames(const float* const* inputs,
                                                    int channelCount,
                                                    int frameCount)
 {
+    // Хост без транспорта (LV2): блок ложится в конец захвата
+    return writeHostFrames(inputs, channelCount, frameCount, -1);
+}
+
+TrackToolStatus TrackToolSession::writeHostFrames(const float* const* inputs,
+                                                  int channelCount,
+                                                  int frameCount,
+                                                  std::int64_t timelineFrame)
+{
     if (!inputs || channelCount <= 0 || frameCount <= 0) {
         return TrackToolStatus::InvalidAudioInfo;
     }
@@ -120,21 +130,45 @@ TrackToolStatus TrackToolSession::appendHostFrames(const float* const* inputs,
     }
     audioBuffer_.channelCount = std::max(audioBuffer_.channelCount, channelCount);
 
-    const std::size_t oldSize = audioBuffer_.left.size();
-    audioBuffer_.left.resize(oldSize + static_cast<std::size_t>(frameCount));
-    if (right) {
-        if (audioBuffer_.right.size() < oldSize) {
-            audioBuffer_.right.resize(oldSize, 0.0f);
+    // Куда писать: по позиции таймлайна или в конец захвата
+    std::int64_t writeStart = timelineFrame;
+    if (writeStart < 0) {
+        writeStart = static_cast<std::int64_t>(audioBuffer_.left.size());
+    } else {
+        // Хост отдал позицию далеко за концом (перемотка в пустоту) — не
+        // раздуваем буфер тишиной, пишем в конец
+        constexpr std::int64_t kMaxGapFrames = 60LL * 384000LL;  // минута на максимальной частоте
+        // Небольшой разрыв между блоками — округления хоста, а не новый проход
+        constexpr std::int64_t kPassGapFrames = 64;
+        const std::int64_t gap = writeStart - static_cast<std::int64_t>(audioBuffer_.left.size());
+        if (gap > kMaxGapFrames) {
+            writeStart = static_cast<std::int64_t>(audioBuffer_.left.size());
+        } else if (!audioBuffer_.left.empty() && std::llabs(writeStart - lastWriteEndFrame_) > kPassGapFrames) {
+            // Блок пришёл не следом за предыдущим — DAW начала новый проход
+            // (перемотка, повтор, перенос клипа). Старый захват выбрасываем:
+            // иначе прошлый проход остался бы висеть на прежнем месте.
+            audioBuffer_.left.clear();
+            audioBuffer_.right.clear();
+            audioBuffer_.mono.clear();
         }
-        audioBuffer_.right.resize(oldSize + static_cast<std::size_t>(frameCount));
+    }
+
+    const std::size_t writeIndex = static_cast<std::size_t>(writeStart);
+    const std::size_t requiredSize = writeIndex + static_cast<std::size_t>(frameCount);
+    if (audioBuffer_.left.size() < requiredSize) {
+        audioBuffer_.left.resize(requiredSize, 0.0f);
+    }
+    if (right && audioBuffer_.right.size() < requiredSize) {
+        audioBuffer_.right.resize(requiredSize, 0.0f);
     }
 
     for (int i = 0; i < frameCount; ++i) {
-        audioBuffer_.left[oldSize + static_cast<std::size_t>(i)] = left[i];
+        audioBuffer_.left[writeIndex + static_cast<std::size_t>(i)] = left[i];
         if (right) {
-            audioBuffer_.right[oldSize + static_cast<std::size_t>(i)] = right[i];
+            audioBuffer_.right[writeIndex + static_cast<std::size_t>(i)] = right[i];
         }
     }
+    lastWriteEndFrame_ = static_cast<std::int64_t>(requiredSize);
 
     rebuildMonoFromChannels(audioBuffer_);
     pitchAnalysis_ = {};
@@ -145,6 +179,7 @@ void TrackToolSession::clearHostCapture()
 {
     audioBuffer_ = {};
     pitchAnalysis_ = {};
+    lastWriteEndFrame_ = 0;
     prepared_ = false;
     analysisValid_ = false;
 }
@@ -246,6 +281,71 @@ TrackRenderOptions sanitizeRenderOptions(const TrackRenderOptions& options)
     TrackRenderOptions out = options;
     out.pitchSemitones = clampFloat(out.pitchSemitones, -24.0f, 24.0f);
     return out;
+}
+
+TrackContentFingerprint computeContentFingerprint(const TrackAudioBuffer& buffer)
+{
+    TrackContentFingerprint print;
+    const std::vector<float>& mono = buffer.mono;
+    if (mono.empty()) {
+        return print;
+    }
+
+    // Тишину по краям отбрасываем: клип в DAW окружён пустотой дорожки
+    constexpr float kSilence = 1.0e-4f;
+    std::int64_t first = 0;
+    const std::int64_t total = static_cast<std::int64_t>(mono.size());
+    while (first < total && std::fabs(mono[static_cast<std::size_t>(first)]) <= kSilence) {
+        ++first;
+    }
+    if (first >= total) {
+        return print;  // одна тишина
+    }
+    std::int64_t last = total - 1;
+    while (last > first && std::fabs(mono[static_cast<std::size_t>(last)]) <= kSilence) {
+        --last;
+    }
+
+    print.startFrame = first;
+    print.lengthFrames = last - first + 1;
+
+    // FNV-1a по содержимому с постоянным числом точек: хеш не зависит ни от
+    // позиции клипа, ни от длины буфера вокруг него
+    constexpr int kProbeCount = 4096;
+    constexpr std::uint64_t kFnvOffset = 1469598103934665603ULL;
+    constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
+    std::uint64_t hash = kFnvOffset;
+    for (int probe = 0; probe < kProbeCount; ++probe) {
+        const std::int64_t offset =
+            print.lengthFrames <= 1
+                ? 0
+                : (print.lengthFrames - 1) * probe / (kProbeCount - 1);
+        const float sample = mono[static_cast<std::size_t>(first + offset)];
+        // Квантование до 16 бит: мелкая арифметическая разница не меняет хеш
+        const auto quantized = static_cast<std::int32_t>(std::lround(sample * 32767.0f));
+        hash = (hash ^ static_cast<std::uint64_t>(quantized & 0xFFFF)) * kFnvPrime;
+    }
+    print.hash = hash;
+    return print;
+}
+
+bool detectContentShift(const TrackContentFingerprint& before,
+                        const TrackContentFingerprint& after,
+                        std::int64_t* deltaFrames)
+{
+    if (before.empty() || after.empty()) {
+        return false;
+    }
+    if (before.hash != after.hash || before.lengthFrames != after.lengthFrames) {
+        return false;  // другой материал — нужен полный анализ
+    }
+    if (before.startFrame == after.startFrame) {
+        return false;  // ничего не двигали
+    }
+    if (deltaFrames) {
+        *deltaFrames = after.startFrame - before.startFrame;
+    }
+    return true;
 }
 
 } // namespace Dontfloat::PluginCore

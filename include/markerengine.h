@@ -61,6 +61,14 @@ QVector<Marker> toMarkers(const QVector<MarkerData>& markerData);
 /** Совпадают ли position/originalPosition у пар меток (для проверки актуальности фонового превью). */
 bool positionsMatch(const QVector<Marker>& current, const QVector<MarkerData>& snapshot);
 
+/**
+ * Позиции транзиентов (сэмплы) по нарастанию огибающей сигнала.
+ * Общий алгоритм для кнопки «OD» в главном окне и в плагинах.
+ * @param channels каналы аудио (миксуются в моно), @param sampleRate частота.
+ * @return отсортированные позиции; пусто, если транзиентов нет.
+ */
+QVector<qint64> detectOnsetSamples(const QVector<QVector<float>>& channels, int sampleRate);
+
 } // namespace MarkerUtils
 
 #endif // MARKERENGINE_H

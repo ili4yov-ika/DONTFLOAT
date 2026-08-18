@@ -14,6 +14,12 @@
 #define CLAP_EXT_AUDIO_PORTS "clap.audio-ports"
 #define CLAP_EXT_GUI "clap.gui"
 #define CLAP_EXT_TIMER_SUPPORT "clap.timer-support"
+/**
+ * Своё расширение хоста: перестановка каретки DAW из плагина. В CLAP нет
+ * стандартного способа подвинуть транспорт хоста, поэтому мини-DAW отдаёт
+ * это расширение, а чужие хосты просто вернут nullptr (плагин это переживёт).
+ */
+#define CLAP_EXT_DONTFLOAT_TRANSPORT "dontfloat.transport/1"
 #define CLAP_PORT_STEREO "stereo"
 #define CLAP_WINDOW_API_WIN32 "win32"
 #define CLAP_WINDOW_API_COCOA "cocoa"
@@ -250,6 +256,12 @@ struct clap_window_t {
 
 // clap.timer-support — lets a plugin ask the host to call it back periodically.
 // Used to pump the Qt event loop when the host is not Qt-based.
+/** Расширение хоста DONTFLOAT: плагин просит переставить каретку DAW. */
+struct clap_host_dontfloat_transport_t {
+    /** @param seconds позиция от начала проекта. */
+    void (*request_seek)(const clap_host_t* host, double seconds);
+};
+
 struct clap_host_timer_support_t {
     bool (*register_timer)(const clap_host_t* host, uint32_t period_ms, clap_id* timer_id);
     bool (*unregister_timer)(const clap_host_t* host, clap_id timer_id);

@@ -1,5 +1,9 @@
 #include "../include/markerengine.h"
 
+#include "../include/uiconstants.h"
+
+#include <cmath>
+
 // ============================================================================
 // MarkerData - базовая структура без UI
 // ============================================================================
@@ -138,6 +142,77 @@ bool positionsMatch(const QVector<Marker>& current, const QVector<MarkerData>& s
         }
     }
     return true;
+}
+
+QVector<qint64> detectOnsetSamples(const QVector<QVector<float>>& channels, int sampleRate)
+{
+    if (channels.isEmpty() || channels[0].isEmpty() || sampleRate <= 0) {
+        return {};
+    }
+
+    // --- Моно-сигнал ---
+    const int numCh = channels.size();
+    const int numSamples = channels[0].size();
+    QVector<float> mono(numSamples);
+    for (int i = 0; i < numSamples; ++i) {
+        double sum = 0.0;
+        for (int ch = 0; ch < numCh; ++ch) {
+            if (i < channels[ch].size()) {
+                sum += channels[ch][i];
+            }
+        }
+        mono[i] = static_cast<float>(sum / qMax(1, numCh));
+    }
+
+    // --- Огибающая и её нарастание (простая onset-функция) ---
+    QVector<float> env(numSamples);
+    const float alpha = 0.99f; // экспоненциальное сглаживание
+    env[0] = std::fabs(mono[0]);
+    for (int i = 1; i < numSamples; ++i) {
+        const float x = std::fabs(mono[i]);
+        env[i] = qMax(x, env[i - 1] * alpha);
+    }
+
+    QVector<float> diff(numSamples);
+    diff[0] = 0.0f;
+    float maxDiff = 0.0f;
+    for (int i = 1; i < numSamples; ++i) {
+        float d = env[i] - env[i - 1];
+        if (d < 0.0f) {
+            d = 0.0f;
+        }
+        diff[i] = d;
+        if (d > maxDiff) {
+            maxDiff = d;
+        }
+    }
+
+    if (maxDiff <= 0.0f) {
+        return {};
+    }
+
+    const float threshold = maxDiff * UiConstants::kOnsetDetectionThresholdRatio;
+    const int minDistanceSamples =
+        qMax(1, sampleRate / UiConstants::kOnsetMinDistanceSampleRateDivisor);
+
+    QVector<qint64> onsets;
+    onsets.reserve(256);
+    int lastOnsetIdx = -minDistanceSamples;
+    for (int i = 1; i < numSamples - 1; ++i) {
+        if (diff[i] < threshold) {
+            continue;
+        }
+        // простой локальный максимум
+        if (diff[i] < diff[i - 1] || diff[i] <= diff[i + 1]) {
+            continue;
+        }
+        if (i - lastOnsetIdx < minDistanceSamples) {
+            continue;
+        }
+        onsets.append(i);
+        lastOnsetIdx = i;
+    }
+    return onsets;
 }
 
 } // namespace MarkerUtils

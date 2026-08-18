@@ -142,21 +142,33 @@ void pluginReset(const clap_plugin_t* plugin)
  * Каретка DAW → каретка редактора. Хост зовёт process() из аудиопотока, поэтому
  * позицию отдаём в UI очередью Qt и склеиваем: одно уведомление за раз.
  */
-void syncEditorPlayhead(ClapPluginInstance* s, const clap_process_t* process)
+/** Позиция каретки DAW в сэмплах; -1 — хост её не сообщает. */
+qint64 hostPlayheadSamples(ClapPluginInstance* s, const clap_process_t* process)
 {
-    if (!s || !s->editor || !process || !process->transport) {
-        return;
+    if (!s || !process || !process->transport) {
+        return -1;
     }
     const clap_event_transport_t& transport = *process->transport;
     if (!(transport.flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE)) {
-        return;
+        return -1;
     }
     const double seconds = double(transport.song_pos_seconds) / double(CLAP_SECTIME_FACTOR);
     const int sampleRate = s->session.audioBuffer().sampleRate;
     if (sampleRate <= 0 || seconds < 0.0) {
+        return -1;
+    }
+    return qint64(seconds * sampleRate);
+}
+
+void syncEditorPlayhead(ClapPluginInstance* s, const clap_process_t* process)
+{
+    if (!s || !s->editor) {
         return;
     }
-    const qint64 samplePosition = qint64(seconds * sampleRate);
+    const qint64 samplePosition = hostPlayheadSamples(s, process);
+    if (samplePosition < 0) {
+        return;
+    }
 
     static std::atomic_bool pending { false };
     if (pending.exchange(true)) {
@@ -166,6 +178,50 @@ void syncEditorPlayhead(ClapPluginInstance* s, const clap_process_t* process)
     QMetaObject::invokeMethod(editor, [editor, samplePosition]() {
         pending.store(false);
         editor->setHostPlayhead(samplePosition);
+    }, Qt::QueuedConnection);
+}
+
+/**
+ * Тактовая сетка DAW → сетка редактора: темп, доли в такте и позиция начала
+ * текущего такта. Так сетка плагина совпадает с сеткой хоста.
+ */
+void syncEditorBeatGrid(ClapPluginInstance* s, const clap_process_t* process)
+{
+    if (!s || !s->editor || !process || !process->transport) {
+        return;
+    }
+    const clap_event_transport_t& transport = *process->transport;
+    if (!(transport.flags & CLAP_TRANSPORT_HAS_TEMPO) || transport.tempo <= 0.0) {
+        return;
+    }
+    const int sampleRate = s->session.audioBuffer().sampleRate;
+    if (sampleRate <= 0) {
+        return;
+    }
+
+    const double bpm = transport.tempo;
+    const int beatsPerBar = transport.tsig_num > 0 ? int(transport.tsig_num) : 4;
+
+    // Начало такта: от позиции каретки отступаем на пройденные доли такта
+    qint64 barStartSample = 0;
+    if ((transport.flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE)
+        && (transport.flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE)) {
+        const double songBeats = double(transport.song_pos_beats) / double(CLAP_BEATTIME_FACTOR);
+        const double barBeats = double(transport.bar_start) / double(CLAP_BEATTIME_FACTOR);
+        const double songSeconds = double(transport.song_pos_seconds) / double(CLAP_SECTIME_FACTOR);
+        const double barSeconds = songSeconds - (songBeats - barBeats) * (60.0 / bpm);
+        barStartSample = qint64(std::max(0.0, barSeconds) * sampleRate);
+    }
+
+    // Одно уведомление за раз: process() идёт из аудиопотока
+    static std::atomic_bool pending { false };
+    if (pending.exchange(true)) {
+        return;
+    }
+    DontfloatPluginEditorShell* editor = s->editor.get();
+    QMetaObject::invokeMethod(editor, [editor, bpm, beatsPerBar, barStartSample]() {
+        pending.store(false);
+        editor->setHostBeatGrid(bpm, beatsPerBar, barStartSample);
     }, Qt::QueuedConnection);
 }
 
@@ -179,13 +235,23 @@ clap_process_status pluginProcess(const clap_plugin_t* plugin, const clap_proces
     // Транспорт читаем всегда, в том числе на пустых блоках: хост так шлёт
     // чистые тики позиции, не добавляя аудио в сессию
     syncEditorPlayhead(s, process);
+    syncEditorBeatGrid(s, process);
 
     const clap_audio_buffer_t& in = process->audio_inputs ? process->audio_inputs[0] : clap_audio_buffer_t{};
     clap_audio_buffer_t& out = process->audio_outputs[0];
     copyOrClear(in, out, process->frames_count);
 
-    if (process->audio_inputs && process->frames_count > 0) {
-        s->session.appendHostFrames(in.data32, int(in.channel_count), int(process->frames_count));
+    // На остановленном транспорте хост шлёт тишину на позиции курсора —
+    // такой блок затёр бы захваченную дорожку, поэтому пишем только на ходу
+    const bool transportStopped = process->transport
+        && !(process->transport->flags & CLAP_TRANSPORT_IS_PLAYING);
+
+    if (process->audio_inputs && process->frames_count > 0 && !transportStopped) {
+        // Пишем по позиции таймлайна: захват повторяет дорожку DAW, поэтому
+        // перемещение клипа виден плагину как сдвиг содержимого
+        s->session.writeHostFrames(in.data32, int(in.channel_count),
+                                   int(process->frames_count),
+                                   hostPlayheadSamples(s, process));
         if (s->editor) {
             s->editor->notifyHostAudioAppended();
         }
@@ -255,6 +321,20 @@ bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
     ensureQtApplication(desc().clapName);
     s->editor = std::make_unique<DontfloatPluginEditorShell>(product());
     s->editor->bindSession(&s->session);
+    // Каретку двинули в плагине → просим DAW встать туда же. В CLAP нет
+    // стандартного способа управлять транспортом хоста, поэтому идём через
+    // своё расширение: хосты без него просто вернут nullptr (мини-DAW отдаёт)
+    s->editor->setHostSeekHandler([s](qint64 samplePosition) {
+        if (!s->host || !s->host->get_extension) {
+            return;
+        }
+        const auto* transport = static_cast<const clap_host_dontfloat_transport_t*>(
+            s->host->get_extension(s->host, CLAP_EXT_DONTFLOAT_TRANSPORT));
+        const int sampleRate = s->session.audioBuffer().sampleRate;
+        if (transport && transport->request_seek && sampleRate > 0) {
+            transport->request_seek(s->host, double(samplePosition) / double(sampleRate));
+        }
+    });
     s->editor->setWindowTitle(QString::fromUtf8(desc().clapName));
     s->editor->resize(int(s->editorWidth), int(s->editorHeight));
     s->editor->setAttribute(Qt::WA_NativeWindow, true);

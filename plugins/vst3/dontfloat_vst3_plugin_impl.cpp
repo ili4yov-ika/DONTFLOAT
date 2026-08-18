@@ -128,6 +128,27 @@ void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition)
     }
 }
 
+/** Тактовая сетка DAW → сетка редакторов (темп, доли, начало такта). */
+void notifyEditorsHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample)
+{
+    static std::atomic_bool pending { false };
+    if (pending.exchange(true)) {
+        return;
+    }
+
+    const std::lock_guard<std::mutex> lock(editorsMutex());
+    if (openEditors().empty()) {
+        pending.store(false);
+        return;
+    }
+    for (DontfloatPluginEditorShell* editor : openEditors()) {
+        QMetaObject::invokeMethod(editor, [editor, bpm, beatsPerBar, barStartSample]() {
+            pending.store(false);
+            editor->setHostBeatGrid(bpm, beatsPerBar, barStartSample);
+        }, Qt::QueuedConnection);
+    }
+}
+
 void notifyEditorsHostAudioAppended()
 {
     // Склейка: пока предыдущее уведомление не разобрано, новых не ставим —
@@ -314,6 +335,26 @@ public:
             notifyEditorsHostPlayhead(data.processContext->projectTimeSamples);
         }
 
+        // Тактовая сетка хоста: темп, доли в такте и начало текущего такта.
+        // barPositionMusic — начало такта в четвертях от начала проекта.
+        if (data.processContext
+            && (data.processContext->state & Steinberg::Vst::ProcessContext::kTempoValid)
+            && data.processContext->tempo > 0.0
+            && data.processContext->sampleRate > 0.0) {
+            const Steinberg::Vst::ProcessContext& context = *data.processContext;
+            const int beatsPerBar =
+                (context.state & Steinberg::Vst::ProcessContext::kTimeSigValid)
+                    ? std::max(1, int(context.timeSigNumerator))
+                    : 4;
+            qint64 barStartSample = 0;
+            if (context.state & Steinberg::Vst::ProcessContext::kBarPositionValid) {
+                const double samplesPerQuarter = (60.0 / context.tempo) * context.sampleRate;
+                barStartSample =
+                    qint64(std::max(0.0, context.barPositionMusic * samplesPerQuarter));
+            }
+            notifyEditorsHostBeatGrid(context.tempo, beatsPerBar, barStartSample);
+        }
+
         if (data.numSamples <= 0 || data.numOutputs <= 0 || data.outputs[0].numChannels <= 0) {
             return Steinberg::kResultOk;
         }
@@ -338,12 +379,23 @@ public:
             }
         }
 
-        if (data.numInputs > 0 && data.inputs[0].channelBuffers32) {
+        // На остановленном транспорте хост шлёт тишину на позиции курсора —
+        // такой блок затёр бы захваченную дорожку, поэтому пишем только на ходу
+        const bool transportStopped =
+            data.processContext
+            && !(data.processContext->state & Steinberg::Vst::ProcessContext::kPlaying);
+
+        if (data.numInputs > 0 && data.inputs[0].channelBuffers32 && !transportStopped) {
             TrackToolSession& session = sharedSession(product());
-            session.appendHostFrames(
+            // Позиция блока на таймлайне: захват повторяет дорожку DAW, поэтому
+            // перемещение клипа видно плагину как сдвиг содержимого
+            const std::int64_t timelineFrame =
+                data.processContext ? std::int64_t(data.processContext->projectTimeSamples) : -1;
+            session.writeHostFrames(
                 const_cast<const float* const*>(data.inputs[0].channelBuffers32),
                 channelCount,
-                data.numSamples);
+                data.numSamples,
+                timelineFrame);
             // Редактор — отдельный объект VST3: сообщаем ему о новом аудио,
             // иначе он не покажет дорожку и не запустит анализ
             notifyEditorsHostAudioAppended();

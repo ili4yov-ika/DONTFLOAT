@@ -110,6 +110,9 @@ function(dontfloat_add_mini_daw_gui)
         src/audiofileservice.cpp
         # Огибающая волны и тактовая сетка дорожки — те же, что в приложении
         src/pianoroll_engine.cpp
+        # Тестовый хост — в оформлении DONTFLOAT (как главное окно)
+        plugins/ui/dontfloat_plugin_theme.cpp
+        plugins/ui/dontfloat_plugin_theme.h
     )
     set_target_properties(dontfloat_mini_daw PROPERTIES
         AUTOMOC ON
@@ -122,6 +125,7 @@ function(dontfloat_add_mini_daw_gui)
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/clap
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/lv2
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/plugins/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
     target_link_libraries(dontfloat_mini_daw PRIVATE
