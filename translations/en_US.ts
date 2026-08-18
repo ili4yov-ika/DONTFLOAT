@@ -32,7 +32,7 @@
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatPitchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+131"/>
+        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+144"/>
         <source>Undefined</source>
         <translation>Undefined</translation>
     </message>
@@ -48,17 +48,17 @@
     </message>
     <message>
         <location line="+7"/>
-        <location line="+173"/>
+        <location line="+186"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>load audio or play a track in the DAW to capture the signal.</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-172"/>
         <source>Analyzing the track… %p%</source>
         <translation>Analyzing the track… %p%</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+114"/>
         <source>the note is too short to split</source>
         <translation>the note is too short to split</translation>
     </message>
@@ -124,17 +124,18 @@
         <translation>MIDI import error: %1</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+9"/>
         <source>reference MIDI: %1 notes, key %2</source>
         <translation>reference MIDI: %1 notes, key %2</translation>
     </message>
     <message>
         <location line="+2"/>
+        <location line="+222"/>
         <source>undefined</source>
         <translation>undefined</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-216"/>
         <source>there are no notes to export</source>
         <translation>there are no notes to export</translation>
     </message>
@@ -159,7 +160,12 @@
         <translation>MIDI exported: %1 (notes: %2)</translation>
     </message>
     <message>
-        <location line="+147"/>
+        <location line="+190"/>
+        <source>reference from another track (%1): %2 notes, key %3</source>
+        <translation>reference from another track (%1): %2 notes, key %3</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <source>no audio data for analysis</source>
         <translation>no audio data for analysis</translation>
     </message>
@@ -169,7 +175,7 @@
         <translation>analysis done: %1, notes found: %2</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>no source audio for correction</source>
         <translation>no source audio for correction</translation>
     </message>
@@ -727,7 +733,7 @@
     <message>
         <location filename="../ui/mainwindow.ui" line="+14"/>
         <location filename="../src/mainwindow.cpp" line="+1736"/>
-        <location line="+250"/>
+        <location line="+254"/>
         <source>DONTFLOAT</source>
         <translation>DONTFLOAT</translation>
     </message>
@@ -838,7 +844,7 @@
     </message>
     <message>
         <location line="+68"/>
-        <location filename="../src/mainwindow.cpp" line="-1245"/>
+        <location filename="../src/mainwindow.cpp" line="-1249"/>
         <location line="+631"/>
         <source>Metronome</source>
         <translation>Metronome</translation>
@@ -1118,19 +1124,19 @@
         <location line="-645"/>
         <location line="+59"/>
         <location line="+584"/>
-        <location line="+1240"/>
+        <location line="+1244"/>
         <source>Hide Pitch Grid</source>
         <translation>Hide Pitch Grid</translation>
     </message>
     <message>
-        <location line="-1883"/>
+        <location line="-1887"/>
         <location line="+60"/>
-        <location line="+1824"/>
+        <location line="+1828"/>
         <source>Show Pitch Grid</source>
         <translation>Show Pitch Grid</translation>
     </message>
     <message>
-        <location line="-1883"/>
+        <location line="-1887"/>
         <location line="+648"/>
         <source>Beat Waveform</source>
         <translation>Beat Waveform</translation>
@@ -1170,12 +1176,12 @@
     <message>
         <location line="-686"/>
         <location line="+713"/>
-        <location line="+2443"/>
+        <location line="+2447"/>
         <source>Apply time stretch</source>
         <translation>Apply time stretch</translation>
     </message>
     <message>
-        <location line="-3156"/>
+        <location line="-3160"/>
         <location line="+715"/>
         <source>Apply time stretch with pitch compensation</source>
         <translation>Apply time stretch with pitch compensation</translation>
@@ -1183,12 +1189,12 @@
     <message>
         <location line="-714"/>
         <location line="+717"/>
-        <location line="+1526"/>
+        <location line="+1530"/>
         <source>Apply note pitch correction</source>
         <translation>Apply note pitch correction</translation>
     </message>
     <message>
-        <location line="-2243"/>
+        <location line="-2247"/>
         <location line="+719"/>
         <source>Re-render audio using the edited piano roll notes</source>
         <translation>Re-render audio using the edited piano roll notes</translation>
@@ -1225,12 +1231,12 @@
     </message>
     <message>
         <location line="-685"/>
-        <location line="+2819"/>
+        <location line="+2823"/>
         <source>Analyzing... %p%</source>
         <translation>Analyzing... %p%</translation>
     </message>
     <message>
-        <location line="-2712"/>
+        <location line="-2716"/>
         <source>Time signature set to %1</source>
         <translation>Time signature set to %1</translation>
     </message>
@@ -1303,12 +1309,12 @@ Shift+B: Remove point B</translation>
     </message>
     <message>
         <location line="+39"/>
-        <location line="+904"/>
+        <location line="+908"/>
         <source>Loop: %1 - %2</source>
         <translation>Loop: %1 - %2</translation>
     </message>
     <message>
-        <location line="-882"/>
+        <location line="-886"/>
         <source>Segment: %1 - %2 | Ratio: %3</source>
         <translation>Segment: %1 - %2 | Ratio: %3</translation>
     </message>
@@ -1384,7 +1390,7 @@ Shift+B: Remove point B</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+79"/>
+        <location line="+83"/>
         <source>Open Audio File</source>
         <translation>Open Audio File</translation>
     </message>
@@ -1461,7 +1467,7 @@ Shift+B: Remove point B</translation>
         <translation>Error: nothing to save</translation>
     </message>
     <message>
-        <location line="-904"/>
+        <location line="-908"/>
         <source>Snap all markers to BPM grid (bar subdivisions)</source>
         <translation>Snap all markers to BPM grid (bar subdivisions)</translation>
     </message>
@@ -1487,7 +1493,7 @@ Do you want to save the changes?</source>
 Do you want to save the changes?</translation>
     </message>
     <message>
-        <location line="+190"/>
+        <location line="+194"/>
         <source>Decode error: %1</source>
         <translation>Decode error: %1</translation>
     </message>
@@ -1723,8 +1729,8 @@ Do you want to save the changes?</translation>
         <translation>Key: %1</translation>
     </message>
     <message>
-        <location line="-2291"/>
-        <location line="+2806"/>
+        <location line="-2295"/>
+        <location line="+2810"/>
         <source>Analyze</source>
         <translation>Analyze</translation>
     </message>

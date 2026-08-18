@@ -256,6 +256,8 @@ if(DONTFLOAT_BUILD_PLUGINS)
     add_library(dontfloat_plugin_core STATIC
         plugins/core/dontfloat_plugin_core.cpp
         plugins/core/dontfloat_plugin_core.h
+        plugins/core/dontfloat_shared_notes.cpp
+        plugins/core/dontfloat_shared_notes.h
         plugins/core/plugin_product.cpp
         plugins/core/plugin_product.h
     )
@@ -823,6 +825,20 @@ target_include_directories(plugin_content_shift_test PRIVATE
 set_tests_properties(plugin_content_shift_test PROPERTIES
     LABELS "unit;plugins"
     DESCRIPTION "Timeline capture and clip-move detection for DAW plugins"
+)
+
+# Общая доска нот: ноты одного экземпляра плагина — референс для соседних
+add_qt_test(plugin_shared_notes_test
+    tests/plugin_shared_notes_test.cpp
+    plugins/core/dontfloat_shared_notes.cpp
+)
+target_include_directories(plugin_shared_notes_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+)
+
+set_tests_properties(plugin_shared_notes_test PROPERTIES
+    LABELS "unit;plugins"
+    DESCRIPTION "Notes from one plugin instance shown as reference in another"
 )
 
 # ============================================================================

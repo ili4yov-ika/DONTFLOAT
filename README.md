@@ -1,5 +1,7 @@
 # DONTFLOAT
 
+[![CI](https://github.com/ili4yov-ika/DONTFLOAT/actions/workflows/ci.yml/badge.svg)](https://github.com/ili4yov-ika/DONTFLOAT/actions/workflows/ci.yml)
+
 Аудиоредактор для выравнивания BPM. В plugin-направлении проект развивается к
 `DONTFLOAT Track Tool`: DAW-инструменту с интерфейсом DONTFLOAT для анализа
 дорожки, beat grid/key analysis, markers и выравнивания BPM, а не к отдельному
