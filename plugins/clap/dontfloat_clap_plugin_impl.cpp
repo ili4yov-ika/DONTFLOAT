@@ -3,6 +3,9 @@
 #include "../core/plugin_host_config.h"
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
+#if defined(DONTFLOAT_WITH_ARA)
+#include "../ara/dontfloat_ara_document_controller.h"
+#endif
 
 #include <QApplication>
 #include <QEventLoop>
@@ -50,6 +53,10 @@ struct ClapPluginInstance {
     uint32_t editorHeight = kEditorHeight;
     clap_id guiTimerId = 0;
     bool guiTimerRegistered = false;
+#if defined(DONTFLOAT_WITH_ARA)
+    /** Привязка экземпляра к документу ARA (см. bind_to_document_controller). */
+    ARA::PlugIn::PlugInExtension araExtension;
+#endif
 };
 
 // Pump the Qt event loop from the host timer so the editor stays responsive
@@ -336,6 +343,16 @@ bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
     ensureQtApplication(desc().clapName);
     s->editor = std::make_unique<DontfloatPluginEditorShell>(product());
     s->editor->bindSession(&s->session);
+#if defined(DONTFLOAT_WITH_ARA)
+    // Экземпляр уже мог быть привязан к документу ARA до создания окна —
+    // тогда редактор сразу берёт ноты и сетку из модели
+    if (s->araExtension.isBoundToARA()) {
+        if (auto* view = s->araExtension.getEditorView<Dontfloat::Ara::AraEditorView>()) {
+            view->setEditorOpenState(true);  // теперь хост шлёт нам выбор клипов
+        }
+        s->editor->setAraBinding(&s->araExtension);
+    }
+#endif
     // Каретку двинули в плагине → просим DAW встать туда же. В CLAP нет
     // стандартного способа управлять транспортом хоста, поэтому идём через
     // своё расширение: хосты без него просто вернут nullptr (мини-DAW отдаёт)
@@ -386,6 +403,13 @@ void guiDestroy(const clap_plugin_t* plugin)
             }
             s->guiTimerRegistered = false;
         }
+#if defined(DONTFLOAT_WITH_ARA)
+        if (s->araExtension.isBoundToARA()) {
+            if (auto* view = s->araExtension.getEditorView<Dontfloat::Ara::AraEditorView>()) {
+                view->setEditorOpenState(false);
+            }
+        }
+#endif
         if (s->editor) {
             s->editor->hide();
         }
@@ -574,8 +598,67 @@ void pluginOnTimer(const clap_plugin_t* plugin, clap_id timerId)
 
 const clap_plugin_timer_support_t kTimerSupportExtension = { pluginOnTimer };
 
+#if defined(DONTFLOAT_WITH_ARA)
+
+const void* araGetFactory(const clap_plugin_t*)
+{
+    return Dontfloat::Ara::AraDocumentController::getARAFactory();
+}
+
+const void* araBindToDocumentController(const clap_plugin_t* plugin, void* documentControllerRef,
+                                        uint64_t knownRoles, uint64_t assignedRoles)
+{
+    ClapPluginInstance* s = self(plugin);
+    if (!s) {
+        return nullptr;
+    }
+    // С этого момента экземпляр работает в режиме ARA: звук и разметка идут
+    // через общую с хостом модель, а не через захват блоков в process()
+    const ARA::ARAPlugInExtensionInstance* instance = s->araExtension.bindToARA(
+        static_cast<ARA::ARADocumentControllerRef>(documentControllerRef),
+        static_cast<ARA::ARAPlugInInstanceRoleFlags>(knownRoles),
+        static_cast<ARA::ARAPlugInInstanceRoleFlags>(assignedRoles));
+    if (instance && s->editor) {
+        if (auto* view = s->araExtension.getEditorView<Dontfloat::Ara::AraEditorView>()) {
+            view->setEditorOpenState(true);
+        }
+        s->editor->setAraBinding(&s->araExtension);
+    }
+    return instance;
+}
+
+const clap_ara_plugin_extension_t kAraPluginExtension = {
+    araGetFactory,
+    araBindToDocumentController,
+};
+
+uint32_t araFactoryGetCount(const clap_ara_factory_t*) { return 1; }
+
+const void* araFactoryGetAraFactory(const clap_ara_factory_t*, uint32_t index)
+{
+    return index == 0 ? Dontfloat::Ara::AraDocumentController::getARAFactory() : nullptr;
+}
+
+const char* araFactoryGetPluginId(const clap_ara_factory_t*, uint32_t index)
+{
+    return index == 0 ? desc().clapId : nullptr;
+}
+
+const clap_ara_factory_t kAraFactory = {
+    araFactoryGetCount,
+    araFactoryGetAraFactory,
+    araFactoryGetPluginId,
+};
+
+#endif // DONTFLOAT_WITH_ARA
+
 const void* pluginGetExtension(const clap_plugin_t*, const char* id)
 {
+#if defined(DONTFLOAT_WITH_ARA)
+    if (id && std::strcmp(id, CLAP_EXT_ARA_PLUGINEXTENSION) == 0) {
+        return &kAraPluginExtension;
+    }
+#endif
     if (id && std::strcmp(id, CLAP_EXT_AUDIO_PORTS) == 0) {
         return &kAudioPortsExtension;
     }
@@ -635,6 +718,12 @@ const void* entryGetFactory(const char* factoryId)
     if (factoryId && std::strcmp(factoryId, CLAP_PLUGIN_FACTORY_ID) == 0) {
         return &kFactory;
     }
+#if defined(DONTFLOAT_WITH_ARA)
+    // Хост может строить модель ARA и без единого экземпляра плагина
+    if (factoryId && std::strcmp(factoryId, CLAP_EXT_ARA_FACTORY) == 0) {
+        return &kAraFactory;
+    }
+#endif
     return nullptr;
 }
 

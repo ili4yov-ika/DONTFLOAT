@@ -7,6 +7,7 @@
 #include "../include/pitchcorrection.h"
 #include "../include/pitchnoteeditcommand.h"
 #include "../include/pitchnotesplitcommand.h"
+#include "../include/pitchnotemovecommand.h"
 #include "../include/midiexporter.h"
 #include "../include/midiimporter.h"
 #include "ui_mainwindow.h"
@@ -2823,6 +2824,20 @@ void MainWindow::onNotePitchEdited(int noteIndex, float oldPitch, float newPitch
         }));
 }
 
+void MainWindow::onNoteTimeEdited(int noteIndex, qint64 oldStartSample, qint64 newStartSample)
+{
+    if (noteIndex < 0 || noteIndex >= basePitchNotes.size() || !undoStack) {
+        return;
+    }
+    undoStack->push(new PitchNoteMoveCommand(
+        pitchGridWidget, &basePitchNotes, noteIndex, oldStartSample, newStartSample,
+        tr("Move note"),
+        [this]() {
+            noteEditCommandActive = true;
+            scheduleMarkerPlaybackPreview();
+        }));
+}
+
 void MainWindow::onNotePreviewRequested(int noteIndex)
 {
     if (!waveformView || noteIndex < 0 || noteIndex >= basePitchNotes.size()) {
@@ -3365,6 +3380,29 @@ void MainWindow::setupPianoRollToolbar()
             this, &MainWindow::onNoteSplitRequested);
     connect(pitchGridWidget, &PitchGridWidget::noteSplitRejected,
             this, &MainWindow::onNoteSplitRejected);
+
+    // Замки перемещения нот: состояние живёт в настройках, как режим реза
+    const bool horizontalLocked = settings.value("pianoRollHorizontalMoveLocked", true).toBool();
+    const bool verticalLocked = settings.value("pianoRollVerticalMoveLocked", false).toBool();
+    pianoRollToolbar->setMoveLocks(horizontalLocked, verticalLocked);
+    pitchGridWidget->setHorizontalMoveLocked(horizontalLocked);
+    pitchGridWidget->setVerticalMoveLocked(verticalLocked);
+    connect(pianoRollToolbar, &PianoRollToolbar::horizontalMoveLockChanged, this,
+        [this](bool locked) {
+            pitchGridWidget->setHorizontalMoveLocked(locked);
+            settings.setValue("pianoRollHorizontalMoveLocked", locked);
+        });
+    connect(pianoRollToolbar, &PianoRollToolbar::verticalMoveLockChanged, this,
+        [this](bool locked) {
+            pitchGridWidget->setVerticalMoveLocked(locked);
+            settings.setValue("pianoRollVerticalMoveLocked", locked);
+        });
+
+    // Сдвиг ноты по времени — через стек отмены, как и правка высоты
+    connect(pitchGridWidget, &PitchGridWidget::noteTimeEdited, this,
+        [this](int noteIndex, qint64 oldStartSample, qint64 newStartSample) {
+            onNoteTimeEdited(noteIndex, oldStartSample, newStartSample);
+        });
 
     // Кнопки справа на полосе — то же, что пункты меню «Файл»
     connect(pianoRollToolbar, &PianoRollToolbar::exportMidiRequested,

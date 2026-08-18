@@ -10,6 +10,8 @@
 
 #include <QtCore/QCommandLineParser>
 #include <QtCore/QFileInfo>
+#include <QtCore/QElapsedTimer>
+#include <QtCore/QThread>
 #include <QtCore/QTimer>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QWidget>
@@ -136,6 +138,42 @@ int runSelfTest(const Selection& selection, const QString& input, double maxSeco
     }
     host->setPlayhead(0, false);
     std::printf("[ok] каретка транспорта прогнана по треку (11 позиций)\n");
+
+#if defined(DONTFLOAT_WITH_ARA)
+    // Путь ARA: документ вместо захвата блоками — плагин читает дорожку сам
+    if (host->supportsAra()) {
+        Dontfloat::PluginTester::AraHostTrack araTrack;
+        araTrack.left = left;
+        araTrack.right = right;
+        araTrack.sampleRate = sampleRate;
+        araTrack.tempoBpm = 120.0;
+        araTrack.beatsPerBar = 4;
+        araTrack.name = QFileInfo(input).fileName();
+
+        if (!host->startAraSession(araTrack, &error)) {
+            std::printf("[FAIL] ARA: %s\n", error.toUtf8().constData());
+            host->unload();
+            return 3;
+        }
+        std::printf("[ok] ARA: документ создан, экземпляр привязан\n");
+
+        QElapsedTimer araClock;
+        araClock.start();
+        while (!host->araAnalysisCompleted() && araClock.elapsed() < 30000) {
+            host->pumpAra();
+            QCoreApplication::processEvents();
+            QThread::msleep(20);
+        }
+        if (!host->araAnalysisCompleted()) {
+            std::printf("[FAIL] ARA: разбор не завершился за 30 с\n");
+            host->unload();
+            return 3;
+        }
+        std::printf("[ok] ARA: разбор завершён, нот получено %d\n", host->araNoteCount());
+    } else {
+        std::printf("[warn] ARA: плагин не отдал фабрику (формат без ARA)\n");
+    }
+#endif
 
     host->unload();
     std::printf("=== selftest OK ===\n");

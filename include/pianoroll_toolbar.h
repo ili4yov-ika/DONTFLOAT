@@ -44,6 +44,10 @@ public:
 
     /** Доступность кнопки «Экспорт MIDI» (нет нот — экспортировать нечего). */
     void setExportMidiEnabled(bool enabled);
+    /** Ставит состояние замков (например, из настроек), без сигналов. */
+    void setMoveLocks(bool horizontalLocked, bool verticalLocked);
+    bool isHorizontalMoveLocked() const;
+    bool isVerticalMoveLocked() const;
 
     /**
      * Ставит виджет на полосу слева от «Экспорт MIDI»: так действия редакции
@@ -70,6 +74,10 @@ signals:
     void exportMidiRequested();
     /** Нажата кнопка «Импорт MIDI» — рядом с экспортом. */
     void importMidiRequested();
+    /** Замок горизонтального перемещения нот (по умолчанию закрыт). */
+    void horizontalMoveLockChanged(bool locked);
+    /** Замок вертикального перемещения нот (по умолчанию открыт). */
+    void verticalMoveLockChanged(bool locked);
 
 protected:
     void changeEvent(QEvent *event) override;
@@ -92,6 +100,9 @@ private:
     QToolButton* splitButton = nullptr;
     QToolButton* gridCutButton = nullptr;
     QToolButton* freeCutButton = nullptr;
+    /** Замки перемещения нот: горизонталь и вертикаль. */
+    QToolButton* horizontalLockButton = nullptr;
+    QToolButton* verticalLockButton = nullptr;
     QToolButton* exportMidiButton = nullptr;
     QToolButton* importMidiButton = nullptr;
 

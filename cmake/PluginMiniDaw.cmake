@@ -24,6 +24,14 @@ function(_dontfloat_add_mini_daw_target target kind format_tag)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
     target_link_libraries(${target} PRIVATE dontfloat_plugin_core)
+    # ARA 2: мини-DAW умеет работать и как ARA-хост (см. mini_daw_ara_host.*)
+    if(TARGET ARA_Host_Library)
+        target_sources(${target} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/mini_daw/mini_daw_ara_host.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/mini_daw/mini_daw_ara_host.h)
+        target_link_libraries(${target} PRIVATE ARA_Host_Library)
+        target_compile_definitions(${target} PRIVATE DONTFLOAT_WITH_ARA=1)
+    endif()
     # Pulls in Qt (Widgets/Multimedia/Concurrent), the product editor sources,
     # AudioFileService and WavWriter, qm-dsp and Rubber Band.
     dontfloat_link_plugin_ui(${target} ${kind})
@@ -128,6 +136,13 @@ function(dontfloat_add_mini_daw_gui)
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
+    if(TARGET ARA_Host_Library)
+        target_sources(dontfloat_mini_daw PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/mini_daw/mini_daw_ara_host.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/mini_daw/mini_daw_ara_host.h)
+        target_link_libraries(dontfloat_mini_daw PRIVATE ARA_Host_Library)
+        target_compile_definitions(dontfloat_mini_daw PRIVATE DONTFLOAT_WITH_ARA=1)
+    endif()
     target_link_libraries(dontfloat_mini_daw PRIVATE
         dontfloat_plugin_core
         Qt6::Core

@@ -207,6 +207,13 @@ public:
             fail(error, QStringLiteral("create_plugin/init не удался"));
             return false;
         }
+#if defined(DONTFLOAT_WITH_ARA)
+        // ARA-фабрика лежит на уровне модуля: хост может строить модель ещё до
+        // экземпляра, а само расширение экземпляра даёт привязку к документу
+        araFactory_ = static_cast<const clap_ara_factory_t*>(entry_->get_factory(CLAP_EXT_ARA_FACTORY));
+        araExtension_ = static_cast<const clap_ara_plugin_extension_t*>(
+            plugin_->get_extension(plugin_, CLAP_EXT_ARA_PLUGINEXTENSION));
+#endif
         if (!plugin_->activate(plugin_, sampleRate, 1, uint32_t(blockSize))
             || !plugin_->start_processing(plugin_)) {
             fail(error, QStringLiteral("activate/start_processing не удался"));
@@ -261,6 +268,56 @@ public:
         }
         return true;
     }
+
+#if defined(DONTFLOAT_WITH_ARA)
+    bool supportsAra() const override
+    {
+        return araFactory_ != nullptr && araExtension_ != nullptr;
+    }
+
+    bool startAraSession(const Dontfloat::PluginTester::AraHostTrack& track, QString* error) override
+    {
+        if (!supportsAra()) {
+            fail(error, QStringLiteral("плагин не отдал расширения ARA"));
+            return false;
+        }
+        const auto* factory = static_cast<const ARA::ARAFactory*>(
+            araFactory_->get_ara_factory(araFactory_, 0));
+        araDocument_ = std::make_unique<Dontfloat::PluginTester::AraHostDocument>();
+        if (!araDocument_->open(factory, track, error)) {
+            araDocument_.reset();
+            return false;
+        }
+        // Привязка переключает экземпляр в режим ARA: звук и разметка идут
+        // через документ, а не через блоки process()
+        if (!araExtension_->bind_to_document_controller(
+                plugin_, araDocument_->documentControllerRef(),
+                Dontfloat::PluginTester::AraHostDocument::knownRoles(),
+                Dontfloat::PluginTester::AraHostDocument::assignedRoles())) {
+            fail(error, QStringLiteral("bind_to_document_controller не удался"));
+            araDocument_.reset();
+            return false;
+        }
+        return true;
+    }
+
+    void pumpAra() override
+    {
+        if (araDocument_) {
+            araDocument_->pumpModelUpdates();
+        }
+    }
+
+    int araNoteCount() const override
+    {
+        return araDocument_ ? araDocument_->readNoteCount() : 0;
+    }
+
+    bool araAnalysisCompleted() const override
+    {
+        return araDocument_ && araDocument_->analysisCompleted();
+    }
+#endif
 
     void resizeEditor(QSize size) override
     {
@@ -398,6 +455,12 @@ private:
     const clap_plugin_entry_t* entry_ = nullptr;
     const clap_plugin_t* plugin_ = nullptr;
     const clap_plugin_gui_t* gui_ = nullptr;
+#if defined(DONTFLOAT_WITH_ARA)
+    /** ARA: фабрика модуля, расширение экземпляра и наш документ. */
+    const clap_ara_factory_t* araFactory_ = nullptr;
+    const clap_ara_plugin_extension_t* araExtension_ = nullptr;
+    std::unique_ptr<Dontfloat::PluginTester::AraHostDocument> araDocument_;
+#endif
     clap_host_t host_ {};
     bool processing_ = false;
     bool guiCreated_ = false;

@@ -16,6 +16,9 @@
 #include <memory>
 
 #include "plugin_host_probe.h"
+#if defined(DONTFLOAT_WITH_ARA)
+#include "mini_daw_ara_host.h"
+#endif
 
 namespace MiniDaw {
 
@@ -38,6 +41,29 @@ public:
 
     /** Встраивает редактор плагина в нативное окно \a parent. */
     virtual bool embedEditor(WId parent, QSize* editorSize, QString* error) = 0;
+
+#if defined(DONTFLOAT_WITH_ARA)
+    /** Отдаёт ли плагин фабрику ARA 2 (тогда доступен путь через документ ARA). */
+    virtual bool supportsAra() const { return false; }
+    /**
+     * Поднимает документ ARA на дорожке track и привязывает к нему экземпляр:
+     * дальше плагин читает звук сам и разбирает его без проигрывания.
+     */
+    virtual bool startAraSession(const Dontfloat::PluginTester::AraHostTrack& track, QString* error)
+    {
+        Q_UNUSED(track);
+        if (error) {
+            *error = QStringLiteral("этот формат не поддерживает ARA");
+        }
+        return false;
+    }
+    /** Прокачивает обновления модели ARA (разбор идёт в фоне плагина). */
+    virtual void pumpAra() {}
+    /** Сколько нот плагин отдал хосту через ARA. */
+    virtual int araNoteCount() const { return 0; }
+    /** Разбор через ARA завершён. */
+    virtual bool araAnalysisCompleted() const { return false; }
+#endif
 
     /** Сообщает плагину новый размер области редактора. */
     virtual void resizeEditor(QSize size) = 0;

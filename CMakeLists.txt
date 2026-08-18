@@ -80,11 +80,15 @@ option(DONTFLOAT_BUILD_PLUGIN_TESTER "Build plugin host probe GUI tool" ON)
 option(DONTFLOAT_BUILD_MINI_DAW "Build minimal in-process plugin hosts (mini-DAW) per format/product" ON)
 set(DONTFLOAT_CLAP_SDK_ROOT "" CACHE PATH "Optional path to official CLAP SDK")
 set(DONTFLOAT_VST3_SDK_ROOT "" CACHE PATH "Optional path to VST3 SDK")
+set(DONTFLOAT_ARA_SDK_ROOT "" CACHE PATH "Optional path to ARA 2 SDK")
 if(DONTFLOAT_VST3_SDK_ROOT STREQUAL "" AND DEFINED ENV{DONTFLOAT_VST3_SDK_ROOT})
     set(DONTFLOAT_VST3_SDK_ROOT "$ENV{DONTFLOAT_VST3_SDK_ROOT}" CACHE PATH "Optional path to VST3 SDK" FORCE)
 elseif(DONTFLOAT_VST3_SDK_ROOT STREQUAL "" AND EXISTS "C:/SDKs/vst3sdk/CMakeLists.txt")
     set(DONTFLOAT_VST3_SDK_ROOT "C:/SDKs/vst3sdk" CACHE PATH "Optional path to VST3 SDK" FORCE)
 endif()
+
+# ARA 2 (Audio Random Access): необязательный SDK, см. cmake/AraSdk.cmake
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/AraSdk.cmake)
 
 find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Core
@@ -159,6 +163,7 @@ set(HEADERS
     include/pitchcorrection.h
     include/pitchnoteeditcommand.h
     include/pitchnotesplitcommand.h
+    include/pitchnotemovecommand.h
     include/notepreviewplayer.h
     include/waveformcolors.h
     include/bpmanalyzer.h
@@ -270,6 +275,10 @@ if(DONTFLOAT_BUILD_PLUGINS)
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
+
+    if(DONTFLOAT_ARA_AVAILABLE)
+        dontfloat_add_ara_library()
+    endif()
 
     if(DONTFLOAT_BUILD_CLAP OR DONTFLOAT_BUILD_LV2 OR DONTFLOAT_BUILD_VST3)
         include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/PluginProducts.cmake)
@@ -834,6 +843,21 @@ set_tests_properties(plugin_content_shift_test PROPERTIES
     LABELS "unit;plugins"
     DESCRIPTION "Timeline capture and clip-move detection for DAW plugins"
 )
+
+# ARA 2: плагин глазами ARA-хоста (фабрика, разбор, чтение нот, две дорожки)
+if(DONTFLOAT_ARA_AVAILABLE AND TARGET dontfloat_ara)
+    add_qt_test(ara_document_controller_test
+        tests/ara_document_controller_test.cpp
+    )
+    target_link_libraries(ara_document_controller_test PRIVATE
+        dontfloat_ara
+        ARA_Host_Library
+    )
+    set_tests_properties(ara_document_controller_test PROPERTIES
+        LABELS "unit;plugins;ara"
+        DESCRIPTION "ARA 2 document controller seen from a host: analysis and note content"
+    )
+endif()
 
 # Иконки кнопок: SVG рисуется без плагина движка иконок Qt
 add_qt_test(svg_icon_test

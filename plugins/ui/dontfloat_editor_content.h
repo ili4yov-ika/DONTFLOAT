@@ -44,6 +44,16 @@ public:
         Q_UNUSED(barStartSample);
     }
 
+#if defined(DONTFLOAT_WITH_ARA)
+    /**
+     * Экземпляр привязали к документу ARA: дальше ноты, тактовая сетка и
+     * референс с соседних дорожек берутся из общей модели, а не из захвата
+     * блоками.  extension — ARA::PlugIn::PlugInExtension этого экземпляра
+     * (тип скрыт за void*, чтобы заголовок не тянул ARA в сборки без неё).
+     */
+    virtual void setAraBinding(const void* extension) { Q_UNUSED(extension); }
+#endif
+
     /** Есть ли волна с тактовой сеткой и метками (кнопки OD / < / BG / > / A / B). */
     virtual bool hasWaveformTools() const { return false; }
     /** Сдвиг тактовой сетки на \a beats долей (знак — направление). */

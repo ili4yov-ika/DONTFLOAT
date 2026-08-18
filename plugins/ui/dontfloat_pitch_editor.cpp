@@ -3,9 +3,15 @@
 #include "../../include/audiofileservice.h"
 #include "../../include/keyanalyzer.h"
 #include "../../include/keymodulationstrip.h"
+#if defined(DONTFLOAT_WITH_ARA)
+#include "../ara/dontfloat_ara_document_controller.h"
+#endif
 #include "../../include/keyselectionmenu.h"
 #include "../../include/notepreviewplayer.h"
 #include "../../include/pitchcorrection.h"
+#include "../../include/pitchnoteeditcommand.h"
+#include "../../include/pitchnotesplitcommand.h"
+#include "../../include/pitchnotemovecommand.h"
 #include "../../include/pianoroll_engine.h"
 #include "../../include/pianoroll_toolbar.h"
 #include "../../include/pitchdetector.h"
@@ -26,6 +32,8 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QShortcut>
+#include <QUndoStack>
 #include <QtConcurrent/QtConcurrent>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -266,12 +274,49 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
             pitchGrid_, &PitchGridWidget::setSplitModeActive);
     connect(pianoRollToolbar_, &PianoRollToolbar::cutModeChanged,
             pitchGrid_, &PitchGridWidget::setCutMode);
+    // Замки перемещения нот: горизонталь закрыта по умолчанию
+    pitchGrid_->setHorizontalMoveLocked(pianoRollToolbar_->isHorizontalMoveLocked());
+    pitchGrid_->setVerticalMoveLocked(pianoRollToolbar_->isVerticalMoveLocked());
+    connect(pianoRollToolbar_, &PianoRollToolbar::horizontalMoveLockChanged,
+            pitchGrid_, &PitchGridWidget::setHorizontalMoveLocked);
+    connect(pianoRollToolbar_, &PianoRollToolbar::verticalMoveLockChanged,
+            pitchGrid_, &PitchGridWidget::setVerticalMoveLocked);
+    connect(pitchGrid_, &PitchGridWidget::noteTimeEdited, this,
+        [this](int noteIndex, qint64 oldStartSample, qint64 newStartSample) {
+            if (noteIndex < 0 || noteIndex >= baseNotes_.size()) {
+                return;
+            }
+            // Сдвиг по времени — командой: Ctrl+Z вернёт ноту на место
+            undoStack_->push(new PitchNoteMoveCommand(
+                pitchGrid_, &baseNotes_, noteIndex, oldStartSample, newStartSample,
+                tr("move note"), [this]() { applyNotesAfterUndo(); }));
+        });
     connect(pianoRollToolbar_, &PianoRollToolbar::exportMidiRequested,
             this, &DontfloatPitchEditor::onExportMidiClicked);
     connect(pianoRollToolbar_, &PianoRollToolbar::importMidiRequested,
             this, &DontfloatPitchEditor::onImportMidiClicked);
     pianoRollToolbar_->setExportMidiEnabled(false);
     pitchGrid_->setCutMode(pianoRollToolbar_->cutMode());
+
+    // Отмена/повтор внутри плагина: правки высот и разрезы нот. Клавиши ловим
+    // только при фокусе в редакторе, чтобы не отбирать Ctrl+Z у DAW
+    undoStack_ = new QUndoStack(this);
+    auto* undoShortcut = new QShortcut(QKeySequence::Undo, this);
+    undoShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(undoShortcut, &QShortcut::activated, this, [this]() {
+        if (undoStack_->canUndo()) {
+            setStatus(tr("undo: %1").arg(undoStack_->undoText()));
+            undoStack_->undo();
+        }
+    });
+    auto* redoShortcut = new QShortcut(QKeySequence::Redo, this);
+    redoShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(redoShortcut, &QShortcut::activated, this, [this]() {
+        if (undoStack_->canRedo()) {
+            setStatus(tr("redo: %1").arg(undoStack_->redoText()));
+            undoStack_->redo();
+        }
+    });
 
     setPrimaryKey(QStringLiteral("C Major"));
     setSecondaryKey(QString());
@@ -313,21 +358,20 @@ void DontfloatPitchEditor::onNoteSplitRequested(int noteIndex, qint64 splitSampl
     // В плагине метки растяжения не двигают ноты, поэтому координата реза
     // совпадает с координатой модели — пересчёт по таймлайну не нужен
     constexpr qint64 minPart = PianoRollEngine::kMinNotePartSamples;
-    PitchDetector::PitchNote& note = baseNotes_[noteIndex];
-    if (note.endSample - note.startSample < 2 * minPart) {
+    const qint64 noteStart = baseNotes_[noteIndex].startSample;
+    const qint64 noteEnd = baseNotes_[noteIndex].endSample;
+    if (noteEnd - noteStart < 2 * minPart) {
         setStatus(tr("the note is too short to split"));
         return;
     }
-    const qint64 cutSample =
-        qBound(note.startSample + minPart, splitSample, note.endSample - minPart);
+    const qint64 cutSample = qBound(noteStart + minPart, splitSample, noteEnd - minPart);
 
-    PitchDetector::PitchNote tail = note;
-    tail.startSample = cutSample;
-    note.endSample = cutSample;
-    baseNotes_.insert(noteIndex + 1, tail);
-
-    refreshPitchGrid();
-    syncNotesToSession();
+    // Через команду: Ctrl+Z склеит ноту обратно
+    undoStack_->push(new PitchNoteSplitCommand(
+        &baseNotes_, noteIndex, cutSample, tr("split note"), [this]() {
+            refreshPitchGrid();
+            applyNotesAfterUndo();
+        }));
     setStatus(tr("note split"));
 }
 
@@ -699,8 +743,89 @@ void DontfloatPitchEditor::publishNotesToBoard()
         instanceId_, toUtf8String(productName_), sampleRate, toCoreNotes(baseNotes_));
 }
 
+#if defined(DONTFLOAT_WITH_ARA)
+
+void DontfloatPitchEditor::setAraBinding(const void* extension)
+{
+    araBinding_ = extension;
+    appliedAraRevision_ = 0;
+    if (araBinding_) {
+        // В режиме ARA звук и разметка приходят из документа: захват блоками и
+        // доска нот соседей больше не нужны
+        setStatus(tr("ARA: bound to the host document"));
+        pullFromAraModel();
+    }
+}
+
+bool DontfloatPitchEditor::pullFromAraModel()
+{
+    if (!araBinding_) {
+        return false;
+    }
+    const auto* extension =
+        static_cast<const ARA::PlugIn::PlugInExtension*>(araBinding_);
+    auto* controller = extension->getDocumentController<Dontfloat::Ara::AraDocumentController>();
+    if (!controller) {
+        return false;
+    }
+
+    const std::uint64_t revision = controller->modelRevision();
+    if (revision == appliedAraRevision_) {
+        return true;  // модель не менялась — дёргать вид незачем
+    }
+    appliedAraRevision_ = revision;
+
+    // Тактовая сетка — из musical context хоста, а не из транспорта
+    const Dontfloat::Ara::AraBeatGrid grid = controller->hostBeatGrid();
+    if (grid.valid && pitchGrid_) {
+        const int sampleRate = session_ && session_->audioBuffer().sampleRate > 0
+            ? session_->audioBuffer().sampleRate
+            : 44100;
+        setHostBeatGrid(grid.tempoBpm, grid.beatsPerBar,
+                        qint64(grid.gridStartSeconds * double(sampleRate)));
+    }
+
+    Dontfloat::Ara::AraAudioSource* ownSource =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
+
+    // Свои ноты: разбор сделал document controller по всему файлу дорожки
+    if (ownSource && ownSource->hasNotes() && baseNotes_.isEmpty()) {
+        const Dontfloat::Ara::AraNoteSet& own = ownSource->noteSet();
+        baseNotes_ = fromCoreNotes(own.notes);
+        refreshPitchGrid();
+        applyNotesAfterUndo();
+        setStatus(tr("ARA: %1 notes from the host document").arg(baseNotes_.size()));
+    }
+
+    // Ноты соседней дорожки — серым фоном (референс), если свой .mid не открыт
+    if (!referenceFromImport_) {
+        const Dontfloat::Ara::AraNoteSet neighbour =
+            controller->referenceNotesExcluding(ownSource);
+        if (neighbour.valid && !neighbour.notes.empty()) {
+            const int sampleRate = int(neighbour.sampleRate > 0.0 ? neighbour.sampleRate : 44100.0);
+            applyReferenceNotes(fromCoreNotes(neighbour.notes), sampleRate);
+        } else if (pitchGrid_ && !pitchGrid_->referenceNotes().isEmpty()) {
+            pitchGrid_->clearReferenceNotes();
+            referenceKeys_ = KeyAnalyzer::PerBarKeyResult();
+            if (referenceKeyStrip_) {
+                referenceKeyStrip_->setRegions({});
+                referenceKeyStrip_->hide();
+            }
+        }
+    }
+    return true;
+}
+
+#endif // DONTFLOAT_WITH_ARA
+
 void DontfloatPitchEditor::pullSharedReferenceNotes()
 {
+#if defined(DONTFLOAT_WITH_ARA)
+    // Под ARA всё берётся из документа: и свои ноты, и соседние дорожки
+    if (pullFromAraModel()) {
+        return;
+    }
+#endif
     if (referenceFromImport_) {
         return;  // импортированный вручную референс не перебиваем
     }
@@ -892,14 +1017,21 @@ void DontfloatPitchEditor::onSecondaryKeySelected(const QString& key)
 
 void DontfloatPitchEditor::onNotePitchEdited(int noteIndex, float oldPitch, float newPitch)
 {
-    Q_UNUSED(oldPitch);
     if (noteIndex < 0 || noteIndex >= baseNotes_.size()) {
         return;
     }
-    baseNotes_[noteIndex].midiPitch = newPitch;
-    pitchGrid_->setNotePitch(noteIndex, newPitch);
+    // Через команду, а не напрямую: Ctrl+Z вернёт прежнюю высоту
+    undoStack_->push(new PitchNoteEditCommand(
+        pitchGrid_, &baseNotes_, noteIndex, oldPitch, newPitch,
+        tr("note pitch"), [this]() { applyNotesAfterUndo(); }));
+}
+
+void DontfloatPitchEditor::applyNotesAfterUndo()
+{
     syncNotesToSession();
-    applyButton_->setEnabled(PitchCorrection::hasPendingEdits(baseNotes_));
+    if (applyButton_) {
+        applyButton_->setEnabled(PitchCorrection::hasPendingEdits(baseNotes_));
+    }
 }
 
 void DontfloatPitchEditor::onNotePreviewRequested(int noteIndex)

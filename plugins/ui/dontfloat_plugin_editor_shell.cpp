@@ -258,6 +258,15 @@ QPushButton* DontfloatPluginEditorShell::makeToolButton(QWidget* parent, const Q
     return button;
 }
 
+#if defined(DONTFLOAT_WITH_ARA)
+void DontfloatPluginEditorShell::setAraBinding(const void* extension)
+{
+    if (content_) {
+        content_->setAraBinding(extension);
+    }
+}
+#endif
+
 void DontfloatPluginEditorShell::showStatus(const QString& text)
 {
     if (statusBar_) {

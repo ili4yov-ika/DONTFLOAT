@@ -38,6 +38,11 @@ private slots:
     void testReferenceNotesAreNotSplittable();
     void testReferenceKeyStripIsReadOnly();
 
+    // Замки перемещения нот: горизонталь закрыта по умолчанию
+    void testHorizontalMoveIsLockedByDefault();
+    void testUnlockedHorizontalMoveShiftsNoteInTime();
+    void testLockedVerticalMoveKeepsPitch();
+
 private:
     static constexpr int kSampleRate = 44100;
     static constexpr float kBpm = 120.0f;
@@ -376,6 +381,68 @@ void PianoRollSplitTest::testReferenceKeyStripIsReadOnly()
 
     // Второй регион стоит правее первого — модуляция читается по таймлайну
     QVERIFY(referenceFields.at(1)->x() > referenceFields.at(0)->x());
+}
+
+// По умолчанию ноту нельзя увести по времени — только менять высоту
+void PianoRollSplitTest::testHorizontalMoveIsLockedByDefault()
+{
+    PitchGridWidget widget;
+    setUpWidget(widget);
+    QVERIFY(widget.isHorizontalMoveLocked());
+    QVERIFY(!widget.isVerticalMoveLocked());
+
+    QSignalSpy timeSpy(&widget, &PitchGridWidget::noteTimeEdited);
+    const QPoint grab(100, noteRowY(72, kNotePitch));
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, grab);
+    QTest::mouseMove(&widget, grab + QPoint(120, 0));
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, grab + QPoint(120, 0));
+
+    QCOMPARE(timeSpy.count(), 0);
+    QCOMPARE(widget.notes().first().startSample, kNoteStart);
+}
+
+// Замок снят — нота едет по таймлайну, длина сохраняется
+void PianoRollSplitTest::testUnlockedHorizontalMoveShiftsNoteInTime()
+{
+    PitchGridWidget widget;
+    setUpWidget(widget);
+    widget.setHorizontalMoveLocked(false);
+    widget.setCutMode(PitchGridWidget::CutMode::Free);
+
+    QSignalSpy timeSpy(&widget, &PitchGridWidget::noteTimeEdited);
+    const QPoint grab(100, noteRowY(72, kNotePitch));
+    const QPoint drop = grab + QPoint(50, 0);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, grab);
+    QTest::mouseMove(&widget, drop);
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, drop);
+
+    QCOMPARE(timeSpy.count(), 1);
+    const qint64 oldStart = timeSpy.at(0).at(1).toLongLong();
+    const qint64 newStart = timeSpy.at(0).at(2).toLongLong();
+    QCOMPARE(oldStart, kNoteStart);
+    QCOMPARE(newStart - oldStart, qint64(50) * kSamplesPerPixel);
+
+    const PitchDetector::PitchNote& note = widget.notes().first();
+    QCOMPARE(note.startSample, newStart);
+    QCOMPARE(note.endSample - note.startSample, kNoteEnd - kNoteStart);
+}
+
+// Закрытый вертикальный замок запрещает менять высоту перетаскиванием
+void PianoRollSplitTest::testLockedVerticalMoveKeepsPitch()
+{
+    PitchGridWidget widget;
+    setUpWidget(widget);
+    widget.setVerticalMoveLocked(true);
+
+    QSignalSpy pitchSpy(&widget, &PitchGridWidget::notePitchEdited);
+    const QPoint grab(100, noteRowY(72, kNotePitch));
+    const QPoint drop(100, noteRowY(72, kNotePitch - 4));
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, grab);
+    QTest::mouseMove(&widget, drop);
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, drop);
+
+    QCOMPARE(pitchSpy.count(), 0);
+    QCOMPARE(widget.notes().first().midiPitch, float(kNotePitch));
 }
 
 QTEST_MAIN(PianoRollSplitTest)

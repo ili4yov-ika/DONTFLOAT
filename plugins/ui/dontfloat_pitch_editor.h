@@ -17,6 +17,7 @@
 #include <memory>
 
 class KeyModulationStrip;
+class QUndoStack;
 class KeySelectionMenu;
 class PianoRollToolbar;
 class QLineEdit;
@@ -53,6 +54,10 @@ public:
     void setHostPlayhead(qint64 samplePosition) override;
     /** Тактовая сетка DAW: пианоролл рисует её же сетку. */
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample) override;
+#if defined(DONTFLOAT_WITH_ARA)
+    /** Экземпляр привязан к документу ARA — работаем с моделью, а не с захватом. */
+    void setAraBinding(const void* extension) override;
+#endif
 
 signals:
     void pitchSessionChanged();
@@ -101,12 +106,21 @@ private:
     void shiftNotes(qint64 deltaSamples);
     /** Полоса референса стоит на таймлайне пианоролла — держим их вместе. */
     void syncReferenceKeyStrip();
+    /** Применяет ноты после отмены/повтора: вид, сессия и кнопка коррекции. */
+    void applyNotesAfterUndo();
     /** Кладёт ноты фоном и пересчитывает потактовые тональности референса. */
     void applyReferenceNotes(const QVector<PitchDetector::PitchNote>& notes, int sampleRate);
     /** Выкладывает свои ноты соседним экземплярам плагина (общая доска). */
     void publishNotesToBoard();
     /** Забирает ноты соседней дорожки, если они изменились. */
     void pullSharedReferenceNotes();
+#if defined(DONTFLOAT_WITH_ARA)
+    /**
+     * Тянет из модели ARA: свои ноты, тактовую сетку хоста и ноты соседней
+     * дорожки референсом. Возвращает false, если экземпляр к ARA не привязан.
+     */
+    bool pullFromAraModel();
+#endif
 
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QString productName_;
@@ -129,10 +143,19 @@ private:
     std::uint64_t instanceId_ = 0;
     std::uint64_t appliedSharedRevision_ = 0;
     QTimer* sharedNotesTimer_ = nullptr;
+#if defined(DONTFLOAT_WITH_ARA)
+    /** ARA::PlugIn::PlugInExtension этого экземпляра (nullptr — режим без ARA). */
+    const void* araBinding_ = nullptr;
+    /** Ревизия модели ARA, на которой мы последний раз обновлялись. */
+    std::uint64_t appliedAraRevision_ = 0;
+#endif
 
     QString primaryKey_;
     QString secondaryKey_;
     QVector<PitchDetector::PitchNote> baseNotes_;
+
+    /** Отмена/повтор правок нот внутри плагина (Ctrl+Z / Ctrl+Y). */
+    QUndoStack* undoStack_ = nullptr;
 
     QFutureWatcher<void>* analysisWatcher_ = nullptr;
     /** Результат анализа: мимо QFuture::result() (см. runPitchAnalysis). */
