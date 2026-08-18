@@ -116,6 +116,7 @@ set(SOURCES
     src/pitchgridwidget.cpp
     src/pianoroll_engine.cpp
     src/pianoroll_toolbar.cpp
+    src/midiexporter.cpp
     src/pitchdetector.cpp
     src/pitchcorrection.cpp
     src/notepreviewplayer.cpp
@@ -149,6 +150,7 @@ set(HEADERS
     include/pitchgridwidget.h
     include/pianoroll_engine.h
     include/pianoroll_toolbar.h
+    include/midiexporter.h
     include/pitchdetector.h
     include/pitchcorrection.h
     include/pitchnoteeditcommand.h
@@ -766,6 +768,54 @@ add_qt_test(markersfile_test
 set_tests_properties(markersfile_test PROPERTIES
     LABELS "unit;markers"
     DESCRIPTION "Markers file read/write for test fixtures"
+)
+
+# Метки растяжения на волне — тот же путь, которым их ставит плагин
+add_qt_test(waveform_marker_test
+    tests/waveform_marker_test.cpp
+    include/waveformview.h
+    src/waveformview.cpp
+    src/waveformcolors.cpp
+    src/beatvisualizer.cpp
+    src/timestretchprocessor.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+    src/bpmanalyzer.cpp
+    src/audiofileservice.cpp
+    src/wavwriter.cpp
+    src/rubberband_offline.cpp
+)
+
+set_tests_properties(waveform_marker_test PROPERTIES
+    LABELS "unit;markers;plugins"
+    DESCRIPTION "Stretch markers added at the playhead (app and plugin path)"
+)
+
+# Экспорт нот пианоролла в MIDI (round-trip через разбор SMF из tests/midi_smf.h)
+add_qt_test(midi_export_test
+    tests/midi_export_test.cpp
+    src/midiexporter.cpp
+    src/pitchdetector.cpp
+)
+target_include_directories(midi_export_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
+set_tests_properties(midi_export_test PROPERTIES
+    LABELS "unit;midi;pianoroll"
+    DESCRIPTION "Piano roll notes exported to a standard MIDI file"
+)
+
+# Захват дорожки по таймлайну и распознавание переноса клипа в DAW
+add_qt_test(plugin_content_shift_test
+    tests/plugin_content_shift_test.cpp
+    plugins/core/dontfloat_plugin_core.cpp
+)
+target_include_directories(plugin_content_shift_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+)
+
+set_tests_properties(plugin_content_shift_test PROPERTIES
+    LABELS "unit;plugins"
+    DESCRIPTION "Timeline capture and clip-move detection for DAW plugins"
 )
 
 # ============================================================================

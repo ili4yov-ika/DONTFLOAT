@@ -5,13 +5,52 @@
 #include "../include/markerengine.h"
 #include "../include/timeutils.h"
 
+#include <cmath>
+
 class MarkersFileTest : public QObject
 {
     Q_OBJECT
 
 private slots:
     void testFormatAndParseRoundTrip();
+    void testDetectOnsetSamples();
 };
+
+// Общий алгоритм кнопки «OD»: им пользуются и главное окно, и плагины
+void MarkersFileTest::testDetectOnsetSamples()
+{
+    const int sampleRate = 44100;
+    const int clickCount = 4;
+    const int stepSamples = sampleRate / 2;  // клик каждые 500 мс
+
+    // Первый клик не в нуле: нарастание огибающей считается от предыдущего
+    // сэмпла, поэтому транзиент в самом начале файла алгоритм не видит
+    const int firstClickSamples = sampleRate / 10;
+
+    QVector<float> mono(firstClickSamples + clickCount * stepSamples, 0.0f);
+    for (int click = 0; click < clickCount; ++click) {
+        const int start = firstClickSamples + click * stepSamples;
+        // Короткий затухающий импульс — транзиент
+        for (int i = 0; i < 400 && start + i < mono.size(); ++i) {
+            mono[start + i] = 0.9f * std::exp(-float(i) / 60.0f);
+        }
+    }
+
+    const QVector<qint64> onsets =
+        MarkerUtils::detectOnsetSamples(QVector<QVector<float>>{ mono }, sampleRate);
+    QCOMPARE(onsets.size(), clickCount);
+
+    const qint64 tolerance = sampleRate / 50;  // 20 мс
+    for (int click = 0; click < clickCount; ++click) {
+        const qint64 expected = firstClickSamples + qint64(click) * stepSamples;
+        QVERIFY(qAbs(onsets[click] - expected) <= tolerance);
+    }
+
+    // Тишина транзиентов не даёт
+    QVERIFY(MarkerUtils::detectOnsetSamples(
+                QVector<QVector<float>>{ QVector<float>(sampleRate, 0.0f) }, sampleRate)
+                .isEmpty());
+}
 
 void MarkersFileTest::testFormatAndParseRoundTrip()
 {

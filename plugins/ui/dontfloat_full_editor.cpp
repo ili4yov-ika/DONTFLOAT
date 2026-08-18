@@ -4,7 +4,6 @@
 
 #include "../core/plugin_product.h"
 
-#include <QLabel>
 #include <QSplitter>
 #include <QVBoxLayout>
 
@@ -24,34 +23,33 @@ DontfloatFullEditor::DontfloatFullEditor(QWidget* parent)
     pitch_ = new DontfloatPitchEditor(this, productName);
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(8, 8, 8, 8);
-    root->setSpacing(6);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
 
-    auto* rhythmLabel = new QLabel(tr("Rhythm / BPM / stretch"), this);
-    rhythmLabel->setStyleSheet(QStringLiteral("color:#cfd6e4; font-weight:600;"));
-    auto* pitchLabel = new QLabel(tr("Pitch / notes / key"), this);
-    pitchLabel->setStyleSheet(QStringLiteral("color:#cfd6e4; font-weight:600;"));
-
-    auto* topPane = new QWidget(this);
-    auto* topLayout = new QVBoxLayout(topPane);
-    topLayout->setContentsMargins(0, 0, 0, 0);
-    topLayout->setSpacing(4);
-    topLayout->addWidget(rhythmLabel);
-    topLayout->addWidget(scratch_, 1);
-
-    auto* bottomPane = new QWidget(this);
-    auto* bottomLayout = new QVBoxLayout(bottomPane);
-    bottomLayout->setContentsMargins(0, 0, 0, 0);
-    bottomLayout->setSpacing(4);
-    bottomLayout->addWidget(pitchLabel);
-    bottomLayout->addWidget(pitch_, 1);
-
+    // Волна и пианоролл разделены так же, как mainSplitter в главном окне
     auto* splitter = new QSplitter(Qt::Vertical, this);
-    splitter->addWidget(topPane);
-    splitter->addWidget(bottomPane);
+    splitter->setObjectName(QStringLiteral("dontfloatFullSplitter"));
+    splitter->setChildrenCollapsible(false);
+    splitter->addWidget(scratch_);
+    splitter->addWidget(pitch_);
     splitter->setStretchFactor(0, 2);
     splitter->setStretchFactor(1, 3);
+    // Пропорции как на макете: волна примерно на треть, пианоролл — остальное
+    splitter->setSizes({ 240, 360 });
     root->addWidget(splitter, 1);
+
+    connect(scratch_, &DontfloatScratchEditor::statusMessage,
+            this, &DontfloatFullEditor::statusMessage);
+    connect(pitch_, &DontfloatPitchEditor::statusMessage,
+            this, &DontfloatFullEditor::statusMessage);
+    connect(scratch_, &DontfloatScratchEditor::seekRequested,
+            this, &DontfloatFullEditor::seekRequested);
+    connect(pitch_, &DontfloatPitchEditor::seekRequested,
+            this, &DontfloatFullEditor::seekRequested);
+    connect(scratch_, &DontfloatScratchEditor::renderedOutputChanged,
+            this, &DontfloatFullEditor::renderedOutputChanged);
+    connect(pitch_, &DontfloatPitchEditor::renderedOutputChanged,
+            this, &DontfloatFullEditor::renderedOutputChanged);
 }
 
 void DontfloatFullEditor::bindSession(Dontfloat::PluginCore::TrackToolSession* session)
@@ -82,6 +80,56 @@ void DontfloatFullEditor::setHostPlayhead(qint64 samplePosition)
     if (pitch_) {
         pitch_->setHostPlayhead(samplePosition);
     }
+}
+
+void DontfloatFullEditor::setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample)
+{
+    if (scratch_) {
+        scratch_->setHostBeatGrid(bpm, beatsPerBar, barStartSample);
+    }
+    if (pitch_) {
+        pitch_->setHostBeatGrid(bpm, beatsPerBar, barStartSample);
+    }
+}
+
+void DontfloatFullEditor::shiftBeatGrid(int beats)
+{
+    if (scratch_) {
+        scratch_->shiftBeatGrid(beats);
+    }
+}
+
+void DontfloatFullEditor::snapMarkersToGrid()
+{
+    if (scratch_) {
+        scratch_->snapMarkersToGrid();
+    }
+}
+
+void DontfloatFullEditor::detectOnsetMarkers()
+{
+    if (scratch_) {
+        scratch_->detectOnsetMarkers();
+    }
+}
+
+void DontfloatFullEditor::setLoopBoundAtPlayhead(bool start)
+{
+    if (scratch_) {
+        scratch_->setLoopBoundAtPlayhead(start);
+    }
+}
+
+void DontfloatFullEditor::setLoopEnabled(bool enabled)
+{
+    if (scratch_) {
+        scratch_->setLoopEnabled(enabled);
+    }
+}
+
+bool DontfloatFullEditor::loopRegionMs(qint64* startMs, qint64* endMs) const
+{
+    return scratch_ && scratch_->loopRegionMs(startMs, endMs);
 }
 
 } // namespace Dontfloat::Plugins::Ui

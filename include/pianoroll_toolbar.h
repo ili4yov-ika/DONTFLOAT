@@ -42,6 +42,15 @@ public:
     /** Подсказка кнопки «Разделить» с актуальной горячей клавишей. */
     void setSplitShortcutText(const QString& shortcutText);
 
+    /** Доступность кнопки «Экспорт MIDI» (нет нот — экспортировать нечего). */
+    void setExportMidiEnabled(bool enabled);
+
+    /**
+     * Ставит виджет на полосу слева от «Экспорт MIDI»: так действия редакции
+     * плагина живут в той же строке, что и кнопки макета.
+     */
+    void addTrailingWidget(QWidget* widget);
+
     // Геометрия: макет (20 / 18 / 1 px) × 1.5; ножницы чуть меньше высоты
     // капсулы, как на макете, где иконка вписана внутрь кнопки
     static constexpr int kCapsuleHeightPx = 30;
@@ -49,12 +58,16 @@ public:
     /** Скругление подложки ножниц: rx=3 при 18 px в макете. */
     static constexpr int kSplitButtonRadiusPx = 4;
     static constexpr int kCutModeButtonSizePx = 27;
+    /** Кнопка «Экспорт MIDI» из макета: невысокий прямоугольник с рамкой. */
+    static constexpr int kExportButtonHeightPx = 22;
     static constexpr int kPanelMarginPx = 2;
     static constexpr int kPanelHeightPx = kCapsuleHeightPx + 2 * kPanelMarginPx;
 
 signals:
     void splitToggled(bool active);
     void cutModeChanged(PitchGridWidget::CutMode mode);
+    /** Нажата кнопка «Экспорт MIDI» справа на полосе. */
+    void exportMidiRequested();
 
 protected:
     void changeEvent(QEvent *event) override;
@@ -77,6 +90,7 @@ private:
     QToolButton* splitButton = nullptr;
     QToolButton* gridCutButton = nullptr;
     QToolButton* freeCutButton = nullptr;
+    QToolButton* exportMidiButton = nullptr;
 
     PitchGridWidget::CutMode currentCutMode = PitchGridWidget::CutMode::SnapToGrid;
     QString colorScheme = QStringLiteral("dark");

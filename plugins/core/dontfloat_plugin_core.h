@@ -174,8 +174,37 @@ public:
     TrackToolStatus render(const TrackRenderRequest& request, TrackRenderResult* result);
 
     TrackToolStatus setAudioBuffer(const TrackAudioBuffer& buffer);
+    /** Запись блока в конец захвата (хосты без транспорта, например LV2). */
     TrackToolStatus appendHostFrames(const float* const* inputs, int channelCount, int frameCount);
+    /**
+     * Запись блока по позиции таймлайна DAW: буфер повторяет дорожку, а не
+     * порядок приходов. Благодаря этому сдвиг клипа в DAW виден плагину как
+     * сдвиг содержимого (см. detectContentShift).
+     * @param timelineFrame позиция начала блока; отрицательная — писать в конец.
+     */
+    TrackToolStatus writeHostFrames(const float* const* inputs, int channelCount, int frameCount,
+                                    std::int64_t timelineFrame);
     void clearHostCapture();
+
+    /**
+     * Готовый результат работы плагина (коррекция высот, растяжение и т.п.).
+     * Его обёртка формата отдаёт в выход `process()` вместо входа — иначе
+     * правки слышны только внутри плагина, а DAW играет исходный звук.
+     * @param timelineStartFrame позиция результата на таймлайне DAW.
+     */
+    void setRenderedOutput(const TrackAudioBuffer& buffer, std::int64_t timelineStartFrame = 0);
+    void clearRenderedOutput();
+    bool hasRenderedOutput() const { return !renderedOutput_.mono.empty(); }
+    const TrackAudioBuffer& renderedOutput() const { return renderedOutput_; }
+    std::int64_t renderedOutputStart() const { return renderedOutputStart_; }
+
+    /**
+     * Копирует готовый результат в выходной блок.
+     * @param timelineFrame позиция блока; отрицательная — считаем от начала.
+     * @return false, если на этой позиции результата нет (играем вход как есть).
+     */
+    bool readRenderedOutput(float* const* outputs, int channelCount, int frameCount,
+                            std::int64_t timelineFrame) const;
 
     const TrackAudioBuffer& audioBuffer() const { return audioBuffer_; }
     const TrackPitchAnalysis& pitchAnalysis() const { return pitchAnalysis_; }
@@ -202,8 +231,13 @@ private:
     std::vector<TrackMarker> markers_;
 
     TrackAudioBuffer audioBuffer_;
+    /** Обработанный звук, который плагин отдаёт в выход (см. setRenderedOutput). */
+    TrackAudioBuffer renderedOutput_;
+    std::int64_t renderedOutputStart_ = 0;
     TrackPitchAnalysis pitchAnalysis_;
 
+    /** Конец последней записи по таймлайну: по нему видно новый проход DAW. */
+    std::int64_t lastWriteEndFrame_ = 0;
     std::uint32_t version_ = 1;
     bool prepared_ = false;
     bool analysisValid_ = false;
@@ -214,6 +248,31 @@ bool isValidAudioInfo(const TrackAudioInfo& audioInfo);
 TrackAnalysisOptions sanitizeAnalysisOptions(const TrackAnalysisOptions& options);
 TrackAlignmentOptions sanitizeAlignmentOptions(const TrackAlignmentOptions& options);
 TrackRenderOptions sanitizeRenderOptions(const TrackRenderOptions& options);
+
+/**
+ * Отпечаток содержимого дорожки: где лежит звук и что это за звук.
+ * `hash` считается по самому содержимому и не зависит от его позиции —
+ * поэтому перемещение клипа в DAW отличимо от смены материала.
+ */
+struct TrackContentFingerprint {
+    std::int64_t startFrame = 0;   ///< первый незвенящий кадр (тишина в начале отброшена)
+    std::int64_t lengthFrames = 0; ///< длина содержимого без тишины по краям
+    std::uint64_t hash = 0;        ///< хеш содержимого; 0 — тишина/пусто
+    bool empty() const { return lengthFrames <= 0; }
+};
+
+/** Отпечаток захваченного буфера (тишина по краям отбрасывается). */
+TrackContentFingerprint computeContentFingerprint(const TrackAudioBuffer& buffer);
+
+/**
+ * Тот же материал, но на другой позиции? Так плагин узнаёт о перемещении
+ * клипа: метки растяжения и ноты нужно сдвинуть, а не пересчитывать.
+ * @return true и \a deltaFrames (новая позиция минус старая), если содержимое
+ *         совпало, а позиция изменилась.
+ */
+bool detectContentShift(const TrackContentFingerprint& before,
+                        const TrackContentFingerprint& after,
+                        std::int64_t* deltaFrames);
 
 } // namespace Dontfloat::PluginCore
 

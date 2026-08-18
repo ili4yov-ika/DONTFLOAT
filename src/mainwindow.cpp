@@ -7,6 +7,7 @@
 #include "../include/pitchcorrection.h"
 #include "../include/pitchnoteeditcommand.h"
 #include "../include/pitchnotesplitcommand.h"
+#include "../include/midiexporter.h"
 #include "ui_mainwindow.h"
 #include <QtWidgets/QApplication>
 #include <QtCore/QFileInfo>
@@ -236,6 +237,7 @@ MainWindow::MainWindow(QWidget *parent)
     , shiftAShortcut(nullptr)
     , shiftBShortcut(nullptr)
     , markerShortcut(nullptr)
+    , splitNoteShortcut(nullptr)
     , waveformViewMenu(nullptr)
     , openAct(nullptr)
     , saveAct(nullptr)
@@ -1318,6 +1320,11 @@ void MainWindow::createActions()
     saveAct->setShortcuts(QKeySequence::Save);
     connect(saveAct, &QAction::triggered, this, &MainWindow::saveAudioFile);
 
+    // Ноты пианоролла в .mid — тот же экспорт, что кнопкой на панели пианоролла
+    exportMidiAct = new QAction(tr("Export &MIDI..."), this);
+    exportMidiAct->setStatusTip(tr("Save the piano roll notes as a MIDI file"));
+    connect(exportMidiAct, &QAction::triggered, this, &MainWindow::exportNotesToMidi);
+
     exitAct = new QAction(tr("&Exit"), this);
     exitAct->setShortcuts(QKeySequence::Quit);
     connect(exitAct, &QAction::triggered, this, &QWidget::close);
@@ -1350,8 +1357,9 @@ void MainWindow::createActions()
     playPauseAct->setShortcut(QKeySequence(Qt::Key_Space));
     connect(playPauseAct, &QAction::triggered, this, &MainWindow::playAudio);
 
+    // «Стоп» без горячей клавиши: S отдана разрезу ноты по каретке
+    // (пользователь может назначить свою в диалоге горячих клавиш)
     stopAct = new QAction(tr("Stop"), this);
-    stopAct->setShortcut(QKeySequence(Qt::Key_S));
     connect(stopAct, &QAction::triggered, this, &MainWindow::stopAudio);
 
     // Metronome action
@@ -1464,6 +1472,8 @@ void MainWindow::createMenus()
     fileMenu->addAction(openAct);
     fileMenu->addAction(saveAct);
     fileMenu->addSeparator();
+    fileMenu->addAction(exportMidiAct);
+    fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
 
     // Edit menu
@@ -1537,6 +1547,13 @@ void MainWindow::setupShortcuts()
         }
     });
 
+    // Разрез ноты по каретке воспроизведения (S). Клавиша работает в любом
+    // фокусе; когда фокус на пианоролле, тот перехватывает её через
+    // ShortcutOverride и режет сам — двойного разреза не будет.
+    splitNoteShortcut = new QShortcut(QKeySequence(Qt::Key_S), this);
+    splitNoteShortcut->setContext(Qt::ApplicationShortcut);
+    connect(splitNoteShortcut, &QShortcut::activated, this, &MainWindow::splitNoteAtPlaybackCursor);
+
     addAction(playPauseAct);
     addAction(stopAct);
     addAction(metronomeAct);
@@ -1568,8 +1585,17 @@ void MainWindow::applyShortcuts()
     if (playShortcut) {
         playShortcut->setKey(QKeySequence());
     }
+    // Раньше «Стоп» по умолчанию висел на S; клавиша ушла разрезу ноты.
+    // Разово чистим старое сохранённое значение, чтобы у существующих
+    // пользователей S не осталась «Стопом» (своё назначение не трогаем).
+    if (!settings.value("stopKeyFreedForSplit", false).toBool()) {
+        if (settings.value("Stop").toString() == QKeySequence(Qt::Key_S).toString()) {
+            settings.remove("Stop");
+        }
+        settings.setValue("stopKeyFreedForSplit", true);
+    }
     if (stopAct) {
-        stopAct->setShortcut(key("Stop", QKeySequence(Qt::Key_S)));
+        stopAct->setShortcut(key("Stop", QKeySequence()));
         stopAct->setShortcutContext(Qt::ApplicationShortcut);
     }
     if (metronomeAct) metronomeAct->setShortcut(key("Metronome", QKeySequence(Qt::Key_T)));
@@ -1581,9 +1607,10 @@ void MainWindow::applyShortcuts()
     if (redoAct)    redoAct->setShortcut(key("Redo", QKeySequence::Redo));
     if (togglePitchGridAct) togglePitchGridAct->setShortcut(key("PitchGrid", QKeySequence(Qt::CTRL | Qt::Key_G)));
     if (markerShortcut) markerShortcut->setKey(key("AddMarker", QKeySequence(Qt::Key_M)));
-    // Разрез ноты: пианоролл перехватывает клавишу, пока он в фокусе (по
-    // умолчанию S — та же клавиша, что «Стоп» вне пианоролла).
+    // Разрез ноты по каретке (S): глобальный шорткат + перехват в пианоролле,
+    // пока он в фокусе (иначе клавиша ушла бы в виджет мимо шортката).
     const QKeySequence splitKey = key("SplitNote", QKeySequence(Qt::Key_S));
+    if (splitNoteShortcut) splitNoteShortcut->setKey(splitKey);
     if (pitchGridWidget) pitchGridWidget->setSplitShortcut(splitKey);
     if (pianoRollToolbar) {
         pianoRollToolbar->setSplitShortcutText(splitKey.toString(QKeySequence::NativeText));
@@ -2757,6 +2784,7 @@ void MainWindow::finishPitchAnalysis(qint64 epoch, bool ok,
 
 void MainWindow::refreshPitchGridNotes()
 {
+    updateMidiExportAvailability();
     if (!pitchGridWidget) {
         return;
     }
@@ -2870,6 +2898,22 @@ void MainWindow::onNoteSplitRequested(int noteIndex, qint64 splitSample)
         [this]() { refreshPitchGridNotes(); }));
 
     statusBar()->showMessage(tr("Note split"), 2000);
+}
+
+void MainWindow::splitNoteAtPlaybackCursor()
+{
+    // Горячая клавиша работает при любом фокусе, поэтому проверяем, что резать
+    // есть где: пианоролл виден и в нём есть ноты.
+    if (!pitchGridWidget || !pitchGridWidget->isVisible()) {
+        statusBar()->showMessage(tr("Show the pitch grid to split notes (Ctrl+G)"), 3000);
+        return;
+    }
+    if (basePitchNotes.isEmpty()) {
+        statusBar()->showMessage(
+            tr("Run note analysis first (the \"Analyze\" button)"), 4000);
+        return;
+    }
+    pitchGridWidget->splitNoteAtPlaybackCursor();
 }
 
 void MainWindow::onNoteSplitRejected(PitchGridWidget::SplitRejection reason)
@@ -3305,7 +3349,12 @@ void MainWindow::setupPianoRollToolbar()
     connect(pitchGridWidget, &PitchGridWidget::noteSplitRejected,
             this, &MainWindow::onNoteSplitRejected);
 
+    // Кнопка справа на полосе — тот же экспорт, что пункт меню «Файл»
+    connect(pianoRollToolbar, &PianoRollToolbar::exportMidiRequested,
+            this, &MainWindow::exportNotesToMidi);
+
     pianoRollToolbar->setColorScheme(settings.value("colorScheme", "dark").toString());
+    updateMidiExportAvailability();
 
     // Режим реза запоминается между сессиями (сам инструмент — нет)
     const bool snapToGrid = settings.value("pianoRollCutSnapToGrid", true).toBool();
@@ -3314,6 +3363,53 @@ void MainWindow::setupPianoRollToolbar()
         : PitchGridWidget::CutMode::Free;
     pianoRollToolbar->setCutMode(cutMode);
     pitchGridWidget->setCutMode(cutMode);
+}
+
+void MainWindow::updateMidiExportAvailability()
+{
+    const bool hasNotes = !basePitchNotes.isEmpty();
+    if (exportMidiAct) {
+        exportMidiAct->setEnabled(hasNotes);
+    }
+    if (pianoRollToolbar) {
+        pianoRollToolbar->setExportMidiEnabled(hasNotes);
+    }
+}
+
+void MainWindow::exportNotesToMidi()
+{
+    if (basePitchNotes.isEmpty()) {
+        statusBar()->showMessage(
+            tr("Run note analysis first (the \"Analyze\" button)"), 4000);
+        return;
+    }
+
+    const QString suggested = currentFileName.isEmpty()
+        ? QStringLiteral("dontfloat.mid")
+        : QFileInfo(currentFileName).completeBaseName() + QStringLiteral(".mid");
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export MIDI"), suggested, tr("MIDI files (*.mid)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    MidiExporter::Options options;
+    options.bpm = waveformView ? waveformView->getBPM() : 120.0f;
+    options.sampleRate = waveformView ? waveformView->getSampleRate() : 44100;
+    // Ноты живут в координатах исходного аудио — нулём файла делаем начало
+    // тактовой сетки, чтобы доли в DAW совпали с сеткой DONTFLOAT
+    options.startSample = waveformView ? waveformView->getGridStartSample() : 0;
+
+    QString error;
+    if (!MidiExporter::writeFile(path, basePitchNotes, options, &error)) {
+        QMessageBox::warning(this, tr("Export MIDI"),
+                             tr("Failed to save the MIDI file: %1").arg(error));
+        return;
+    }
+    statusBar()->showMessage(
+        tr("MIDI exported: %1 (notes: %2)").arg(QFileInfo(path).fileName())
+            .arg(basePitchNotes.size()),
+        4000);
 }
 
 void MainWindow::setupPitchGridAnalyzeOverlay()
@@ -4023,68 +4119,8 @@ void MainWindow::createOnsetMarkersAuto()
         return;
     }
 
-    // --- Подготовка моно-сигнала ---
-    const int numCh = data.size();
-    const int numSamples = data[0].size();
-    QVector<float> mono;
-    mono.resize(numSamples);
-    for (int i = 0; i < numSamples; ++i) {
-        double sum = 0.0;
-        for (int ch = 0; ch < numCh; ++ch) {
-            if (i < data[ch].size())
-                sum += data[ch][i];
-        }
-        mono[i] = static_cast<float>(sum / qMax(1, numCh));
-    }
-
-    // --- Оценка огибающей и её производной (простая onset-функция) ---
-    QVector<float> env;
-    env.resize(numSamples);
-    const float alpha = 0.99f; // экспоненциальное сглаживание
-    env[0] = std::fabs(mono[0]);
-    for (int i = 1; i < numSamples; ++i) {
-        const float x = std::fabs(mono[i]);
-        env[i] = qMax(x, env[i - 1] * alpha);
-    }
-
-    QVector<float> diff;
-    diff.resize(numSamples);
-    diff[0] = 0.0f;
-    float maxDiff = 0.0f;
-    for (int i = 1; i < numSamples; ++i) {
-        float d = env[i] - env[i - 1];
-        if (d < 0.0f) d = 0.0f;
-        diff[i] = d;
-        if (d > maxDiff) maxDiff = d;
-    }
-
-    if (maxDiff <= 0.0f) {
-        QMessageBox::information(this, dialogTitle,
-                                 tr("No transients found."));
-        return;
-    }
-
-    const float threshold = maxDiff * UiConstants::kOnsetDetectionThresholdRatio;
-    const int minDistanceSamples = sampleRate / UiConstants::kOnsetMinDistanceSampleRateDivisor;
-
-    QVector<qint64> onsetSamples;
-    onsetSamples.reserve(256);
-    int lastOnsetIdx = -minDistanceSamples;
-
-    for (int i = 1; i < numSamples - 1; ++i) {
-        if (diff[i] < threshold)
-            continue;
-
-        // простой локальный максимум
-        if (diff[i] < diff[i - 1] || diff[i] <= diff[i + 1])
-            continue;
-
-        if (i - lastOnsetIdx < minDistanceSamples)
-            continue;
-
-        onsetSamples.append(i);
-        lastOnsetIdx = i;
-    }
+    // Сам алгоритм — общий с плагинами (MarkerUtils::detectOnsetSamples)
+    const QVector<qint64> onsetSamples = MarkerUtils::detectOnsetSamples(data, sampleRate);
 
     if (onsetSamples.isEmpty()) {
         QMessageBox::information(this, dialogTitle, tr("No suitable transients found."));

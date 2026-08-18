@@ -5,12 +5,16 @@
 #include "../../include/keyselectionmenu.h"
 #include "../../include/notepreviewplayer.h"
 #include "../../include/pitchcorrection.h"
+#include "../../include/pianoroll_engine.h"
+#include "../../include/pianoroll_toolbar.h"
 #include "../../include/pitchdetector.h"
+#include "../../include/midiexporter.h"
 #include "../../include/pitchgridwidget.h"
-#include "../../include/wavwriter.h"
+#include "../../include/uiconstants.h"
 
 #include <QEvent>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -106,12 +110,15 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     , notePreviewPlayer_(new NotePreviewPlayer(this))
 {
     setObjectName(QStringLiteral("dontfloatPitchEditor"));
-    setMinimumSize(900, 560);
+    setMinimumSize(720, 280);
     setWindowTitle(productName_);
 
+    // Разметка как в главном окне: поля тональностей над пианороллом, под ним
+    // панель разреза (макет MARKDOWN/example_plugin_dontfloat.svg)
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(8, 8, 8, 8);
-    root->setSpacing(6);
+    root->setContentsMargins(UiConstants::kTimelineHorizontalMarginPx, 4,
+                             UiConstants::kTimelineHorizontalMarginPx, 0);
+    root->setSpacing(4);
 
     auto* keyRow = new QHBoxLayout();
     keyRow->setSpacing(8);
@@ -138,27 +145,25 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     root->addLayout(keyRow);
 
     pitchGrid_ = new PitchGridWidget(this);
-    pitchGrid_->setMinimumHeight(320);
+    pitchGrid_->setMinimumHeight(180);
     pitchGrid_->setPrimaryKey(QStringLiteral("C Major"));
     root->addWidget(pitchGrid_, 1);
 
-    auto* toolbar = new QHBoxLayout();
-    // Аудио приходит с дорожки DAW — собственного импорта у плагина нет
-    analyzeButton_ = new QPushButton(tr("Analyze"), this);
-    analyzeButton_->setToolTip(tr("Re-run the analysis of the track captured from the DAW"));
-    applyButton_ = new QPushButton(tr("Apply correction"), this);
-    exportButton_ = new QPushButton(tr("Export WAV…"), this);
-    applyButton_->setEnabled(false);
-    toolbar->addWidget(analyzeButton_);
-    toolbar->addWidget(applyButton_);
-    toolbar->addWidget(exportButton_);
-    toolbar->addStretch(1);
-    root->addLayout(toolbar);
+    // Нижняя полоса — та же, что в главном окне: слева панель разреза, справа
+    // «Экспорт MIDI» (макет MARKDOWN/example_plugin_dontfloat.svg).
+    // Полоса тянется на всю ширину, поэтому экспорт стоит у правого края
+    pianoRollToolbar_ = new PianoRollToolbar(this);
 
-    statusLabel_ = new QLabel(this);
-    statusLabel_->setWordWrap(true);
-    statusLabel_->setStyleSheet(QStringLiteral("color:#aeb6c8;"));
-    root->addWidget(statusLabel_);
+    // Аудио приходит с дорожки DAW, анализ идёт сам при каждом изменении
+    // содержимого — кнопок «Анализировать» и «Экспорт WAV» больше нет.
+    // «Применить коррекцию» живёт в той же полосе, слева от экспорта
+    applyButton_ = new QPushButton(tr("Apply correction"), pianoRollToolbar_);
+    applyButton_->setEnabled(false);
+    applyButton_->setProperty("dontfloatSlim", true);
+    applyButton_->setFixedHeight(PianoRollToolbar::kExportButtonHeightPx);
+    pianoRollToolbar_->addTrailingWidget(applyButton_);
+    root->addWidget(pianoRollToolbar_);
+
     setStatus(tr("load audio or play a track in the DAW to capture the signal."));
 
     analyzeOverlay_ = new QWidget(this);
@@ -203,9 +208,7 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
 
     connect(keyMenu_, &KeySelectionMenu::keySelected, this, &DontfloatPitchEditor::onPrimaryKeySelected);
     connect(keyMenu2_, &KeySelectionMenu::keySelected, this, &DontfloatPitchEditor::onSecondaryKeySelected);
-    connect(analyzeButton_, &QPushButton::clicked, this, &DontfloatPitchEditor::onAnalyzeClicked);
     connect(applyButton_, &QPushButton::clicked, this, &DontfloatPitchEditor::onApplyCorrectionClicked);
-    connect(exportButton_, &QPushButton::clicked, this, &DontfloatPitchEditor::onExportClicked);
     connect(analysisWatcher_, &QFutureWatcher<void>::finished,
             this, &DontfloatPitchEditor::onPitchAnalysisFinished);
 
@@ -217,6 +220,33 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
             this, &DontfloatPitchEditor::onNotePreviewPitchChanged);
     connect(pitchGrid_, &PitchGridWidget::notePreviewStopped,
             this, &DontfloatPitchEditor::onNotePreviewStopped);
+
+    // Каретку двигают в плагине — просим DAW встать туда же
+    connect(pitchGrid_, &PitchGridWidget::positionChanged, this, [this](qint64 positionMs) {
+        if (applyingHostPlayhead_ || !session_) {
+            return;
+        }
+        const int sampleRate = session_->audioBuffer().sampleRate;
+        if (sampleRate > 0) {
+            emit seekRequested((positionMs * sampleRate) / 1000);
+        }
+    });
+
+    // Разрез ноты: панель и клавиша S работают так же, как в главном окне
+    connect(pitchGrid_, &PitchGridWidget::noteSplitRequested,
+            this, &DontfloatPitchEditor::onNoteSplitRequested);
+    connect(pitchGrid_, &PitchGridWidget::noteSplitRejected,
+            this, &DontfloatPitchEditor::onNoteSplitRejected);
+    connect(pitchGrid_, &PitchGridWidget::splitModeChanged,
+            pianoRollToolbar_, &PianoRollToolbar::setSplitActive);
+    connect(pianoRollToolbar_, &PianoRollToolbar::splitToggled,
+            pitchGrid_, &PitchGridWidget::setSplitModeActive);
+    connect(pianoRollToolbar_, &PianoRollToolbar::cutModeChanged,
+            pitchGrid_, &PitchGridWidget::setCutMode);
+    connect(pianoRollToolbar_, &PianoRollToolbar::exportMidiRequested,
+            this, &DontfloatPitchEditor::onExportMidiClicked);
+    pianoRollToolbar_->setExportMidiEnabled(false);
+    pitchGrid_->setCutMode(pianoRollToolbar_->cutMode());
 
     setPrimaryKey(QStringLiteral("C Major"));
     setSecondaryKey(QString());
@@ -233,10 +263,41 @@ void DontfloatPitchEditor::setProductName(const QString& productName)
 
 void DontfloatPitchEditor::setStatus(const QString& text)
 {
-    if (!statusLabel_) {
+    // Статусбар живёт в оболочке плагина — как в главном окне, один на весь редактор
+    emit statusMessage(QStringLiteral("%1: %2").arg(productName_, text));
+}
+
+void DontfloatPitchEditor::onNoteSplitRequested(int noteIndex, qint64 splitSample)
+{
+    if (noteIndex < 0 || noteIndex >= baseNotes_.size()) {
         return;
     }
-    statusLabel_->setText(QStringLiteral("%1: %2").arg(productName_, text));
+    // В плагине метки растяжения не двигают ноты, поэтому координата реза
+    // совпадает с координатой модели — пересчёт по таймлайну не нужен
+    constexpr qint64 minPart = PianoRollEngine::kMinNotePartSamples;
+    PitchDetector::PitchNote& note = baseNotes_[noteIndex];
+    if (note.endSample - note.startSample < 2 * minPart) {
+        setStatus(tr("the note is too short to split"));
+        return;
+    }
+    const qint64 cutSample =
+        qBound(note.startSample + minPart, splitSample, note.endSample - minPart);
+
+    PitchDetector::PitchNote tail = note;
+    tail.startSample = cutSample;
+    note.endSample = cutSample;
+    baseNotes_.insert(noteIndex + 1, tail);
+
+    refreshPitchGrid();
+    syncNotesToSession();
+    setStatus(tr("note split"));
+}
+
+void DontfloatPitchEditor::onNoteSplitRejected(PitchGridWidget::SplitRejection reason)
+{
+    setStatus(reason == PitchGridWidget::SplitRejection::NoNoteAtCursor
+                  ? tr("no note at the cut position")
+                  : tr("the cut point is outside the note — use “Free cut” or move the cursor"));
 }
 
 void DontfloatPitchEditor::bindSession(TrackToolSession* session)
@@ -315,10 +376,13 @@ void DontfloatPitchEditor::setHostPlayhead(qint64 samplePosition)
         return;
     }
     // Пианоролл живёт в миллисекундах дорожки: каретка встаёт туда же, где
-    // каретка DAW (setPlaybackPosition сам пересчитает её в пиксели)
+    // каретка DAW (setPlaybackPosition сам пересчитает её в пиксели).
+    // Флаг гасит обратную отправку в DAW — иначе позиция ходила бы по кругу.
     const qint64 clamped = std::clamp<qint64>(
         samplePosition, 0, qint64(session_->audioBuffer().frameCount()));
+    applyingHostPlayhead_ = true;
     pitchGrid_->setPlaybackPosition((clamped * 1000) / sampleRate);
+    applyingHostPlayhead_ = false;
 }
 
 void DontfloatPitchEditor::startAutoAnalysis()
@@ -326,12 +390,87 @@ void DontfloatPitchEditor::startAutoAnalysis()
     if (!session_ || session_->audioBuffer().empty() || analysisRunning_) {
         return;
     }
-    // Поток аудио утих — показываем дорожку целиком и считаем ноты
+    // Поток аудио утих — показываем дорожку целиком
     refreshFromSession();
-    if (session_->pitchAnalysis().valid) {
-        return;  // анализ этой дорожки уже есть
+
+    const auto print = Dontfloat::PluginCore::computeContentFingerprint(session_->audioBuffer());
+    if (print.empty()) {
+        return;
     }
+    if (print.hash == analyzedContent_.hash && print.startFrame == analyzedContent_.startFrame
+        && print.lengthFrames == analyzedContent_.lengthFrames) {
+        return;  // содержимое не менялось
+    }
+
+    // Тот же материал на новой позиции — клип переехал в DAW: ноты едут с ним
+    qint64 shift = 0;
+    if (Dontfloat::PluginCore::detectContentShift(analyzedContent_, print, &shift)) {
+        shiftNotes(shift);
+        analyzedContent_ = print;
+        setStatus(tr("clip moved — notes followed"));
+        return;
+    }
+
+    // Содержимое дорожки изменилось — считаем ноты заново
+    analyzedContent_ = print;
     runPitchAnalysis();
+}
+
+void DontfloatPitchEditor::setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample)
+{
+    if (!pitchGrid_ || bpm <= 0.0) {
+        return;
+    }
+    // Сетка пианоролла = сетка DAW: доли реза и снап считаются по ней
+    hostBpm_ = bpm;
+    hostBeatsPerBar_ = std::max(1, beatsPerBar);
+    hostGridStartSample_ = std::max<qint64>(0, barStartSample);
+    pitchGrid_->setBPM(float(hostBpm_));
+    pitchGrid_->setBeatsPerBar(hostBeatsPerBar_);
+    pitchGrid_->setGridStartSample(hostGridStartSample_);
+}
+
+void DontfloatPitchEditor::onExportMidiClicked()
+{
+    if (baseNotes_.isEmpty()) {
+        setStatus(tr("there are no notes to export"));
+        return;
+    }
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export MIDI"), QStringLiteral("dontfloat.mid"), tr("MIDI files (*.mid)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    MidiExporter::Options options;
+    options.sampleRate = session_ ? session_->audioBuffer().sampleRate : 44100;
+    if (session_ && session_->analysisValid() && session_->analysis().bpm > 0.0f) {
+        options.bpm = session_->analysis().bpm;
+        options.startSample = session_->analysis().gridStartFrame;
+    }
+
+    QString error;
+    if (!MidiExporter::writeFile(path, baseNotes_, options, &error)) {
+        setStatus(tr("MIDI export error: %1").arg(error));
+        return;
+    }
+    setStatus(tr("MIDI exported: %1 (notes: %2)")
+                  .arg(QFileInfo(path).fileName())
+                  .arg(baseNotes_.size()));
+}
+
+void DontfloatPitchEditor::shiftNotes(qint64 deltaSamples)
+{
+    if (deltaSamples == 0 || baseNotes_.isEmpty()) {
+        return;
+    }
+    for (PitchDetector::PitchNote& note : baseNotes_) {
+        note.startSample = std::max<qint64>(0, note.startSample + deltaSamples);
+        note.endSample = std::max<qint64>(note.startSample + 1, note.endSample + deltaSamples);
+    }
+    refreshPitchGrid();
+    syncNotesToSession();
 }
 
 void DontfloatPitchEditor::setPrimaryKey(const QString& key)
@@ -359,8 +498,6 @@ void DontfloatPitchEditor::setAnalysisRunning(bool running)
             analyzeOverlay_->raise();
         }
     }
-    analyzeButton_->setEnabled(!running);
-    exportButton_->setEnabled(!running);
     applyButton_->setEnabled(!running && PitchCorrection::hasPendingEdits(baseNotes_));
 }
 
@@ -378,6 +515,9 @@ void DontfloatPitchEditor::refreshPitchGrid()
 {
     pitchGrid_->setNotes(baseNotes_);
     fitPitchRangeToNotes();
+    if (pianoRollToolbar_) {
+        pianoRollToolbar_->setExportMidiEnabled(!baseNotes_.isEmpty());
+    }
 }
 
 void DontfloatPitchEditor::fitPitchRangeToNotes()
@@ -485,11 +625,6 @@ void DontfloatPitchEditor::runPitchAnalysis()
         }));
 }
 
-void DontfloatPitchEditor::onAnalyzeClicked()
-{
-    runPitchAnalysis();
-}
-
 void DontfloatPitchEditor::onPitchAnalysisFinished()
 {
     setAnalysisRunning(false);
@@ -563,42 +698,13 @@ void DontfloatPitchEditor::onApplyCorrectionClicked()
         note.detectedPitch = note.midiPitch;
     }
     baseNotes_ = fromCoreNotes(session_->pitchAnalysis().notes);
+    // Результат уходит в выход плагина: без этого DAW играла бы исходный звук
+    session_->setRenderedOutput(buffer, 0);
     refreshFromSession();
     applyButton_->setEnabled(false);
-    setStatus(tr("correction applied — processed audio is in the plugin session"));
+    setStatus(tr("correction applied — the DAW now plays the corrected audio"));
+    emit renderedOutputChanged();
     emit pitchSessionChanged();
-}
-
-void DontfloatPitchEditor::onExportClicked()
-{
-    if (!session_ || session_->audioBuffer().empty()) {
-        return;
-    }
-
-    const QString path = QFileDialog::getSaveFileName(
-        this, tr("%1 — WAV export").arg(productName_), QString(),
-        tr("WAV (*.wav)"));
-    if (path.isEmpty()) {
-        return;
-    }
-
-    QVector<QVector<float>> channels;
-    const TrackAudioBuffer& buffer = session_->audioBuffer();
-    if (!buffer.left.empty()) {
-        channels.append(toQVector(buffer.left));
-        if (!buffer.right.empty()) {
-            channels.append(toQVector(buffer.right));
-        }
-    } else if (!buffer.mono.empty()) {
-        channels.append(toQVector(buffer.mono));
-    }
-
-    QString error;
-    if (!WavWriter::writeFile(path, channels, buffer.sampleRate, &error)) {
-        setStatus(tr("export error: %1").arg(error));
-        return;
-    }
-    setStatus(tr("exported: %1").arg(path));
 }
 
 void DontfloatPitchEditor::onPrimaryKeySelected(const QString& key)

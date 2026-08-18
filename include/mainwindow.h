@@ -96,6 +96,10 @@ private slots:
     void onNotePreviewRequested(int noteIndex);
     void onNotePreviewPitchChanged(int noteIndex, float midiPitch);
     void stopNotePreview();
+    /** Разрез ноты по каретке воспроизведения (горячая клавиша S). */
+    void splitNoteAtPlaybackCursor();
+    /** Экспорт нот пианоролла в .mid (меню «Файл» и кнопка на панели). */
+    void exportNotesToMidi();
     /** Разрез ноты по каретке / клику: splitSample — сэмпл текущего таймлайна. */
     void onNoteSplitRequested(int noteIndex, qint64 splitSample);
     void onNoteSplitRejected(PitchGridWidget::SplitRejection reason);
@@ -136,6 +140,8 @@ private:
     void layoutPitchGridScrollOverlay();
     /** Панель кнопок под пианороллом («Разделить», режим реза). */
     void setupPianoRollToolbar();
+    /** Экспорт MIDI доступен только когда есть проанализированные ноты. */
+    void updateMidiExportAvailability();
     void setupPitchGridAnalyzeOverlay();
     void showPitchGridAnalyzeOverlay();
     void hidePitchGridAnalyzeOverlay();
@@ -224,6 +230,8 @@ private:
     // Action components
     QAction *openAct;
     QAction *saveAct;
+    /** «Экспорт MIDI…» — доступен, когда в пианоролле есть ноты. */
+    QAction *exportMidiAct = nullptr;
     QAction *exitAct;
     QAction *undoAct;
     QAction *redoAct;
@@ -333,6 +341,8 @@ private:
     QShortcut *shiftAShortcut;
     QShortcut *shiftBShortcut;
     QShortcut *markerShortcut;
+    /** Разрез ноты по каретке (S) — работает независимо от фокуса */
+    QShortcut *splitNoteShortcut;
 };
 
 #endif // MAINWINDOW_H

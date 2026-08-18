@@ -30,22 +30,9 @@
     </message>
 </context>
 <context>
-    <name>Dontfloat::Plugins::Ui::DontfloatFullEditor</name>
-    <message>
-        <location filename="../plugins/ui/dontfloat_full_editor.cpp" line="+30"/>
-        <source>Rhythm / BPM / stretch</source>
-        <translation>Ритм / BPM / stretch</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Pitch / notes / key</source>
-        <translation>Питч / ноты / тональность</translation>
-    </message>
-</context>
-<context>
     <name>Dontfloat::Plugins::Ui::DontfloatPitchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+120"/>
+        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+128"/>
         <source>Undefined</source>
         <translation>Не определена</translation>
     </message>
@@ -55,59 +42,83 @@
         <translation>Модуляция</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>Import WAV…</source>
-        <translation>Импорт WAV…</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <location line="+24"/>
-        <source>Analyze</source>
-        <translation>Анализировать</translation>
-    </message>
-    <message>
-        <location line="-23"/>
+        <location line="+23"/>
         <source>Apply correction</source>
         <translation>Применить коррекцию</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Export WAV…</source>
-        <translation>Экспорт WAV…</translation>
-    </message>
-    <message>
-        <location line="+13"/>
-        <location line="+109"/>
+        <location line="+7"/>
+        <location line="+170"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>загрузите аудио или воспроизведите трек в DAW для захвата сигнала.</translation>
     </message>
     <message>
-        <location line="-7"/>
+        <location line="-156"/>
+        <source>Analyzing the track… %p%</source>
+        <translation>Анализ дорожки… %p%</translation>
+    </message>
+    <message>
+        <location line="+99"/>
+        <source>the note is too short to split</source>
+        <translation>нота слишком короткая для разреза</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>note split</source>
+        <translation>нота разделена</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>no note at the cut position</source>
+        <translation>в точке реза нет ноты</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>the cut point is outside the note — use “Free cut” or move the cursor</source>
+        <translation>точка реза вне ноты — включите «Свободный рез» или сдвиньте каретку</translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <source>audio: %1 samples, %2 Hz</source>
         <translation>аудио: %1 сэмплов, %2 Гц</translation>
     </message>
     <message>
-        <location line="+109"/>
-        <source>%1 — audio import</source>
-        <translation>%1 — импорт аудио</translation>
+        <location line="+81"/>
+        <source>clip moved — notes followed</source>
+        <translation>клип перенесён — ноты сдвинулись за ним</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Audio Files (*.wav *.mp3 *.flac);;All Files (*)</source>
-        <translation>Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)</translation>
+        <location line="+26"/>
+        <source>there are no notes to export</source>
+        <translation>нет нот для экспорта</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>import error: %1</source>
-        <translation>ошибка импорта: %1</translation>
+        <location line="+5"/>
+        <source>Export MIDI</source>
+        <translation>Экспорт MIDI</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+0"/>
+        <source>MIDI files (*.mid)</source>
+        <translation>MIDI-файлы (*.mid)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>MIDI export error: %1</source>
+        <translation>ошибка экспорта MIDI: %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>MIDI exported: %1 (notes: %2)</source>
+        <translation>MIDI сохранён: %1 (нот: %2)</translation>
+    </message>
+    <message>
+        <location line="+136"/>
         <source>no audio data for analysis</source>
         <translation>нет аудиоданных для анализа</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+62"/>
         <source>analysis done: %1, notes found: %2</source>
         <translation>анализ завершён: %1, найдено нот: %2</translation>
     </message>
@@ -132,45 +143,88 @@
         <translation>коррекция не удалась</translation>
     </message>
     <message>
-        <location line="+17"/>
-        <source>correction applied — processed audio is in the plugin session</source>
-        <translation>коррекция применена — обработанное аудио в сессии плагина</translation>
+        <location line="+19"/>
+        <source>correction applied — the DAW now plays the corrected audio</source>
+        <translation>коррекция применена — DAW теперь играет исправленный звук</translation>
+    </message>
+</context>
+<context>
+    <name>Dontfloat::Plugins::Ui::DontfloatPluginEditorShell</name>
+    <message>
+        <location filename="../plugins/ui/dontfloat_plugin_editor_shell.cpp" line="+109"/>
+        <source>Play the track in the DAW — the plugin will pick up the audio.</source>
+        <translation>Запустите дорожку в DAW — плагин подхватит звук.</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <source>%1 — WAV export</source>
-        <translation>%1 — экспорт WAV</translation>
+        <location line="+27"/>
+        <source>Auto markers (onset detection)</source>
+        <translation>Авто-метки по транзиентам (Onset detection)</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>WAV (*.wav)</source>
-        <translation>WAV (*.wav)</translation>
+        <location line="+2"/>
+        <source>Shift beat grid one beat back</source>
+        <translation>Сдвинуть тактовую сетку на один удар назад</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>export error: %1</source>
-        <translation>ошибка экспорта: %1</translation>
+        <location line="+2"/>
+        <source>Snap all markers to BPM grid</source>
+        <translation>Привязать все метки к тактовой сетке BPM</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Shift beat grid one beat forward</source>
+        <translation>Сдвинуть тактовую сетку на один удар вперёд</translation>
+    </message>
+    <message>
+        <location line="+32"/>
+        <source>Preview the captured track</source>
+        <translation>Прослушать захваченную дорожку</translation>
     </message>
     <message>
         <location line="+3"/>
-        <source>exported: %1</source>
-        <translation>экспортировано: %1</translation>
+        <source>Stop the preview</source>
+        <translation>Остановить прослушивание</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Metronome (during preview)</source>
+        <translation>Метроном (во время прослушивания)</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Set loop start A at the cursor</source>
+        <translation>Точка цикла A по каретке</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Set loop end B at the cursor</source>
+        <translation>Точка цикла B по каретке</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Toggle loop</source>
+        <translation>Включить/выключить цикл</translation>
+    </message>
+    <message>
+        <location line="+91"/>
+        <source>No audio captured from the DAW yet.</source>
+        <translation>Аудио от DAW ещё не получено.</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Preview: playing the captured track.</source>
+        <translation>Прослушивание: играет захваченная дорожка.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Preview stopped.</source>
+        <translation>Прослушивание остановлено.</translation>
     </message>
 </context>
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatScratchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="+100"/>
-        <source>Import WAV…</source>
-        <translation>Импорт WAV…</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>BPM analysis</source>
-        <translation>Анализ BPM</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="+129"/>
         <source>Align beats</source>
         <translation>Выровнять доли</translation>
     </message>
@@ -180,13 +234,8 @@
         <translation>Применить stretch</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Export WAV…</source>
-        <translation>Экспорт WAV…</translation>
-    </message>
-    <message>
-        <location line="+18"/>
-        <location line="+69"/>
+        <location line="+9"/>
+        <location line="+95"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>загрузите аудио или воспроизведите трек в DAW для захвата сигнала.</translation>
     </message>
@@ -201,22 +250,108 @@
         <translation>аудио: %1 сэмплов, %2 Гц — нажмите «Анализ BPM»</translation>
     </message>
     <message>
-        <location line="+31"/>
-        <source>%1 — audio import</source>
-        <translation>%1 — импорт аудио</translation>
+        <location line="+65"/>
+        <location line="+48"/>
+        <source>no audio captured from the DAW yet</source>
+        <translation>аудио от DAW ещё не получено</translation>
+    </message>
+    <message>
+        <location line="-35"/>
+        <source>stretch marker added at %1</source>
+        <translation>метка растяжения поставлена на %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>could not add a marker here (too close to an existing one)</source>
+        <translation>здесь метку поставить нельзя (слишком близко к соседней)</translation>
+    </message>
+    <message>
+        <location line="+38"/>
+        <source>no beat grid to shift (BPM not detected)</source>
+        <translation>нечего сдвигать: тактовая сетка не построена (BPM не определён)</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>beat grid is already at the file boundary</source>
+        <translation>тактовая сетка уже у края файла</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>beat grid shifted one beat back</source>
+        <translation>тактовая сетка сдвинута на долю назад</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Audio Files (*.wav *.mp3 *.flac);;All Files (*)</source>
-        <translation>Аудиофайлы (*.wav *.mp3 *.flac);;Все файлы (*)</translation>
+        <source>beat grid shifted one beat forward</source>
+        <translation>тактовая сетка сдвинута на долю вперёд</translation>
     </message>
     <message>
-        <location line="+7"/>
-        <source>import error: %1</source>
-        <translation>ошибка импорта: %1</translation>
+        <location line="+9"/>
+        <source>no beat grid to snap to (BPM or beats not detected)</source>
+        <translation>не к чему привязывать: нет тактовой сетки (BPM или доли не определены)</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+5"/>
+        <source>no markers to snap to the grid</source>
+        <translation>нет меток для привязки к сетке</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>could not snap markers to the grid</source>
+        <translation>не удалось привязать метки к сетке</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>markers snapped to the grid (%1)</source>
+        <translation>метки привязаны к сетке (%1)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>all markers are already on the grid</source>
+        <translation>все метки уже на сетке</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>no transients found</source>
+        <translation>транзиенты не найдены</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>created %1 transient markers</source>
+        <translation>создано меток по транзиентам: %1</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>loop start A: %1</source>
+        <translation>точка цикла A: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>loop end B: %1</source>
+        <translation>точка цикла B: %1</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>loop off</source>
+        <translation>цикл выключен</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>set loop points A and B first</source>
+        <translation>сначала задайте точки цикла A и B</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>loop on: %1 — %2</source>
+        <translation>цикл включён: %1 — %2</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>clip moved by %1 — markers followed</source>
+        <translation>клип перенесён на %1 — метки сдвинулись за ним</translation>
+    </message>
+    <message>
+        <location line="+61"/>
         <source>no audio data for BPM analysis</source>
         <translation>нет аудиоданных для анализа BPM</translation>
     </message>
@@ -226,7 +361,7 @@
         <translation>анализ BPM…</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+21"/>
         <source>could not detect BPM</source>
         <translation>не удалось определить BPM</translation>
     </message>
@@ -241,7 +376,7 @@
         <translation>выравнивание долей…</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+28"/>
         <source>beat alignment error</source>
         <translation>ошибка выравнивания долей</translation>
     </message>
@@ -256,29 +391,9 @@
         <translation>не удалось применить stretch</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>stretch applied · %1 samples</source>
         <translation>stretch применён · %1 сэмплов</translation>
-    </message>
-    <message>
-        <location line="+11"/>
-        <source>%1 — WAV export</source>
-        <translation>%1 — экспорт WAV</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>WAV (*.wav)</source>
-        <translation>WAV (*.wav)</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>export error: %1</source>
-        <translation>ошибка экспорта: %1</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>exported: %1</source>
-        <translation>экспортировано: %1</translation>
     </message>
 </context>
 <context>
@@ -560,7 +675,7 @@
     <name>MainWindow</name>
     <message>
         <location filename="../ui/mainwindow.ui" line="+14"/>
-        <location filename="../src/mainwindow.cpp" line="+1702"/>
+        <location filename="../src/mainwindow.cpp" line="+1729"/>
         <location line="+250"/>
         <source>DONTFLOAT</source>
         <translation>DONTFLOAT</translation>
@@ -672,8 +787,8 @@
     </message>
     <message>
         <location line="+68"/>
-        <location filename="../src/mainwindow.cpp" line="-1214"/>
-        <location line="+620"/>
+        <location filename="../src/mainwindow.cpp" line="-1239"/>
+        <location line="+626"/>
         <source>Metronome</source>
         <translation>Метроном</translation>
     </message>
@@ -798,50 +913,50 @@
                     color: rgb(255, 255, 255);</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="-637"/>
-        <location line="+742"/>
+        <location filename="../src/mainwindow.cpp" line="-643"/>
+        <location line="+748"/>
         <source>&amp;File</source>
         <translation>&amp;Файл</translation>
     </message>
     <message>
-        <location line="-741"/>
-        <location line="+748"/>
+        <location line="-747"/>
+        <location line="+756"/>
         <source>&amp;Edit</source>
         <translation>&amp;Правка</translation>
     </message>
     <message>
-        <location line="-747"/>
-        <location line="+756"/>
+        <location line="-755"/>
+        <location line="+764"/>
         <source>&amp;View</source>
         <translation>&amp;Вид</translation>
     </message>
     <message>
-        <location line="-755"/>
-        <location line="+758"/>
+        <location line="-763"/>
+        <location line="+766"/>
         <source>Themes</source>
         <translation>Темы</translation>
     </message>
     <message>
-        <location line="-757"/>
-        <location line="+761"/>
+        <location line="-765"/>
+        <location line="+769"/>
         <source>&amp;Color Scheme</source>
         <translation>&amp;Цветовая схема</translation>
     </message>
     <message>
-        <location line="-760"/>
-        <location line="+776"/>
+        <location line="-768"/>
+        <location line="+784"/>
         <source>&amp;Settings</source>
         <translation>&amp;Настройки</translation>
     </message>
     <message>
-        <location line="-775"/>
-        <location line="+782"/>
+        <location line="-783"/>
+        <location line="+790"/>
         <source>Language</source>
         <translatorcomment>DONTFLOAT policy: submenu title stays the literal string «Language» in every locale (do not translate to «Язык», etc.).</translatorcomment>
         <translation>Language</translation>
     </message>
     <message>
-        <location line="-781"/>
+        <location line="-789"/>
         <location line="+585"/>
         <source>&amp;Open...</source>
         <translation>&amp;Открыть...</translation>
@@ -854,217 +969,217 @@
     </message>
     <message>
         <location line="-587"/>
-        <location line="+591"/>
+        <location line="+596"/>
         <source>&amp;Exit</source>
         <translation>&amp;Выход</translation>
     </message>
     <message>
-        <location line="-590"/>
-        <location line="+596"/>
+        <location line="-595"/>
+        <location line="+601"/>
         <source>Use default theme</source>
         <translation>Использовать тему по умолчанию</translation>
     </message>
     <message>
-        <location line="-596"/>
-        <location line="+595"/>
+        <location line="-601"/>
+        <location line="+600"/>
         <source>Reset to default</source>
         <translation>По умолчанию</translation>
     </message>
     <message>
-        <location line="-594"/>
-        <location line="+599"/>
+        <location line="-599"/>
+        <location line="+604"/>
         <source>Dark</source>
         <translation>Тёмная</translation>
     </message>
     <message>
-        <location line="-599"/>
-        <location line="+600"/>
+        <location line="-604"/>
+        <location line="+605"/>
         <source>Use dark theme</source>
         <translation>Использовать тёмную тему</translation>
     </message>
     <message>
-        <location line="-599"/>
-        <location line="+602"/>
+        <location line="-604"/>
+        <location line="+607"/>
         <source>Light</source>
         <translation>Светлая</translation>
     </message>
     <message>
-        <location line="-602"/>
-        <location line="+603"/>
+        <location line="-607"/>
+        <location line="+608"/>
         <source>Use light theme</source>
         <translation>Использовать светлую тему</translation>
     </message>
     <message>
-        <location line="-602"/>
-        <location line="+606"/>
+        <location line="-607"/>
+        <location line="+611"/>
         <source>&amp;Metronome Settings...</source>
         <translation>Настройки &amp;метронома...</translation>
     </message>
     <message>
-        <location line="-606"/>
-        <location line="+607"/>
+        <location line="-611"/>
+        <location line="+612"/>
         <source>Metronome Settings</source>
         <translation>Настройки метронома</translation>
     </message>
     <message>
-        <location line="-606"/>
-        <location line="+609"/>
+        <location line="-611"/>
+        <location line="+614"/>
         <source>&amp;Hotkeys...</source>
         <translation>&amp;Горячие клавиши...</translation>
     </message>
     <message>
-        <location line="-609"/>
-        <location line="+610"/>
+        <location line="-614"/>
+        <location line="+615"/>
         <source>Configure hotkeys</source>
         <translation>Настройка горячих клавиш</translation>
     </message>
     <message>
-        <location line="-609"/>
-        <location line="+613"/>
+        <location line="-614"/>
+        <location line="+618"/>
         <source>Play/Pause</source>
         <translation>Воспроизведение/Пауза</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+616"/>
+        <location line="-617"/>
+        <location line="+623"/>
         <source>Stop</source>
         <translation>Стоп</translation>
     </message>
     <message>
-        <location line="-614"/>
-        <location line="+625"/>
+        <location line="-621"/>
+        <location line="+631"/>
         <source>Set loop start</source>
         <translation>Установить начало цикла</translation>
     </message>
     <message>
-        <location line="-624"/>
-        <location line="+628"/>
+        <location line="-630"/>
+        <location line="+634"/>
         <source>Set loop end</source>
         <translation>Установить конец цикла</translation>
     </message>
     <message>
-        <location line="-627"/>
-        <location line="+634"/>
+        <location line="-633"/>
+        <location line="+640"/>
         <source>Toggle pitch grid visibility</source>
         <translation>Переключить видимость питч-сетки</translation>
     </message>
     <message>
-        <location line="-634"/>
+        <location line="-640"/>
         <location line="+59"/>
-        <location line="+573"/>
-        <location line="+1220"/>
+        <location line="+579"/>
+        <location line="+1239"/>
         <source>Hide Pitch Grid</source>
         <translation>Убрать питч-сетку</translation>
     </message>
     <message>
-        <location line="-1852"/>
+        <location line="-1877"/>
         <location line="+60"/>
-        <location line="+1793"/>
+        <location line="+1818"/>
         <source>Show Pitch Grid</source>
         <translation>Показать питч-сетку</translation>
     </message>
     <message>
-        <location line="-1852"/>
-        <location line="+637"/>
+        <location line="-1877"/>
+        <location line="+643"/>
         <source>Beat Waveform</source>
         <translation>Силуэт ударных</translation>
     </message>
     <message>
-        <location line="-637"/>
-        <location line="+640"/>
+        <location line="-643"/>
+        <location line="+646"/>
         <source>Toggle beat waveform overlay</source>
         <translation>Переключить отображение силуэта ударных поверх волны</translation>
     </message>
     <message>
-        <location line="-639"/>
-        <location line="+666"/>
+        <location line="-645"/>
+        <location line="+672"/>
         <source>&amp;Undo</source>
         <translation>&amp;Отменить</translation>
     </message>
     <message>
-        <location line="-665"/>
-        <location line="+669"/>
+        <location line="-671"/>
+        <location line="+675"/>
         <source>&amp;Redo</source>
         <translation>&amp;Повторить</translation>
     </message>
     <message>
-        <location line="-668"/>
-        <location line="+672"/>
+        <location line="-674"/>
+        <location line="+678"/>
         <source>Русский</source>
         <translatorcomment>Language name autonym: keep Cyrillic «Русский» in the English .ts as well (do not use «Russian» here).</translatorcomment>
         <translation>Русский</translation>
     </message>
     <message>
-        <location line="-671"/>
-        <location line="+676"/>
+        <location line="-677"/>
+        <location line="+682"/>
         <source>English</source>
         <translatorcomment>Language name autonym: keep «English» (do not translate to localized demonyms).</translatorcomment>
         <translation>English</translation>
     </message>
     <message>
-        <location line="-675"/>
-        <location line="+702"/>
-        <location line="+2230"/>
+        <location line="-681"/>
+        <location line="+708"/>
+        <location line="+2318"/>
         <source>Apply time stretch</source>
         <translation>Применить сжатие-растяжение</translation>
     </message>
     <message>
-        <location line="-2932"/>
-        <location line="+704"/>
+        <location line="-3026"/>
+        <location line="+710"/>
         <source>Apply time stretch with pitch compensation</source>
         <translation>Применить сжатие-растяжение аудио по меткам с тонкомпенсацией</translation>
     </message>
     <message>
-        <location line="-703"/>
-        <location line="+706"/>
-        <location line="+1489"/>
+        <location line="-709"/>
+        <location line="+712"/>
+        <location line="+1525"/>
         <source>Apply note pitch correction</source>
         <translation>Применить коррекцию высоты нот</translation>
     </message>
     <message>
-        <location line="-2195"/>
-        <location line="+708"/>
+        <location line="-2237"/>
+        <location line="+714"/>
         <source>Re-render audio using the edited piano roll notes</source>
         <translation>Пересчитать звук по изменённым нотам пианоролла</translation>
     </message>
     <message>
-        <location line="-707"/>
-        <location line="+742"/>
+        <location line="-713"/>
+        <location line="+750"/>
         <source>Waveform view</source>
         <translation>Вид звуковой волны</translation>
     </message>
     <message>
-        <location line="-741"/>
-        <location line="+636"/>
+        <location line="-749"/>
+        <location line="+642"/>
         <source>Wave peaks</source>
         <translation>Звуковые пики</translation>
     </message>
     <message>
-        <location line="-635"/>
-        <location line="+646"/>
+        <location line="-641"/>
+        <location line="+652"/>
         <source>Spectrogram</source>
         <translation>Спектрограмма</translation>
     </message>
     <message>
-        <location line="-645"/>
-        <location line="+675"/>
+        <location line="-651"/>
+        <location line="+681"/>
         <source>Spectrogram display settings...</source>
         <translation>Настройки отображения спектрограммы...</translation>
     </message>
     <message>
-        <location line="-675"/>
-        <location line="+676"/>
+        <location line="-681"/>
+        <location line="+682"/>
         <source>Spectrogram options (window, bands, color)</source>
         <translation>Настроить параметры спектрограммы (размер окна, полосы, цвет)</translation>
     </message>
     <message>
-        <location line="-674"/>
-        <location line="+2595"/>
+        <location line="-680"/>
+        <location line="+2689"/>
         <source>Analyzing... %p%</source>
         <translation>Анализ... %p%</translation>
     </message>
     <message>
-        <location line="-2488"/>
+        <location line="-2582"/>
         <source>Time signature set to %1</source>
         <translation>Размер такта изменен на %1</translation>
     </message>
@@ -1137,22 +1252,32 @@ Shift+B: Удалить точку B</translation>
     </message>
     <message>
         <location line="+39"/>
-        <location line="+873"/>
+        <location line="+898"/>
         <source>Loop: %1 - %2</source>
         <translation>Цикл: %1 - %2</translation>
     </message>
     <message>
-        <location line="-851"/>
+        <location line="-876"/>
         <source>Segment: %1 - %2 | Ratio: %3</source>
         <translation>Сегмент: %1 - %2 | Коэффициент: %3</translation>
     </message>
     <message>
-        <location line="+246"/>
+        <location line="+32"/>
+        <source>Export &amp;MIDI...</source>
+        <translation>Экспорт &amp;MIDI...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Save the piano roll notes as a MIDI file</source>
+        <translation>Сохранить ноты пианоролла в MIDI-файл</translation>
+    </message>
+    <message>
+        <location line="+221"/>
         <source>Marker added</source>
         <translation>Метка добавлена</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+95"/>
         <source>Point A (loop start) set: %1</source>
         <translation>Установлена точка A (начало цикла): %1</translation>
     </message>
@@ -1275,7 +1400,7 @@ Shift+B: Удалить точку B</translation>
         <translation>Ошибка: нет данных для сохранения</translation>
     </message>
     <message>
-        <location line="-873"/>
+        <location line="-898"/>
         <source>Snap all markers to BPM grid (bar subdivisions)</source>
         <translation>Привязать все метки к тактовой сетке BPM (подразделения такта)</translation>
     </message>
@@ -1294,7 +1419,7 @@ Shift + LMB drag on waveform — fine grid adjustment</source>
 Shift + перетаскивание ЛКМ на волне — тонкая подстройка сетки</translation>
     </message>
     <message>
-        <location line="+628"/>
+        <location line="+653"/>
         <source>The audio file has unsaved changes.
 Do you want to save the changes?</source>
         <translation>В аудиофайле есть несохраненные изменения.
@@ -1443,7 +1568,7 @@ Do you want to save the changes?</source>
         <translation>Анализ завершён: %1, найдено нот: %2</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>Change note pitch</source>
         <translation>Изменить высоту ноты</translation>
     </message>
@@ -1463,7 +1588,12 @@ Do you want to save the changes?</source>
         <translation>Нота разделена</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
+        <source>Show the pitch grid to split notes (Ctrl+G)</source>
+        <translation>Покажите питч-сетку, чтобы резать ноты (Ctrl+G)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>No note at the cut position</source>
         <translation>В позиции реза нет ноты</translation>
     </message>
@@ -1473,12 +1603,14 @@ Do you want to save the changes?</source>
         <translation>Точка реза вне ноты — включите «Свободный рез» или сдвиньте каретку</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-10"/>
+        <location line="+21"/>
+        <location line="+449"/>
         <source>Run note analysis first (the &quot;Analyze&quot; button)</source>
         <translation>Сначала выполните анализ нот (кнопка «Анализировать»)</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="-444"/>
         <source>No edited notes — drag notes on the piano roll</source>
         <translation>Нет изменённых нот — сдвиньте ноты на пианоролле</translation>
     </message>
@@ -1508,14 +1640,14 @@ Do you want to save the changes?</source>
         <translation>Коррекция высоты нот применена</translation>
     </message>
     <message>
-        <location line="-309"/>
-        <location line="+317"/>
+        <location line="-326"/>
+        <location line="+334"/>
         <source>Load an audio file first</source>
         <translation>Сначала загрузите аудиофайл</translation>
     </message>
     <message>
-        <location line="-309"/>
-        <location line="+315"/>
+        <location line="-326"/>
+        <location line="+332"/>
         <source>No audio to analyze</source>
         <translation>Нет аудиоданных для анализа</translation>
     </message>
@@ -1530,13 +1662,13 @@ Do you want to save the changes?</source>
         <translation>Тональность определена: %1</translation>
     </message>
     <message>
-        <location line="-2243"/>
-        <location line="+2582"/>
+        <location line="-2285"/>
+        <location line="+2676"/>
         <source>Analyze</source>
         <translation>Анализировать</translation>
     </message>
     <message>
-        <location line="-55"/>
+        <location line="-107"/>
         <source>Split tool off</source>
         <translation>Инструмент «Разделить» выключен</translation>
     </message>
@@ -1546,7 +1678,28 @@ Do you want to save the changes?</source>
         <translation>Инструмент «Разделить» включён: кликните по ноте или %1 — рез по каретке (Esc — выключить)</translation>
     </message>
     <message>
-        <location line="+297"/>
+        <location line="+61"/>
+        <location line="+14"/>
+        <source>Export MIDI</source>
+        <translation>Экспорт MIDI</translation>
+    </message>
+    <message>
+        <location line="-14"/>
+        <source>MIDI files (*.mid)</source>
+        <translation>MIDI-файлы (*.mid)</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Failed to save the MIDI file: %1</source>
+        <translation>Не удалось сохранить MIDI-файл: %1</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>MIDI exported: %1 (notes: %2)</source>
+        <translation>MIDI сохранён: %1 (нот: %2)</translation>
+    </message>
+    <message>
+        <location line="+269"/>
         <source>Translation load error</source>
         <translation>Ошибка загрузки перевода</translation>
     </message>
@@ -1600,16 +1753,16 @@ Press M to add markers.</source>
         <translation>Авто-метки по транзиентам</translation>
     </message>
     <message>
-        <location line="-1637"/>
+        <location line="-1706"/>
         <location line="+59"/>
-        <location line="+1581"/>
+        <location line="+1650"/>
         <source>Waveform not initialized.</source>
         <translation>Волновая форма не инициализирована.</translation>
     </message>
     <message>
-        <location line="-1634"/>
+        <location line="-1703"/>
         <location line="+59"/>
-        <location line="+1581"/>
+        <location line="+1650"/>
         <source>No audio loaded.</source>
         <translation>Аудиоданные не загружены.</translation>
     </message>
@@ -1619,12 +1772,7 @@ Press M to add markers.</source>
         <translation>Некорректная частота дискретизации.</translation>
     </message>
     <message>
-        <location line="+41"/>
-        <source>No transients found.</source>
-        <translation>Не удалось обнаружить транзиенты в аудиофайле.</translation>
-    </message>
-    <message>
-        <location line="+27"/>
+        <location line="+8"/>
         <source>No suitable transients found.</source>
         <translation>Подходящих транзиентов не найдено.</translation>
     </message>
@@ -1948,7 +2096,7 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
 <context>
     <name>PianoRollToolbar</name>
     <message>
-        <location filename="../src/pianoroll_toolbar.cpp" line="+227"/>
+        <location filename="../src/pianoroll_toolbar.cpp" line="+238"/>
         <source>Split note at the playback cursor or by clicking on a note</source>
         <translation>Разрезать ноту по каретке воспроизведения или кликом по ноте</translation>
     </message>
@@ -1987,6 +2135,18 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
         <location line="-1"/>
         <source>the cut lands exactly where the cursor is</source>
         <translation>рез точно в позиции курсора</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+2"/>
+        <location line="+1"/>
+        <source>Export MIDI</source>
+        <translation>Экспорт MIDI</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>save the piano roll notes as a .mid file</source>
+        <translation>сохранить ноты пианоролла в файл .mid</translation>
     </message>
 </context>
 <context>
@@ -2136,6 +2296,11 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
         <source>Beat alignment</source>
         <translation>Выравнивание долей</translation>
     </message>
+    <message>
+        <location filename="../src/midiexporter.cpp" line="+144"/>
+        <source>There are no notes to export</source>
+        <translation>Нет нот для экспорта</translation>
+    </message>
 </context>
 <context>
     <name>ShortcutsDialog</name>
@@ -2145,7 +2310,12 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
         <translation>Горячие клавиши</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+20"/>
+        <source>Split note at the playback cursor</source>
+        <translation>Разрезать ноту по каретке воспроизведения</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Apply note pitch correction</source>
         <translation>Применить коррекцию высоты нот</translation>
     </message>
@@ -2170,7 +2340,7 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
         <translation>Восстановить все сочетания по умолчанию</translation>
     </message>
     <message>
-        <location line="-34"/>
+        <location line="-35"/>
         <source>Open file</source>
         <translation>Открыть файл</translation>
     </message>
@@ -2190,7 +2360,7 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
         <translation>Воспроизведение/Пауза</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Stop</source>
         <translation>Стоп</translation>
     </message>
@@ -2240,12 +2410,7 @@ Shift + перетаскивание ЛКМ на волне — тонкая п�
         <translation>Добавить метку</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Split note at the playback cursor (piano roll)</source>
-        <translation>Разрезать ноту по каретке воспроизведения (пианоролл)</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Apply time stretch</source>
         <translation>Применить сжатие-растяжение</translation>
     </message>

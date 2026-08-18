@@ -87,6 +87,18 @@ void PianoRollToolbar::buildUi()
     root->addWidget(cutGroup);
     root->addStretch(1);
 
+    // Экспорт MIDI — справа на полосе: ноты пианоролла уходят в файл .mid.
+    // В макете это компактный прямоугольник ниже капсулы реза
+    exportMidiButton = new QToolButton(this);
+    exportMidiButton->setObjectName(QStringLiteral("pianoRollExportMidiButton"));
+    exportMidiButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    exportMidiButton->setFixedHeight(kExportButtonHeightPx);
+    exportMidiButton->setCursor(Qt::PointingHandCursor);
+    exportMidiButton->setFocusPolicy(Qt::NoFocus);
+    root->addWidget(exportMidiButton, 0, Qt::AlignVCenter);
+
+    connect(exportMidiButton, &QToolButton::clicked,
+            this, &PianoRollToolbar::exportMidiRequested);
     connect(splitButton, &QToolButton::toggled, this, &PianoRollToolbar::splitToggled);
     connect(gridCutButton, &QToolButton::toggled, this, [this](bool checked) {
         if (!checked) {
@@ -119,6 +131,10 @@ void PianoRollToolbar::applyStyle()
     const QString splitCheckedBg = QStringLiteral("rgba(0, 0, 0, 128)");
     const QString modeOffBg = QStringLiteral("#585858");
     const QString modeOnBg  = QStringLiteral("#222222");
+    // Кнопка экспорта из макета: тёмная заливка и светлая рамка в тон панели
+    const QString exportBg     = light ? QStringLiteral("#c4c4c4") : QStringLiteral("#3c3c3c");
+    const QString exportBorder = light ? QStringLiteral("#8a8a8a") : QStringLiteral("#9a9a9a");
+    const QString exportText   = light ? QStringLiteral("#202020") : QStringLiteral("#e8e8e8");
 
     // Радиусы: капсула и круглые переключатели — половина размера, подложка
     // ножниц — мягкий квадрат из макета. Радиус повторяется в каждом состоянии:
@@ -171,7 +187,20 @@ void PianoRollToolbar::applyStyle()
                modeBox + background(hoverBg))
         + rule(QStringLiteral("QToolButton#pianoRollGridCutButton:checked,"
                               " QToolButton#pianoRollFreeCutButton:checked"),
-               modeBox + background(modeOnBg)));
+               modeBox + background(modeOnBg))
+        // Кнопка экспорта — прямоугольник с тонкой рамкой (как в макете
+        // MARKDOWN/example_plugin_dontfloat.svg), а не капсула
+        + rule(QStringLiteral("QToolButton#pianoRollExportMidiButton"),
+               background(exportBg)
+                   + QStringLiteral(" color: ") + exportText
+                   + QStringLiteral("; border: 1px solid ") + exportBorder
+                   + QStringLiteral("; border-radius: 2px; padding: 1px 10px;"))
+        + rule(QStringLiteral("QToolButton#pianoRollExportMidiButton:hover"),
+               background(hoverBg) + QStringLiteral(" border: 1px solid ") + exportBorder
+                   + QStringLiteral("; border-radius: 2px;"))
+        + rule(QStringLiteral("QToolButton#pianoRollExportMidiButton:disabled"),
+               QStringLiteral("color: rgba(255, 255, 255, 90); border: 1px solid ")
+                   + exportBorder + QStringLiteral("; border-radius: 2px;")));
 }
 
 void PianoRollToolbar::refreshIcons()
@@ -223,6 +252,28 @@ void PianoRollToolbar::retranslateUi()
     freeCutButton->setToolTip(QStringLiteral("%1 — %2")
         .arg(tr("Free cut"), tr("the cut lands exactly where the cursor is")));
     freeCutButton->setAccessibleName(tr("Free cut"));
+
+    exportMidiButton->setText(tr("Export MIDI"));
+    exportMidiButton->setToolTip(QStringLiteral("%1 — %2")
+        .arg(tr("Export MIDI"), tr("save the piano roll notes as a .mid file")));
+    exportMidiButton->setAccessibleName(tr("Export MIDI"));
+}
+
+void PianoRollToolbar::setExportMidiEnabled(bool enabled)
+{
+    exportMidiButton->setEnabled(enabled);
+}
+
+void PianoRollToolbar::addTrailingWidget(QWidget* widget)
+{
+    auto* root = qobject_cast<QHBoxLayout*>(layout());
+    if (!root || !widget) {
+        return;
+    }
+    // Перед кнопкой экспорта: она остаётся крайней справа, как в макете
+    const int exportIndex = root->indexOf(exportMidiButton);
+    root->insertWidget(exportIndex >= 0 ? exportIndex : root->count(), widget, 0,
+                       Qt::AlignVCenter);
 }
 
 void PianoRollToolbar::setSplitActive(bool active)

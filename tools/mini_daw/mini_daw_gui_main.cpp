@@ -17,6 +17,7 @@
 #include <cstdio>
 
 #include "audiofileservice.h"
+#include "dontfloat_plugin_theme.h"
 #include "mini_daw_plugin_host.h"
 #include "mini_daw_window.h"
 
@@ -120,7 +121,8 @@ int runSelfTest(const Selection& selection, const QString& input, double maxSeco
 
     for (int pos = 0; pos < frames; pos += 512) {
         const int n = std::min(512, frames - pos);
-        host->process(left.data() + pos, right.data() + pos, n);
+        // Позиция блока на таймлайне — как в окне: плагин пишет захват по ней
+        host->process(left.data() + pos, right.data() + pos, n, pos);
     }
     std::printf("[ok] прогнано %d кадров через process(), выход RMS %.4f\n",
                 frames, rms(left, frames));
@@ -148,6 +150,9 @@ int main(int argc, char** argv)
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("DONTFLOAT mini-DAW"));
     QApplication::setOrganizationName(QStringLiteral("DONTFLOAT"));
+    // Тестовый хост держим в оформлении DONTFLOAT: плагин рисуется в нём,
+    // и разница стилей мешала бы сверять его вид с главным окном
+    Dontfloat::Plugins::Ui::applyDontfloatAppTheme(&app);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("DONTFLOAT mini-DAW"));

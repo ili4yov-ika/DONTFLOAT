@@ -12,6 +12,7 @@
 #include <QtCore/QString>
 #include <QtGui/qwindowdefs.h>
 
+#include <functional>
 #include <memory>
 
 #include "plugin_host_probe.h"
@@ -41,8 +42,13 @@ public:
     /** Сообщает плагину новый размер области редактора. */
     virtual void resizeEditor(QSize size) = 0;
 
-    /** Прогоняет блок стерео-аудио через плагин (обработка на месте). */
-    virtual void process(float* left, float* right, int frames) = 0;
+    /**
+     * Прогоняет блок стерео-аудио через плагин (обработка на месте).
+     * @param timelineFrame позиция начала блока на таймлайне; плагин пишет
+     *        захват по ней, поэтому сдвиг клипа виден ему как сдвиг
+     *        содержимого. Отрицательное значение — позиция неизвестна.
+     */
+    virtual void process(float* left, float* right, int frames, qint64 timelineFrame = -1) = 0;
 
     /** Транспорт хоста: темп и размер такта из полей панели. */
     virtual void setTransport(double bpm, int beatsPerBar) = 0;
@@ -52,6 +58,19 @@ public:
      * Отправляется пустым блоком process() — аудио в сессию при этом не идёт.
      */
     virtual void setPlayhead(qint64 frame, bool playing) = 0;
+
+    /**
+     * Плагин просит переставить каретку DAW (своё расширение CLAP
+     * `dontfloat.transport/1`; в VST3/LV2 такого канала нет).
+     * @param handler позиция в кадрах дорожки.
+     */
+    virtual void setSeekRequestHandler(std::function<void(qint64)> handler) { Q_UNUSED(handler); }
+
+    /**
+     * Плагин пересчитал звук (коррекция высот, растяжение) — дорожку надо
+     * прогнать через него заново, иначе правки не слышны.
+     */
+    virtual void setRenderChangedHandler(std::function<void()> handler) { Q_UNUSED(handler); }
 
     /** Выгружает редактор и экземпляр плагина. */
     virtual void unload() = 0;

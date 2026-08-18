@@ -1,5 +1,7 @@
 #include "dontfloat_qt_hosting.h"
 
+#include "dontfloat_plugin_theme.h"
+
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -137,6 +139,9 @@ void ensureQtApplication(const char* applicationName)
     configureQtPluginSearchPaths();
     app->setApplicationName(QString::fromUtf8(appNameStorage));
     app->setOrganizationName(QStringLiteral("DONTFLOAT"));
+    // QApplication наш — можно ставить стиль и палитру главного окна глобально;
+    // при хостовом цикле Qt красится только поддерево редактора (см. тему)
+    applyDontfloatAppTheme(app);
 #if defined(_WIN32)
     ensureWin32QtEventPump();
 #endif

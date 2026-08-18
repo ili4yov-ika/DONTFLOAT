@@ -929,8 +929,9 @@ void PitchGridWidget::leaveEvent(QEvent *event)
 
 bool PitchGridWidget::event(QEvent *event)
 {
-    // Клавиша реза перехватывается до QShortcut приложения (по умолчанию S —
-    // это же «Стоп»): пока фокус на пианоролле, режем ноту, а не останавливаем.
+    // Клавиша реза перехватывается до QShortcut приложения: пока фокус на
+    // пианоролле, режет сам виджет (в плагинах главного окна нет вовсе),
+    // и глобальный шорткат не сработает вторым разрезом.
     if (event->type() == QEvent::ShortcutOverride
         && matchesSplitShortcut(static_cast<QKeyEvent*>(event))) {
         event->accept();

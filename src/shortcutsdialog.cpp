@@ -23,7 +23,8 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
         { "Save",           tr("Save file"),         QKeySequence::Save },
         { "Exit",           tr("Exit"),                 QKeySequence::Quit },
         { "Play",           tr("Play/Pause"), QKeySequence(Qt::Key_Space) },
-        { "Stop",           tr("Stop"),                  QKeySequence(Qt::Key_S) },
+        // S отдана разрезу ноты — «Стоп» по умолчанию без клавиши
+        { "Stop",           tr("Stop"),                  QKeySequence() },
         { "Metronome",      tr("Metronome"),              QKeySequence(Qt::Key_T) },
         { "LoopStart",      tr("Set loop start (A)"), QKeySequence(Qt::Key_A) },
         { "LoopEnd",        tr("Set loop end (B)"),  QKeySequence(Qt::Key_B) },
@@ -33,7 +34,7 @@ ShortcutsDialog::ShortcutsDialog(QWidget *parent)
         { "Redo",           tr("Redo"),             QKeySequence::Redo },
         { "PitchGrid",      tr("Toggle pitch grid"), QKeySequence(Qt::CTRL | Qt::Key_G) },
         { "AddMarker",      tr("Add marker"),        QKeySequence(Qt::Key_M) },
-        { "SplitNote",      tr("Split note at the playback cursor (piano roll)"), QKeySequence(Qt::Key_S) },
+        { "SplitNote",      tr("Split note at the playback cursor"), QKeySequence(Qt::Key_S) },
         { "TimeStretch",    tr("Apply time stretch"), QKeySequence(Qt::CTRL | Qt::Key_T) },
         { "PitchCorrection", tr("Apply note pitch correction"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T) },
     };

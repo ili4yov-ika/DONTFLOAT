@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -176,8 +177,28 @@ public:
         host_.vendor = "DONTFLOAT";
         host_.url = "https://github.com/ili4yov-ika/DONTFLOAT";
         host_.version = "0.0.1";
-        host_.get_extension = [](const clap_host_t*, const char*) -> const void* {
-            // Хост крутит свой Qt-цикл, clap.timer-support плагину не нужен
+        host_.host_data = this;
+        host_.get_extension = [](const clap_host_t* host, const char* id) -> const void* {
+            // Хост крутит свой Qt-цикл, clap.timer-support плагину не нужен.
+            // Своё расширение транспорта отдаём: по нему плагин двигает каретку DAW
+            if (id && std::strcmp(id, CLAP_EXT_DONTFLOAT_TRANSPORT) == 0) {
+                static const clap_host_dontfloat_transport_t kTransport {
+                    [](const clap_host_t* self, double seconds) {
+                        auto* owner = static_cast<ClapHost*>(self->host_data);
+                        if (owner && owner->seekHandler_ && owner->sampleRate_ > 0.0) {
+                            owner->seekHandler_(qint64(seconds * owner->sampleRate_));
+                        }
+                    },
+                    [](const clap_host_t* self) {
+                        auto* owner = static_cast<ClapHost*>(self->host_data);
+                        if (owner && owner->renderChangedHandler_) {
+                            owner->renderChangedHandler_();
+                        }
+                    }
+                };
+                return &kTransport;
+            }
+            Q_UNUSED(host);
             return nullptr;
         };
 
@@ -248,10 +269,14 @@ public:
         }
     }
 
-    void process(float* left, float* right, int frames) override
+    void process(float* left, float* right, int frames, qint64 timelineFrame) override
     {
         if (!plugin_ || !processing_ || frames <= 0) {
             return;
+        }
+        // Позиция блока на таймлайне — в транспорт: плагин пишет захват по ней
+        if (timelineFrame >= 0 && sampleRate_ > 0.0) {
+            updateTransportPosition(double(timelineFrame) / sampleRate_, true);
         }
         float* channels[2] = { left, right };
         clap_audio_buffer_t input {};
@@ -280,19 +305,32 @@ public:
         transport_.tsig_denom = 4;
     }
 
-    void setPlayhead(qint64 frame, bool playing) override
+    /** Заполняет транспорт позицией \a seconds (общая часть process/setPlayhead). */
+    void updateTransportPosition(double seconds, bool playing)
     {
-        if (!plugin_ || !processing_ || sampleRate_ <= 0.0) {
-            return;
-        }
-        const double seconds = double(frame) / sampleRate_;
         transport_.flags = CLAP_TRANSPORT_HAS_TEMPO | CLAP_TRANSPORT_HAS_TIME_SIGNATURE
             | CLAP_TRANSPORT_HAS_SECONDS_TIMELINE | CLAP_TRANSPORT_HAS_BEATS_TIMELINE;
         if (playing) {
             transport_.flags |= CLAP_TRANSPORT_IS_PLAYING;
         }
         transport_.song_pos_seconds = clap_sectime(seconds * CLAP_SECTIME_FACTOR);
-        transport_.song_pos_beats = clap_beattime(seconds * (bpm_ / 60.0) * CLAP_BEATTIME_FACTOR);
+        const double beats = seconds * (bpm_ / 60.0);
+        transport_.song_pos_beats = clap_beattime(beats * CLAP_BEATTIME_FACTOR);
+
+        // Тактовая сетка хоста начинается в нуле: границу такта плагин берёт
+        // отсюда и рисует свою сетку по ней (см. syncEditorBeatGrid)
+        const double barBeats = double(std::max(1, beatsPerBar_));
+        const double barIndex = std::floor(beats / barBeats);
+        transport_.bar_start = clap_beattime(barIndex * barBeats * CLAP_BEATTIME_FACTOR);
+        transport_.bar_number = int32_t(barIndex);
+    }
+
+    void setPlayhead(qint64 frame, bool playing) override
+    {
+        if (!plugin_ || !processing_ || sampleRate_ <= 0.0) {
+            return;
+        }
+        updateTransportPosition(double(frame) / sampleRate_, playing);
 
         // Пустой блок: плагин прочитает транспорт, но аудио не получит
         clap_audio_buffer_t input {};
@@ -306,6 +344,16 @@ public:
         process.steady_time = steadyTime_;
         process.transport = &transport_;
         plugin_->process(plugin_, &process);
+    }
+
+    void setSeekRequestHandler(std::function<void(qint64)> handler) override
+    {
+        seekHandler_ = std::move(handler);
+    }
+
+    void setRenderChangedHandler(std::function<void()> handler) override
+    {
+        renderChangedHandler_ = std::move(handler);
     }
 
     void unload() override
@@ -332,6 +380,10 @@ public:
     }
 
     QString displayName() const override { return displayName_; }
+
+    /** Запросы плагина (см. расширение dontfloat.transport). */
+    std::function<void(qint64)> seekHandler_;
+    std::function<void()> renderChangedHandler_;
 
 private:
     void fail(QString* error, const QString& text)
@@ -493,8 +545,11 @@ public:
         // Каретка LV2 приедет тем же time:Position (см. setTransport)
     }
 
-    void process(float* left, float* right, int frames) override
+    void process(float* left, float* right, int frames, qint64 timelineFrame) override
     {
+        // Позиция таймлайна LV2 передаётся событием time:Position — не реализовано,
+        // поэтому плагин пишет захват в конец (см. appendHostFrames)
+        Q_UNUSED(timelineFrame);
         if (!instance_ || !active_ || frames <= 0) {
             return;
         }
@@ -790,11 +845,18 @@ public:
         view_->onSize(&rect);
     }
 
-    void process(float* left, float* right, int frames) override
+    void process(float* left, float* right, int frames, qint64 timelineFrame) override
     {
         if (!processor_ || !processing_ || frames <= 0) {
             return;
         }
+        // Позиция блока на таймлайне — в ProcessContext: по ней плагин пишет
+        // захват (и только на «играющем» транспорте, см. обёртку плагина)
+        if (timelineFrame >= 0) {
+            context_.projectTimeSamples = Steinberg::Vst::TSamples(timelineFrame);
+            context_.state |= Steinberg::Vst::ProcessContext::kPlaying;
+        }
+        updateMusicalPosition();
         float* channels[2] = { left, right };
         Steinberg::Vst::AudioBusBuffers input {};
         input.numChannels = 2;
@@ -829,6 +891,22 @@ public:
         context_.tempo = bpm_;
         context_.timeSigNumerator = beatsPerBar_;
         context_.timeSigDenominator = 4;
+        updateMusicalPosition();
+    }
+
+    /** Музыкальное время и начало такта — по ним плагин строит свою сетку. */
+    void updateMusicalPosition()
+    {
+        if (context_.sampleRate <= 0.0 || bpm_ <= 0.0) {
+            return;
+        }
+        const double quarters =
+            (double(context_.projectTimeSamples) / context_.sampleRate) * (bpm_ / 60.0);
+        const double barQuarters = double(std::max(1, beatsPerBar_));
+        context_.projectTimeMusic = quarters;
+        context_.barPositionMusic = std::floor(quarters / barQuarters) * barQuarters;
+        context_.state |= Steinberg::Vst::ProcessContext::kProjectTimeMusicValid
+            | Steinberg::Vst::ProcessContext::kBarPositionValid;
     }
 
     void setPlayhead(qint64 frame, bool playing) override
@@ -838,6 +916,7 @@ public:
         }
         context_.projectTimeSamples = frame;
         context_.continousTimeSamples = frame;
+        updateMusicalPosition();
         if (playing) {
             context_.state |= Steinberg::Vst::ProcessContext::kPlaying;
         } else {
