@@ -138,6 +138,13 @@ struct TrackPitchNote {
     float midiPitch = 60.0f;
     float detectedPitch = 60.0f;
     float confidence = 0.0f;
+    /**
+     * Откуда берётся звук ноты (−1 — оттуда же, где она нарисована).
+     * Заполняется, когда ноту передвинули по времени: коррекция переносит
+     * звук с этого места на новое.
+     */
+    std::int64_t sourceStartSample = -1;
+    std::int64_t sourceEndSample = -1;
 };
 
 struct TrackAudioBuffer {

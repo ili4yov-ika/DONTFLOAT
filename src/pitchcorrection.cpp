@@ -62,12 +62,36 @@ void blendInto(QVector<float>& channel, const QVector<float>& processed, int sta
     }
 }
 
+/** Гасит участок [from, to) с короткими фейдами — место ушедшей ноты. */
+void silenceRange(QVector<float>& channel, qint64 from, qint64 to)
+{
+    const int len = int(to - from);
+    if (len <= 0) {
+        return;
+    }
+    const int fade = qMin(kCrossfadeSamples, len / 4);
+    for (int i = 0; i < len; ++i) {
+        float w = 0.0f;  // 0 — тишина, 1 — исходный звук
+        if (i < fade) {
+            w = 1.0f - float(i) / float(fade);
+        } else if (i >= len - fade) {
+            w = 1.0f - float(len - 1 - i) / float(fade);
+        }
+        channel[int(from) + i] *= w;
+    }
+}
+
 } // namespace
 
 bool hasPendingEdits(const QVector<PitchDetector::PitchNote>& notes)
 {
     for (const PitchDetector::PitchNote& note : notes) {
         if (std::abs(note.midiPitch - note.detectedPitch) > 0.01f) {
+            return true;
+        }
+        // Перенос ноты по времени тоже требует пересчёта: звук надо забрать
+        // с прежнего места и положить на новое
+        if (note.isMovedInTime()) {
             return true;
         }
     }
@@ -85,27 +109,59 @@ QVector<QVector<float>> apply(const QVector<QVector<float>>& channels,
     QVector<QVector<float>> out = channels;
     const qint64 totalSamples = channels[0].size();
 
+    // Сначала освобождаем места, откуда ноты ушли: если этого не сделать,
+    // старое звучание останется поверх нового и перестановка будет не слышна
     for (const PitchDetector::PitchNote& note : notes) {
-        const float semitones = note.midiPitch - note.detectedPitch;
-        if (std::abs(semitones) < 0.01f) {
+        if (!note.isMovedInTime()) {
             continue;
         }
-        const qint64 start = qBound<qint64>(0, note.startSample, totalSamples);
-        const qint64 end = qBound<qint64>(start, note.endSample, totalSamples);
-        const int len = int(end - start);
-        if (len < kCrossfadeSamples * 2) {
+        const qint64 from = qBound<qint64>(0, note.sourceStart(), totalSamples);
+        const qint64 to = qBound<qint64>(from, note.sourceEnd(), totalSamples);
+        if (to <= from) {
+            continue;
+        }
+        for (QVector<float>& channel : out) {
+            silenceRange(channel, from, to);
+        }
+    }
+
+    for (const PitchDetector::PitchNote& note : notes) {
+        const float semitones = note.midiPitch - note.detectedPitch;
+        const bool pitchChanged = std::abs(semitones) >= 0.01f;
+        const bool moved = note.isMovedInTime();
+        if (!pitchChanged && !moved) {
+            continue;
+        }
+
+        // Звук берём с исходного места ноты, кладём — на нынешнее
+        const qint64 sourceStart = qBound<qint64>(0, note.sourceStart(), totalSamples);
+        const qint64 sourceEnd = qBound<qint64>(sourceStart, note.sourceEnd(), totalSamples);
+        const int sourceLen = int(sourceEnd - sourceStart);
+        const qint64 targetStart = qBound<qint64>(0, note.startSample, totalSamples);
+        const int targetLen = int(qMin<qint64>(sourceLen, totalSamples - targetStart));
+        if (sourceLen < kCrossfadeSamples * 2 || targetLen < kCrossfadeSamples * 2) {
             continue;
         }
 
         const float ratio = std::pow(2.0f, semitones / 12.0f);
-        for (QVector<float>& channel : out) {
-            QVector<float> segment(len);
-            std::copy(channel.constBegin() + start,
-                      channel.constBegin() + start + len, segment.begin());
-            const QVector<float> shifted = shiftSegmentPitch(segment, ratio, sampleRate);
-            if (shifted.size() == len) {
-                blendInto(channel, shifted, int(start));
+        for (int channelIndex = 0; channelIndex < out.size(); ++channelIndex) {
+            // Источник читаем из исходного аудио: соседняя нота могла уже
+            // занять это место в выходном буфере
+            const QVector<float>& source = channels[channelIndex];
+            QVector<float> segment(sourceLen);
+            std::copy(source.constBegin() + sourceStart,
+                      source.constBegin() + sourceStart + sourceLen, segment.begin());
+
+            QVector<float> processed = pitchChanged
+                ? shiftSegmentPitch(segment, ratio, sampleRate)
+                : segment;
+            if (processed.size() != sourceLen) {
+                continue;
             }
+            if (targetLen < sourceLen) {
+                processed.resize(targetLen);  // нота уехала к концу трека
+            }
+            blendInto(out[channelIndex], processed, int(targetStart));
         }
     }
 

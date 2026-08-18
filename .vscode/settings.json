@@ -92,5 +92,8 @@
         "-std=c++17"
     ],
     "clangd.path": "clangd",
-    "clangd.checkUpdates": false
+    "clangd.checkUpdates": false,
+    "cSpell.words": [
+        "Внедри"
+    ]
 }

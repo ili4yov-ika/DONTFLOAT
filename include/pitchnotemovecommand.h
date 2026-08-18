@@ -57,6 +57,12 @@ private:
         }
         PitchDetector::PitchNote& note = (*m_baseNotes)[m_noteIndex];
         const qint64 length = note.endSample - note.startSample;
+        // Первый перенос запоминает, откуда брать звук ноты: без этого
+        // перестановка нот осталась бы только картинкой на пианоролле
+        if (note.sourceStartSample < 0) {
+            note.sourceStartSample = note.startSample;
+            note.sourceEndSample = note.endSample;
+        }
         note.startSample = startSample;
         note.endSample = startSample + length;
 
