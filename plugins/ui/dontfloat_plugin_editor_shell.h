@@ -49,6 +49,14 @@ public:
     {
         hostSeekHandler_ = std::move(handler);
     }
+    /**
+     * Обработчик «плагин пересчитал звук»: хост должен прогнать дорожку
+     * заново, иначе правки не будут слышны.
+     */
+    void setHostRenderChangedHandler(std::function<void()> handler)
+    {
+        hostRenderChangedHandler_ = std::move(handler);
+    }
 
 private slots:
     /** Локальное прослушивание дорожки, захваченной из DAW. */
@@ -84,6 +92,7 @@ private:
     QWidget* loopToolsGroup_ = nullptr;
 
     std::function<void(qint64)> hostSeekHandler_;
+    std::function<void()> hostRenderChangedHandler_;
     NotePreviewPlayer* previewPlayer_ = nullptr;
     MetronomeController* metronome_ = nullptr;
 };

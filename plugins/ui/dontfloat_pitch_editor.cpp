@@ -698,9 +698,12 @@ void DontfloatPitchEditor::onApplyCorrectionClicked()
         note.detectedPitch = note.midiPitch;
     }
     baseNotes_ = fromCoreNotes(session_->pitchAnalysis().notes);
+    // Результат уходит в выход плагина: без этого DAW играла бы исходный звук
+    session_->setRenderedOutput(buffer, 0);
     refreshFromSession();
     applyButton_->setEnabled(false);
-    setStatus(tr("correction applied — processed audio is in the plugin session"));
+    setStatus(tr("correction applied — the DAW now plays the corrected audio"));
+    emit renderedOutputChanged();
     emit pitchSessionChanged();
 }
 

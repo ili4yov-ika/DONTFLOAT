@@ -78,6 +78,12 @@ DontfloatPluginEditorShell::DontfloatPluginEditorShell(
             hostSeekHandler_(samplePosition);
         }
     });
+    // Плагин пересчитал звук — просим хост прогнать дорожку заново
+    connect(editor, &ContentEditor::renderedOutputChanged, this, [this]() {
+        if (hostRenderChangedHandler_) {
+            hostRenderChangedHandler_();
+        }
+    });
     content_ = editor;
     contentWidget_ = editor;
     root->addWidget(contentWidget_, 1);

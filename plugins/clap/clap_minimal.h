@@ -260,6 +260,11 @@ struct clap_window_t {
 struct clap_host_dontfloat_transport_t {
     /** @param seconds позиция от начала проекта. */
     void (*request_seek)(const clap_host_t* host, double seconds);
+    /**
+     * Плагин пересчитал звук (коррекция высот, растяжение): хосту стоит
+     * прогнать дорожку заново, иначе правки не будут слышны.
+     */
+    void (*notify_output_changed)(const clap_host_t* host);
 };
 
 struct clap_host_timer_support_t {

@@ -401,6 +401,16 @@ public:
             notifyEditorsHostAudioAppended();
         }
 
+        // Обработанный звук отдаём в выход — строго после захвата: вход и
+        // выход у хоста часто один буфер, иначе захватили бы свой же выход
+        {
+            TrackToolSession& session = sharedSession(product());
+            const std::int64_t timelineFrame =
+                data.processContext ? std::int64_t(data.processContext->projectTimeSamples) : -1;
+            session.readRenderedOutput(data.outputs[0].channelBuffers32, outputChannels,
+                                       data.numSamples, timelineFrame);
+        }
+
         return Steinberg::kResultOk;
     }
 

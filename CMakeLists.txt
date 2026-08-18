@@ -770,6 +770,27 @@ set_tests_properties(markersfile_test PROPERTIES
     DESCRIPTION "Markers file read/write for test fixtures"
 )
 
+# Метки растяжения на волне — тот же путь, которым их ставит плагин
+add_qt_test(waveform_marker_test
+    tests/waveform_marker_test.cpp
+    include/waveformview.h
+    src/waveformview.cpp
+    src/waveformcolors.cpp
+    src/beatvisualizer.cpp
+    src/timestretchprocessor.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+    src/bpmanalyzer.cpp
+    src/audiofileservice.cpp
+    src/wavwriter.cpp
+    src/rubberband_offline.cpp
+)
+
+set_tests_properties(waveform_marker_test PROPERTIES
+    LABELS "unit;markers;plugins"
+    DESCRIPTION "Stretch markers added at the playhead (app and plugin path)"
+)
+
 # Экспорт нот пианоролла в MIDI (round-trip через разбор SMF из tests/midi_smf.h)
 add_qt_test(midi_export_test
     tests/midi_export_test.cpp

@@ -46,6 +46,10 @@ DontfloatFullEditor::DontfloatFullEditor(QWidget* parent)
             this, &DontfloatFullEditor::seekRequested);
     connect(pitch_, &DontfloatPitchEditor::seekRequested,
             this, &DontfloatFullEditor::seekRequested);
+    connect(scratch_, &DontfloatScratchEditor::renderedOutputChanged,
+            this, &DontfloatFullEditor::renderedOutputChanged);
+    connect(pitch_, &DontfloatPitchEditor::renderedOutputChanged,
+            this, &DontfloatFullEditor::renderedOutputChanged);
 }
 
 void DontfloatFullEditor::bindSession(Dontfloat::PluginCore::TrackToolSession* session)

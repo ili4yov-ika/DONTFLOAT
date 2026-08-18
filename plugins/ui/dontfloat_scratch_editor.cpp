@@ -12,6 +12,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QShortcut>
 #include <QtConcurrent/QtConcurrent>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -151,6 +152,12 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
             this, &DontfloatScratchEditor::onAlignFinished);
     connect(waveform_, &WaveformView::markersChanged, this, &DontfloatScratchEditor::onMarkersChanged);
 
+    // Метка растяжения по каретке — та же клавиша, что в главном окне.
+    // Контекст виджета: в DAW клавиша M не должна перехватываться у хоста
+    auto* markerShortcut = new QShortcut(QKeySequence(Qt::Key_M), this);
+    markerShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(markerShortcut, &QShortcut::activated, this, &DontfloatScratchEditor::addMarkerAtPlayhead);
+
     // Каретку двигают в плагине — просим DAW встать туда же
     connect(waveform_, &WaveformView::positionChanged, this, [this](qint64 positionMs) {
         if (applyingHostPlayhead_ || !session_) {
@@ -248,6 +255,25 @@ void DontfloatScratchEditor::refreshWaveform()
     }
 }
 
+void DontfloatScratchEditor::publishRenderedOutput(const QVector<QVector<float>>& channels,
+                                                   int sampleRate)
+{
+    if (!session_ || channels.isEmpty()) {
+        return;
+    }
+    Dontfloat::PluginCore::TrackAudioBuffer rendered;
+    rendered.sampleRate = sampleRate;
+    rendered.channelCount = channels.size();
+    rendered.left = toStdVector(channels[0]);
+    if (channels.size() > 1) {
+        rendered.right = toStdVector(channels[1]);
+    }
+    rendered.mono = toStdVector(AudioFileService::toMono(channels));
+    // Результат покрывает ту же дорожку, что и захват, — с её начала
+    session_->setRenderedOutput(rendered, 0);
+    emit renderedOutputChanged();
+}
+
 void DontfloatScratchEditor::writeChannelsToSession(const QVector<QVector<float>>& channels, int sampleRate)
 {
     if (!session_ || channels.isEmpty()) {
@@ -283,6 +309,30 @@ void DontfloatScratchEditor::setHostPlayhead(qint64 samplePosition)
     applyingHostPlayhead_ = true;
     waveform_->setPlaybackPosition((clamped * 1000) / sampleRate);
     applyingHostPlayhead_ = false;
+}
+
+void DontfloatScratchEditor::addMarkerAtPlayhead()
+{
+    if (!waveform_ || waveform_->getAudioData().isEmpty()) {
+        setStatus(tr("no audio captured from the DAW yet"));
+        return;
+    }
+    const int sampleRate = waveform_->getSampleRate();
+    if (sampleRate <= 0) {
+        return;
+    }
+
+    const qint64 sample = (waveform_->getPlaybackPosition() * sampleRate) / 1000;
+    const int before = waveform_->getMarkers().size();
+    waveform_->addMarker(sample);
+    const int after = waveform_->getMarkers().size();
+    if (after > before) {
+        setStatus(tr("stretch marker added at %1")
+                      .arg(TimeUtils::formatTime(waveform_->getPlaybackPosition())));
+    } else {
+        setStatus(tr("could not add a marker here (too close to an existing one)"));
+    }
+    updateActionButtons();
 }
 
 void DontfloatScratchEditor::setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample)
@@ -718,6 +768,8 @@ void DontfloatScratchEditor::onApplyStretchClicked()
     waveform_->setBeatsAligned(true);
     waveform_->update();
 
+    // Результат уходит в выход плагина: DAW должна услышать растяжение
+    publishRenderedOutput(result.audioData, sampleRate);
     setStatus(tr("stretch applied · %1 samples").arg(result.audioData[0].size()));
     updateActionButtons();
 }

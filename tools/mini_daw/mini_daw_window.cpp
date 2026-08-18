@@ -674,6 +674,13 @@ void Window::reloadPlugin()
         QMetaObject::invokeMethod(this, [this, frame]() { onSeekRequested(frame); },
                                   Qt::QueuedConnection);
     });
+    // Плагин пересчитал звук — прогоняем дорожку заново, чтобы это стало слышно
+    host_->setRenderChangedHandler([this]() {
+        QMetaObject::invokeMethod(this, [this]() {
+            showPluginMessage(tr("The plugin re-rendered the audio — re-streaming…"), false);
+            runTrackThroughPlugin();
+        }, Qt::QueuedConnection);
+    });
 
     QSize editorSize;
     if (host_->embedEditor(pluginSurface_->winId(), &editorSize, &error)) {

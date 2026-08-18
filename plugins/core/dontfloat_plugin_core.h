@@ -186,6 +186,26 @@ public:
                                     std::int64_t timelineFrame);
     void clearHostCapture();
 
+    /**
+     * Готовый результат работы плагина (коррекция высот, растяжение и т.п.).
+     * Его обёртка формата отдаёт в выход `process()` вместо входа — иначе
+     * правки слышны только внутри плагина, а DAW играет исходный звук.
+     * @param timelineStartFrame позиция результата на таймлайне DAW.
+     */
+    void setRenderedOutput(const TrackAudioBuffer& buffer, std::int64_t timelineStartFrame = 0);
+    void clearRenderedOutput();
+    bool hasRenderedOutput() const { return !renderedOutput_.mono.empty(); }
+    const TrackAudioBuffer& renderedOutput() const { return renderedOutput_; }
+    std::int64_t renderedOutputStart() const { return renderedOutputStart_; }
+
+    /**
+     * Копирует готовый результат в выходной блок.
+     * @param timelineFrame позиция блока; отрицательная — считаем от начала.
+     * @return false, если на этой позиции результата нет (играем вход как есть).
+     */
+    bool readRenderedOutput(float* const* outputs, int channelCount, int frameCount,
+                            std::int64_t timelineFrame) const;
+
     const TrackAudioBuffer& audioBuffer() const { return audioBuffer_; }
     const TrackPitchAnalysis& pitchAnalysis() const { return pitchAnalysis_; }
     TrackPitchAnalysis& pitchAnalysis() { return pitchAnalysis_; }
@@ -211,6 +231,9 @@ private:
     std::vector<TrackMarker> markers_;
 
     TrackAudioBuffer audioBuffer_;
+    /** Обработанный звук, который плагин отдаёт в выход (см. setRenderedOutput). */
+    TrackAudioBuffer renderedOutput_;
+    std::int64_t renderedOutputStart_ = 0;
     TrackPitchAnalysis pitchAnalysis_;
 
     /** Конец последней записи по таймлайну: по нему видно новый проход DAW. */

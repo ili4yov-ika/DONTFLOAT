@@ -53,6 +53,8 @@ signals:
     void statusMessage(const QString& text);
     /** Каретку двинули в плагине — DAW должна встать туда же. */
     void seekRequested(qint64 samplePosition);
+    /** Плагин пересчитал звук — хосту стоит прогнать дорожку заново. */
+    void renderedOutputChanged();
 
 private slots:
     /** Анализ при каждом изменении содержимого дорожки — кнопок анализа нет. */
@@ -71,11 +73,15 @@ private:
     void updateActionButtons();
     /** Сдвиг меток, сетки и точек цикла вслед за переехавшим клипом. */
     void shiftAnnotations(qint64 deltaSamples);
+    /** Метка растяжения по каретке (клавиша M — как в главном окне). */
+    void addMarkerAtPlayhead();
     qint64 samplesToMs(qint64 samples) const;
     QVector<Marker> makeAlignedBeatMarkers(const QVector<BPMAnalyzer::BeatInfo>& beats,
                                            qint64 totalSamples,
                                            int sampleRate) const;
     void writeChannelsToSession(const QVector<QVector<float>>& channels, int sampleRate);
+    /** Кладёт обработанный звук в выход плагина (его услышит DAW). */
+    void publishRenderedOutput(const QVector<QVector<float>>& channels, int sampleRate);
 
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QString productName_;

@@ -143,15 +143,15 @@
         <translation>коррекция не удалась</translation>
     </message>
     <message>
-        <location line="+17"/>
-        <source>correction applied — processed audio is in the plugin session</source>
-        <translation>коррекция применена — обработанное аудио в сессии плагина</translation>
+        <location line="+19"/>
+        <source>correction applied — the DAW now plays the corrected audio</source>
+        <translation>коррекция применена — DAW теперь играет исправленный звук</translation>
     </message>
 </context>
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatPluginEditorShell</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_plugin_editor_shell.cpp" line="+103"/>
+        <location filename="../plugins/ui/dontfloat_plugin_editor_shell.cpp" line="+109"/>
         <source>Play the track in the DAW — the plugin will pick up the audio.</source>
         <translation>Запустите дорожку в DAW — плагин подхватит звук.</translation>
     </message>
@@ -224,7 +224,7 @@
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatScratchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="+128"/>
+        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="+129"/>
         <source>Align beats</source>
         <translation>Выровнять доли</translation>
     </message>
@@ -235,7 +235,7 @@
     </message>
     <message>
         <location line="+9"/>
-        <location line="+89"/>
+        <location line="+95"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>загрузите аудио или воспроизведите трек в DAW для захвата сигнала.</translation>
     </message>
@@ -250,12 +250,23 @@
         <translation>аудио: %1 сэмплов, %2 Гц — нажмите «Анализ BPM»</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+65"/>
+        <location line="+48"/>
         <source>no audio captured from the DAW yet</source>
         <translation>аудио от DAW ещё не получено</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-35"/>
+        <source>stretch marker added at %1</source>
+        <translation>метка растяжения поставлена на %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>could not add a marker here (too close to an existing one)</source>
+        <translation>здесь метку поставить нельзя (слишком близко к соседней)</translation>
+    </message>
+    <message>
+        <location line="+38"/>
         <source>no beat grid to shift (BPM not detected)</source>
         <translation>нечего сдвигать: тактовая сетка не построена (BPM не определён)</translation>
     </message>
@@ -380,7 +391,7 @@
         <translation>не удалось применить stretch</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>stretch applied · %1 samples</source>
         <translation>stretch применён · %1 сэмплов</translation>
     </message>

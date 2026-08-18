@@ -43,6 +43,8 @@ signals:
     void statusMessage(const QString& text);
     /** Каретку двинули в плагине — DAW должна встать туда же. */
     void seekRequested(qint64 samplePosition);
+    /** Плагин пересчитал звук — хосту стоит прогнать дорожку заново. */
+    void renderedOutputChanged();
 
 private:
     DontfloatScratchEditor* scratch_ = nullptr;

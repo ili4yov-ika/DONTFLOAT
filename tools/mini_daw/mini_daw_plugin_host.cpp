@@ -188,6 +188,12 @@ public:
                         if (owner && owner->seekHandler_ && owner->sampleRate_ > 0.0) {
                             owner->seekHandler_(qint64(seconds * owner->sampleRate_));
                         }
+                    },
+                    [](const clap_host_t* self) {
+                        auto* owner = static_cast<ClapHost*>(self->host_data);
+                        if (owner && owner->renderChangedHandler_) {
+                            owner->renderChangedHandler_();
+                        }
                     }
                 };
                 return &kTransport;
@@ -345,6 +351,11 @@ public:
         seekHandler_ = std::move(handler);
     }
 
+    void setRenderChangedHandler(std::function<void()> handler) override
+    {
+        renderChangedHandler_ = std::move(handler);
+    }
+
     void unload() override
     {
         if (gui_ && guiCreated_) {
@@ -370,8 +381,9 @@ public:
 
     QString displayName() const override { return displayName_; }
 
-    /** Запрос перемотки от плагина (см. расширение dontfloat.transport). */
+    /** Запросы плагина (см. расширение dontfloat.transport). */
     std::function<void(qint64)> seekHandler_;
+    std::function<void()> renderChangedHandler_;
 
 private:
     void fail(QString* error, const QString& text)

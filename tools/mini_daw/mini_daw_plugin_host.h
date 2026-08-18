@@ -66,6 +66,12 @@ public:
      */
     virtual void setSeekRequestHandler(std::function<void(qint64)> handler) { Q_UNUSED(handler); }
 
+    /**
+     * Плагин пересчитал звук (коррекция высот, растяжение) — дорожку надо
+     * прогнать через него заново, иначе правки не слышны.
+     */
+    virtual void setRenderChangedHandler(std::function<void()> handler) { Q_UNUSED(handler); }
+
     /** Выгружает редактор и экземпляр плагина. */
     virtual void unload() = 0;
 

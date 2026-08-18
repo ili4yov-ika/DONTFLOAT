@@ -62,7 +62,69 @@ private slots:
     void testMovedClipIsDetectedAsShift();
     void testMovedClipInSameSession();
     void testDifferentContentIsNotAShift();
+    void testRenderedOutputReplacesInput();
+    void testRenderedOutputOnlyOnItsRange();
 };
+
+// Обработанный звук уходит в выход плагина: DAW слышит правки, а не исходник
+void PluginContentShiftTest::testRenderedOutputReplacesInput()
+{
+    TrackToolSession session = makePreparedSession();
+    const std::vector<float> clip = makeClip(kSampleRate / 4);
+    feedClip(session, clip, 0);
+
+    // Результат: тот же материал, но вдвое тише — так видно подмену
+    Dontfloat::PluginCore::TrackAudioBuffer rendered;
+    rendered.sampleRate = kSampleRate;
+    rendered.channelCount = 1;
+    rendered.mono = clip;
+    for (float& sample : rendered.mono) {
+        sample *= 0.5f;
+    }
+    session.setRenderedOutput(rendered, 0);
+    QVERIFY(session.hasRenderedOutput());
+
+    // Блок в середине результата: выход должен стать «тише вдвое»
+    const int frames = 128;
+    const qint64 position = kSampleRate / 8;
+    std::vector<float> left(frames, 1.0f);
+    std::vector<float> right(frames, 1.0f);
+    float* outputs[2] = { left.data(), right.data() };
+    QVERIFY(session.readRenderedOutput(outputs, 2, frames, position));
+
+    for (int i = 0; i < frames; ++i) {
+        const float expected = clip[static_cast<std::size_t>(position + i)] * 0.5f;
+        QVERIFY(std::fabs(left[static_cast<std::size_t>(i)] - expected) < 1.0e-6f);
+        // Моно-результат уходит в оба канала
+        QCOMPARE(right[static_cast<std::size_t>(i)], left[static_cast<std::size_t>(i)]);
+    }
+}
+
+// Вне диапазона результата выход не трогаем — играет то, что дала DAW
+void PluginContentShiftTest::testRenderedOutputOnlyOnItsRange()
+{
+    TrackToolSession session = makePreparedSession();
+    Dontfloat::PluginCore::TrackAudioBuffer rendered;
+    rendered.sampleRate = kSampleRate;
+    rendered.channelCount = 1;
+    rendered.mono = makeClip(kSampleRate / 4);
+    // Результат лежит со второй секунды дорожки
+    session.setRenderedOutput(rendered, 2 * kSampleRate);
+
+    const int frames = 64;
+    std::vector<float> left(frames, 1.0f);
+    float* outputs[1] = { left.data() };
+
+    QVERIFY(!session.readRenderedOutput(outputs, 1, frames, 0));
+    QCOMPARE(left[0], 1.0f);  // выход остался нетронутым
+
+    QVERIFY(session.readRenderedOutput(outputs, 1, frames, 2 * kSampleRate));
+    QVERIFY(std::fabs(left[0] - rendered.mono[0]) < 1.0e-6f);
+
+    session.clearRenderedOutput();
+    QVERIFY(!session.hasRenderedOutput());
+    QVERIFY(!session.readRenderedOutput(outputs, 1, frames, 2 * kSampleRate));
+}
 
 // Как в жизни: та же сессия, второй проход DAW с клипом на новой позиции
 void PluginContentShiftTest::testMovedClipInSameSession()

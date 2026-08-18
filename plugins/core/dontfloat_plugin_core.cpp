@@ -175,10 +175,62 @@ TrackToolStatus TrackToolSession::writeHostFrames(const float* const* inputs,
     return setAudioInfo(audioInfoFromBuffer(audioBuffer_));
 }
 
+void TrackToolSession::setRenderedOutput(const TrackAudioBuffer& buffer,
+                                         std::int64_t timelineStartFrame)
+{
+    renderedOutput_ = buffer;
+    if (renderedOutput_.mono.empty() && !renderedOutput_.left.empty()) {
+        rebuildMonoFromChannels(renderedOutput_);
+    }
+    renderedOutputStart_ = std::max<std::int64_t>(0, timelineStartFrame);
+}
+
+void TrackToolSession::clearRenderedOutput()
+{
+    renderedOutput_ = {};
+    renderedOutputStart_ = 0;
+}
+
+bool TrackToolSession::readRenderedOutput(float* const* outputs, int channelCount,
+                                          int frameCount, std::int64_t timelineFrame) const
+{
+    if (!outputs || channelCount <= 0 || frameCount <= 0 || renderedOutput_.mono.empty()) {
+        return false;
+    }
+
+    const std::int64_t start = (timelineFrame >= 0 ? timelineFrame : 0) - renderedOutputStart_;
+    const std::int64_t total = static_cast<std::int64_t>(renderedOutput_.mono.size());
+    if (start + frameCount <= 0 || start >= total) {
+        return false;  // блок не пересекается с результатом
+    }
+
+    // Левый/правый: если результат моно, оба канала берут его же
+    const std::vector<float>& left =
+        renderedOutput_.left.empty() ? renderedOutput_.mono : renderedOutput_.left;
+    const std::vector<float>& right =
+        renderedOutput_.right.empty() ? left : renderedOutput_.right;
+
+    for (int i = 0; i < frameCount; ++i) {
+        const std::int64_t index = start + i;
+        const bool inside = index >= 0 && index < total;
+        for (int ch = 0; ch < channelCount; ++ch) {
+            if (!outputs[ch]) {
+                continue;
+            }
+            const std::vector<float>& source = (ch == 0) ? left : right;
+            outputs[ch][i] = (inside && index < static_cast<std::int64_t>(source.size()))
+                ? source[static_cast<std::size_t>(index)]
+                : 0.0f;
+        }
+    }
+    return true;
+}
+
 void TrackToolSession::clearHostCapture()
 {
     audioBuffer_ = {};
     pitchAnalysis_ = {};
+    clearRenderedOutput();
     lastWriteEndFrame_ = 0;
     prepared_ = false;
     analysisValid_ = false;

@@ -18,6 +18,8 @@
 #include <cstdio>
 #include <vector>
 
+#include <QtCore/QCoreApplication>
+#include <QtCore/QDir>
 #include <QtCore/QString>
 #include <QtCore/QVector>
 
@@ -43,6 +45,28 @@ struct Options {
 inline const char* productName()
 {
     return Dontfloat::PluginHost::desc().clapName;
+}
+
+/**
+ * Каталог для выходных WAV: `build/temp` рядом с исполняемым файлом сборки.
+ * Так результаты прогонов не сыплются в корень репозитория.
+ */
+inline QString defaultOutputDir()
+{
+    // Из build/<config>/host.exe поднимаемся к build/ и кладём temp/ рядом
+    QDir dir(QCoreApplication::applicationDirPath());
+    while (!dir.isRoot()) {
+        if (dir.dirName() == QLatin1String("build")) {
+            return dir.filePath(QStringLiteral("temp"));
+        }
+        if (dir.exists(QStringLiteral("build"))) {
+            return dir.filePath(QStringLiteral("build/temp"));
+        }
+        if (!dir.cdUp()) {
+            break;
+        }
+    }
+    return QDir::current().filePath(QStringLiteral("build/temp"));
 }
 
 inline Options parseArgs(int argc, char** argv, const char* formatTag)
@@ -72,7 +96,11 @@ inline Options parseArgs(int argc, char** argv, const char* formatTag)
         }
     }
     if (o.output.isEmpty()) {
-        o.output = QStringLiteral("mini_daw_%1_%2_out.wav")
+        // Выходные WAV кладём в build/temp, чтобы не сорить в корне репозитория
+        const QString outputDir = defaultOutputDir();
+        QDir().mkpath(outputDir);
+        o.output = QStringLiteral("%1/mini_daw_%2_%3_out.wav")
+                       .arg(outputDir)
                        .arg(QString::fromLatin1(formatTag).toLower())
                        .arg(QString::fromUtf8(Dontfloat::PluginHost::desc().clapFileBase));
     }

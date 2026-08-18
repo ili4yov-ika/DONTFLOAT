@@ -143,15 +143,15 @@
         <translation>correction failed</translation>
     </message>
     <message>
-        <location line="+17"/>
-        <source>correction applied — processed audio is in the plugin session</source>
-        <translation>correction applied — processed audio is in the plugin session</translation>
+        <location line="+19"/>
+        <source>correction applied — the DAW now plays the corrected audio</source>
+        <translation>correction applied — the DAW now plays the corrected audio</translation>
     </message>
 </context>
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatPluginEditorShell</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_plugin_editor_shell.cpp" line="+103"/>
+        <location filename="../plugins/ui/dontfloat_plugin_editor_shell.cpp" line="+109"/>
         <source>Play the track in the DAW — the plugin will pick up the audio.</source>
         <translation>Play the track in the DAW — the plugin will pick up the audio.</translation>
     </message>
@@ -224,7 +224,7 @@
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatScratchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="+128"/>
+        <location filename="../plugins/ui/dontfloat_scratch_editor.cpp" line="+129"/>
         <source>Align beats</source>
         <translation>Align beats</translation>
     </message>
@@ -235,7 +235,7 @@
     </message>
     <message>
         <location line="+9"/>
-        <location line="+89"/>
+        <location line="+95"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>load audio or play a track in the DAW to capture the signal.</translation>
     </message>
@@ -250,12 +250,23 @@
         <translation>audio: %1 samples, %2 Hz — click “BPM analysis”</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+65"/>
+        <location line="+48"/>
         <source>no audio captured from the DAW yet</source>
         <translation>no audio captured from the DAW yet</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-35"/>
+        <source>stretch marker added at %1</source>
+        <translation>stretch marker added at %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>could not add a marker here (too close to an existing one)</source>
+        <translation>could not add a marker here (too close to an existing one)</translation>
+    </message>
+    <message>
+        <location line="+38"/>
         <source>no beat grid to shift (BPM not detected)</source>
         <translation>no beat grid to shift (BPM not detected)</translation>
     </message>
@@ -380,7 +391,7 @@
         <translation>failed to apply stretch</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+16"/>
         <source>stretch applied · %1 samples</source>
         <translation>stretch applied · %1 samples</translation>
     </message>

@@ -246,6 +246,8 @@ clap_process_status pluginProcess(const clap_plugin_t* plugin, const clap_proces
     const bool transportStopped = process->transport
         && !(process->transport->flags & CLAP_TRANSPORT_IS_PLAYING);
 
+    // Захват — строго до записи результата в выход: у многих хостов вход и
+    // выход это один буфер, и обратный порядок захватывал бы свой же выход
     if (process->audio_inputs && process->frames_count > 0 && !transportStopped) {
         // Пишем по позиции таймлайна: захват повторяет дорожку DAW, поэтому
         // перемещение клипа виден плагину как сдвиг содержимого
@@ -255,6 +257,14 @@ clap_process_status pluginProcess(const clap_plugin_t* plugin, const clap_proces
         if (s->editor) {
             s->editor->notifyHostAudioAppended();
         }
+    }
+
+    // Обработанный звук (коррекция высот, растяжение) отдаём в выход — иначе
+    // правки слышны только в плагине, а DAW играет исходную дорожку
+    if (out.data32 && process->frames_count > 0) {
+        s->session.readRenderedOutput(out.data32, int(out.channel_count),
+                                      int(process->frames_count),
+                                      hostPlayheadSamples(s, process));
     }
 
     return CLAP_PROCESS_CONTINUE;
@@ -333,6 +343,18 @@ bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
         const int sampleRate = s->session.audioBuffer().sampleRate;
         if (transport && transport->request_seek && sampleRate > 0) {
             transport->request_seek(s->host, double(samplePosition) / double(sampleRate));
+        }
+    });
+    // Плагин пересчитал звук — просим хост прогнать дорожку заново, иначе
+    // правки слышны только внутри плагина
+    s->editor->setHostRenderChangedHandler([s]() {
+        if (!s->host || !s->host->get_extension) {
+            return;
+        }
+        const auto* transport = static_cast<const clap_host_dontfloat_transport_t*>(
+            s->host->get_extension(s->host, CLAP_EXT_DONTFLOAT_TRANSPORT));
+        if (transport && transport->notify_output_changed) {
+            transport->notify_output_changed(s->host);
         }
     });
     s->editor->setWindowTitle(QString::fromUtf8(desc().clapName));

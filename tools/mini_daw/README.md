@@ -85,6 +85,9 @@ VST3 хостится через Steinberg SDK (`sdk_hosting`): модуль г�
 `reloadingPlugin_` хост успевал удалить `PluginHost` прямо во время
 `embedEditor()`.
 
+Выходные WAV headless-хостов пишутся в **`build/temp`** (каталог создаётся сам),
+а не в корень репозитория; свой путь по-прежнему задаётся ключом `--output`.
+
 ## Headless-хосты
 
 Each host loads an audio file (default `tests/midi/test_1.wav`),
