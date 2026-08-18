@@ -115,6 +115,11 @@ public:
     /// Объединяет соседние такты с одинаковой тональностью в регионы.
     static QVector<KeyRegion> mergeBarsIntoRegions(const QVector<BarKey>& bars);
 
+    /// Собирает итог по готовым потактовым тональностям: доминирующая
+    /// тональность, регионы модуляции и признак смены тональности.
+    /// Общий хвост для анализа звука и для нот референсного MIDI.
+    static PerBarKeyResult summarizeBarKeys(const QVector<BarKey>& bars);
+
     /// Наиболее частая тональность тактов, отличная от excludeKey (тональность
     /// модуляции для отображения во втором поле над пианороллом).
     /// Возвращает KeyInfo с key == UNKNOWN_KEY, если другой тональности нет.
@@ -129,6 +134,11 @@ public:
     /// Самодостаточный анализ высоты — не зависит от qm-dsp, поэтому детерминирован в тестах.
     static QVector<float> computeChromaGoertzel(const QVector<float>& samples, int sampleRate);
 
+    /// Тональность по готовому хроматическому вектору (12 полутонов).
+    /// Публично: тем же способом определяется тональность референсного MIDI,
+    /// где хрома строится не из звука, а из длительностей нот.
+    static KeyInfo detectKeyFromChroma(const QVector<float>& chromaVector);
+
 private:
     // Методы для работы с qm-dsp
     static QVector<double> convertToDouble(const QVector<float>& samples);
@@ -139,8 +149,6 @@ private:
                                                int sampleRate,
                                                int frameSize, 
                                                int hopSize);
-    
-    static KeyInfo detectKeyFromChroma(const QVector<float>& chromaVector);
     
     static QVector<KeyInfo> detectKeyChanges(const QVector<QVector<float>>& chromaFrames,
                                             float threshold);

@@ -68,6 +68,8 @@ signals:
     void cutModeChanged(PitchGridWidget::CutMode mode);
     /** Нажата кнопка «Экспорт MIDI» справа на полосе. */
     void exportMidiRequested();
+    /** Нажата кнопка «Импорт MIDI» — рядом с экспортом. */
+    void importMidiRequested();
 
 protected:
     void changeEvent(QEvent *event) override;
@@ -91,6 +93,7 @@ private:
     QToolButton* gridCutButton = nullptr;
     QToolButton* freeCutButton = nullptr;
     QToolButton* exportMidiButton = nullptr;
+    QToolButton* importMidiButton = nullptr;
 
     PitchGridWidget::CutMode currentCutMode = PitchGridWidget::CutMode::SnapToGrid;
     QString colorScheme = QStringLiteral("dark");

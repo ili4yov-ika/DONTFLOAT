@@ -2,6 +2,7 @@
 #define DONTFLOAT_PITCH_EDITOR_H
 
 #include "../core/dontfloat_plugin_core.h"
+#include "../../include/keyanalyzer.h"
 #include "../../include/pitchdetector.h"
 #include "../../include/pitchgridwidget.h"
 #include "dontfloat_editor_content.h"
@@ -14,6 +15,7 @@
 #include <atomic>
 #include <memory>
 
+class KeyModulationStrip;
 class KeySelectionMenu;
 class PianoRollToolbar;
 class QLineEdit;
@@ -69,6 +71,8 @@ private slots:
     void onApplyCorrectionClicked();
     /** Экспорт нот пианоролла в .mid (кнопка справа на панели). */
     void onExportMidiClicked();
+    /** Импорт референсного MIDI: серые ноты на фоне пианоролла. */
+    void onImportMidiClicked();
     void onPitchAnalysisFinished();
     void onPrimaryKeySelected(const QString& key);
     void onSecondaryKeySelected(const QString& key);
@@ -94,6 +98,8 @@ private:
     void setStatus(const QString& text);
     /** Сдвиг нот вслед за переехавшим клипом (см. detectContentShift). */
     void shiftNotes(qint64 deltaSamples);
+    /** Полоса референса стоит на таймлайне пианоролла — держим их вместе. */
+    void syncReferenceKeyStrip();
 
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QString productName_;
@@ -107,6 +113,9 @@ private:
     QProgressBar* analyzeProgress_ = nullptr;
     QPushButton* applyButton_ = nullptr;
     PianoRollToolbar* pianoRollToolbar_ = nullptr;
+    /** Потактовая панель тональностей референсного MIDI (под своей). */
+    KeyModulationStrip* referenceKeyStrip_ = nullptr;
+    KeyAnalyzer::PerBarKeyResult referenceKeys_;
 
     QString primaryKey_;
     QString secondaryKey_;

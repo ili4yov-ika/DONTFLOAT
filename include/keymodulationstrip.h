@@ -31,6 +31,13 @@ public:
     /// Обновить текст региона (после выбора в меню).
     void setRegionKey(int regionIndex, const QString& keyName);
 
+    /**
+     * Полоса референсного MIDI: поля серые, как и сами референсные ноты,
+     * и не открывают меню выбора тональности — референс только для сверки.
+     */
+    void setReferenceAppearance(bool reference);
+    bool isReferenceAppearance() const { return m_reference; }
+
 signals:
     /// ПКМ / клик по полю — показать меню выбора тональности.
     void fieldMenuRequested(int regionIndex, QWidget* anchor, const QPoint& localPos);
@@ -47,6 +54,7 @@ private:
     QVector<KeyAnalyzer::KeyRegion> m_regions;
     QVector<QLineEdit*> m_fields;
 
+    bool m_reference = false;
     qint64 m_timelineSamples = 0;
     int m_referenceWidthPx = 0;
     float m_zoomLevel = 1.0f;

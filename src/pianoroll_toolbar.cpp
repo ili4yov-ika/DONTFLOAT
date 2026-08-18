@@ -87,6 +87,17 @@ void PianoRollToolbar::buildUi()
     root->addWidget(cutGroup);
     root->addStretch(1);
 
+    // Импорт референсного MIDI — рядом с экспортом, тем же прямоугольником
+    importMidiButton = new QToolButton(this);
+    importMidiButton->setObjectName(QStringLiteral("pianoRollImportMidiButton"));
+    importMidiButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    importMidiButton->setFixedHeight(kExportButtonHeightPx);
+    importMidiButton->setCursor(Qt::PointingHandCursor);
+    importMidiButton->setFocusPolicy(Qt::NoFocus);
+    root->addWidget(importMidiButton, 0, Qt::AlignVCenter);
+    connect(importMidiButton, &QToolButton::clicked,
+            this, &PianoRollToolbar::importMidiRequested);
+
     // Экспорт MIDI — справа на полосе: ноты пианоролла уходят в файл .mid.
     // В макете это компактный прямоугольник ниже капсулы реза
     exportMidiButton = new QToolButton(this);
@@ -190,6 +201,14 @@ void PianoRollToolbar::applyStyle()
                modeBox + background(modeOnBg))
         // Кнопка экспорта — прямоугольник с тонкой рамкой (как в макете
         // MARKDOWN/example_plugin_dontfloat.svg), а не капсула
+        + rule(QStringLiteral("QToolButton#pianoRollImportMidiButton"),
+               background(exportBg)
+                   + QStringLiteral(" color: ") + exportText
+                   + QStringLiteral("; border: 1px solid ") + exportBorder
+                   + QStringLiteral("; border-radius: 2px; padding: 1px 10px;"))
+        + rule(QStringLiteral("QToolButton#pianoRollImportMidiButton:hover"),
+               background(hoverBg) + QStringLiteral(" border: 1px solid ") + exportBorder
+                   + QStringLiteral("; border-radius: 2px;"))
         + rule(QStringLiteral("QToolButton#pianoRollExportMidiButton"),
                background(exportBg)
                    + QStringLiteral(" color: ") + exportText
@@ -252,6 +271,11 @@ void PianoRollToolbar::retranslateUi()
     freeCutButton->setToolTip(QStringLiteral("%1 — %2")
         .arg(tr("Free cut"), tr("the cut lands exactly where the cursor is")));
     freeCutButton->setAccessibleName(tr("Free cut"));
+
+    importMidiButton->setText(tr("Import MIDI"));
+    importMidiButton->setToolTip(QStringLiteral("%1 — %2")
+        .arg(tr("Import MIDI"), tr("show notes from a .mid file as a grey reference")));
+    importMidiButton->setAccessibleName(tr("Import MIDI"));
 
     exportMidiButton->setText(tr("Export MIDI"));
     exportMidiButton->setToolTip(QStringLiteral("%1 — %2")

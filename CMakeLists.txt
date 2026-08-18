@@ -117,6 +117,7 @@ set(SOURCES
     src/pianoroll_engine.cpp
     src/pianoroll_toolbar.cpp
     src/midiexporter.cpp
+    src/midiimporter.cpp
     src/pitchdetector.cpp
     src/pitchcorrection.cpp
     src/notepreviewplayer.cpp
@@ -151,6 +152,7 @@ set(HEADERS
     include/pianoroll_engine.h
     include/pianoroll_toolbar.h
     include/midiexporter.h
+    include/midiimporter.h
     include/pitchdetector.h
     include/pitchcorrection.h
     include/pitchnoteeditcommand.h
@@ -650,6 +652,9 @@ add_qt_test(pianoroll_split_test
     include/pitchgridwidget.h
     src/pitchgridwidget.cpp
     src/pianoroll_engine.cpp
+    include/keymodulationstrip.h
+    src/keymodulationstrip.cpp
+    src/keyanalyzer.cpp
 )
 
 set_tests_properties(pianoroll_split_test PROPERTIES
@@ -795,13 +800,15 @@ set_tests_properties(waveform_marker_test PROPERTIES
 add_qt_test(midi_export_test
     tests/midi_export_test.cpp
     src/midiexporter.cpp
+    src/midiimporter.cpp
     src/pitchdetector.cpp
+    src/keyanalyzer.cpp
 )
 target_include_directories(midi_export_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 
 set_tests_properties(midi_export_test PROPERTIES
     LABELS "unit;midi;pianoroll"
-    DESCRIPTION "Piano roll notes exported to a standard MIDI file"
+    DESCRIPTION "Piano roll notes exported to MIDI and reference MIDI imported back"
 )
 
 # Захват дорожки по таймлайну и распознавание переноса клипа в DAW

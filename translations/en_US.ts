@@ -32,7 +32,7 @@
 <context>
     <name>Dontfloat::Plugins::Ui::DontfloatPitchEditor</name>
     <message>
-        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+128"/>
+        <location filename="../plugins/ui/dontfloat_pitch_editor.cpp" line="+131"/>
         <source>Undefined</source>
         <translation>Undefined</translation>
     </message>
@@ -42,23 +42,23 @@
         <translation>Modulation</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+30"/>
         <source>Apply correction</source>
         <translation>Apply correction</translation>
     </message>
     <message>
         <location line="+7"/>
-        <location line="+170"/>
+        <location line="+173"/>
         <source>load audio or play a track in the DAW to capture the signal.</source>
         <translation>load audio or play a track in the DAW to capture the signal.</translation>
     </message>
     <message>
-        <location line="-156"/>
+        <location line="-159"/>
         <source>Analyzing the track… %p%</source>
         <translation>Analyzing the track… %p%</translation>
     </message>
     <message>
-        <location line="+99"/>
+        <location line="+101"/>
         <source>the note is too short to split</source>
         <translation>the note is too short to split</translation>
     </message>
@@ -78,7 +78,7 @@
         <translation>the cut point is outside the note — use “Free cut” or move the cursor</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+30"/>
         <source>audio: %1 samples, %2 Hz</source>
         <translation>audio: %1 samples, %2 Hz</translation>
     </message>
@@ -89,6 +89,52 @@
     </message>
     <message>
         <location line="+26"/>
+        <location line="+7"/>
+        <source>Import reference MIDI</source>
+        <translation>Import reference MIDI</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <source>MIDI files (*.mid *.midi)</source>
+        <translation>MIDI files (*.mid *.midi)</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>How should the reference notes be placed on the timeline?</source>
+        <translation>How should the reference notes be placed on the timeline?</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Keep as is</source>
+        <translation>Keep as is</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Fit to BPM</source>
+        <translation>Fit to BPM</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Align and fit to BPM</source>
+        <translation>Align and fit to BPM</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>MIDI import error: %1</source>
+        <translation>MIDI import error: %1</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>reference MIDI: %1 notes, key %2</source>
+        <translation>reference MIDI: %1 notes, key %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>undefined</source>
+        <translation>undefined</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>there are no notes to export</source>
         <translation>there are no notes to export</translation>
     </message>
@@ -113,7 +159,7 @@
         <translation>MIDI exported: %1 (notes: %2)</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+147"/>
         <source>no audio data for analysis</source>
         <translation>no audio data for analysis</translation>
     </message>
@@ -400,7 +446,7 @@
     <name>KeyModulationStrip</name>
     <message>
         <location filename="../src/keymodulationstrip.cpp" line="+82"/>
-        <location line="+70"/>
+        <location line="+94"/>
         <source>Undefined</source>
         <translation>Undefined</translation>
     </message>
@@ -413,6 +459,11 @@
         <location line="+3"/>
         <source>%1 (bars %2–%3)</source>
         <translation>%1 (bars %2–%3)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Reference MIDI: %1</source>
+        <translation>Reference MIDI: %1</translation>
     </message>
 </context>
 <context>
@@ -675,7 +726,7 @@
     <name>MainWindow</name>
     <message>
         <location filename="../ui/mainwindow.ui" line="+14"/>
-        <location filename="../src/mainwindow.cpp" line="+1729"/>
+        <location filename="../src/mainwindow.cpp" line="+1736"/>
         <location line="+250"/>
         <source>DONTFLOAT</source>
         <translation>DONTFLOAT</translation>
@@ -787,8 +838,8 @@
     </message>
     <message>
         <location line="+68"/>
-        <location filename="../src/mainwindow.cpp" line="-1239"/>
-        <location line="+626"/>
+        <location filename="../src/mainwindow.cpp" line="-1245"/>
+        <location line="+631"/>
         <source>Metronome</source>
         <translation>Metronome</translation>
     </message>
@@ -913,50 +964,50 @@
                     color: rgb(255, 255, 255);</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="-643"/>
-        <location line="+748"/>
+        <location filename="../src/mainwindow.cpp" line="-648"/>
+        <location line="+753"/>
         <source>&amp;File</source>
         <translation>&amp;File</translation>
     </message>
     <message>
-        <location line="-747"/>
-        <location line="+756"/>
+        <location line="-752"/>
+        <location line="+762"/>
         <source>&amp;Edit</source>
         <translation>&amp;Edit</translation>
     </message>
     <message>
-        <location line="-755"/>
-        <location line="+764"/>
+        <location line="-761"/>
+        <location line="+770"/>
         <source>&amp;View</source>
         <translation>&amp;View</translation>
     </message>
     <message>
-        <location line="-763"/>
-        <location line="+766"/>
+        <location line="-769"/>
+        <location line="+772"/>
         <source>Themes</source>
         <translation>Themes</translation>
     </message>
     <message>
-        <location line="-765"/>
-        <location line="+769"/>
+        <location line="-771"/>
+        <location line="+775"/>
         <source>&amp;Color Scheme</source>
         <translation>&amp;Color Scheme</translation>
     </message>
     <message>
-        <location line="-768"/>
-        <location line="+784"/>
+        <location line="-774"/>
+        <location line="+790"/>
         <source>&amp;Settings</source>
         <translation>&amp;Settings</translation>
     </message>
     <message>
-        <location line="-783"/>
-        <location line="+790"/>
+        <location line="-789"/>
+        <location line="+796"/>
         <source>Language</source>
         <translatorcomment>DONTFLOAT policy: submenu title stays the literal string «Language» in every locale (do not translate to «Язык», etc.).</translatorcomment>
         <translation>Language</translation>
     </message>
     <message>
-        <location line="-789"/>
+        <location line="-795"/>
         <location line="+585"/>
         <source>&amp;Open...</source>
         <translation>&amp;Open...</translation>
@@ -969,217 +1020,217 @@
     </message>
     <message>
         <location line="-587"/>
-        <location line="+596"/>
+        <location line="+601"/>
         <source>&amp;Exit</source>
         <translation>&amp;Exit</translation>
     </message>
     <message>
-        <location line="-595"/>
-        <location line="+601"/>
+        <location line="-600"/>
+        <location line="+606"/>
         <source>Use default theme</source>
         <translation>Use default theme</translation>
     </message>
     <message>
-        <location line="-601"/>
-        <location line="+600"/>
+        <location line="-606"/>
+        <location line="+605"/>
         <source>Reset to default</source>
         <translation>Reset to default</translation>
     </message>
     <message>
-        <location line="-599"/>
-        <location line="+604"/>
+        <location line="-604"/>
+        <location line="+609"/>
         <source>Dark</source>
         <translation>Dark</translation>
     </message>
     <message>
-        <location line="-604"/>
-        <location line="+605"/>
+        <location line="-609"/>
+        <location line="+610"/>
         <source>Use dark theme</source>
         <translation>Use dark theme</translation>
     </message>
     <message>
-        <location line="-604"/>
-        <location line="+607"/>
+        <location line="-609"/>
+        <location line="+612"/>
         <source>Light</source>
         <translation>Light</translation>
     </message>
     <message>
-        <location line="-607"/>
-        <location line="+608"/>
+        <location line="-612"/>
+        <location line="+613"/>
         <source>Use light theme</source>
         <translation>Use light theme</translation>
     </message>
     <message>
-        <location line="-607"/>
-        <location line="+611"/>
+        <location line="-612"/>
+        <location line="+616"/>
         <source>&amp;Metronome Settings...</source>
         <translation>&amp;Metronome Settings...</translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+612"/>
+        <location line="-616"/>
+        <location line="+617"/>
         <source>Metronome Settings</source>
         <translation>Metronome Settings</translation>
     </message>
     <message>
-        <location line="-611"/>
-        <location line="+614"/>
+        <location line="-616"/>
+        <location line="+619"/>
         <source>&amp;Hotkeys...</source>
         <translation>&amp;Hotkeys...</translation>
     </message>
     <message>
-        <location line="-614"/>
-        <location line="+615"/>
+        <location line="-619"/>
+        <location line="+620"/>
         <source>Configure hotkeys</source>
         <translation>Configure hotkeys</translation>
     </message>
     <message>
-        <location line="-614"/>
-        <location line="+618"/>
+        <location line="-619"/>
+        <location line="+623"/>
         <source>Play/Pause</source>
         <translation>Play/Pause</translation>
     </message>
     <message>
-        <location line="-617"/>
-        <location line="+623"/>
+        <location line="-622"/>
+        <location line="+628"/>
         <source>Stop</source>
         <translation>Stop</translation>
     </message>
     <message>
-        <location line="-621"/>
-        <location line="+631"/>
+        <location line="-626"/>
+        <location line="+636"/>
         <source>Set loop start</source>
         <translation>Set loop start</translation>
     </message>
     <message>
-        <location line="-630"/>
-        <location line="+634"/>
+        <location line="-635"/>
+        <location line="+639"/>
         <source>Set loop end</source>
         <translation>Set loop end</translation>
     </message>
     <message>
-        <location line="-633"/>
-        <location line="+640"/>
+        <location line="-638"/>
+        <location line="+645"/>
         <source>Toggle pitch grid visibility</source>
         <translation>Toggle pitch grid visibility</translation>
     </message>
     <message>
-        <location line="-640"/>
+        <location line="-645"/>
         <location line="+59"/>
-        <location line="+579"/>
-        <location line="+1239"/>
+        <location line="+584"/>
+        <location line="+1240"/>
         <source>Hide Pitch Grid</source>
         <translation>Hide Pitch Grid</translation>
     </message>
     <message>
-        <location line="-1877"/>
+        <location line="-1883"/>
         <location line="+60"/>
-        <location line="+1818"/>
+        <location line="+1824"/>
         <source>Show Pitch Grid</source>
         <translation>Show Pitch Grid</translation>
     </message>
     <message>
-        <location line="-1877"/>
-        <location line="+643"/>
+        <location line="-1883"/>
+        <location line="+648"/>
         <source>Beat Waveform</source>
         <translation>Beat Waveform</translation>
     </message>
     <message>
-        <location line="-643"/>
-        <location line="+646"/>
+        <location line="-648"/>
+        <location line="+651"/>
         <source>Toggle beat waveform overlay</source>
         <translation>Toggle beat waveform overlay</translation>
     </message>
     <message>
-        <location line="-645"/>
-        <location line="+672"/>
+        <location line="-650"/>
+        <location line="+677"/>
         <source>&amp;Undo</source>
         <translation>&amp;Undo</translation>
     </message>
     <message>
-        <location line="-671"/>
-        <location line="+675"/>
+        <location line="-676"/>
+        <location line="+680"/>
         <source>&amp;Redo</source>
         <translation>&amp;Redo</translation>
     </message>
     <message>
-        <location line="-674"/>
-        <location line="+678"/>
+        <location line="-679"/>
+        <location line="+683"/>
         <source>Русский</source>
         <translatorcomment>Language name autonym: keep Cyrillic «Русский» in the English .ts as well (do not use «Russian» here).</translatorcomment>
         <translation>Русский</translation>
     </message>
     <message>
-        <location line="-677"/>
-        <location line="+682"/>
+        <location line="-682"/>
+        <location line="+687"/>
         <source>English</source>
         <translatorcomment>Language name autonym: keep «English» (do not translate to localized demonyms).</translatorcomment>
         <translation>English</translation>
     </message>
     <message>
-        <location line="-681"/>
-        <location line="+708"/>
-        <location line="+2318"/>
+        <location line="-686"/>
+        <location line="+713"/>
+        <location line="+2443"/>
         <source>Apply time stretch</source>
         <translation>Apply time stretch</translation>
     </message>
     <message>
-        <location line="-3026"/>
-        <location line="+710"/>
+        <location line="-3156"/>
+        <location line="+715"/>
         <source>Apply time stretch with pitch compensation</source>
         <translation>Apply time stretch with pitch compensation</translation>
     </message>
     <message>
-        <location line="-709"/>
-        <location line="+712"/>
-        <location line="+1525"/>
+        <location line="-714"/>
+        <location line="+717"/>
+        <location line="+1526"/>
         <source>Apply note pitch correction</source>
         <translation>Apply note pitch correction</translation>
     </message>
     <message>
-        <location line="-2237"/>
-        <location line="+714"/>
+        <location line="-2243"/>
+        <location line="+719"/>
         <source>Re-render audio using the edited piano roll notes</source>
         <translation>Re-render audio using the edited piano roll notes</translation>
     </message>
     <message>
-        <location line="-713"/>
-        <location line="+750"/>
+        <location line="-718"/>
+        <location line="+756"/>
         <source>Waveform view</source>
         <translation>Waveform view</translation>
     </message>
     <message>
-        <location line="-749"/>
-        <location line="+642"/>
+        <location line="-755"/>
+        <location line="+647"/>
         <source>Wave peaks</source>
         <translation>Wave peaks</translation>
     </message>
     <message>
-        <location line="-641"/>
-        <location line="+652"/>
+        <location line="-646"/>
+        <location line="+657"/>
         <source>Spectrogram</source>
         <translation>Spectrogram</translation>
     </message>
     <message>
-        <location line="-651"/>
-        <location line="+681"/>
+        <location line="-656"/>
+        <location line="+686"/>
         <source>Spectrogram display settings...</source>
         <translation>Spectrogram display settings...</translation>
     </message>
     <message>
-        <location line="-681"/>
-        <location line="+682"/>
+        <location line="-686"/>
+        <location line="+687"/>
         <source>Spectrogram options (window, bands, color)</source>
         <translation>Spectrogram options (window, bands, color)</translation>
     </message>
     <message>
-        <location line="-680"/>
-        <location line="+2689"/>
+        <location line="-685"/>
+        <location line="+2819"/>
         <source>Analyzing... %p%</source>
         <translation>Analyzing... %p%</translation>
     </message>
     <message>
-        <location line="-2582"/>
+        <location line="-2712"/>
         <source>Time signature set to %1</source>
         <translation>Time signature set to %1</translation>
     </message>
@@ -1252,12 +1303,12 @@ Shift+B: Remove point B</translation>
     </message>
     <message>
         <location line="+39"/>
-        <location line="+898"/>
+        <location line="+904"/>
         <source>Loop: %1 - %2</source>
         <translation>Loop: %1 - %2</translation>
     </message>
     <message>
-        <location line="-876"/>
+        <location line="-882"/>
         <source>Segment: %1 - %2 | Ratio: %3</source>
         <translation>Segment: %1 - %2 | Ratio: %3</translation>
     </message>
@@ -1272,7 +1323,17 @@ Shift+B: Remove point B</translation>
         <translation>Save the piano roll notes as a MIDI file</translation>
     </message>
     <message>
-        <location line="+221"/>
+        <location line="+4"/>
+        <source>Import reference MI&amp;DI...</source>
+        <translation>Import reference MI&amp;DI...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Show notes from a MIDI file as a grey reference</source>
+        <translation>Show notes from a MIDI file as a grey reference</translation>
+    </message>
+    <message>
+        <location line="+222"/>
         <source>Marker added</source>
         <translation>Marker added</translation>
     </message>
@@ -1400,7 +1461,7 @@ Shift+B: Remove point B</translation>
         <translation>Error: nothing to save</translation>
     </message>
     <message>
-        <location line="-898"/>
+        <location line="-904"/>
         <source>Snap all markers to BPM grid (bar subdivisions)</source>
         <translation>Snap all markers to BPM grid (bar subdivisions)</translation>
     </message>
@@ -1419,7 +1480,7 @@ Shift + LMB drag on waveform — fine grid adjustment</source>
 Shift + LMB drag on waveform — fine grid adjustment</translation>
     </message>
     <message>
-        <location line="+653"/>
+        <location line="+659"/>
         <source>The audio file has unsaved changes.
 Do you want to save the changes?</source>
         <translation>The audio file has unsaved changes.
@@ -1605,12 +1666,12 @@ Do you want to save the changes?</translation>
     <message>
         <location line="-10"/>
         <location line="+21"/>
-        <location line="+449"/>
+        <location line="+573"/>
         <source>Run note analysis first (the &quot;Analyze&quot; button)</source>
         <translation>Run note analysis first (the &quot;Analyze&quot; button)</translation>
     </message>
     <message>
-        <location line="-444"/>
+        <location line="-568"/>
         <source>No edited notes — drag notes on the piano roll</source>
         <translation>No edited notes — drag notes on the piano roll</translation>
     </message>
@@ -1662,13 +1723,13 @@ Do you want to save the changes?</translation>
         <translation>Key: %1</translation>
     </message>
     <message>
-        <location line="-2285"/>
-        <location line="+2676"/>
+        <location line="-2291"/>
+        <location line="+2806"/>
         <source>Analyze</source>
         <translation>Analyze</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-225"/>
         <source>Split tool off</source>
         <translation>Split tool off</translation>
     </message>
@@ -1678,7 +1739,49 @@ Do you want to save the changes?</translation>
         <translation>Split tool on: click a note, or %1 — cut at the playback cursor (Esc — off)</translation>
     </message>
     <message>
-        <location line="+61"/>
+        <location line="+96"/>
+        <location line="+7"/>
+        <location line="+27"/>
+        <source>Import reference MIDI</source>
+        <translation>Import reference MIDI</translation>
+    </message>
+    <message>
+        <location line="-34"/>
+        <source>MIDI files (*.mid *.midi)</source>
+        <translation>MIDI files (*.mid *.midi)</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>How should the reference notes be placed on the timeline?</source>
+        <translation>How should the reference notes be placed on the timeline?</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Keep as is</source>
+        <translation>Keep as is</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Fit to BPM</source>
+        <translation>Fit to BPM</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Align and fit to BPM</source>
+        <translation>Align and fit to BPM</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Failed to read the MIDI file: %1</source>
+        <translation>Failed to read the MIDI file: %1</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Reference MIDI: %1 notes, source tempo %2 BPM</source>
+        <translation>Reference MIDI: %1 notes, source tempo %2 BPM</translation>
+    </message>
+    <message>
+        <location line="+29"/>
         <location line="+14"/>
         <source>Export MIDI</source>
         <translation>Export MIDI</translation>
@@ -1753,16 +1856,16 @@ Press M to add markers.</translation>
         <translation>Auto markers on transients</translation>
     </message>
     <message>
-        <location line="-1706"/>
+        <location line="-1830"/>
         <location line="+59"/>
-        <location line="+1650"/>
+        <location line="+1774"/>
         <source>Waveform not initialized.</source>
         <translation>Waveform not initialized.</translation>
     </message>
     <message>
-        <location line="-1703"/>
+        <location line="-1827"/>
         <location line="+59"/>
-        <location line="+1650"/>
+        <location line="+1774"/>
         <source>No audio loaded.</source>
         <translation>No audio loaded.</translation>
     </message>
@@ -2096,7 +2199,7 @@ Shift + LMB drag on waveform — fine grid adjustment</translation>
 <context>
     <name>PianoRollToolbar</name>
     <message>
-        <location filename="../src/pianoroll_toolbar.cpp" line="+238"/>
+        <location filename="../src/pianoroll_toolbar.cpp" line="+257"/>
         <source>Split note at the playback cursor or by clicking on a note</source>
         <translation>Split note at the playback cursor or by clicking on a note</translation>
     </message>
@@ -2135,6 +2238,18 @@ Shift + LMB drag on waveform — fine grid adjustment</translation>
         <location line="-1"/>
         <source>the cut lands exactly where the cursor is</source>
         <translation>the cut lands exactly where the cursor is</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+2"/>
+        <location line="+1"/>
+        <source>Import MIDI</source>
+        <translation>Import MIDI</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>show notes from a .mid file as a grey reference</source>
+        <translation>show notes from a .mid file as a grey reference</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2300,6 +2415,16 @@ Shift + LMB drag on waveform — fine grid adjustment</translation>
         <location filename="../src/midiexporter.cpp" line="+144"/>
         <source>There are no notes to export</source>
         <translation>There are no notes to export</translation>
+    </message>
+    <message>
+        <location filename="../src/midiimporter.cpp" line="+172"/>
+        <source>This is not a MIDI file (no MThd header)</source>
+        <translation>This is not a MIDI file (no MThd header)</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>The MIDI file has no notes</source>
+        <translation>The MIDI file has no notes</translation>
     </message>
 </context>
 <context>

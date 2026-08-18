@@ -546,6 +546,8 @@ void PitchGridWidget::paintEvent(QPaintEvent*)
     drawPianoRollBackground(painter, area);
     drawBeatGrid(painter, area);
     drawSelectedPitchRow(painter, area);
+    // Референс — под своими нотами: он фон для сверки, а не рабочий материал
+    drawReferenceNotes(painter, area);
     drawNoteBlocks(painter, area);
     drawSplitPreview(painter, area);
     drawLegendColumn(painter, legendRect());
@@ -658,6 +660,47 @@ QRectF PitchGridWidget::noteRect(const PitchDetector::PitchNote& note) const
     const float x2 = timelineToContentX(viewport.sampleToPixelX(note.endSample));
     const float yTop = pitchToContentY(note.midiPitch);
     return QRectF(x1, yTop + 1.0f, qMax(2.0f, x2 - x1), kPitchRowHeightPx - 2);
+}
+
+void PitchGridWidget::drawReferenceNotes(QPainter& painter, const QRect& rect) const
+{
+    if (referenceNotes_.isEmpty()) {
+        return;
+    }
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    // Серый полупрозрачный блок: виден, но не спорит с рабочими нотами
+    const QColor fill(150, 150, 150, 110);
+    const QColor border(190, 190, 190, 150);
+
+    for (const PitchDetector::PitchNote& note : referenceNotes_) {
+        const QRectF r = noteRect(note);
+        if (r.right() < rect.left() || r.left() > rect.right()
+            || r.bottom() < rect.top() || r.top() > rect.bottom()) {
+            continue;
+        }
+        painter.setBrush(fill);
+        painter.setPen(QPen(border, 1.0));
+        painter.drawRoundedRect(r, 2.0, 2.0);
+    }
+
+    painter.restore();
+}
+
+void PitchGridWidget::setReferenceNotes(const QVector<PitchDetector::PitchNote>& referenceNotes)
+{
+    referenceNotes_ = referenceNotes;
+    update();
+}
+
+void PitchGridWidget::clearReferenceNotes()
+{
+    if (referenceNotes_.isEmpty()) {
+        return;
+    }
+    referenceNotes_.clear();
+    update();
 }
 
 void PitchGridWidget::drawNoteBlocks(QPainter& painter, const QRect& rect) const

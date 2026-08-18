@@ -572,13 +572,19 @@ KeyAnalyzer::PerBarKeyResult KeyAnalyzer::analyzeKeyPerBar(const QVector<float>&
         result.bars.append(bk);
     }
 
-    if (result.bars.isEmpty()) {
+    return summarizeBarKeys(result.bars);
+}
+
+KeyAnalyzer::PerBarKeyResult KeyAnalyzer::summarizeBarKeys(const QVector<BarKey>& bars) {
+    PerBarKeyResult result;
+    result.bars = bars;
+    if (bars.isEmpty()) {
         return result;
     }
 
     // Доминирующая тональность (по числу тактов), UNKNOWN не считаем основной.
     QVector<int> counts(int(UNKNOWN_KEY) + 1, 0);
-    for (const BarKey& b : result.bars) {
+    for (const BarKey& b : bars) {
         counts[int(b.key.key)]++;
     }
     int bestIdx = -1;
@@ -598,11 +604,11 @@ KeyAnalyzer::PerBarKeyResult KeyAnalyzer::analyzeKeyPerBar(const QVector<float>&
         result.primaryKey.isMajor = isMajorKey(result.primaryKey.key);
     }
 
-    result.regions = mergeBarsIntoRegions(result.bars);
+    result.regions = mergeBarsIntoRegions(bars);
 
     // Модуляция: обнаружено больше одной различной тональности (без учёта UNKNOWN).
     QSet<int> distinct;
-    for (const BarKey& b : result.bars) {
+    for (const BarKey& b : bars) {
         if (b.key.key != UNKNOWN_KEY) {
             distinct.insert(int(b.key.key));
         }

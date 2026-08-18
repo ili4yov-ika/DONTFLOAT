@@ -2,6 +2,7 @@
 
 #include "../../include/audiofileservice.h"
 #include "../../include/keyanalyzer.h"
+#include "../../include/keymodulationstrip.h"
 #include "../../include/keyselectionmenu.h"
 #include "../../include/notepreviewplayer.h"
 #include "../../include/pitchcorrection.h"
@@ -9,12 +10,14 @@
 #include "../../include/pianoroll_toolbar.h"
 #include "../../include/pitchdetector.h"
 #include "../../include/midiexporter.h"
+#include "../../include/midiimporter.h"
 #include "../../include/pitchgridwidget.h"
 #include "../../include/uiconstants.h"
 
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QMessageBox>
 #include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -144,6 +147,13 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     keyRow->addStretch(1);
     root->addLayout(keyRow);
 
+    // Панель тональностей референсного MIDI — под своей, появляется после
+    // импорта. Поля стоят по тактам: модуляция видна там, где она звучит
+    referenceKeyStrip_ = new KeyModulationStrip(this);
+    referenceKeyStrip_->setReferenceAppearance(true);
+    referenceKeyStrip_->hide();
+    root->addWidget(referenceKeyStrip_);
+
     pitchGrid_ = new PitchGridWidget(this);
     pitchGrid_->setMinimumHeight(180);
     pitchGrid_->setPrimaryKey(QStringLiteral("C Major"));
@@ -245,6 +255,8 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
             pitchGrid_, &PitchGridWidget::setCutMode);
     connect(pianoRollToolbar_, &PianoRollToolbar::exportMidiRequested,
             this, &DontfloatPitchEditor::onExportMidiClicked);
+    connect(pianoRollToolbar_, &PianoRollToolbar::importMidiRequested,
+            this, &DontfloatPitchEditor::onImportMidiClicked);
     pianoRollToolbar_->setExportMidiEnabled(false);
     pitchGrid_->setCutMode(pianoRollToolbar_->cutMode());
 
@@ -326,6 +338,7 @@ void DontfloatPitchEditor::refreshFromSession()
         pitchGrid_->setAudioData(channels);
         pitchGrid_->setSampleRate(buffer.sampleRate);
         pitchGrid_->setTimelineSampleCount(buffer.frameCount());
+        syncReferenceKeyStrip();
         setStatus(tr("audio: %1 samples, %2 Hz")
                       .arg(buffer.frameCount())
                       .arg(buffer.sampleRate));
@@ -428,6 +441,66 @@ void DontfloatPitchEditor::setHostBeatGrid(double bpm, int beatsPerBar, qint64 b
     pitchGrid_->setBPM(float(hostBpm_));
     pitchGrid_->setBeatsPerBar(hostBeatsPerBar_);
     pitchGrid_->setGridStartSample(hostGridStartSample_);
+}
+
+void DontfloatPitchEditor::onImportMidiClicked()
+{
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Import reference MIDI"), QString(), tr("MIDI files (*.mid *.midi)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    // Как раскладывать ноты по времени — спрашиваем сразу после выбора файла
+    QMessageBox question(this);
+    question.setWindowTitle(tr("Import reference MIDI"));
+    question.setText(tr("How should the reference notes be placed on the timeline?"));
+    question.setIcon(QMessageBox::Question);
+    QPushButton* keepButton = question.addButton(tr("Keep as is"), QMessageBox::AcceptRole);
+    QPushButton* fitButton = question.addButton(tr("Fit to BPM"), QMessageBox::AcceptRole);
+    QPushButton* alignButton =
+        question.addButton(tr("Align and fit to BPM"), QMessageBox::AcceptRole);
+    question.addButton(QMessageBox::Cancel);
+    question.exec();
+
+    MidiImporter::Options options;
+    if (question.clickedButton() == keepButton) {
+        options.mode = MidiImporter::TimingMode::KeepAsIs;
+    } else if (question.clickedButton() == fitButton) {
+        options.mode = MidiImporter::TimingMode::FitToBpm;
+    } else if (question.clickedButton() == alignButton) {
+        options.mode = MidiImporter::TimingMode::AlignAndFitToBpm;
+    } else {
+        return;  // отмена
+    }
+
+    // Темп и сетка — от DAW (см. setHostBeatGrid), частота — от захваченной дорожки
+    options.projectBpm = hostBpm_ > 0.0 ? float(hostBpm_) : 120.0f;
+    options.sampleRate = session_ ? session_->audioBuffer().sampleRate : 44100;
+    options.gridStartSample = hostGridStartSample_;
+
+    const MidiImporter::Result result = MidiImporter::readFile(path, options);
+    if (!result.ok) {
+        setStatus(tr("MIDI import error: %1").arg(result.error));
+        return;
+    }
+
+    pitchGrid_->setReferenceNotes(result.notes);
+
+    // Тональности референса — потактово по сетке DAW, как у полосы проекта
+    KeyAnalyzer::BarGrid grid;
+    grid.bpm = options.projectBpm;
+    grid.beatsPerBar = hostBeatsPerBar_;
+    grid.gridStartSample = options.gridStartSample;
+    referenceKeys_ = MidiImporter::analyzeKeyPerBar(result.notes, grid, options.sampleRate);
+    referenceKeyStrip_->setRegions(referenceKeys_.regions);
+    referenceKeyStrip_->setVisible(!referenceKeys_.regions.isEmpty());
+    syncReferenceKeyStrip();
+
+    const QString referenceKey = referenceKeys_.primaryKey.keyName;
+    setStatus(tr("reference MIDI: %1 notes, key %2")
+                  .arg(result.notes.size())
+                  .arg(referenceKey.isEmpty() ? tr("undefined") : referenceKey));
 }
 
 void DontfloatPitchEditor::onExportMidiClicked()
@@ -580,6 +653,17 @@ void DontfloatPitchEditor::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     layoutAnalyzeOverlay();
+    syncReferenceKeyStrip();
+}
+
+void DontfloatPitchEditor::syncReferenceKeyStrip()
+{
+    if (!referenceKeyStrip_ || !pitchGrid_) {
+        return;
+    }
+    // У плагина таймлайн не масштабируется — достаточно длины и ширины вида
+    referenceKeyStrip_->setTimelineSampleCount(pitchGrid_->timelineSamples());
+    referenceKeyStrip_->setTimelineReferenceWidth(pitchGrid_->width());
 }
 
 void DontfloatPitchEditor::runPitchAnalysis()
