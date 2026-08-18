@@ -104,6 +104,19 @@ std::vector<float> toStdVector(const QVector<float>& samples)
     return std::vector<float>(samples.begin(), samples.end());
 }
 
+// QString::toStdString / fromStdString в отладочной сборке ходят в Qt6Core.dll,
+// собранную с release-рантаймом, и возвращают мусор. Переводим через UTF-8 сами.
+std::string toUtf8String(const QString& text)
+{
+    const QByteArray utf8 = text.toUtf8();
+    return std::string(utf8.constData(), static_cast<std::size_t>(utf8.size()));
+}
+
+QString fromUtf8String(const std::string& text)
+{
+    return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
+}
+
 } // namespace
 
 DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& productName)
@@ -262,9 +275,22 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
 
     setPrimaryKey(QStringLiteral("C Major"));
     setSecondaryKey(QString());
+
+    // Соседние экземпляры в этом же DAW: их ноты приходят к нам референсом.
+    // Доска не умеет звать нас сама (ядро без Qt), поэтому опрашиваем её —
+    // сравнивается только отметка, ноты копируются лишь когда они изменились
+    instanceId_ = Dontfloat::PluginCore::SharedNoteBoard::registerInstance();
+    sharedNotesTimer_ = new QTimer(this);
+    sharedNotesTimer_->setInterval(kSharedNotesPollMs);
+    connect(sharedNotesTimer_, &QTimer::timeout,
+            this, &DontfloatPitchEditor::pullSharedReferenceNotes);
+    sharedNotesTimer_->start();
 }
 
-DontfloatPitchEditor::~DontfloatPitchEditor() = default;
+DontfloatPitchEditor::~DontfloatPitchEditor()
+{
+    Dontfloat::PluginCore::SharedNoteBoard::unregisterInstance(instanceId_);
+}
 
 void DontfloatPitchEditor::setProductName(const QString& productName)
 {
@@ -485,17 +511,9 @@ void DontfloatPitchEditor::onImportMidiClicked()
         return;
     }
 
-    pitchGrid_->setReferenceNotes(result.notes);
-
-    // Тональности референса — потактово по сетке DAW, как у полосы проекта
-    KeyAnalyzer::BarGrid grid;
-    grid.bpm = options.projectBpm;
-    grid.beatsPerBar = hostBeatsPerBar_;
-    grid.gridStartSample = options.gridStartSample;
-    referenceKeys_ = MidiImporter::analyzeKeyPerBar(result.notes, grid, options.sampleRate);
-    referenceKeyStrip_->setRegions(referenceKeys_.regions);
-    referenceKeyStrip_->setVisible(!referenceKeys_.regions.isEmpty());
-    syncReferenceKeyStrip();
+    // Импортированный вручную референс важнее нот соседней дорожки
+    referenceFromImport_ = true;
+    applyReferenceNotes(result.notes, options.sampleRate);
 
     const QString referenceKey = referenceKeys_.primaryKey.keyName;
     setStatus(tr("reference MIDI: %1 notes, key %2")
@@ -628,6 +646,7 @@ void DontfloatPitchEditor::syncNotesToSession()
     }
     session_->pitchAnalysis().notes = toCoreNotes(baseNotes_);
     session_->pitchAnalysis().valid = !baseNotes_.isEmpty();
+    publishNotesToBoard();
     emit pitchSessionChanged();
 }
 
@@ -654,6 +673,75 @@ void DontfloatPitchEditor::resizeEvent(QResizeEvent* event)
     QWidget::resizeEvent(event);
     layoutAnalyzeOverlay();
     syncReferenceKeyStrip();
+}
+
+void DontfloatPitchEditor::applyReferenceNotes(const QVector<PitchDetector::PitchNote>& notes,
+                                               int sampleRate)
+{
+    pitchGrid_->setReferenceNotes(notes);
+
+    // Тональности референса — потактово по сетке DAW, как у полосы проекта
+    KeyAnalyzer::BarGrid grid;
+    grid.bpm = hostBpm_ > 0.0 ? float(hostBpm_) : 120.0f;
+    grid.beatsPerBar = hostBeatsPerBar_;
+    grid.gridStartSample = hostGridStartSample_;
+    referenceKeys_ = MidiImporter::analyzeKeyPerBar(notes, grid, sampleRate);
+    referenceKeyStrip_->setRegions(referenceKeys_.regions);
+    referenceKeyStrip_->setVisible(!referenceKeys_.regions.isEmpty());
+    syncReferenceKeyStrip();
+}
+
+void DontfloatPitchEditor::publishNotesToBoard()
+{
+    // Свои ноты — соседним экземплярам плагина в этом же DAW
+    const int sampleRate = session_ ? session_->audioBuffer().sampleRate : 44100;
+    Dontfloat::PluginCore::SharedNoteBoard::publish(
+        instanceId_, toUtf8String(productName_), sampleRate, toCoreNotes(baseNotes_));
+}
+
+void DontfloatPitchEditor::pullSharedReferenceNotes()
+{
+    if (referenceFromImport_) {
+        return;  // импортированный вручную референс не перебиваем
+    }
+
+    const auto stamp = Dontfloat::PluginCore::SharedNoteBoard::latestStamp(instanceId_);
+    if (stamp.revision == appliedSharedRevision_) {
+        return;  // соседи ничего нового не выкладывали
+    }
+    appliedSharedRevision_ = stamp.revision;
+
+    const auto shared = Dontfloat::PluginCore::SharedNoteBoard::latestFrom(instanceId_);
+    if (shared.empty()) {
+        // Сосед закрылся или остался без нот — референс убираем
+        pitchGrid_->clearReferenceNotes();
+        referenceKeys_ = KeyAnalyzer::PerBarKeyResult();
+        referenceKeyStrip_->setRegions({});
+        referenceKeyStrip_->hide();
+        return;
+    }
+
+    const int sampleRate = session_ && session_->audioBuffer().sampleRate > 0
+        ? session_->audioBuffer().sampleRate
+        : shared.sampleRate;
+    QVector<PitchDetector::PitchNote> notes = fromCoreNotes(shared.notes);
+    if (shared.sampleRate > 0 && sampleRate != shared.sampleRate) {
+        // У дорожек разная частота — позиции переводим в свои сэмплы
+        const double scale = double(sampleRate) / double(shared.sampleRate);
+        for (PitchDetector::PitchNote& note : notes) {
+            note.startSample = qint64(std::llround(double(note.startSample) * scale));
+            note.endSample = std::max(note.startSample + 1,
+                                      qint64(std::llround(double(note.endSample) * scale)));
+        }
+    }
+
+    applyReferenceNotes(notes, sampleRate);
+    setStatus(tr("reference from another track (%1): %2 notes, key %3")
+                  .arg(fromUtf8String(shared.publisherName))
+                  .arg(notes.size())
+                  .arg(referenceKeys_.primaryKey.keyName.isEmpty()
+                           ? tr("undefined")
+                           : referenceKeys_.primaryKey.keyName));
 }
 
 void DontfloatPitchEditor::syncReferenceKeyStrip()
@@ -740,6 +828,7 @@ void DontfloatPitchEditor::onPitchAnalysisFinished()
     setStatus(tr("analysis done: %1, notes found: %2")
                   .arg(keysText)
                   .arg(baseNotes_.size()));
+    publishNotesToBoard();
     emit pitchSessionChanged();
 }
 

@@ -2,6 +2,7 @@
 #define DONTFLOAT_PITCH_EDITOR_H
 
 #include "../core/dontfloat_plugin_core.h"
+#include "../core/dontfloat_shared_notes.h"
 #include "../../include/keyanalyzer.h"
 #include "../../include/pitchdetector.h"
 #include "../../include/pitchgridwidget.h"
@@ -100,6 +101,12 @@ private:
     void shiftNotes(qint64 deltaSamples);
     /** Полоса референса стоит на таймлайне пианоролла — держим их вместе. */
     void syncReferenceKeyStrip();
+    /** Кладёт ноты фоном и пересчитывает потактовые тональности референса. */
+    void applyReferenceNotes(const QVector<PitchDetector::PitchNote>& notes, int sampleRate);
+    /** Выкладывает свои ноты соседним экземплярам плагина (общая доска). */
+    void publishNotesToBoard();
+    /** Забирает ноты соседней дорожки, если они изменились. */
+    void pullSharedReferenceNotes();
 
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QString productName_;
@@ -113,9 +120,15 @@ private:
     QProgressBar* analyzeProgress_ = nullptr;
     QPushButton* applyButton_ = nullptr;
     PianoRollToolbar* pianoRollToolbar_ = nullptr;
-    /** Потактовая панель тональностей референсного MIDI (под своей). */
+    /** Потактовая панель тональностей референса (под своей). */
     KeyModulationStrip* referenceKeyStrip_ = nullptr;
     KeyAnalyzer::PerBarKeyResult referenceKeys_;
+    /** Референс пришёл из файла .mid — нотами соседней дорожки его не трогаем. */
+    bool referenceFromImport_ = false;
+    /** Место на общей доске нот: свои публикуем, чужие берём референсом. */
+    std::uint64_t instanceId_ = 0;
+    std::uint64_t appliedSharedRevision_ = 0;
+    QTimer* sharedNotesTimer_ = nullptr;
 
     QString primaryKey_;
     QString secondaryKey_;
@@ -142,6 +155,8 @@ private:
     static constexpr int kAutoAnalysisDelayMs = 400;
     /** Минимальный интервал перерисовки вида при потоке блоков от хоста. */
     static constexpr int kHostRefreshIntervalMs = 200;
+    /** Как часто спрашиваем доску, не появились ли ноты на соседней дорожке. */
+    static constexpr int kSharedNotesPollMs = 700;
 };
 
 } // namespace Dontfloat::Plugins::Ui
