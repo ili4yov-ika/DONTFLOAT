@@ -985,11 +985,6 @@ set_tests_properties(plugin_shared_notes_test PROPERTIES
     DESCRIPTION "Notes from one plugin instance shown as reference in another"
 )
 
-# ============================================================================
-# CPack конфигурация для создания установочных пакетов
-# ============================================================================
-include(CPack)
-
 # Установка переводов
 install(FILES ${DONTFLOAT_QM_FILES}
     DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/translations
@@ -1002,11 +997,20 @@ install(FILES README.md
     OPTIONAL
 )
 
-# CPack настройки
+# ============================================================================
+# CPack: установочные пакеты (.deb, .rpm, .tar.gz, NSIS, .dmg)
+# ============================================================================
+# include(CPack) стоит в самом конце файла намеренно: он записывает
+# CPackConfig.cmake прямо в момент включения, поэтому всё, что задано ниже него,
+# в конфигурацию уже не попадает. Раньше include шёл до этих set() — и cpack не
+# видел ни сопровождающего, ни зависимостей, ни списка генераторов.
 set(CPACK_PACKAGE_NAME "DONTFLOAT")
 set(CPACK_PACKAGE_VENDOR "DONTFLOAT Project")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Аудиоредактор для выравнивания BPM")
 set(CPACK_PACKAGE_DESCRIPTION "DONTFLOAT - это аудиоредактор для анализа и выравнивания BPM аудиофайлов.")
+# Полная версия из project(...): иначе CPack соберёт её из MAJOR.MINOR.PATCH и
+# потеряет четвёртую цифру — имена пакетов разъедутся с версией приложения
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
@@ -1052,3 +1056,6 @@ if(APPLE)
     set(CPACK_DMG_FORMAT "UDBZ")
     set(CPACK_PACKAGE_FILE_NAME "DONTFLOAT-${PROJECT_VERSION}-macOS")
 endif()
+
+# Читает всё, что задано выше, и пишет CPackConfig.cmake — строго в конце файла
+include(CPack)
