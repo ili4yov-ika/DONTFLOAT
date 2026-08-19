@@ -37,6 +37,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <cstdint>
 #include <cmath>
 #include <vector>
 
@@ -491,8 +492,9 @@ void DontfloatPitchEditor::startAutoAnalysis()
         return;  // содержимое не менялось
     }
 
-    // Тот же материал на новой позиции — клип переехал в DAW: ноты едут с ним
-    qint64 shift = 0;
+    // Тот же материал на новой позиции — клип переехал в DAW: ноты едут с ним.
+    // std::int64_t, а не qint64: на Linux (LP64) это разные типы, см. ядро
+    std::int64_t shift = 0;
     if (Dontfloat::PluginCore::detectContentShift(analyzedContent_, print, &shift)) {
         shiftNotes(shift);
         analyzedContent_ = print;

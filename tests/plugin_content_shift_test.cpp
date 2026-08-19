@@ -5,6 +5,7 @@
 
 #include "../plugins/core/dontfloat_plugin_core.h"
 
+#include <cstdint>
 #include <cmath>
 #include <vector>
 
@@ -142,7 +143,7 @@ void PluginContentShiftTest::testMovedClipInSameSession()
     QCOMPARE(after.lengthFrames, before.lengthFrames);
     QCOMPARE(after.hash, before.hash);
 
-    qint64 delta = 0;
+    std::int64_t delta = 0;
     QVERIFY(detectContentShift(before, after, &delta));
     QVERIFY(std::llabs(delta - 2 * kSampleRate) < kBlockSize);
 }
@@ -183,7 +184,7 @@ void PluginContentShiftTest::testMovedClipIsDetectedAsShift()
     QCOMPARE(before.hash, after.hash);
     QCOMPARE(before.lengthFrames, after.lengthFrames);
 
-    qint64 delta = 0;
+    std::int64_t delta = 0;
     QVERIFY(detectContentShift(before, after, &delta));
     QVERIFY(std::llabs(delta - 2 * kSampleRate) < kBlockSize);
 
@@ -206,7 +207,7 @@ void PluginContentShiftTest::testDifferentContentIsNotAShift()
     feedClip(second, other, kSampleRate);
     const auto after = computeContentFingerprint(second.audioBuffer());
 
-    qint64 delta = 0;
+    std::int64_t delta = 0;
     QVERIFY(!detectContentShift(before, after, &delta));
 }
 

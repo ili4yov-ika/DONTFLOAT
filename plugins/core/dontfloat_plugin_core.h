@@ -276,6 +276,12 @@ TrackContentFingerprint computeContentFingerprint(const TrackAudioBuffer& buffer
  * клипа: метки растяжения и ноты нужно сдвинуть, а не пересчитывать.
  * @return true и \a deltaFrames (новая позиция минус старая), если содержимое
  *         совпало, а позиция изменилась.
+ *
+ * @note \a deltaFrames — именно `std::int64_t`, а не `qint64`. Ядро плагина
+ *       живёт без Qt, а на Linux (LP64) `int64_t` — это `long`, тогда как
+ *       `qint64` — `long long`: размеры совпадают, типы нет, и `qint64*` сюда
+ *       не приводится. На Windows и macOS оба типа — `long long`, поэтому
+ *       такая ошибка видна только в сборке под Linux.
  */
 bool detectContentShift(const TrackContentFingerprint& before,
                         const TrackContentFingerprint& after,
