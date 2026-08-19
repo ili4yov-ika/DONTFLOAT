@@ -2,6 +2,8 @@
 #include "../include/timestretchprocessor.h"
 
 #include <QtCore/QtMath>
+
+#include <algorithm>
 #include <cmath>
 
 namespace PitchCorrection {

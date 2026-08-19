@@ -15,6 +15,7 @@
 
 #include "ARA_Library/Dispatch/ARAHostDispatch.h"
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
