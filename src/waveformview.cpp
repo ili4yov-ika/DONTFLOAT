@@ -466,6 +466,7 @@ void WaveformView::setAudioData(const QVector<QVector<float>>& channels)
     spectrogramImages.clear();
     spectrogramDirty = true;
     invalidateWavePixmapCache();
+    invalidateWavePeaks();
     markMarkersCacheDirty();
 
     // Сбрасываем масштаб и смещение
@@ -853,6 +854,34 @@ void WaveformView::paintEvent(QPaintEvent* event)
     drawMarkers(painter, rect());
 }
 
+const WaveformPeaks* WaveformView::peaksFor(const QVector<float>& samples)
+{
+    if (samples.isEmpty()) {
+        return nullptr;
+    }
+    for (ChannelPeaks& entry : wavePeaks) {
+        if (entry.source == samples.constData() && entry.size == samples.size()) {
+            return &entry.peaks;
+        }
+    }
+
+    // Держим по одной пирамиде на канал: больше буферов одновременно не рисуем
+    if (wavePeaks.size() >= 4) {
+        wavePeaks.removeFirst();
+    }
+    ChannelPeaks entry;
+    entry.source = samples.constData();
+    entry.size = samples.size();
+    entry.peaks.build(samples);
+    wavePeaks.append(std::move(entry));
+    return &wavePeaks.last().peaks;
+}
+
+void WaveformView::invalidateWavePeaks()
+{
+    wavePeaks.clear();
+}
+
 void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect)
 {
     if (samples.isEmpty()) return;
@@ -872,21 +901,29 @@ void WaveformView::drawWaveform(QPainter& painter, const QVector<float>& samples
     const float centerY = adjustedRect.center().y();
     const float halfHeight = adjustedRect.height() * 0.5f;
 
+    // Пики берём из пирамиды: точные min/max без прореживания и без прохода
+    // по сырым сэмплам на каждой перерисовке
+    const WaveformPeaks* peaks = peaksFor(samples);
+
     for (int x = 0; x < rect.width(); ++x) {
         int currentSample = startSample + int(x * samplesPerPixel);
         int nextSample = startSample + int((x + 1) * samplesPerPixel);
 
         if (currentSample >= samples.size()) break;
 
-        // Оптимизация: используем шаг для уменьшения количества итераций
-        // при большом количестве сэмплов на пиксель (максимум 200 проверок на пиксель)
         float minValue = 0, maxValue = 0;
-        int sampleCount = qMin(nextSample, samples.size()) - currentSample;
-        int step = qMax(1, sampleCount / 200);
-
-        for (int s = currentSample; s < qMin(nextSample, samples.size()); s += step) {
-            minValue = qMin(minValue, samples[s]);
-            maxValue = qMax(maxValue, samples[s]);
+        const int lastSample = qMin(nextSample, samples.size());
+        float peakMin = 0.0f;
+        float peakMax = 0.0f;
+        if (peaks && peaks->range(samples, currentSample, lastSample, peakMin, peakMax)) {
+            minValue = qMin(0.0f, peakMin);
+            maxValue = qMax(0.0f, peakMax);
+        } else {
+            // Запасной путь (например, буфер сменился прямо сейчас)
+            for (int s = currentSample; s < lastSample; ++s) {
+                minValue = qMin(minValue, samples[s]);
+                maxValue = qMax(maxValue, samples[s]);
+            }
         }
 
         // Определяем цвет в зависимости от частоты
@@ -2951,6 +2988,7 @@ void WaveformView::startRealtimeStretchJob()
 
             if (fresh && !audio.isEmpty() && !audio[0].isEmpty()) {
                 self->audioData = audio;
+                self->invalidateWavePeaks();
 
                 if (self->renderMode == WaveformRenderMode::Spectrogram) {
                     self->spectrogramImages.clear();
@@ -2989,6 +3027,7 @@ void WaveformView::applyStretchedPreview(const QVector<QVector<float>>& channels
     }
 
     audioData = channels;
+    invalidateWavePeaks();
     if (renderMode == WaveformRenderMode::Spectrogram) {
         spectrogramImages.clear();
         spectrogramDirty = true;

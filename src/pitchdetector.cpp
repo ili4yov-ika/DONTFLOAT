@@ -1,7 +1,12 @@
 #include "../include/pitchdetector.h"
 
+#include <QtCore/QRunnable>
+#include <QtCore/QSemaphore>
+#include <QtCore/QThread>
+#include <QtCore/QThreadPool>
 #include <QtCore/QtMath>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <vector>
 
@@ -296,16 +301,70 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
     diff.reserve(layout.maxLag + 1);
     cmnd.reserve(layout.maxLag + 1);
 
-    int lastReported = -1;
-    for (int f = 0; f < frameCount; ++f) {
-        frames[f] = estimateFrame(work.constData() + qint64(f) * layout.hopSize,
-                                  layout, options, diff, cmnd);
-        if (onProgress) {
-            const int pct = int(qint64(f + 1) * 100 / frameCount);
+    // Кадры считаются независимо друг от друга, поэтому раскладываем их по
+    // ядрам. Пул свой, а не глобальный: анализ и сам обычно запущен из
+    // QtConcurrent на глобальном пуле, и на одноядерной машине задачи ждали бы
+    // поток, который занят ими же.
+    const int threadCount = qBound(1, QThread::idealThreadCount(), 16);
+    constexpr int kMinFramesForThreads = 64;
+
+    if (threadCount <= 1 || frameCount < kMinFramesForThreads) {
+        int lastReported = -1;
+        for (int f = 0; f < frameCount; ++f) {
+            frames[f] = estimateFrame(work.constData() + qint64(f) * layout.hopSize,
+                                      layout, options, diff, cmnd);
+            if (onProgress) {
+                const int pct = int(qint64(f + 1) * 100 / frameCount);
+                if (pct != lastReported) {
+                    lastReported = pct;
+                    onProgress(pct);
+                }
+            }
+        }
+    } else {
+        QThreadPool pool;
+        pool.setMaxThreadCount(threadCount);
+
+        std::atomic<int> processed { 0 };
+        QSemaphore finished;
+        const int chunkSize = (frameCount + threadCount - 1) / threadCount;
+
+        for (int chunk = 0; chunk < threadCount; ++chunk) {
+            const int from = chunk * chunkSize;
+            const int to = qMin(frameCount, from + chunkSize);
+            if (from >= to) {
+                finished.release();
+                continue;
+            }
+            pool.start(QRunnable::create([&, from, to]() {
+                // Буферы разностной функции — свои у каждого потока
+                std::vector<float> localDiff;
+                std::vector<float> localCmnd;
+                localDiff.reserve(layout.maxLag + 1);
+                localCmnd.reserve(layout.maxLag + 1);
+                for (int f = from; f < to; ++f) {
+                    frames[f] = estimateFrame(work.constData() + qint64(f) * layout.hopSize,
+                                              layout, options, localDiff, localCmnd);
+                    processed.fetch_add(1, std::memory_order_relaxed);
+                }
+                finished.release();
+            }));
+        }
+
+        // Ждём и по дороге отдаём прогресс — плашка анализа должна двигаться
+        int lastReported = -1;
+        while (!finished.tryAcquire(threadCount, 30)) {
+            if (!onProgress) {
+                continue;
+            }
+            const int pct = int(qint64(processed.load(std::memory_order_relaxed)) * 100 / frameCount);
             if (pct != lastReported) {
                 lastReported = pct;
                 onProgress(pct);
             }
+        }
+        if (onProgress && lastReported != 100) {
+            onProgress(100);
         }
     }
 

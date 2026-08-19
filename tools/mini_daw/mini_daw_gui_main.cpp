@@ -211,7 +211,13 @@ int main(int argc, char** argv)
                                       QStringLiteral("Headless check: load plugin, embed editor, process"));
     QCommandLineOption autoPlayOption(QStringLiteral("autoplay"),
                                       QStringLiteral("Start the transport as soon as the track is loaded"));
+    // Вторая дорожка: два экземпляра плагина в одном процессе — так проверяется
+    // передача нот-референсов между дорожками
+    QCommandLineOption input2Option(QStringLiteral("input2"),
+                                    QStringLiteral("Audio file to load into track 2"),
+                                    QStringLiteral("path"));
     parser.addOption(autoPlayOption);
+    parser.addOption(input2Option);
     parser.addOption(inputOption);
     parser.addOption(formatOption);
     parser.addOption(productOption);
@@ -247,10 +253,20 @@ int main(int argc, char** argv)
         window.selectPlugin(selection.format, selection.product);
     }
     window.show();
-    if (!input.isEmpty()) {
+    const QString input2 = parser.value(input2Option);
+    if (!input.isEmpty() || !input2.isEmpty()) {
         // Через очередь событий: сначала поднимется плагин (таймер окна),
         // потом декодируется трек — иначе загрузка идёт во вложенном цикле
-        QTimer::singleShot(0, &window, [&window, input]() { window.openAudio(input); });
+        QTimer::singleShot(0, &window, [&window, input, input2]() {
+            if (!input.isEmpty()) {
+                window.openAudio(0, input);
+            }
+            if (!input2.isEmpty()) {
+                window.openAudio(1, input2);
+                // Возвращаемся на первую дорожку: её редактор показан по умолчанию
+                window.setActiveTrack(0);
+            }
+        });
     }
     return app.exec();
 }

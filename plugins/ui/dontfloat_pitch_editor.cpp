@@ -181,7 +181,8 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     root->addWidget(referenceKeyStrip_);
 
     pitchGrid_ = new PitchGridWidget(this);
-    pitchGrid_->setMinimumHeight(180);
+    // Ниже — только чтобы пианоролл не схлопывался: место ему даёт разметка
+    pitchGrid_->setMinimumHeight(110);
     pitchGrid_->setPrimaryKey(QStringLiteral("C Major"));
     root->addWidget(pitchGrid_, 1);
 
@@ -780,24 +781,67 @@ bool DontfloatPitchEditor::pullFromAraModel()
         return false;
     }
 
+    Dontfloat::Ara::AraAudioSource* ownSource =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
+    if (!ownSource) {
+        // Роли хост мог назначить позже привязки — на одной дорожке источник
+        // всё равно один, берём его
+        ownSource = controller->onlyAudioSource();
+    }
+
+    // Плашка прогресса: разбор идёт сразу после появления дорожки, и пианоролл
+    // на это время прикрыт — как в главном окне
+    const bool analysisRunning = ownSource && ownSource->analysisRunning();
+    if (analysisRunning) {
+        setAnalysisRunning(true);
+        analyzeProgress_->setValue(ownSource->analysisProgress());
+        analyzeOverlay_->setVisible(true);
+        layoutAnalyzeOverlay();
+    } else if (araAnalysisWasRunning_) {
+        setAnalysisRunning(false);
+        analyzeOverlay_->hide();
+    }
+    araAnalysisWasRunning_ = analysisRunning;
+
     const std::uint64_t revision = controller->modelRevision();
-    if (revision == appliedAraRevision_) {
+    if (revision == appliedAraRevision_ && araAudioApplied_) {
         return true;  // модель не менялась — дёргать вид незачем
     }
     appliedAraRevision_ = revision;
 
-    // Тактовая сетка — из musical context хоста, а не из транспорта
+    // Звук дорожки приходит из ARA целиком: ни проигрывания, ни «записи»
+    // блоков в плагин не нужно (так же работает Melodyne)
+    if (ownSource && !ownSource->monoSamples().empty() && session_ && !araAudioApplied_) {
+        const std::vector<float>& mono = ownSource->monoSamples();
+        TrackAudioBuffer buffer;
+        buffer.sampleRate = int(ownSource->getSampleRate() > 0.0 ? ownSource->getSampleRate()
+                                                                : 44100.0);
+        buffer.channelCount = 1;
+        buffer.mono = mono;
+        session_->setAudioBuffer(buffer);
+        araAudioApplied_ = true;
+        refreshFromSession();
+    }
+
+    // Тактовая сетка — из musical context хоста, причём в координатах дорожки:
+    // клип может стоять не в начале проекта, и сетка обязана совпасть с DAW
     const Dontfloat::Ara::AraBeatGrid grid = controller->hostBeatGrid();
     if (grid.valid && pitchGrid_) {
         const int sampleRate = session_ && session_->audioBuffer().sampleRate > 0
             ? session_->audioBuffer().sampleRate
             : 44100;
+        double gridStartInSource = grid.gridStartSeconds;
+        const std::vector<Dontfloat::Ara::AraClipPlacement> clips =
+            controller->clipsForAudioSource(ownSource);
+        if (!clips.empty()) {
+            // Время проекта → время источника: где начало такта 1 внутри файла
+            const Dontfloat::Ara::AraClipPlacement& clip = clips.front();
+            gridStartInSource = clip.startInSourceSeconds
+                + (grid.gridStartSeconds - clip.startInPlaybackSeconds) / clip.stretchFactor();
+        }
         setHostBeatGrid(grid.tempoBpm, grid.beatsPerBar,
-                        qint64(grid.gridStartSeconds * double(sampleRate)));
+                        qint64(gridStartInSource * double(sampleRate)));
     }
-
-    Dontfloat::Ara::AraAudioSource* ownSource =
-        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
 
     // Свои ноты: разбор сделал document controller по всему файлу дорожки
     if (ownSource && ownSource->hasNotes() && baseNotes_.isEmpty()) {

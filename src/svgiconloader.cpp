@@ -1,7 +1,9 @@
 #include "../include/svgiconloader.h"
 
 #include <QtGui/QPainter>
+#if defined(DONTFLOAT_HAS_QT_SVG)
 #include <QtSvg/QSvgRenderer>
+#endif
 
 #include <cmath>
 
@@ -14,6 +16,11 @@ QPixmap renderPixmap(const QString& resourcePath, QSize size, qreal devicePixelR
     }
     const qreal dpr = devicePixelRatio > 0.0 ? devicePixelRatio : 1.0;
 
+#if !defined(DONTFLOAT_HAS_QT_SVG)
+    // Сборка без модуля Qt Svg: остаётся обычный QIcon (ему нужен плагин
+    // движка иконок рядом с бинарником)
+    return QIcon(resourcePath).pixmap(size, dpr);
+#else
     QSvgRenderer renderer(resourcePath);
     if (!renderer.isValid()) {
         // Не SVG или ресурс не собрался — пусть попробует обычный QIcon
@@ -31,6 +38,7 @@ QPixmap renderPixmap(const QString& resourcePath, QSize size, qreal devicePixelR
     renderer.render(&painter, QRectF(QPointF(0.0, 0.0), QSizeF(size)));
     painter.end();
     return pixmap;
+#endif
 }
 
 QIcon load(const QString& resourcePath, int sizePx, qreal devicePixelRatio)

@@ -149,12 +149,12 @@ function(dontfloat_add_mini_daw_gui)
         Qt6::Gui
         Qt6::Widgets
         Qt6::Multimedia
-        # Иконки плагина рисуются через QSvgRenderer. Модуль плагина грузится
-        # с LOAD_WITH_ALTERED_SEARCH_PATH, поэтому Qt6Svg ищется не рядом с
-        # хостом, а по PATH: без ссылки отсюда windeployqt его не положит и
-        # загрузка плагина в мини-DAW падает на InitDll
-        Qt6::Svg
     )
+    # Иконки плагина рисуются через QSvgRenderer. Модуль плагина грузится
+    # с LOAD_WITH_ALTERED_SEARCH_PATH, поэтому Qt6Svg ищется не рядом с
+    # хостом, а по PATH: без ссылки отсюда windeployqt его не положит и
+    # загрузка плагина в мини-DAW падает на InitDll
+    dontfloat_link_qt_svg(dontfloat_mini_daw)
     target_compile_definitions(dontfloat_mini_daw PRIVATE
         "DONTFLOAT_PLUGIN_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\""
     )

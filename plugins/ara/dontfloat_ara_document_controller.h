@@ -76,12 +76,26 @@ public:
     const AraNoteSet& noteSet() const noexcept { return noteSet_; }
     bool hasNotes() const noexcept { return noteSet_.valid; }
 
+    /**
+     * Моно-копия звука дорожки, прочитанная через ARA.
+     * Именно она позволяет редактору показать волну и слушать ноты **без**
+     * проигрывания в DAW: захват блоками больше не нужен.
+     */
+    void setMonoSamples(std::vector<float> samples) noexcept;
+    const std::vector<float>& monoSamples() const noexcept { return monoSamples_; }
+
+    /** Ход разбора 0..100 — для плашки прогресса в редакторе. */
+    int analysisProgress() const noexcept { return analysisProgress_.load(); }
+    void setAnalysisProgress(int percent) noexcept { analysisProgress_.store(percent); }
+
     /** Идёт ли фоновый разбор этого источника. */
     bool analysisRunning() const noexcept { return analysisRunning_; }
     void setAnalysisRunning(bool running) noexcept { analysisRunning_ = running; }
 
 private:
     AraNoteSet noteSet_;
+    std::vector<float> monoSamples_;
+    std::atomic<int> analysisProgress_ { 0 };
     bool analysisRunning_ = false;
 };
 
@@ -153,6 +167,12 @@ public:
      */
     static AraAudioSource* audioSourceForInstance(
         const ARA::PlugIn::PlugInExtension& extension) noexcept;
+
+    /**
+     * Единственный источник документа — запасной путь, когда хост ещё не
+     * назначил экземпляру клипы (роли приходят позже привязки).
+     */
+    AraAudioSource* onlyAudioSource() const noexcept;
 
 protected:
     ARA::PlugIn::AudioSource* doCreateAudioSource(ARA::PlugIn::Document* document,

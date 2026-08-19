@@ -97,9 +97,28 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS
     Multimedia
     MultimediaWidgets
     Concurrent
-    Svg
     Test
 )
+
+# Qt Svg рисует иконки кнопок напрямую (см. src/svgiconloader.cpp). Модуль
+# есть не в каждой сборке Qt, поэтому он необязательный: без него иконки
+# грузятся обычным QIcon, а конфигурация не падает.
+find_package(Qt6 ${QT_MIN_VERSION} QUIET COMPONENTS Svg)
+if(TARGET Qt6::Svg)
+    set(DONTFLOAT_HAS_QT_SVG ON)
+    add_compile_definitions(DONTFLOAT_HAS_QT_SVG=1)
+    message(STATUS "Qt Svg найден: иконки рисуются QSvgRenderer")
+else()
+    set(DONTFLOAT_HAS_QT_SVG OFF)
+    message(STATUS "Qt Svg не найден: иконки грузятся через QIcon (нужен плагин qsvgicon)")
+endif()
+
+# Хелпер: линкует Qt6::Svg, если он есть
+function(dontfloat_link_qt_svg target_name)
+    if(TARGET Qt6::Svg)
+        target_link_libraries(${target_name} PRIVATE Qt6::Svg)
+    endif()
+endfunction()
 
 # Каталог Qt для CTest на Windows (PATH к DLL); берём из найденного Qt6_DIR (MSVC или MinGW).
 if(WIN32)
@@ -127,6 +146,7 @@ set(SOURCES
     src/pitchcorrection.cpp
     src/notepreviewplayer.cpp
     src/waveformcolors.cpp
+    src/waveformpeaks.cpp
     src/bpmanalyzer.cpp
     src/keyanalyzer.cpp
     src/waveformanalyzer.cpp
@@ -166,6 +186,7 @@ set(HEADERS
     include/pitchnotemovecommand.h
     include/notepreviewplayer.h
     include/waveformcolors.h
+    include/waveformpeaks.h
     include/bpmanalyzer.h
     include/keyanalyzer.h
     include/waveformanalyzer.h
@@ -254,8 +275,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Multimedia
     Qt6::MultimediaWidgets
     Qt6::Concurrent
-    Qt6::Svg
 )
+dontfloat_link_qt_svg(${PROJECT_NAME})
 dontfloat_link_rubberband(${PROJECT_NAME})
 
 # windeployqt-хелпер нужен целям плагинов и мини-DAW, которые создаются ниже
@@ -472,10 +493,10 @@ if(DONTFLOAT_BUILD_PLUGINS)
             Qt6::Core
             Qt6::Gui
             Qt6::Widgets
-            # Qt6Svg нужен модулю плагина (иконки через QSvgRenderer), а он
-            # грузится с LOAD_WITH_ALTERED_SEARCH_PATH — рядом с хостом должен лежать
-            Qt6::Svg
         )
+        # Qt6Svg нужен модулю плагина (иконки через QSvgRenderer), а он
+        # грузится с LOAD_WITH_ALTERED_SEARCH_PATH — рядом с хостом должен лежать
+        dontfloat_link_qt_svg(dontfloat_plugin_tester)
         target_compile_definitions(dontfloat_plugin_tester PRIVATE
             "DONTFLOAT_PLUGIN_BUILD_ROOT=\"${CMAKE_BINARY_DIR}\""
         )
@@ -541,9 +562,9 @@ function(add_qt_test test_name)
         Qt6::Multimedia
         Qt6::MultimediaWidgets
         Qt6::Concurrent
-        Qt6::Svg
         Qt6::Test
     )
+    dontfloat_link_qt_svg(${test_name})
 
     # Директории включений
     target_include_directories(${test_name} PRIVATE
@@ -629,6 +650,18 @@ set_tests_properties(timestretchprocessor_test PROPERTIES
     LABELS "timestretch;pitch;unit"
     DESCRIPTION "Unit tests for time stretch and pitch compensation"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Пирамида пиков волны: значения совпадают с прямым перебором
+add_qt_test(waveform_peaks_test
+    tests/waveform_peaks_test.cpp
+    src/waveformpeaks.cpp
+    include/waveformpeaks.h
+)
+
+set_tests_properties(waveform_peaks_test PROPERTIES
+    LABELS "unit;ui"
+    DESCRIPTION "Waveform peak pyramid matches brute-force min/max"
 )
 
 # Перестановка нот слышна: коррекция переносит звук вместе с нотой
@@ -732,6 +765,7 @@ add_qt_test(ui_responsiveness_test
     tests/ui_responsiveness_test.cpp
     include/waveformview.h
     src/waveformview.cpp
+    src/waveformpeaks.cpp
     src/waveformcolors.cpp
     src/beatvisualizer.cpp
     src/timestretchprocessor.cpp
@@ -756,6 +790,7 @@ set(MARKER_TESTGEN_SOURCES
     src/markertestgenwindow.cpp
     src/markersfile.cpp
     src/waveformview.cpp
+    src/waveformpeaks.cpp
     src/waveformcolors.cpp
     src/markerengine.cpp
     src/timeutils.cpp
@@ -819,6 +854,7 @@ add_qt_test(waveform_marker_test
     tests/waveform_marker_test.cpp
     include/waveformview.h
     src/waveformview.cpp
+    src/waveformpeaks.cpp
     src/waveformcolors.cpp
     src/beatvisualizer.cpp
     src/timestretchprocessor.cpp
@@ -868,6 +904,8 @@ set_tests_properties(plugin_content_shift_test PROPERTIES
 if(DONTFLOAT_ARA_AVAILABLE AND TARGET dontfloat_ara)
     add_qt_test(ara_document_controller_test
         tests/ara_document_controller_test.cpp
+        src/midiimporter.cpp
+        src/keyanalyzer.cpp
     )
     target_link_libraries(ara_document_controller_test PRIVATE
         dontfloat_ara
@@ -876,6 +914,21 @@ if(DONTFLOAT_ARA_AVAILABLE AND TARGET dontfloat_ara)
     set_tests_properties(ara_document_controller_test PROPERTIES
         LABELS "unit;plugins;ara"
         DESCRIPTION "ARA 2 document controller seen from a host: analysis and note content"
+    )
+
+    # Мини-DAW с двумя дорожками: один документ ARA, два экземпляра плагина
+    add_qt_test(mini_daw_two_tracks_test
+        tests/mini_daw_two_tracks_test.cpp
+        tools/mini_daw/mini_daw_ara_host.cpp
+        tools/mini_daw/mini_daw_ara_host.h
+    )
+    target_link_libraries(mini_daw_two_tracks_test PRIVATE
+        dontfloat_ara
+        ARA_Host_Library
+    )
+    set_tests_properties(mini_daw_two_tracks_test PROPERTIES
+        LABELS "unit;plugins;ara"
+        DESCRIPTION "Two mini-DAW tracks in one ARA document: own audio, notes and reference"
     )
 endif()
 
