@@ -1,4 +1,5 @@
 #include "dontfloat_ara_document_controller.h"
+#include "dontfloat_version.h"
 
 #include "../../include/pitchdetector.h"
 
@@ -19,7 +20,7 @@ constexpr const char* kFactoryId = "org.dontfloat.ara.factory";
 constexpr const char* kPlugInName = "DONTFLOAT";
 constexpr const char* kManufacturerName = "DONTFLOAT";
 constexpr const char* kInformationUrl = "https://github.com/ili4yov-ika/DONTFLOAT";
-constexpr const char* kVersionString = "0.0.0.1";
+constexpr const char* kVersionString = DONTFLOAT_VERSION_STRING;
 constexpr const char* kDocumentArchiveId = "org.dontfloat.ara.archive.v1";
 
 /** Единственный тип содержимого, который мы разбираем и отдаём хосту. */

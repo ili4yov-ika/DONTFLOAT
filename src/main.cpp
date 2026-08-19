@@ -1,3 +1,5 @@
+#include "dontfloat_version.h"
+
 #include <QApplication>
 #include <QIcon>
 #include <QCoreApplication>
@@ -188,7 +190,7 @@ int main(int argc, char *argv[])
         QCoreApplication app(argc, argv);
         QCoreApplication::setOrganizationName("DONTFLOAT");
         QCoreApplication::setApplicationName("DONTFLOAT");
-        QCoreApplication::setApplicationVersion("0.0.0.1");
+        QCoreApplication::setApplicationVersion(QStringLiteral(DONTFLOAT_VERSION_STRING));
 
         BPMAnalyzer::AnalysisOptions options;
         options.minBPM = 60.0f;
@@ -205,7 +207,7 @@ int main(int argc, char *argv[])
 
     QCoreApplication::setOrganizationName("DONTFLOAT");
     QCoreApplication::setApplicationName("DONTFLOAT");
-    QCoreApplication::setApplicationVersion("0.0.0.1");
+    QCoreApplication::setApplicationVersion(QStringLiteral(DONTFLOAT_VERSION_STRING));
 
     qCDebug(lcStartup) << "Qt Application создан, версия" << QT_VERSION_STR;
 

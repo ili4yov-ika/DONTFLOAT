@@ -1,10 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(DONTFLOAT VERSION 0.0.0.1 LANGUAGES C CXX)
+# Единственное место, где живёт номер версии: и приложение, и плагины (CLAP,
+# VST3, ARA) берут его из сгенерированного dontfloat_version.h
+project(DONTFLOAT VERSION 0.1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/dontfloat_version.h.in
+    ${CMAKE_BINARY_DIR}/generated/dontfloat_version.h
+    @ONLY
+)
+# Каталог со сгенерированным заголовком виден всем целям проекта
+include_directories(${CMAKE_BINARY_DIR}/generated)
 
 # MSVC: в qm-dsp (TempoTrackV2::calculateBeatPeriod) std::copy(df.begin()+(i+k), …);
 # проверяемые итераторы в Debug дают assert _Verify_offset. Задаём явно для всех CONFIG,

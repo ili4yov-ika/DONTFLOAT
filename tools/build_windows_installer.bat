@@ -184,7 +184,15 @@ if %ERRORLEVEL% EQU 0 (
 ) else (
     set "INSTALL_ABS=%INSTALL_DIR%"
 )
-"%MAKENSIS%" /DBUILD_DIR="%INSTALL_ABS%" "%NSIS_SCRIPT%"
+REM Version comes from project(... VERSION ...) so it cannot drift
+set "PRODUCT_VERSION="
+for /f "tokens=3" %%v in ('findstr /b /c:"project(DONTFLOAT VERSION" "%PROJECT_ROOT%\CMakeLists.txt"') do set "PRODUCT_VERSION=%%v"
+if "%PRODUCT_VERSION%"=="" (
+    echo [ERROR] Version not found in CMakeLists.txt
+    exit /b 1
+)
+echo Version: %PRODUCT_VERSION%
+"%MAKENSIS%" /DBUILD_DIR="%INSTALL_ABS%" /DPRODUCT_VERSION=%PRODUCT_VERSION% "%NSIS_SCRIPT%"
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] NSIS installer creation failed!
     exit /b 1
