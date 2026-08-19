@@ -26,6 +26,7 @@ bash tools/macos_build.sh release         # Release
 bash tools/macos_build.sh release test    # + ctest (QT_QPA_PLATFORM=offscreen)
 bash tools/macos_build.sh release deploy  # + macdeployqt → build/macos/DONTFLOAT.app
 bash tools/macos_build.sh release pkg     # + pkgbuild → build/macos/DONTFLOAT-<версия>-macOS.pkg
+bash tools/macos_build.sh release pkg dmg # + hdiutil  → тот же бандл ещё и образом .dmg
 ```
 
 Требуется: macOS 11+, Xcode CLT, Homebrew. CMake Presets: `macos-debug`, `macos-release` (`CMakePresets.json`).
@@ -40,8 +41,11 @@ bash tools/macos_build.sh release pkg     # + pkgbuild → build/macos/DONTFLOAT
 
 `pkg` кладёт готовый `DONTFLOAT.app` (со всеми Qt-библиотеками внутри) в
 `/Applications` — именно бандл, а не голый бинарник в `/usr/local`, иначе Qt
-рядом с ним искать негде. Пакет не подписан: при первом запуске macOS попросит
-разрешение в «Системных настройках → Защита и безопасность».
+рядом с ним искать негде. `dmg` собирает из того же бандла образ с ярлыком на
+«Программы» — привычный для macOS способ раздачи; CPack-генератор `DragNDrop`
+для этого не годится, он пакует дерево установки CMake, где Qt рядом нет.
+Ни пакет, ни образ не подписаны: при первом запуске macOS попросит разрешение
+в «Системных настройках → Защита и безопасность».
 
 ## Пакеты в CI (`.deb`, `.rpm`, `.pkg`)
 
@@ -52,8 +56,8 @@ Workflow `.github/workflows/release-packages.yml` собирает пакеты 
 
 | Джоба | Раннер | Чем собирается | Что получается |
 |-------|--------|----------------|----------------|
-| `linux` | ubuntu-24.04 | CPack (`cpack -G DEB`, `cpack -G RPM`) | `.deb`, `.rpm` с приложением и плагинами CLAP/LV2 |
-| `macos` | macos-14 | `tools/macos_build.sh release pkg` | `.pkg` с `DONTFLOAT.app` |
+| `linux` | ubuntu-24.04 | CPack (`DEB`, `RPM`, `TGZ`) | `.deb`, `.rpm`, `.tar.gz` с приложением и плагинами CLAP/LV2 |
+| `macos` | macos-14 | `tools/macos_build.sh release pkg dmg` | `.pkg` и `.dmg` с `DONTFLOAT.app` |
 | `upload` | ubuntu-24.04 | `gh release upload --clobber` | файлы в релизе |
 
 Запуск: автоматически при публикации релиза либо вручную (**Actions → Release

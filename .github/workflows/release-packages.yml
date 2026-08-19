@@ -28,7 +28,7 @@ env:
 
 jobs:
   linux:
-    name: Linux (.deb, .rpm)
+    name: Linux (.deb, .rpm, .tar.gz)
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -78,12 +78,15 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
-      - name: Package (.deb, .rpm)
+      # Все три генератора, что объявлены в CPack для Linux: пакеты для
+      # dpkg и rpm плюс переносимый архив для всего остального
+      - name: Package (.deb, .rpm, .tar.gz)
         working-directory: build
         run: |
           cpack -G DEB
           cpack -G RPM
-          ls -la ./*.deb ./*.rpm
+          cpack -G TGZ
+          ls -la ./*.deb ./*.rpm ./*.tar.gz
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -92,10 +95,11 @@ jobs:
           path: |
             build/*.deb
             build/*.rpm
+            build/*.tar.gz
           if-no-files-found: error
 
   macos:
-    name: macOS (.pkg)
+    name: macOS (.pkg, .dmg)
     runs-on: macos-14
     steps:
       - name: Checkout
@@ -116,17 +120,20 @@ jobs:
       - name: Install Ninja
         run: brew install ninja
 
-      # Тот же скрипт, которым собирают локально: сборка → macdeployqt → pkgbuild
-      - name: Build and package (.pkg)
-        run: bash tools/macos_build.sh release pkg
+      # Тот же скрипт, которым собирают локально:
+      # сборка → macdeployqt → pkgbuild (.pkg) и hdiutil (.dmg)
+      - name: Build and package (.pkg, .dmg)
+        run: bash tools/macos_build.sh release pkg dmg
         env:
           CMAKE_PREFIX_PATH: ${{ steps.qt.outputs.QT_ROOT_DIR }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-package
-          path: build/macos/*.pkg
+          name: macos-packages
+          path: |
+            build/macos/*.pkg
+            build/macos/*.dmg
           if-no-files-found: error
 
   upload:
@@ -154,8 +161,7 @@ jobs:
             echo "::error::Не задан тег релиза"
             exit 1
           fi
-          mapfile -t files < <(find packages -type f \
-            \( -name '*.deb' -o -name '*.rpm' -o -name '*.pkg' \) | sort)
+          mapfile -t files < <(find packages -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.pkg' -o -name '*.dmg' \) | sort)
           if [ ${#files[@]} -eq 0 ]; then
             echo "::error::Пакеты не найдены"
             exit 1

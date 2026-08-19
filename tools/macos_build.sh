@@ -7,6 +7,7 @@
 #   bash tools/macos_build.sh debug test   # Debug + ctest
 #   bash tools/macos_build.sh release deploy  # Release + macdeployqt
 #   bash tools/macos_build.sh release pkg     # Release + macdeployqt + .pkg
+#   bash tools/macos_build.sh release pkg dmg # + образ .dmg рядом с .pkg
 
 set -euo pipefail
 
@@ -23,6 +24,7 @@ BUILD_TYPE="debug"
 RUN_TEST=0
 DEPLOY=0
 MAKE_PKG=0
+MAKE_DMG=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -30,11 +32,12 @@ for arg in "$@"; do
         debug|Debug) BUILD_TYPE="debug" ;;
         test) RUN_TEST=1 ;;
         deploy) DEPLOY=1 ;;
-        # .pkg собирается из готового бандла, поэтому deploy обязателен
+        # .pkg и .dmg собираются из готового бандла, поэтому deploy обязателен
         pkg) DEPLOY=1; MAKE_PKG=1 ;;
+        dmg) DEPLOY=1; MAKE_DMG=1 ;;
         *)
             echo "Неизвестный аргумент: $arg"
-            echo "Использование: $0 [debug|release] [test] [deploy|pkg]"
+            echo "Использование: $0 [debug|release] [test] [deploy|pkg|dmg]"
             exit 1
             ;;
     esac
@@ -113,6 +116,24 @@ EOF
                      --version "${VERSION:-0.1.0.0}" \
                      "$PKG_OUT"
             echo "Пакет: $PKG_OUT"
+        fi
+
+        if [[ "$MAKE_DMG" -eq 1 ]]; then
+            # Образ с тем же бандлом: привычный для macOS способ раздачи —
+            # открыл и перетащил в «Программы». CPack-генератор DragNDrop сюда
+            # не годится: он пакует дерево установки CMake, где Qt рядом нет.
+            DMG_OUT="${BUILD_DIR}/DONTFLOAT-${VERSION:-0.1.0.0}-macOS.dmg"
+            DMG_ROOT="${BUILD_DIR}/dmgroot"
+            rm -rf "$DMG_ROOT" "$DMG_OUT"
+            mkdir -p "$DMG_ROOT"
+            cp -R "$APP_DIR" "$DMG_ROOT/"
+            ln -s /Applications "$DMG_ROOT/Applications"
+
+            hdiutil create -volname "DONTFLOAT" \
+                           -srcfolder "$DMG_ROOT" \
+                           -ov -format UDZO \
+                           "$DMG_OUT"
+            echo "Образ: $DMG_OUT"
         fi
     fi
 fi
