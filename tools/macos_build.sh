@@ -83,8 +83,8 @@ if [[ "$DEPLOY" -eq 1 ]]; then
     <key>CFBundleName</key><string>DONTFLOAT</string>
     <key>CFBundleDisplayName</key><string>DONTFLOAT</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>${VERSION:-0.0.0.1}</string>
-    <key>CFBundleVersion</key><string>${VERSION:-0.0.0.1}</string>
+    <key>CFBundleShortVersionString</key><string>${VERSION:-0.1.0.0}</string>
+    <key>CFBundleVersion</key><string>${VERSION:-0.1.0.0}</string>
     <key>LSMinimumSystemVersion</key><string>11.0</string>
     <key>NSHighResolutionCapable</key><true/>
 </dict>

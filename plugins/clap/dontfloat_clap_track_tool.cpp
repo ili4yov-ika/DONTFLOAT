@@ -1,4 +1,5 @@
 #include "clap_minimal.h"
+#include "dontfloat_version.h"
 #include "../core/dontfloat_plugin_core.h"
 #include "../ui/dontfloat_qt_hosting.h"
 #include "../ui/dontfloat_track_tool_editor.h"
@@ -53,7 +54,7 @@ const clap_plugin_descriptor_t kDescriptor = {
     "https://github.com/ili4yov-ika/DONTFLOAT",
     nullptr,
     nullptr,
-    "0.0.0.1",
+    DONTFLOAT_VERSION_STRING,
     "DONTFLOAT track analysis and BPM alignment tool MVP",
     kFeatures,
 };

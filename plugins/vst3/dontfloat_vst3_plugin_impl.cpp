@@ -1,3 +1,5 @@
+#include "dontfloat_version.h"
+
 #include "../core/dontfloat_plugin_core.h"
 #include "../core/plugin_host_config.h"
 #include "../ui/dontfloat_plugin_editor_shell.h"
@@ -601,7 +603,7 @@ DEF_CLASS2(INLINE_UID_FROM_FUID(Steinberg::Vst::DontfloatProcessorUid),
            DONTFLOAT_VST3_DISPLAY_NAME,
            Vst::kDistributable,
            "Fx|Tools",
-           "0.0.0.1",
+           DONTFLOAT_VERSION_STRING,
            kVstVersionString,
            Dontfloat::Vst3::ProductProcessorVst3::createInstance)
 
@@ -611,7 +613,7 @@ DEF_CLASS2(INLINE_UID_FROM_FUID(Steinberg::Vst::DontfloatControllerUid),
            DONTFLOAT_VST3_CONTROLLER_NAME,
            0,
            "",
-           "0.0.0.1",
+           DONTFLOAT_VERSION_STRING,
            kVstVersionString,
            Dontfloat::Vst3::ProductControllerVst3::createInstance)
 
@@ -623,7 +625,7 @@ DEF_CLASS2(INLINE_UID_FROM_FUID(Steinberg::Vst::DontfloatAraFactoryUid),
            DONTFLOAT_VST3_ARA_FACTORY_NAME,
            0,
            "",
-           "0.0.0.1",
+           DONTFLOAT_VERSION_STRING,
            kVstVersionString,
            Dontfloat::Vst3::ProductAraMainFactoryVst3::createInstance)
 #endif

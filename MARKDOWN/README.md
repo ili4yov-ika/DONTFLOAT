@@ -231,7 +231,7 @@
 
 **Последнее обновление**: 2026-05-30
 
-Документация приведена в соответствие с кодовой базой DONTFLOAT версии 0.0.0.1.
+Документация приведена в соответствие с кодовой базой DONTFLOAT версии 0.1.0.0.
 
 **Актуализация 2026-02-14**:
 - ✅ Добавлена документация Windows installer (tools/build_windows_installer.bat), иконка EXE (app.rc, svg_to_ico.py), локализация (EN/RU) — README.md, DEVELOPMENT_GUIDE.md, DOCUMENTATION_CHANGELOG.md

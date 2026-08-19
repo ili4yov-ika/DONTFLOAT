@@ -1,0 +1,19 @@
+#ifndef DONTFLOAT_VERSION_H
+#define DONTFLOAT_VERSION_H
+
+/*
+ * Версия приложения и плагинов — одна на всё.
+ *
+ * Файл генерируется CMake из `project(DONTFLOAT VERSION ...)` в корневом
+ * CMakeLists.txt: правится только там, руками этот заголовок не редактируется
+ * (он лежит в каталоге сборки). Раньше строка версии была вписана в восьми
+ * местах и разъезжалась — отсюда и генерация.
+ */
+
+#define DONTFLOAT_VERSION_STRING "@PROJECT_VERSION@"
+#define DONTFLOAT_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define DONTFLOAT_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define DONTFLOAT_VERSION_PATCH @PROJECT_VERSION_PATCH@
+#define DONTFLOAT_VERSION_TWEAK @PROJECT_VERSION_TWEAK@
+
+#endif // DONTFLOAT_VERSION_H

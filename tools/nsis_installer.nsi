@@ -6,7 +6,11 @@ Unicode true
 
 ; Product info
 !define PRODUCT_NAME "DONTFLOAT"
-!define PRODUCT_VERSION "0.0.0.1"
+; Версию передаёт build_windows_installer.bat из project(... VERSION ...);
+; значение ниже — запасное, для ручного вызова makensis
+!ifndef PRODUCT_VERSION
+  !define PRODUCT_VERSION "0.1.0.0"
+!endif
 !define PRODUCT_PUBLISHER "DONTFLOAT Project"
 !define PRODUCT_WEB_SITE "https://github.com/ili4yov-ika/DONTFLOAT"
 !define CLAP_INSTALL_DIR "$COMMONFILES64\CLAP"

@@ -1,5 +1,5 @@
 %define name dontfloat
-%define version 0.0.0.1
+%define version 0.1.0.0
 %define release 1
 %define buildroot %{_tmppath}/%{name}-%{version}-%{release}-root
 
