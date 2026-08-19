@@ -1038,14 +1038,31 @@ if(UNIX AND NOT APPLE)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "DONTFLOAT Project <ilichyov.kolyan@yandex.ru>")
     set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
     set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6 (>= 6.8.0), libqt6gui6 (>= 6.8.0), libqt6widgets6 (>= 6.8.0), libqt6multimedia6 (>= 6.8.0), libqt6multimediawidgets6 (>= 6.8.0)")
+    # Список сверен с DT_NEEDED собранного бинарника и плагинов, а не с
+    # target_link_libraries: Concurrent и MultimediaWidgets в него не попадают,
+    # зато нужны Svg (иконки интерфейса рисует плагин qsvg) и GLX/OpenGL.
+    # Альтернативы «t64 | обычное имя» — из-за переименования пакетов Qt при
+    # переходе на 64-битный time_t (Debian 13, Ubuntu 24.04).
+    set(_dontfloat_deb_depends
+        "libqt6core6t64 (>= 6.8.0) | libqt6core6 (>= 6.8.0)"
+        "libqt6gui6t64 (>= 6.8.0) | libqt6gui6 (>= 6.8.0)"
+        "libqt6widgets6t64 (>= 6.8.0) | libqt6widgets6 (>= 6.8.0)"
+        "libqt6multimedia6t64 (>= 6.8.0) | libqt6multimedia6 (>= 6.8.0)"
+        "libqt6svg6t64 (>= 6.8.0) | libqt6svg6 (>= 6.8.0)"
+        "libglx0"
+        "libopengl0"
+    )
+    list(JOIN _dontfloat_deb_depends ", " CPACK_DEBIAN_PACKAGE_DEPENDS)
+    unset(_dontfloat_deb_depends)
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
     # RPM настройки
     set(CPACK_RPM_PACKAGE_NAME "dontfloat")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/Multimedia")
     set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0+")
-    set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.8.0, qt6-qtmultimedia >= 6.8.0")
+    # Точные зависимости по sonames rpmbuild добавляет сам; здесь — минимум
+    # по именам пакетов, включая qt6-qtsvg: без него не рисуются иконки
+    set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.8.0, qt6-qtmultimedia >= 6.8.0, qt6-qtsvg >= 6.8.0")
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 endif()
 
