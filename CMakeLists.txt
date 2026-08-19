@@ -674,6 +674,22 @@ set_tests_properties(waveform_peaks_test PROPERTIES
     DESCRIPTION "Waveform peak pyramid matches brute-force min/max"
 )
 
+# Выравнивание долей по сетке: метки ведут из доли на сетку, звук остаётся звуком
+add_qt_test(beat_align_test
+    tests/beat_align_test.cpp
+    src/timestretchprocessor.cpp
+    src/rubberband_offline.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+)
+dontfloat_link_rubberband(beat_align_test)
+
+set_tests_properties(beat_align_test PROPERTIES
+    LABELS "unit;pitch;timestretch"
+    DESCRIPTION "Beat alignment maps beats onto the grid without destroying audio"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # Перестановка нот слышна: коррекция переносит звук вместе с нотой
 add_qt_test(note_move_render_test
     tests/note_move_render_test.cpp

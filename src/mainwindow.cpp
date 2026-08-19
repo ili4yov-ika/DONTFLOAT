@@ -2576,25 +2576,28 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
             continue;
         }
 
-        // Метки коррекции: position = фактическая доля.
-        // Если neutralMarkers — originalPosition = position (сегменты не сжимаются/не растягиваются).
-        // Иначе originalPosition = ожидаемая по сетке (коэффициент сегмента (actual/expected) != 1).
-        if (!addedPositions.contains(prevBeat.position)) {
-            Marker startMarker(prevBeat.position, sampleRate);
-            startMarker.originalPosition = neutralMarkers ? prevBeat.position : prevBeat.expectedPosition;
-            startMarker.originalTimeMs = TimeUtils::samplesToMs(startMarker.originalPosition, sampleRate);
-            waveformView->addMarker(startMarker);
-            addedPositions.insert(prevBeat.position);
-            markersCreated++;
-        }
-        if (!addedPositions.contains(currentBeat.position)) {
-            Marker endMarker(currentBeat.position, sampleRate);
-            endMarker.originalPosition = neutralMarkers ? currentBeat.position : currentBeat.expectedPosition;
-            endMarker.originalTimeMs = TimeUtils::samplesToMs(endMarker.originalPosition, sampleRate);
-            waveformView->addMarker(endMarker);
-            addedPositions.insert(currentBeat.position);
-            markersCreated++;
-        }
+        // Метка коррекции ведёт «из доли на сетку»:
+        //   originalPosition — откуда брать звук, то есть фактическая доля;
+        //   position         — куда её поставить, то есть линия сетки.
+        // Сторона важна: applyMarkerStretch режет исходник по originalPosition,
+        // поэтому источником обязана быть реальная доля. Раньше было наоборот —
+        // сегмент резался по линии сетки и уезжал на фактическую долю, то есть
+        // растяжение уводило долю ещё дальше от сетки.
+        // neutralMarkers — метки «сами в себя»: стоят на долях и ничего не тянут.
+        const auto addCorrectionMarker = [&](const BPMAnalyzer::BeatInfo& beat) {
+            if (addedPositions.contains(beat.position)) {
+                return;
+            }
+            const qint64 target = neutralMarkers ? beat.position : beat.expectedPosition;
+            Marker marker(target, sampleRate);
+            marker.originalPosition = beat.position;
+            marker.originalTimeMs = TimeUtils::samplesToMs(beat.position, sampleRate);
+            waveformView->addMarker(marker);
+            addedPositions.insert(beat.position);
+            ++markersCreated;
+        };
+        addCorrectionMarker(prevBeat);
+        addCorrectionMarker(currentBeat);
     }
 
     // Сортируем метки по позиции

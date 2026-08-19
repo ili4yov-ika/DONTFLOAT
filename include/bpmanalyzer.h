@@ -106,9 +106,6 @@ public:
                                    int sampleRate,
                                    const AnalysisOptions& options = AnalysisOptions());
 
-    static QVector<float> fixBeats(const QVector<float>& samples,
-                                 const AnalysisResult& analysis);
-
     // Вспомогательные функции
     static float correctToStandardBPM(float bpm);
 
@@ -132,10 +129,9 @@ public:
                                               float bpm,
                                               const AnalysisOptions& options = AnalysisOptions());
 
-    static QVector<float> alignToBeatGrid(const QVector<float>& samples,
-                                        int sampleRate,
-                                        float bpm,
-                                        qint64 gridStartSample = 0);
+    // Выравнивание долей по сетке живёт в TimeStretchProcessor::alignBeatsToGrid:
+    // это растяжение участков между долями, для него нужны и метки, и Rubber Band,
+    // а BPMAnalyzer намеренно остаётся только анализом.
 
     // Методы интеграции с Mixxx
     static AnalysisResult analyzeBPMUsingMixxx(const QVector<float>& samples,

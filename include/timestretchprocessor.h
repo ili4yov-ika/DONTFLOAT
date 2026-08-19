@@ -40,6 +40,13 @@ public:
         qint64 endSample;        ///< Конец сегмента в исходных данных
         float stretchFactor;     ///< Коэффициент растяжения
         bool preservePitch;      ///< Сохранять ли pitch
+        /**
+         * Куда конец сегмента обязан прийти на выходе (сэмплы), -1 — не задано.
+         * По нему длина сегмента подгоняется под **фактически** собранный выход:
+         * иначе кроссфейд на каждом стыке съедает свои ~10 мс и метки уезжают
+         * всё раньше и раньше — на длинной дорожке это десятки миллисекунд.
+         */
+        qint64 targetEndSample = -1;
     };
 
     // ========================================================================
@@ -82,6 +89,49 @@ public:
         const QVector<QVector<float>>& audioData,
         const QVector<MarkerData>& markers,
         int sampleRate,
+        bool preservePitch = true);
+
+    /**
+     * @brief Метки выравнивания долей по сетке
+     *
+     * Каждая доля даёт метку: **откуда** (`originalPosition`) — её фактическая
+     * позиция в звуке, **куда** (`position`) — ближайшая линия сетки. Сторона
+     * важна: applyMarkerStretch режет исходник по `originalPosition`, поэтому
+     * источником обязана быть реальная доля. Если перепутать, растяжение уводит
+     * долю ещё дальше от сетки вместо того, чтобы поставить её на место.
+     *
+     * Начало и конец закрепляются метками «сам в себя», так что общая длина
+     * дорожки не меняется — клип в DAW остаётся той же длины.
+     *
+     * @param beatPositions       позиции долей в сэмплах (сортируются сами)
+     * @param beatIntervalSamples интервал сетки в сэмплах (60*sr/BPM)
+     * @param gridStartSample     опорная линия сетки
+     * @param totalSamples        длина дорожки
+     * @param sampleRate          частота дискретизации
+     * @return метки; пусто, если выравнивать нечего
+     */
+    static QVector<MarkerData> buildBeatAlignmentMarkers(
+        const QVector<qint64>& beatPositions,
+        double beatIntervalSamples,
+        qint64 gridStartSample,
+        qint64 totalSamples,
+        int sampleRate);
+
+    /**
+     * @brief Ставит доли на сетку BPM растяжением участков между ними
+     *
+     * Обёртка над buildBeatAlignmentMarkers + applyMarkerStretch: доли едут на
+     * ближайшие линии сетки, звук между ними тянется/жмётся с сохранением
+     * высоты тона. Все каналы обрабатываются вместе, поэтому не расходятся.
+     *
+     * @return исходные данные без изменений, если выравнивать нечего
+     */
+    static StretchResult alignBeatsToGrid(
+        const QVector<QVector<float>>& audioData,
+        const QVector<qint64>& beatPositions,
+        float bpm,
+        int sampleRate,
+        qint64 gridStartSample,
         bool preservePitch = true);
 
     /**
