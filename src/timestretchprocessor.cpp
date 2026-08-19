@@ -2,8 +2,11 @@
 #include "../include/rubberband_offline.h"
 #include <QtCore/QVector>
 #include <QtCore/QtGlobal>
-#include <cmath>
+#include <QtCore/QDebug>
+
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace {
 
@@ -237,6 +240,20 @@ TimeStretchProcessor::StretchResult TimeStretchProcessor::applyMarkerStretch(
         const bool isFirstSegment = segmentOutputLengths.isEmpty();
         const qint64 lengthBefore = isFirstSegment ? 0 : result.audioData[0].size();
 
+        // Коэффициент пересчитывается от **уже собранного** выхода и цели метки.
+        // Иначе кроссфейд на каждом стыке съедает свои ~10 мс, ошибка копится, и
+        // к концу дорожки метки уезжают на десятки миллисекунд от нужного места.
+        // Пересчёт от фактической длины гасит и это, и округления Rubber Band.
+        float effectiveFactor = seg.stretchFactor;
+        if (seg.targetEndSample >= 0) {
+            const qint64 overlap = isFirstSegment ? 0 : qint64(crossfadeSamples);
+            const qint64 desiredAdd = seg.targetEndSample - lengthBefore + overlap;
+            if (desiredAdd > 0) {
+                effectiveFactor = static_cast<float>(double(desiredAdd) / double(segmentLength));
+            }
+        }
+        effectiveFactor = qBound(0.1f, effectiveFactor, 10.0f);
+
         // Обрабатываем каждый канал
         for (int ch = 0; ch < audioData.size(); ++ch) {
             QVector<float> segment;
@@ -247,7 +264,7 @@ TimeStretchProcessor::StretchResult TimeStretchProcessor::applyMarkerStretch(
 
             const QVector<float> processedSegment = processSegment(
                 segment,
-                seg.stretchFactor,
+                effectiveFactor,
                 seg.preservePitch,
                 sampleRate
             );
@@ -297,6 +314,125 @@ TimeStretchProcessor::StretchResult TimeStretchProcessor::applyMarkerStretch(
     return result;
 }
 
+QVector<MarkerData> TimeStretchProcessor::buildBeatAlignmentMarkers(
+    const QVector<qint64>& beatPositions,
+    double beatIntervalSamples,
+    qint64 gridStartSample,
+    qint64 totalSamples,
+    int sampleRate)
+{
+    QVector<MarkerData> markers;
+    if (beatPositions.isEmpty() || beatIntervalSamples < 1.0 || totalSamples <= 1
+        || sampleRate <= 0) {
+        return markers;
+    }
+
+    // Сегмент короче этого не растягиваем: коэффициент улетает, а Rubber Band
+    // на огрызке в пару миллисекунд даёт слышимый артефакт
+    const qint64 minSegment = qMax<qint64>(1, qint64(sampleRate) / 50);  // 20 мс
+
+    QVector<qint64> sorted = beatPositions;
+    std::sort(sorted.begin(), sorted.end());
+
+    // Доля → ближайшая линия сетки. Пара (источник, цель) должна расти строго
+    // монотонно по обеим координатам, иначе сегмент вывернется наизнанку
+    struct Anchor {
+        qint64 source;
+        qint64 target;
+    };
+    QVector<Anchor> anchors;
+    anchors.reserve(sorted.size() + 2);
+
+    qint64 lastGridIndex = std::numeric_limits<qint64>::min();
+    for (qint64 beat : sorted) {
+        if (beat <= 0 || beat >= totalSamples) {
+            continue;  // края закрепляются отдельно
+        }
+        const qint64 gridIndex =
+            qint64(std::llround((double(beat) - double(gridStartSample)) / beatIntervalSamples));
+        const qint64 target =
+            gridStartSample + qint64(std::llround(double(gridIndex) * beatIntervalSamples));
+        if (target <= 0 || target >= totalSamples) {
+            continue;
+        }
+        if (gridIndex == lastGridIndex && !anchors.isEmpty()) {
+            // Две доли на одной линии сетки (лишнее срабатывание детектора):
+            // оставляем ту, что ближе к линии
+            const Anchor& kept = anchors.last();
+            if (std::llabs(beat - target) < std::llabs(kept.source - kept.target)) {
+                anchors.last() = Anchor { beat, target };
+            }
+            continue;
+        }
+        anchors.append(Anchor { beat, target });
+        lastGridIndex = gridIndex;
+    }
+
+    if (anchors.isEmpty()) {
+        return markers;
+    }
+
+    // Края закреплены: длина дорожки не меняется, начало не уезжает
+    QVector<Anchor> chain;
+    chain.reserve(anchors.size() + 2);
+    chain.append(Anchor { 0, 0 });
+    for (const Anchor& a : anchors) {
+        const Anchor& prev = chain.last();
+        if (a.source - prev.source < minSegment || a.target - prev.target < minSegment) {
+            continue;  // слишком короткий кусок — долю пропускаем
+        }
+        chain.append(a);
+    }
+    const qint64 lastSample = totalSamples - 1;
+    if (lastSample - chain.last().source >= minSegment
+        && lastSample - chain.last().target >= minSegment) {
+        chain.append(Anchor { lastSample, lastSample });
+    }
+
+    if (chain.size() < 3) {
+        return markers;  // одни только края — выравнивать нечего
+    }
+
+    markers.reserve(chain.size());
+    for (int i = 0; i < chain.size(); ++i) {
+        MarkerData m;
+        m.originalPosition = chain[i].source;
+        m.position = chain[i].target;
+        m.isFixed = (i == 0);
+        m.isEndMarker = (i == chain.size() - 1);
+        m.updateTimeFromSamples(sampleRate);
+        markers.append(m);
+    }
+    return markers;
+}
+
+TimeStretchProcessor::StretchResult TimeStretchProcessor::alignBeatsToGrid(
+    const QVector<QVector<float>>& audioData,
+    const QVector<qint64>& beatPositions,
+    float bpm,
+    int sampleRate,
+    qint64 gridStartSample,
+    bool preservePitch)
+{
+    StretchResult result;
+    result.audioData = audioData;
+
+    if (audioData.isEmpty() || audioData[0].isEmpty() || bpm <= 0.0f || sampleRate <= 0) {
+        return result;
+    }
+
+    const double interval = (60.0 * double(sampleRate)) / double(bpm);
+    const QVector<MarkerData> markers = buildBeatAlignmentMarkers(
+        beatPositions, interval, gridStartSample, audioData[0].size(), sampleRate);
+    if (markers.size() < 2) {
+        qDebug() << "alignBeatsToGrid: нечего выравнивать";
+        return result;
+    }
+
+    result = applyMarkerStretch(audioData, markers, sampleRate, preservePitch);
+    return result;
+}
+
 QVector<TimeStretchProcessor::StretchSegment> TimeStretchProcessor::calculateSegments(
     const QVector<MarkerData>& markers,
     qint64 audioSize,
@@ -322,6 +458,7 @@ QVector<TimeStretchProcessor::StretchSegment> TimeStretchProcessor::calculateSeg
         seg.endSample = sortedMarkers.first().originalPosition;
         seg.stretchFactor = 1.0f; // Без растяжения
         seg.preservePitch = preservePitch;
+        seg.targetEndSample = sortedMarkers.first().position;
         segments.append(seg);
         qDebug() << "Segment (initial): 0 ->" << seg.endSample << ", factor=1.0";
     }
@@ -336,6 +473,7 @@ QVector<TimeStretchProcessor::StretchSegment> TimeStretchProcessor::calculateSeg
         seg.endSample = endMarker.originalPosition;
         seg.stretchFactor = calculateStretchFactor(startMarker, endMarker);
         seg.preservePitch = preservePitch;
+        seg.targetEndSample = endMarker.position;
         segments.append(seg);
 
         qDebug() << "Segment" << i << ":" << seg.startSample << "->" << seg.endSample
@@ -358,6 +496,7 @@ QVector<TimeStretchProcessor::StretchSegment> TimeStretchProcessor::calculateSeg
         seg.endSample = audioSize;
         seg.stretchFactor = stretchFactor;
         seg.preservePitch = preservePitch;
+        seg.targetEndSample = lastMarker.position + originalLength;
         segments.append(seg);
 
         qDebug() << "Segment (tail):" << seg.startSample << "->" << seg.endSample

@@ -269,66 +269,6 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::analyzeBPM(const QVector<float>& sample
     return result;
 }
 
-QVector<float> BPMAnalyzer::fixBeats(const QVector<float>& samples,
-                                    const AnalysisResult& analysis) {
-    if (samples.isEmpty() || analysis.beats.isEmpty()) {
-        return samples;
-    }
-
-    QVector<float> result = samples;
-    const int sampleCount = samples.size();
-
-    // Размер окна для коррекции (10мс)
-    const int windowSize = 441; // при 44100 Hz
-
-    // Применяем коррекцию для каждого бита
-    for (const auto& beat : analysis.beats) {
-        int pos = beat.position;
-        if (pos < 0 || pos >= sampleCount) {
-            continue;
-        }
-
-        // Находим локальный максимум в окне
-        int maxPos = pos;
-        float maxVal = std::abs(samples[pos]);
-
-        int start = std::max(0, pos - windowSize/2);
-        int end = std::min<int>(sampleCount, pos + windowSize/2);
-
-        for (int i = start; i < end; ++i) {
-            float val = std::abs(samples[i]);
-            if (val > maxVal) {
-                maxVal = val;
-                maxPos = i;
-            }
-        }
-
-        // Усиливаем бит в позиции максимума
-        if (maxPos != pos) {
-            // Копируем форму волны из максимума в позицию бита
-            for (int i = -windowSize/4; i <= windowSize/4; ++i) {
-                int srcPos = maxPos + i;
-                int destPos = pos + i;
-                if (srcPos >= 0 && srcPos < sampleCount &&
-                    destPos >= 0 && destPos < sampleCount) {
-                    result[destPos] = samples[srcPos];
-                }
-            }
-        }
-
-        // Усиливаем амплитуду бита
-        float amplification = 1.2f + 0.3f * beat.confidence;
-        for (int i = -windowSize/4; i <= windowSize/4; ++i) {
-            int p = pos + i;
-            if (p >= 0 && p < sampleCount) {
-                result[p] *= amplification;
-            }
-        }
-    }
-
-    return result;
-}
-
 QVector<QPair<int, float>> BPMAnalyzer::detectPeaks(const QVector<float>& samples,
                                                    float minEnergy) {
     QVector<QPair<int, float>> peaks;
@@ -981,44 +921,6 @@ BPMAnalyzer::AnalysisResult BPMAnalyzer::createBeatGridFromBPM(const QVector<flo
     qDebug() << "Created beat grid with" << result.beats.size() << "beats, starting at sample" << firstBeat;
 
     return result;
-}
-
-QVector<float> BPMAnalyzer::alignToBeatGrid(const QVector<float>& samples,
-                                           int sampleRate,
-                                           float bpm,
-                                           qint64 gridStartSample) {
-    if (samples.isEmpty() || bpm <= 0.0f) {
-        return samples;
-    }
-
-    QVector<float> result = samples;
-
-    // Вычисляем интервал между битами
-    float beatInterval = (60.0f * sampleRate) / bpm;
-
-    // Создаем временную шкалу для выравнивания
-    QVector<float> alignedSamples(samples.size(), 0.0f);
-
-    // Находим ближайшие биты для каждого сэмпла
-    for (int i = 0; i < static_cast<int>(samples.size()); ++i) {
-        // Вычисляем позицию в битах относительно начала сетки
-        float beatPosition = (i - gridStartSample) / beatInterval;
-
-        // Округляем до ближайшего бита
-        int nearestBeat = static_cast<int>(std::round(beatPosition));
-
-        // Вычисляем новую позицию
-        int newPosition = gridStartSample + static_cast<int>(nearestBeat * beatInterval);
-
-        // Если новая позиция в пределах массива, копируем сэмпл
-        if (newPosition >= 0 && newPosition < samples.size()) {
-            alignedSamples[newPosition] += samples[i];
-        }
-    }
-
-    qDebug() << "Aligned samples to beat grid with BPM:" << bpm << "starting at:" << gridStartSample;
-
-    return alignedSamples;
 }
 
 // ============================================================================

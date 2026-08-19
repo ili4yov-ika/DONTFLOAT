@@ -691,15 +691,23 @@ void DontfloatScratchEditor::runBeatAlign()
 
     const BPMAnalyzer::AnalysisResult analysis = lastAnalysis_;
     const int sampleRate = session_->audioBuffer().sampleRate;
+    // Выравнивание — это растяжение участков между долями, а не правка отдельных
+    // сэмплов: каждая найденная доля едет на ближайшую линию сетки, звук между
+    // ними тянется с сохранением высоты. Все каналы обрабатываются вместе, иначе
+    // стерео разъедется
+    QVector<qint64> beatPositions;
+    beatPositions.reserve(analysis.beats.size());
+    for (const BPMAnalyzer::BeatInfo& beat : analysis.beats) {
+        beatPositions.append(beat.position);
+    }
+
     pendingAligned_ = std::make_shared<QVector<QVector<float>>>();
     alignWatcher_->setFuture(
-        QtConcurrent::run([source, analysis, sampleRate, out = pendingAligned_]() {
-            QVector<QVector<float>> fixed = source;
-            for (int ch = 0; ch < fixed.size(); ++ch) {
-                fixed[ch] = BPMAnalyzer::alignToBeatGrid(
-                    source[ch], sampleRate, analysis.bpm, analysis.gridStartSample);
-            }
-            *out = fixed;
+        QtConcurrent::run([source, analysis, beatPositions, sampleRate, out = pendingAligned_]() {
+            const TimeStretchProcessor::StretchResult aligned =
+                TimeStretchProcessor::alignBeatsToGrid(source, beatPositions, analysis.bpm,
+                                                       sampleRate, analysis.gridStartSample);
+            *out = aligned.audioData.isEmpty() ? source : aligned.audioData;
         }));
 }
 
