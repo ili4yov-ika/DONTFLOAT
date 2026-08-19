@@ -6,6 +6,7 @@
 #   bash tools/macos_build.sh release      # Release
 #   bash tools/macos_build.sh debug test   # Debug + ctest
 #   bash tools/macos_build.sh release deploy  # Release + macdeployqt
+#   bash tools/macos_build.sh release pkg     # Release + macdeployqt + .pkg
 
 set -euo pipefail
 
@@ -21,6 +22,7 @@ fi
 BUILD_TYPE="debug"
 RUN_TEST=0
 DEPLOY=0
+MAKE_PKG=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -28,9 +30,11 @@ for arg in "$@"; do
         debug|Debug) BUILD_TYPE="debug" ;;
         test) RUN_TEST=1 ;;
         deploy) DEPLOY=1 ;;
+        # .pkg собирается из готового бандла, поэтому deploy обязателен
+        pkg) DEPLOY=1; MAKE_PKG=1 ;;
         *)
             echo "Неизвестный аргумент: $arg"
-            echo "Использование: $0 [debug|release] [test] [deploy]"
+            echo "Использование: $0 [debug|release] [test] [deploy|pkg]"
             exit 1
             ;;
     esac
@@ -92,5 +96,23 @@ if [[ "$DEPLOY" -eq 1 ]]; then
 EOF
         "$MACDEPLOYQT" "$APP_DIR"
         echo "Развёрнуто: $APP_DIR"
+
+        if [[ "$MAKE_PKG" -eq 1 ]]; then
+            # Установщик macOS: бандл со всеми Qt-библиотеками внутри кладётся
+            # в /Applications. Ставим именно .app, а не голый бинарник в
+            # /usr/local — иначе Qt рядом с ним искать негде.
+            PKG_ROOT="${BUILD_DIR}/pkgroot"
+            PKG_OUT="${BUILD_DIR}/DONTFLOAT-${VERSION:-0.1.0.0}-macOS.pkg"
+            rm -rf "$PKG_ROOT"
+            mkdir -p "$PKG_ROOT"
+            cp -R "$APP_DIR" "$PKG_ROOT/"
+
+            pkgbuild --root "$PKG_ROOT" \
+                     --install-location /Applications \
+                     --identifier org.dontfloat.DONTFLOAT \
+                     --version "${VERSION:-0.1.0.0}" \
+                     "$PKG_OUT"
+            echo "Пакет: $PKG_OUT"
+        fi
     fi
 fi

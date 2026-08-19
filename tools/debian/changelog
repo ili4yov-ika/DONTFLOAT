@@ -1,3 +1,13 @@
+dontfloat (0.1.0.0-1) unstable; urgency=low
+
+  * Первый публичный релиз
+  * Плагины CLAP и LV2 в трёх редакциях: DONTFLOAT, Scratch, Pitcher
+  * Поддержка ARA 2: разбор дорожки без проигрывания
+  * Выравнивание долей по сетке растяжением участков между ними
+  * Импорт и экспорт MIDI, потактовые тональности
+
+ -- DONTFLOAT Project <ilichyov.kolyan@yandex.ru>  Wed, 19 Aug 2026 06:00:00 +0000
+
 dontfloat (0.0.0.1-1) unstable; urgency=low
 
   * Первый релиз DONTFLOAT

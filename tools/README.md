@@ -25,6 +25,7 @@ bash tools/macos_build.sh                 # Debug (preset macos-debug)
 bash tools/macos_build.sh release         # Release
 bash tools/macos_build.sh release test    # + ctest (QT_QPA_PLATFORM=offscreen)
 bash tools/macos_build.sh release deploy  # + macdeployqt → build/macos/DONTFLOAT.app
+bash tools/macos_build.sh release pkg     # + pkgbuild → build/macos/DONTFLOAT-<версия>-macOS.pkg
 ```
 
 Требуется: macOS 11+, Xcode CLT, Homebrew. CMake Presets: `macos-debug`, `macos-release` (`CMakePresets.json`).
@@ -37,12 +38,51 @@ bash tools/macos_build.sh release deploy  # + macdeployqt → build/macos/DONTFL
 только префикс из `brew --prefix qt@6` и предупреждает, если Qt старее
 `QT_MIN_VERSION` из `CMakeLists.txt`.
 
+`pkg` кладёт готовый `DONTFLOAT.app` (со всеми Qt-библиотеками внутри) в
+`/Applications` — именно бандл, а не голый бинарник в `/usr/local`, иначе Qt
+рядом с ним искать негде. Пакет не подписан: при первом запуске macOS попросит
+разрешение в «Системных настройках → Защита и безопасность».
+
+## Пакеты в CI (`.deb`, `.rpm`, `.pkg`)
+
+Workflow `.github/workflows/release-packages.yml` собирает пакеты на своих
+раннерах и складывает их в релиз: по джобе на систему плюс отдельная джоба
+выгрузки с `needs` — окружение между джобами не переживает, поэтому файлы
+передаются через `upload-artifact` / `download-artifact`.
+
+| Джоба | Раннер | Чем собирается | Что получается |
+|-------|--------|----------------|----------------|
+| `linux` | ubuntu-24.04 | CPack (`cpack -G DEB`, `cpack -G RPM`) | `.deb`, `.rpm` с приложением и плагинами CLAP/LV2 |
+| `macos` | macos-14 | `tools/macos_build.sh release pkg` | `.pkg` с `DONTFLOAT.app` |
+| `upload` | ubuntu-24.04 | `gh release upload --clobber` | файлы в релизе |
+
+Запуск: автоматически при публикации релиза либо вручную (**Actions → Release
+packages → Run workflow**) с указанием тега — ручной запуск умеет класть пакеты
+и в **черновик** релиза.
+
+Что важно знать:
+
+- **VST3 в пакеты не входит.** Для него нужен проприетарный Steinberg SDK,
+  которого на раннере нет. Windows-установщик с VST3 по-прежнему собирается
+  локально через `build_windows_installer.bat`.
+- **В macOS-пакет входит только приложение.** Плагины под macOS пока не
+  упаковываются: для них нужна своя раскладка бандлов (`.clap`/`.vst3` с
+  `Info.plist`) в `/Library/Audio/Plug-Ins`, и проверить её без macOS негде.
+  В `.deb`/`.rpm` плагины CLAP и LV2 входят.
+- **Пакеты требуют системный Qt 6.8+** (так объявлены зависимости в
+  `CPACK_DEBIAN_PACKAGE_DEPENDS` / `CPACK_RPM_PACKAGE_REQUIRES`). Это Fedora 41+,
+  Debian 13+; на Ubuntu 24.04 в репозиториях Qt 6.4, и пакет туда не встанет.
+  Если понадобится независимость от системного Qt — Qt придётся класть внутрь
+  пакета, как это сделано в Windows-установщике.
+
 ## Структура (установщики)
 
 - `build_windows_installer.bat` — сборка Windows installer (NSIS) вместе с
   CLAP/LV2/VST3 plugin targets
-- `build_deb.sh` — сборка Debian/Ubuntu пакета (.deb)
-- `build_rpm.sh` — сборка Fedora/RHEL пакета (.rpm)
+- `build_deb.sh` — сборка .deb **на самом Debian/Ubuntu** через
+  `dpkg-buildpackage` (нативный путь дистрибутива, зависимости считает
+  `dh_shlibdeps`); в CI вместо него работает CPack — см. выше
+- `build_rpm.sh` — то же для Fedora/RHEL через `rpmbuild`
 - `setup_macos.sh` / `macos_build.sh` — окружение и сборка на macOS (см. выше)
 - `nsis_installer.nsi` — скрипт NSIS для Windows installer и опциональных
   секций DAW-плагинов

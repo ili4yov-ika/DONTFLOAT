@@ -1,0 +1,166 @@
+name: Release packages
+
+# Пакеты под Linux и macOS собираются на своих раннерах и складываются в релиз.
+#
+# Схема как в разборе на Habr (habr.com/ru/articles/466501): по джобе на систему
+# плюс отдельная джоба выгрузки с `needs`. Между джобами окружение не переживает,
+# поэтому готовые файлы передаются через upload-artifact / download-artifact.
+# Выгружает `gh release upload` из GITHUB_TOKEN — сторонний экшен для этого не
+# нужен, и он один умеет класть файлы в **черновик** релиза.
+#
+# Windows-установщик здесь не собирается: `tools/build_windows_installer.bat`
+# кладёт в него ещё и VST3, для которого нужен проприетарный Steinberg SDK,
+# недоступный на раннере. Его по-прежнему собирают локально.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза, куда класть пакеты (например v0.1.0.0)'
+        required: true
+        type: string
+
+# Тег берётся либо из события релиза, либо из поля запуска вручную
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+
+jobs:
+  linux:
+    name: Linux (.deb, .rpm)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            rpm \
+            libgl1-mesa-dev \
+            libegl1-mesa-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-0 \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-libav
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtmultimedia
+          cache: true
+
+      # Приложение и плагины CLAP/LV2. VST3 требует Steinberg SDK, мини-DAW и
+      # plugin_tester — инструменты разработчика, в пакет им не место.
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DDONTFLOAT_BUILD_PLUGINS=ON \
+            -DDONTFLOAT_BUILD_CLAP=ON \
+            -DDONTFLOAT_BUILD_LV2=ON \
+            -DDONTFLOAT_BUILD_VST3=OFF \
+            -DDONTFLOAT_BUILD_MINI_DAW=OFF \
+            -DDONTFLOAT_BUILD_PLUGIN_TESTER=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Package (.deb, .rpm)
+        working-directory: build
+        run: |
+          cpack -G DEB
+          cpack -G RPM
+          ls -la ./*.deb ./*.rpm
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            build/*.deb
+            build/*.rpm
+          if-no-files-found: error
+
+  macos:
+    name: macOS (.pkg)
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        id: qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: mac
+          target: desktop
+          arch: clang_64
+          modules: qtmultimedia
+          cache: true
+
+      # Пресет macos-release собирается Ninja — на раннере его нет
+      - name: Install Ninja
+        run: brew install ninja
+
+      # Тот же скрипт, которым собирают локально: сборка → macdeployqt → pkgbuild
+      - name: Build and package (.pkg)
+        run: bash tools/macos_build.sh release pkg
+        env:
+          CMAKE_PREFIX_PATH: ${{ steps.qt.outputs.QT_ROOT_DIR }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: build/macos/*.pkg
+          if-no-files-found: error
+
+  upload:
+    name: Attach packages to the release
+    needs: [linux, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: packages
+
+      - name: List packages
+        run: find packages -type f -exec ls -la {} +
+
+      # --clobber перезаписывает файл с тем же именем: повторный запуск обновляет
+      # пакеты в релизе, а не падает на «asset already exists»
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::Не задан тег релиза"
+            exit 1
+          fi
+          mapfile -t files < <(find packages -type f \
+            \( -name '*.deb' -o -name '*.rpm' -o -name '*.pkg' \) | sort)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::Пакеты не найдены"
+            exit 1
+          fi
+          printf 'Кладу в релиз %s:\n' "$RELEASE_TAG"
+          printf '  %s\n' "${files[@]}"
+          gh release upload "$RELEASE_TAG" "${files[@]}" \
+            --clobber --repo "$GITHUB_REPOSITORY"
