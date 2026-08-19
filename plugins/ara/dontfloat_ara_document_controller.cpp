@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <iterator>
+#include <functional>
 #include <limits>
 #include <utility>
 
@@ -67,7 +68,8 @@ std::vector<float> readMonoSamples(const ARA::PlugIn::AudioSource* audioSource)
 }
 
 /** Наш детектор нот поверх прочитанных сэмплов. */
-AraNoteSet analyzeSamples(std::vector<float> mono, double sampleRate)
+AraNoteSet analyzeSamples(std::vector<float> mono, double sampleRate,
+                          const std::function<void(int)>& onProgress = {})
 {
     AraNoteSet result;
     result.sampleRate = sampleRate > 0.0 ? sampleRate : 44100.0;
@@ -79,7 +81,8 @@ AraNoteSet analyzeSamples(std::vector<float> mono, double sampleRate)
     std::copy(mono.begin(), mono.end(), qMono.begin());
 
     const QVector<PitchDetector::PitchNote> detected =
-        PitchDetector::detectNotes(qMono, int(result.sampleRate));
+        PitchDetector::detectNotes(qMono, int(result.sampleRate), PitchDetector::Options {},
+                                   onProgress);
 
     result.notes.reserve(static_cast<std::size_t>(detected.size()));
     for (const PitchDetector::PitchNote& note : detected) {
@@ -287,6 +290,11 @@ void AraAudioSource::setNoteSet(AraNoteSet noteSet) noexcept
     noteSet_ = std::move(noteSet);
 }
 
+void AraAudioSource::setMonoSamples(std::vector<float> samples) noexcept
+{
+    monoSamples_ = std::move(samples);
+}
+
 const ARA::ARAFactory* AraDocumentController::getARAFactory() noexcept
 {
     return ARA::PlugIn::PlugInEntry::getPlugInEntry<AraFactoryConfig, AraDocumentController>()
@@ -352,16 +360,23 @@ void AraDocumentController::doRequestAudioSourceContentAnalysis(
     // хост не должен ждать анализа внутри своего вызова
     std::vector<float> mono = readMonoSamples(source);
     const double sampleRate = source->getSampleRate();
+    // Копию звука держим у источника: по ней редактор рисует волну и слушает
+    // ноты, не дожидаясь проигрывания дорожки
+    source->setMonoSamples(mono);
 
     source->setAnalysisRunning(true);
+    source->setAnalysisProgress(0);
     notifyAudioSourceAnalysisProgressStarted(source);
 
     const std::lock_guard<std::mutex> lock(mutex_);
     PendingAnalysis pending;
     pending.audioSource = source;
     pending.future = std::async(std::launch::async,
-                                [mono = std::move(mono), sampleRate]() mutable {
-                                    return analyzeSamples(std::move(mono), sampleRate);
+                                [source, mono = std::move(mono), sampleRate]() mutable {
+                                    return analyzeSamples(std::move(mono), sampleRate,
+                                                          [source](int percent) {
+                                                              source->setAnalysisProgress(percent);
+                                                          });
                                 });
     pendingAnalyses_.push_back(std::move(pending));
 }
@@ -389,6 +404,7 @@ void AraDocumentController::collectFinishedAnalyses() noexcept
         AraAudioSource* source = entry.first;
         source->setNoteSet(std::move(entry.second));
         source->setAnalysisRunning(false);
+        source->setAnalysisProgress(100);
         {
             const std::lock_guard<std::mutex> lock(mutex_);
             analyzedOrder_.erase(std::remove(analyzedOrder_.begin(), analyzedOrder_.end(), source),
@@ -541,6 +557,15 @@ AraAudioSource* AraDocumentController::audioSourceForInstance(
         }
     }
     return nullptr;
+}
+
+AraAudioSource* AraDocumentController::onlyAudioSource() const noexcept
+{
+    const ARA::PlugIn::Document* document = getDocument();
+    if (!document || document->getAudioSources().size() != 1) {
+        return nullptr;
+    }
+    return static_cast<AraAudioSource*>(document->getAudioSources().front());
 }
 
 AraBeatGrid AraDocumentController::hostBeatGrid() const noexcept

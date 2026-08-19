@@ -11,11 +11,15 @@
 
 #include "../plugins/ara/dontfloat_ara_document_controller.h"
 
+#include "../include/midiimporter.h"
+
 #include "ARA_Library/Dispatch/ARAHostDispatch.h"
 
 #include <cmath>
 #include <cstring>
 #include <map>
+#include <memory>
+#include <string>
 #include <vector>
 
 namespace {
@@ -226,6 +230,9 @@ private slots:
     void testNewClipIsAnalyzedWithoutRequest();
     void testClipMoveAndStretchKeepNotes();
     void testArchiveRoundTripRestoresNotes();
+    void testReferenceNotesFromNeighbourGiveKeyRegions();
+    void testAudioAndProgressAvailableWithoutPlayback();
+    void testInstancesOnDifferentTracksExchangeReferenceNotes();
 
 private:
     /** Заводит источник в документе и дожидается разбора. */
@@ -242,6 +249,10 @@ private:
 
     /** Сколько нот плагин отдаёт по источнику прямо сейчас. */
     int noteCountOf(ARA::ARAAudioSourceRef sourceRef);
+    /** Наш document controller — тесты смотрят модель напрямую. */
+    ARA::PlugIn::DocumentController* araDocumentController() const { return araController_; }
+
+    ARA::PlugIn::DocumentController* araController_ = nullptr;
     std::unique_ptr<ARA::Host::DocumentController> documentController_;
     TestAudioAccessController audioAccess_;
     TestArchivingController archiving_;
@@ -271,6 +282,10 @@ void AraDocumentControllerTest::initTestCase()
                                                        &documentProperties);
     QVERIFY(instance != nullptr);
     documentController_ = std::make_unique<ARA::Host::DocumentController>(instance);
+    // Ссылка на нашу реализацию: часть проверок смотрит модель изнутри
+    araController_ = static_cast<ARA::PlugIn::DocumentController*>(
+        ARA::PlugIn::fromRef<ARA::PlugIn::DocumentControllerInterface>(
+            instance->documentControllerRef));
 
     // Контекст и дорожка живут весь тест: клипы вешаются на них
     documentController_->beginEditing();
@@ -574,6 +589,214 @@ void AraDocumentControllerTest::testArchiveRoundTripRestoresNotes()
     documentController_->notifyModelUpdates();
 
     QCOMPARE(noteCountOf(sourceRef), notesBefore);
+}
+
+// Механизм референса целиком: ноты соседа → потактовые тональности,
+// как их показывает редактор плагина
+void AraDocumentControllerTest::testReferenceNotesFromNeighbourGiveKeyRegions()
+{
+    HostAudioTrack own = HostAudioTrack::makeTone(60.0f);        // своя дорожка
+    HostAudioTrack neighbour = HostAudioTrack::makeTone(67.0f);  // соседняя
+
+    const ARA::ARAAudioSourceRef ownRef = addAnalyzedSource(&own, "source-own");
+    QVERIFY(waitForAnalysis(toHostRef(&own)));
+    const ARA::ARAAudioSourceRef neighbourRef = addAnalyzedSource(&neighbour, "source-neighbour");
+    QVERIFY(waitForAnalysis(toHostRef(&neighbour)));
+    Q_UNUSED(ownRef);
+    Q_UNUSED(neighbourRef);
+
+    // Тот же вызов, которым редактор берёт референс с соседней дорожки
+    auto* controller = static_cast<Dontfloat::Ara::AraDocumentController*>(
+        araDocumentController());
+    QVERIFY(controller != nullptr);
+
+    Dontfloat::Ara::AraAudioSource* ownSource = nullptr;
+    for (ARA::PlugIn::AudioSource* source : controller->getDocument()->getAudioSources()) {
+        auto* candidate = static_cast<Dontfloat::Ara::AraAudioSource*>(source);
+        if (candidate->getPersistentID() == std::string { "source-own" }) {
+            ownSource = candidate;
+        }
+    }
+    QVERIFY(ownSource != nullptr);
+
+    const Dontfloat::Ara::AraNoteSet reference = controller->referenceNotesExcluding(ownSource);
+    QVERIFY2(reference.valid && !reference.notes.empty(), "референс соседней дорожки пуст");
+
+    // Ноты референса → потактовые тональности (полоса под пианороллом)
+    QVector<PitchDetector::PitchNote> notes;
+    for (const auto& note : reference.notes) {
+        PitchDetector::PitchNote out;
+        out.startSample = note.startSample;
+        out.endSample = note.endSample;
+        out.midiPitch = note.midiPitch;
+        out.detectedPitch = note.detectedPitch;
+        out.confidence = note.confidence;
+        notes.append(out);
+    }
+    KeyAnalyzer::BarGrid grid;
+    grid.bpm = 120.0f;
+    grid.beatsPerBar = 4;
+    grid.gridStartSample = 0;
+    const KeyAnalyzer::PerBarKeyResult keys =
+        MidiImporter::analyzeKeyPerBar(notes, grid, int(reference.sampleRate));
+    QVERIFY2(!keys.regions.isEmpty(), "по нотам референса не собрались тональности");
+    QVERIFY(!keys.primaryKey.keyName.isEmpty());
+}
+
+// Звук и прогресс разбора доступны плагину без единого блока process()
+void AraDocumentControllerTest::testAudioAndProgressAvailableWithoutPlayback()
+{
+    HostAudioTrack track = HostAudioTrack::makeTone(64.0f);
+    const ARA::ARAAudioSourceRef sourceRef = addAnalyzedSource(&track, "source-no-playback");
+    QVERIFY(waitForAnalysis(toHostRef(&track)));
+    Q_UNUSED(sourceRef);
+
+    auto* controller = static_cast<Dontfloat::Ara::AraDocumentController*>(
+        araDocumentController());
+    QVERIFY(controller != nullptr);
+
+    Dontfloat::Ara::AraAudioSource* source = nullptr;
+    for (ARA::PlugIn::AudioSource* candidate : controller->getDocument()->getAudioSources()) {
+        auto* araSource = static_cast<Dontfloat::Ara::AraAudioSource*>(candidate);
+        if (araSource->getPersistentID() == std::string { "source-no-playback" }) {
+            source = araSource;
+        }
+    }
+    QVERIFY(source != nullptr);
+
+    // Весь звук дорожки уже у плагина — редактор рисует волну без проигрывания
+    QCOMPARE(source->monoSamples().size(), track.samples.size());
+    QCOMPARE(source->analysisProgress(), 100);
+    QVERIFY(!source->analysisRunning());
+    QVERIFY(source->hasNotes());
+}
+
+// Два экземпляра плагина на разных дорожках одного документа
+//
+// Так плагин и стоит в DAW: на каждой дорожке свой экземпляр, у каждого свой
+// клип и свой аудиоисточник, а документ ARA общий. Проверяется и адресация
+// («какой источник мой»), и сам механизм референса — ноты соседней дорожки.
+void AraDocumentControllerTest::testInstancesOnDifferentTracksExchangeReferenceNotes()
+{
+    HostAudioTrack lower = HostAudioTrack::makeTone(60.0f);  // C4 — дорожка 1
+    HostAudioTrack upper = HostAudioTrack::makeTone(72.0f);  // C5 — дорожка 2
+
+    const ARA::ARAAudioSourceRef lowerSourceRef = addAnalyzedSource(&lower, "source-lane-1");
+    QVERIFY(waitForAnalysis(toHostRef(&lower)));
+    const ARA::ARAAudioSourceRef upperSourceRef = addAnalyzedSource(&upper, "source-lane-2");
+    QVERIFY(waitForAnalysis(toHostRef(&upper)));
+
+    /** Дорожка глазами хоста: клип на своей region sequence и свой экземпляр. */
+    struct Lane {
+        ARA::ARARegionSequenceRef sequence = nullptr;
+        ARA::ARAAudioModificationRef modification = nullptr;
+        ARA::ARAPlaybackRegionRef region = nullptr;
+        std::unique_ptr<ARA::PlugIn::PlugInExtension> extension;
+        std::unique_ptr<ARA::Host::PlaybackRenderer> renderer;
+    };
+    Lane lanes[2];
+
+    const auto buildLane = [&](Lane& lane, ARA::ARAAudioSourceRef sourceRef, HostAudioTrack* track,
+                               const char* name, const char* modificationId, int order) {
+        const double duration = double(track->samples.size()) / track->sampleRate;
+        documentController_->beginEditing();
+        const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARARegionSequenceProperties, color)>
+            sequenceProperties { name, order, musicalContextRef_, nullptr };
+        lane.sequence = documentController_->createRegionSequence(
+            reinterpret_cast<ARA::ARARegionSequenceHostRef>(track), &sequenceProperties);
+        const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAAudioModificationProperties, persistentID)>
+            modificationProperties { name, modificationId };
+        lane.modification = documentController_->createAudioModification(
+            sourceRef, reinterpret_cast<ARA::ARAAudioModificationHostRef>(track),
+            &modificationProperties);
+        const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAPlaybackRegionProperties, color)>
+            regionProperties {
+                ARA::kARAPlaybackTransformationNoChanges,
+                0.0, duration, 0.0, duration,
+                musicalContextRef_, lane.sequence, name, nullptr,
+            };
+        lane.region = documentController_->createPlaybackRegion(
+            lane.modification, reinterpret_cast<ARA::ARAPlaybackRegionHostRef>(track),
+            &regionProperties);
+        documentController_->endEditing();
+
+        // Привязка экземпляра к документу — то же, что делает обёртка формата
+        lane.extension = std::make_unique<ARA::PlugIn::PlugInExtension>();
+        const ARA::ARAPlugInExtensionInstance* instance = lane.extension->bindToARA(
+            documentController_->getRef(),
+            ARA::kARAPlaybackRendererRole | ARA::kARAEditorRendererRole | ARA::kARAEditorViewRole,
+            ARA::kARAPlaybackRendererRole | ARA::kARAEditorRendererRole | ARA::kARAEditorViewRole);
+        QVERIFY(instance != nullptr);
+        // Клип уходит в роль экземпляра: по нему плагин и находит свой источник
+        lane.renderer = std::make_unique<ARA::Host::PlaybackRenderer>(instance);
+        lane.renderer->addPlaybackRegion(lane.region);
+    };
+
+    buildLane(lanes[0], lowerSourceRef, &lower, "lane 1", "modification-lane-1", 0);
+    buildLane(lanes[1], upperSourceRef, &upper, "lane 2", "modification-lane-2", 1);
+
+    auto* controller = static_cast<Dontfloat::Ara::AraDocumentController*>(araDocumentController());
+    QVERIFY(controller != nullptr);
+
+    // 1. Каждый экземпляр адресует свою дорожку, а не соседнюю
+    Dontfloat::Ara::AraAudioSource* ownOfFirst =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*lanes[0].extension);
+    Dontfloat::Ara::AraAudioSource* ownOfSecond =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*lanes[1].extension);
+    QVERIFY(ownOfFirst != nullptr);
+    QVERIFY(ownOfSecond != nullptr);
+    // Сравниваем как std::string: QString::fromStdString в Debug против
+    // релизных Qt-DLL падает (разные аллокаторы STL)
+    QVERIFY2(ownOfFirst->getPersistentID() == std::string { "source-lane-1" },
+             "первый экземпляр сел не на свою дорожку");
+    QVERIFY2(ownOfSecond->getPersistentID() == std::string { "source-lane-2" },
+             "второй экземпляр сел не на свою дорожку");
+    QVERIFY(ownOfFirst->hasNotes());
+    QVERIFY(ownOfSecond->hasNotes());
+
+    // 2. Референс: каждому экземпляру видны ноты соседней дорожки
+    const Dontfloat::Ara::AraNoteSet referenceForFirst =
+        controller->referenceNotesExcluding(ownOfFirst);
+    const Dontfloat::Ara::AraNoteSet referenceForSecond =
+        controller->referenceNotesExcluding(ownOfSecond);
+    QVERIFY2(referenceForFirst.valid && !referenceForFirst.notes.empty(),
+             "первая дорожка не получила референс со второй");
+    QVERIFY2(referenceForSecond.valid && !referenceForSecond.notes.empty(),
+             "вторая дорожка не получила референс с первой");
+
+    // 3. Референс — именно чужие ноты: снизу C4, сверху C5, а не наоборот
+    const auto averagePitch = [](const std::vector<Dontfloat::PluginCore::TrackPitchNote>& notes) {
+        if (notes.empty()) {
+            return 0.0;
+        }
+        double sum = 0.0;
+        for (const auto& note : notes) {
+            sum += double(note.midiPitch);
+        }
+        return sum / double(notes.size());
+    };
+    const double ownPitchOfFirst = averagePitch(ownOfFirst->noteSet().notes);
+    const double ownPitchOfSecond = averagePitch(ownOfSecond->noteSet().notes);
+    QVERIFY2(averagePitch(referenceForFirst.notes) > ownPitchOfFirst + 6.0,
+             "первой дорожке подсунули её же ноты вместо соседних");
+    QVERIFY2(averagePitch(referenceForSecond.notes) < ownPitchOfSecond - 6.0,
+             "второй дорожке подсунули её же ноты вместо соседних");
+
+    // Разрушение — в порядке ARA: сначала экземпляры, потом объекты модели
+    for (Lane& lane : lanes) {
+        if (lane.renderer && lane.region) {
+            lane.renderer->removePlaybackRegion(lane.region);
+        }
+        lane.renderer.reset();
+        lane.extension.reset();
+    }
+    documentController_->beginEditing();
+    for (Lane& lane : lanes) {
+        documentController_->destroyPlaybackRegion(lane.region);
+        documentController_->destroyAudioModification(lane.modification);
+        documentController_->destroyRegionSequence(lane.sequence);
+    }
+    documentController_->endEditing();
 }
 
 QTEST_MAIN(AraDocumentControllerTest)

@@ -46,8 +46,29 @@ public:
     /** Отдаёт ли плагин фабрику ARA 2 (тогда доступен путь через документ ARA). */
     virtual bool supportsAra() const { return false; }
     /**
-     * Поднимает документ ARA на дорожке track и привязывает к нему экземпляр:
+     * Фабрика ARA плагина (ARA::ARAFactory*) — по ней хост строит документ.
+     * У экземпляров одного модуля она одна: на такой документ и садятся все
+     * дорожки, иначе плагины не увидят ноты друг друга.
+     */
+    virtual const void* araFactory() const { return nullptr; }
+    /**
+     * Сажает экземпляр на дорожку  trackIndex уже открытого документа:
      * дальше плагин читает звук сам и разбирает его без проигрывания.
+     */
+    virtual bool bindAraDocument(Dontfloat::PluginTester::AraHostDocument& document,
+                                 int trackIndex, QString* error)
+    {
+        Q_UNUSED(document);
+        Q_UNUSED(trackIndex);
+        if (error) {
+            *error = QStringLiteral("этот формат не поддерживает ARA");
+        }
+        return false;
+    }
+    /**
+     * Поднимает собственный документ ARA на одной дорожке и садится на него.
+     * Короткий путь для headless-проверок; окно мини-DAW вместо этого держит
+     * общий документ на все дорожки (см. bindAraDocument).
      */
     virtual bool startAraSession(const Dontfloat::PluginTester::AraHostTrack& track, QString* error)
     {

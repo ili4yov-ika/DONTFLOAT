@@ -248,6 +248,9 @@ public:
         }
 #endif
         editor_->setWindowTitle(QString::fromUtf8(desc().clapName));
+        // Без рамки: хост двигает окно целиком, клиентская область должна
+        // совпадать с ним (иначе по краям остаются пустые полосы)
+        editor_->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
         editor_->setAttribute(Qt::WA_NativeWindow, true);
         editor_->setAttribute(Qt::WA_DontCreateNativeAncestors, true);
         editor_->resize(kEditorWidth, kEditorHeight);

@@ -380,6 +380,10 @@ bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
         }
     });
     s->editor->setWindowTitle(QString::fromUtf8(desc().clapName));
+    // Без рамки и заголовка: хост задаёт размер окна целиком (MoveWindow), а с
+    // рамкой Qt раскладывал интерфейс по клиентской области — она у́же и ниже
+    // внешнего прямоугольника, отчего справа и снизу оставались пустые полосы
+    s->editor->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
     s->editor->resize(int(s->editorWidth), int(s->editorHeight));
     s->editor->setAttribute(Qt::WA_NativeWindow, true);
 

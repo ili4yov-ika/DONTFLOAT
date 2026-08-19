@@ -29,6 +29,7 @@ set(DONTFLOAT_PLUGIN_SCRATCH_UI_SOURCES
     plugins/ui/dontfloat_scratch_editor.h
     src/waveformview.cpp
     src/waveformcolors.cpp
+    src/waveformpeaks.cpp
     src/beatvisualizer.cpp
     src/bpmanalyzer.cpp
     src/timestretchprocessor.cpp
@@ -39,6 +40,7 @@ set(DONTFLOAT_PLUGIN_SCRATCH_UI_SOURCES
     src/wavwriter.cpp
     include/waveformview.h
     include/waveformcolors.h
+    include/waveformpeaks.h
     include/beatvisualizer.h
     include/bpmanalyzer.h
     include/timestretchprocessor.h
@@ -100,8 +102,8 @@ function(_dontfloat_link_plugin_ui_common target_name)
         Qt6::Widgets
         Qt6::Multimedia
         Qt6::Concurrent
-        Qt6::Svg
     )
+    dontfloat_link_qt_svg(${target_name})
     if(TARGET qm_dsp)
         target_link_libraries(${target_name} PRIVATE qm_dsp)
         target_compile_definitions(${target_name} PRIVATE USE_MIXXX_QM_DSP)

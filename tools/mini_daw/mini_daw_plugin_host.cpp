@@ -275,26 +275,52 @@ public:
         return araFactory_ != nullptr && araExtension_ != nullptr;
     }
 
+    const void* araFactory() const override
+    {
+        if (!supportsAra()) {
+            return nullptr;
+        }
+        return araFactory_->get_ara_factory(araFactory_, 0);
+    }
+
+    bool bindAraDocument(Dontfloat::PluginTester::AraHostDocument& document, int trackIndex,
+                         QString* error) override
+    {
+        if (!supportsAra()) {
+            fail(error, QStringLiteral("плагин не отдал расширения ARA"));
+            return false;
+        }
+        // Привязка переключает экземпляр в режим ARA: звук и разметка идут
+        // через документ, а не через блоки process()
+        const void* instance = araExtension_->bind_to_document_controller(
+            plugin_, document.documentControllerRef(),
+            Dontfloat::PluginTester::AraHostDocument::knownRoles(),
+            Dontfloat::PluginTester::AraHostDocument::assignedRoles());
+        if (!instance) {
+            fail(error, QStringLiteral("bind_to_document_controller не удался"));
+            return false;
+        }
+        // Клип дорожки — в роли экземпляра: иначе плагин не знает, с каким
+        // источником он работает, и не покажет ни волну, ни ноты
+        document.bindInstance(trackIndex, instance);
+        boundDocument_ = &document;
+        boundTrackIndex_ = trackIndex;
+        return true;
+    }
+
     bool startAraSession(const Dontfloat::PluginTester::AraHostTrack& track, QString* error) override
     {
         if (!supportsAra()) {
             fail(error, QStringLiteral("плагин не отдал расширения ARA"));
             return false;
         }
-        const auto* factory = static_cast<const ARA::ARAFactory*>(
-            araFactory_->get_ara_factory(araFactory_, 0));
+        const auto* factory = static_cast<const ARA::ARAFactory*>(araFactory());
         araDocument_ = std::make_unique<Dontfloat::PluginTester::AraHostDocument>();
         if (!araDocument_->open(factory, track, error)) {
             araDocument_.reset();
             return false;
         }
-        // Привязка переключает экземпляр в режим ARA: звук и разметка идут
-        // через документ, а не через блоки process()
-        if (!araExtension_->bind_to_document_controller(
-                plugin_, araDocument_->documentControllerRef(),
-                Dontfloat::PluginTester::AraHostDocument::knownRoles(),
-                Dontfloat::PluginTester::AraHostDocument::assignedRoles())) {
-            fail(error, QStringLiteral("bind_to_document_controller не удался"));
+        if (!bindAraDocument(*araDocument_, 0, error)) {
             araDocument_.reset();
             return false;
         }
@@ -303,6 +329,7 @@ public:
 
     void pumpAra() override
     {
+        // Общий документ качает окно: здесь только собственный (headless-путь)
         if (araDocument_) {
             araDocument_->pumpModelUpdates();
         }
@@ -310,12 +337,15 @@ public:
 
     int araNoteCount() const override
     {
-        return araDocument_ ? araDocument_->readNoteCount() : 0;
+        if (boundDocument_) {
+            return boundDocument_->readNoteCount(boundTrackIndex_);
+        }
+        return 0;
     }
 
     bool araAnalysisCompleted() const override
     {
-        return araDocument_ && araDocument_->analysisCompleted();
+        return boundDocument_ && boundDocument_->analysisCompleted();
     }
 #endif
 
@@ -415,6 +445,15 @@ public:
 
     void unload() override
     {
+#if defined(DONTFLOAT_WITH_ARA)
+        // Клип снимаем с ролей и закрываем свой документ, пока экземпляр жив:
+        // и то и другое — вызовы в плагин
+        if (boundDocument_) {
+            boundDocument_->unbindInstance(boundTrackIndex_);
+            boundDocument_ = nullptr;
+        }
+        araDocument_.reset();
+#endif
         if (gui_ && guiCreated_) {
             gui_->hide(plugin_);
             gui_->destroy(plugin_);
@@ -459,7 +498,11 @@ private:
     /** ARA: фабрика модуля, расширение экземпляра и наш документ. */
     const clap_ara_factory_t* araFactory_ = nullptr;
     const clap_ara_plugin_extension_t* araExtension_ = nullptr;
+    /** Свой документ — только для startAraSession (headless-путь). */
     std::unique_ptr<Dontfloat::PluginTester::AraHostDocument> araDocument_;
+    /** Документ, на котором сидит экземпляр (может принадлежать окну). */
+    Dontfloat::PluginTester::AraHostDocument* boundDocument_ = nullptr;
+    int boundTrackIndex_ = 0;
 #endif
     clap_host_t host_ {};
     bool processing_ = false;
@@ -1124,8 +1167,11 @@ public:
     }
 
     void resizeEditor(QSize) override {}
-    void process(float*, float*, int) override {}
+    // Сигнатура должна повторять PluginHost::process (с позицией на таймлайне):
+    // без этого сборка без Steinberg SDK не компилировалась вовсе
+    void process(float*, float*, int, qint64) override {}
     void setTransport(double, int) override {}
+    void setPlayhead(qint64, bool) override {}
     void unload() override {}
     QString displayName() const override { return QStringLiteral("VST3"); }
 };

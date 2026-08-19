@@ -6,6 +6,7 @@
 #include <cstring>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace Dontfloat::PluginTester {
 namespace {
@@ -16,35 +17,80 @@ struct TempoMap {
     ARA::ARAContentBarSignature barSignature {};
 };
 
+/**
+ * Счётчик инициализаций фабрики ARA.
+ *
+ * ARA требует ровно одного initializeARAWithConfiguration на фабрику: второй
+ * вызов ловится ассертом SDK (_usedApiGeneration == 0 в ARAPlug.cpp). Мини-DAW
+ * же поднимает по документу на дорожку, и обе дорожки берут фабрику из одного
+ * загруженного модуля плагина. Поэтому фабрику инициализирует первый документ,
+ * а деинициализирует последний закрывшийся.
+ *
+ * Все вызовы идут из UI-потока окна, поэтому обычной карты достаточно.
+ */
+int& factoryUseCount(const ARA::ARAFactory* factory)
+{
+    static std::map<const ARA::ARAFactory*, int> counts;
+    return counts[factory];
+}
+
+void retainFactory(const ARA::ARAFactory* factory)
+{
+    int& count = factoryUseCount(factory);
+    if (count == 0) {
+        const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAInterfaceConfiguration, assertFunctionAddress)>
+            interfaceConfig { ARA::kARAAPIGeneration_2_0_Final, nullptr };
+        factory->initializeARAWithConfiguration(&interfaceConfig);
+    }
+    ++count;
+}
+
+void releaseFactory(const ARA::ARAFactory* factory)
+{
+    int& count = factoryUseCount(factory);
+    if (count <= 0) {
+        return;
+    }
+    if (--count == 0) {
+        factory->uninitializeARA();
+    }
+}
+
 } // namespace
 
-/** Доступ к сэмплам дорожки — ради этого ARA и нужна. */
+/**
+ * Доступ к сэмплам дорожек — ради этого ARA и нужна.
+ *
+ * Дорожек в документе несколько, поэтому объект не помнит ни одной: хост-ссылка
+ * источника — это адрес самой AraHostTrack (см. AraHostDocument::addTrack),
+ * и ридер просто носит её дальше.
+ */
 class AraHostAudioAccess : public ARA::Host::AudioAccessControllerInterface {
 public:
-    explicit AraHostAudioAccess(const AraHostTrack* track) noexcept : track_ { track } {}
-
-    ARA::ARAAudioReaderHostRef createAudioReaderForSource(ARA::ARAAudioSourceHostRef,
+    ARA::ARAAudioReaderHostRef createAudioReaderForSource(ARA::ARAAudioSourceHostRef sourceRef,
                                                           bool) noexcept override
     {
-        return reinterpret_cast<ARA::ARAAudioReaderHostRef>(const_cast<AraHostTrack*>(track_));
+        return reinterpret_cast<ARA::ARAAudioReaderHostRef>(sourceRef);
     }
 
-    bool readAudioSamples(ARA::ARAAudioReaderHostRef, ARA::ARASamplePosition samplePosition,
+    bool readAudioSamples(ARA::ARAAudioReaderHostRef readerRef,
+                          ARA::ARASamplePosition samplePosition,
                           ARA::ARASampleCount samplesPerChannel,
                           void* const buffers[]) noexcept override
     {
-        if (!track_ || !buffers) {
+        const auto* track = reinterpret_cast<const AraHostTrack*>(readerRef);
+        if (!track || !buffers) {
             return false;
         }
-        const int channels = track_->channelCount();
+        const int channels = track->channelCount();
         for (int channel = 0; channel < channels; ++channel) {
             auto* out = static_cast<float*>(buffers[channel]);
             if (!out) {
                 return false;
             }
-            const QVector<float>& source = (channel == 0 || track_->right.isEmpty())
-                ? track_->left
-                : track_->right;
+            const QVector<float>& source = (channel == 0 || track->right.isEmpty())
+                ? track->left
+                : track->right;
             for (ARA::ARASampleCount i = 0; i < samplesPerChannel; ++i) {
                 const qint64 index = samplePosition + i;
                 out[i] = (index >= 0 && index < source.size()) ? source[int(index)] : 0.0f;
@@ -54,9 +100,6 @@ public:
     }
 
     void destroyAudioReader(ARA::ARAAudioReaderHostRef) noexcept override {}
-
-private:
-    const AraHostTrack* track_ = nullptr;
 };
 
 /** Архивы мини-DAW не хранит: проект живёт только в памяти. */
@@ -81,23 +124,17 @@ public:
     }
 };
 
-/** Разметка хоста: темп и размер такта из панели мини-DAW. */
+/** Разметка хоста: темп и размер такта из панели мини-DAW (общие на документ). */
 class AraHostContentAccess : public ARA::Host::ContentAccessControllerInterface {
 public:
-    explicit AraHostContentAccess(const AraHostTrack* track) noexcept : track_ { track }
-    {
-        rebuild();
-    }
+    AraHostContentAccess() noexcept { setTempo(120.0, 4); }
 
-    void rebuild() noexcept
+    void setTempo(double bpm, int beatsPerBar) noexcept
     {
-        if (!track_) {
-            return;
-        }
-        const double secondsPerQuarter = 60.0 / std::max(1.0, track_->tempoBpm);
+        const double secondsPerQuarter = 60.0 / std::max(1.0, bpm);
         tempo_.entries[0] = { 0.0, 0.0 };
         tempo_.entries[1] = { secondsPerQuarter, 1.0 };
-        tempo_.barSignature = { track_->beatsPerBar, 4, 0.0 };
+        tempo_.barSignature = { std::max(1, beatsPerBar), 4, 0.0 };
     }
 
     bool isMusicalContextContentAvailable(ARA::ARAMusicalContextHostRef,
@@ -171,7 +208,6 @@ private:
         return static_cast<ARA::ARAContentType>(reinterpret_cast<std::uintptr_t>(ref));
     }
 
-    const AraHostTrack* track_ = nullptr;
     TempoMap tempo_;
 };
 
@@ -219,7 +255,18 @@ public:
 };
 
 struct AraHostDocument::Impl {
-    AraHostTrack track;
+    /** Одна дорожка документа: её звук и объекты модели ARA. */
+    struct TrackEntry {
+        AraHostTrack track;
+        std::string name;  ///< c_str() из свойств живёт, пока жива запись
+        ARA::ARARegionSequenceRef regionSequenceRef = nullptr;
+        ARA::ARAAudioSourceRef audioSourceRef = nullptr;
+        ARA::ARAAudioModificationRef audioModificationRef = nullptr;
+        ARA::ARAPlaybackRegionRef playbackRegionRef = nullptr;
+        std::unique_ptr<ARA::Host::PlaybackRenderer> playbackRenderer;
+        std::unique_ptr<ARA::Host::EditorView> editorView;
+    };
+
     std::unique_ptr<AraHostAudioAccess> audioAccess;
     AraHostArchiving archiving;
     std::unique_ptr<AraHostContentAccess> contentAccess;
@@ -229,12 +276,17 @@ struct AraHostDocument::Impl {
     std::unique_ptr<ARA::Host::DocumentController> documentController;
 
     ARA::ARAMusicalContextRef musicalContextRef = nullptr;
-    ARA::ARARegionSequenceRef regionSequenceRef = nullptr;
-    ARA::ARAAudioSourceRef audioSourceRef = nullptr;
-    ARA::ARAAudioModificationRef audioModificationRef = nullptr;
-    ARA::ARAPlaybackRegionRef playbackRegionRef = nullptr;
+    // unique_ptr: хост-ссылки указывают внутрь записей, поэтому адреса
+    // обязаны пережить добавление соседних дорожек
+    std::vector<std::unique_ptr<TrackEntry>> tracks;
     const ARA::ARAFactory* factory = nullptr;
     bool open = false;
+
+    TrackEntry* entry(int index) const
+    {
+        return (index >= 0 && index < int(tracks.size())) ? tracks[std::size_t(index)].get()
+                                                          : nullptr;
+    }
 };
 
 AraHostDocument::AraHostDocument() : impl_ { std::make_unique<Impl>() } {}
@@ -244,8 +296,7 @@ AraHostDocument::~AraHostDocument()
     close();
 }
 
-bool AraHostDocument::open(const ARA::ARAFactory* factory, const AraHostTrack& track,
-                           QString* error)
+bool AraHostDocument::open(const ARA::ARAFactory* factory, QString* error)
 {
     const auto fail = [error](const QString& text) {
         if (error) {
@@ -257,19 +308,14 @@ bool AraHostDocument::open(const ARA::ARAFactory* factory, const AraHostTrack& t
     if (!factory) {
         return fail(QStringLiteral("плагин не отдал фабрику ARA"));
     }
-    if (track.frameCount() <= 0) {
-        return fail(QStringLiteral("дорожка пуста — нечего отдавать в ARA"));
-    }
     close();
 
-    impl_->track = track;
     impl_->factory = factory;
-    impl_->audioAccess = std::make_unique<AraHostAudioAccess>(&impl_->track);
-    impl_->contentAccess = std::make_unique<AraHostContentAccess>(&impl_->track);
+    impl_->audioAccess = std::make_unique<AraHostAudioAccess>();
+    impl_->contentAccess = std::make_unique<AraHostContentAccess>();
 
-    const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAInterfaceConfiguration, assertFunctionAddress)>
-        interfaceConfig { ARA::kARAAPIGeneration_2_0_Final, nullptr };
-    factory->initializeARAWithConfiguration(&interfaceConfig);
+    // Фабрика инициализируется один раз на весь процесс — см. retainFactory
+    retainFactory(factory);
 
     impl_->hostInstance = std::make_unique<ARA::Host::DocumentControllerHostInstance>(
         impl_->audioAccess.get(), &impl_->archiving, impl_->contentAccess.get(),
@@ -289,40 +335,86 @@ bool AraHostDocument::open(const ARA::ARAFactory* factory, const AraHostTrack& t
 
     ARA::Host::DocumentController& controller = *impl_->documentController;
     controller.beginEditing();
-
-    // Musical context: темп и размер такта, как их показывает панель мини-DAW
+    // Musical context один на документ: у дорожек мини-DAW общий транспорт
     const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAMusicalContextProperties, color)>
         musicalContextProperties { "mini-DAW timeline", 0, nullptr };
     impl_->musicalContextRef = controller.createMusicalContext(
         reinterpret_cast<ARA::ARAMusicalContextHostRef>(impl_.get()), &musicalContextProperties);
+    controller.endEditing();
+    return true;
+}
 
+bool AraHostDocument::open(const ARA::ARAFactory* factory, const AraHostTrack& track,
+                           QString* error)
+{
+    if (track.frameCount() <= 0) {
+        if (error) {
+            *error = QStringLiteral("дорожка пуста — нечего отдавать в ARA");
+        }
+        return false;
+    }
+    if (!open(factory, error)) {
+        return false;
+    }
+    if (addTrack(track) < 0) {
+        if (error) {
+            *error = QStringLiteral("не удалось добавить дорожку в документ ARA");
+        }
+        return false;
+    }
+    return true;
+}
+
+int AraHostDocument::addTrack(const AraHostTrack& track)
+{
+    if (!impl_->open || !impl_->documentController || track.frameCount() <= 0) {
+        return -1;
+    }
+    ARA::Host::DocumentController& controller = *impl_->documentController;
+
+    auto entry = std::make_unique<Impl::TrackEntry>();
+    entry->track = track;
+    entry->name = track.name.isEmpty() ? std::string { "mini-DAW audio" }
+                                       : std::string { track.name.toUtf8().constData() };
+    Impl::TrackEntry& state = *entry;
+    const int index = int(impl_->tracks.size());
+    impl_->tracks.push_back(std::move(entry));
+
+    // Темп документа задаёт первая дорожка: транспорт в мини-DAW общий
+    if (index == 0) {
+        impl_->contentAccess->setTempo(state.track.tempoBpm, state.track.beatsPerBar);
+    }
+
+    // Уникальные persistent ID: по ним плагин отличает дорожки в архиве
+    const std::string sourceId = "mini-daw-audio-source-" + std::to_string(index);
+    const std::string modificationId = "mini-daw-audio-modification-" + std::to_string(index);
+
+    controller.beginEditing();
     const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARARegionSequenceProperties, color)>
-        regionSequenceProperties { "mini-DAW track", 0, impl_->musicalContextRef, nullptr };
-    impl_->regionSequenceRef = controller.createRegionSequence(
-        reinterpret_cast<ARA::ARARegionSequenceHostRef>(impl_.get()), &regionSequenceProperties);
+        regionSequenceProperties { state.name.c_str(), index, impl_->musicalContextRef, nullptr };
+    state.regionSequenceRef = controller.createRegionSequence(
+        reinterpret_cast<ARA::ARARegionSequenceHostRef>(&state), &regionSequenceProperties);
 
-    const std::string trackName = impl_->track.name.isEmpty()
-        ? std::string { "mini-DAW audio" }
-        : impl_->track.name.toStdString();
     const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAAudioSourceProperties, merits64BitSamples)>
         audioSourceProperties {
-            trackName.c_str(),
-            "mini-daw-audio-source",
-            static_cast<ARA::ARASampleCount>(impl_->track.frameCount()),
-            impl_->track.sampleRate,
-            impl_->track.channelCount(),
+            state.name.c_str(),
+            sourceId.c_str(),
+            static_cast<ARA::ARASampleCount>(state.track.frameCount()),
+            state.track.sampleRate,
+            state.track.channelCount(),
             ARA::kARAFalse,
         };
-    impl_->audioSourceRef = controller.createAudioSource(
-        reinterpret_cast<ARA::ARAAudioSourceHostRef>(&impl_->track), &audioSourceProperties);
+    // Хост-ссылка источника — адрес самой дорожки: по ней читаются сэмплы
+    state.audioSourceRef = controller.createAudioSource(
+        reinterpret_cast<ARA::ARAAudioSourceHostRef>(&state.track), &audioSourceProperties);
 
     const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAAudioModificationProperties, persistentID)>
-        audioModificationProperties { trackName.c_str(), "mini-daw-audio-modification" };
-    impl_->audioModificationRef = controller.createAudioModification(
-        impl_->audioSourceRef, reinterpret_cast<ARA::ARAAudioModificationHostRef>(impl_.get()),
+        audioModificationProperties { state.name.c_str(), modificationId.c_str() };
+    state.audioModificationRef = controller.createAudioModification(
+        state.audioSourceRef, reinterpret_cast<ARA::ARAAudioModificationHostRef>(&state),
         &audioModificationProperties);
 
-    const double durationSeconds = double(impl_->track.frameCount()) / impl_->track.sampleRate;
+    const double durationSeconds = double(state.track.frameCount()) / state.track.sampleRate;
     const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAPlaybackRegionProperties, color)>
         playbackRegionProperties {
             ARA::kARAPlaybackTransformationNoChanges,
@@ -331,21 +423,99 @@ bool AraHostDocument::open(const ARA::ARAFactory* factory, const AraHostTrack& t
             0.0,
             durationSeconds,
             impl_->musicalContextRef,
-            impl_->regionSequenceRef,
-            trackName.c_str(),
+            state.regionSequenceRef,
+            state.name.c_str(),
             nullptr,
         };
-    impl_->playbackRegionRef = controller.createPlaybackRegion(
-        impl_->audioModificationRef, reinterpret_cast<ARA::ARAPlaybackRegionHostRef>(impl_.get()),
+    state.playbackRegionRef = controller.createPlaybackRegion(
+        state.audioModificationRef, reinterpret_cast<ARA::ARAPlaybackRegionHostRef>(&state),
         &playbackRegionProperties);
-
     controller.endEditing();
 
     // Доступ к сэмплам и запрос разбора: дальше плагин работает сам
-    controller.enableAudioSourceSamplesAccess(impl_->audioSourceRef, true);
+    controller.enableAudioSourceSamplesAccess(state.audioSourceRef, true);
     const ARA::ARAContentType noteContent = ARA::kARAContentTypeNotes;
-    controller.requestAudioSourceContentAnalysis(impl_->audioSourceRef, 1, &noteContent);
-    return true;
+    controller.requestAudioSourceContentAnalysis(state.audioSourceRef, 1, &noteContent);
+    return index;
+}
+
+void AraHostDocument::unbindInstance(int trackIndex)
+{
+    Impl::TrackEntry* state = impl_->entry(trackIndex);
+    if (!state) {
+        return;
+    }
+    // Роли экземпляра отпускаем до разрушения клипа — иначе плагин держит
+    // ссылку на уже уничтоженный playback region
+    if (state->playbackRenderer && state->playbackRegionRef) {
+        state->playbackRenderer->removePlaybackRegion(state->playbackRegionRef);
+    }
+    state->playbackRenderer.reset();
+    state->editorView.reset();
+}
+
+void AraHostDocument::removeTrack(int index)
+{
+    Impl::TrackEntry* state = impl_->entry(index);
+    if (!state || !impl_->documentController) {
+        return;
+    }
+    ARA::Host::DocumentController& controller = *impl_->documentController;
+    unbindInstance(index);
+
+    if (state->audioSourceRef) {
+        controller.enableAudioSourceSamplesAccess(state->audioSourceRef, false);
+    }
+    controller.beginEditing();
+    if (state->playbackRegionRef) {
+        controller.destroyPlaybackRegion(state->playbackRegionRef);
+    }
+    if (state->audioModificationRef) {
+        controller.destroyAudioModification(state->audioModificationRef);
+    }
+    if (state->audioSourceRef) {
+        controller.destroyAudioSource(state->audioSourceRef);
+    }
+    if (state->regionSequenceRef) {
+        controller.destroyRegionSequence(state->regionSequenceRef);
+    }
+    controller.endEditing();
+
+    // Запись оставляем на месте, но пустой: индексы дорожек не должны съезжать
+    state->playbackRegionRef = nullptr;
+    state->audioModificationRef = nullptr;
+    state->audioSourceRef = nullptr;
+    state->regionSequenceRef = nullptr;
+    state->track = AraHostTrack {};
+}
+
+int AraHostDocument::trackCount() const
+{
+    return int(impl_->tracks.size());
+}
+
+void AraHostDocument::bindInstance(int trackIndex, const void* plugInExtensionInstance)
+{
+    Impl::TrackEntry* state = impl_->entry(trackIndex);
+    if (!plugInExtensionInstance || !state || !state->playbackRegionRef) {
+        return;
+    }
+    const auto* instance =
+        static_cast<const ARA::ARAPlugInExtensionInstance*>(plugInExtensionInstance);
+    // Клип уходит в роль воспроизведения — по нему плагин находит свой источник
+    if (instance->playbackRendererInterface) {
+        state->playbackRenderer = std::make_unique<ARA::Host::PlaybackRenderer>(instance);
+        state->playbackRenderer->addPlaybackRegion(state->playbackRegionRef);
+    }
+    // И в выбор редактора: так плагин показывает именно эту дорожку
+    if (instance->editorViewInterface) {
+        state->editorView = std::make_unique<ARA::Host::EditorView>(instance);
+        const ARA::ARAPlaybackRegionRef regions[] = { state->playbackRegionRef };
+        const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAViewSelection, timeRange)> selection {
+            ARA::ARASize { 1 }, regions, ARA::ARASize { 0 }, nullptr, nullptr
+        };
+        state->editorView->notifySelection(&selection);
+    }
 }
 
 void* AraHostDocument::documentControllerRef() const
@@ -378,18 +548,19 @@ bool AraHostDocument::analysisCompleted() const
     return impl_->modelUpdates.analysisCompleted;
 }
 
-int AraHostDocument::readNoteCount() const
+int AraHostDocument::readNoteCount(int trackIndex) const
 {
-    if (!impl_->documentController || !impl_->audioSourceRef) {
+    Impl::TrackEntry* state = impl_->entry(trackIndex);
+    if (!impl_->documentController || !state || !state->audioSourceRef) {
         return 0;
     }
     ARA::Host::DocumentController& controller = *impl_->documentController;
-    if (!controller.isAudioSourceContentAvailable(impl_->audioSourceRef,
+    if (!controller.isAudioSourceContentAvailable(state->audioSourceRef,
                                                   ARA::kARAContentTypeNotes)) {
         return 0;
     }
     const ARA::ARAContentReaderRef reader = controller.createAudioSourceContentReader(
-        impl_->audioSourceRef, ARA::kARAContentTypeNotes, nullptr);
+        state->audioSourceRef, ARA::kARAContentTypeNotes, nullptr);
     if (!reader) {
         return 0;
     }
@@ -401,43 +572,35 @@ int AraHostDocument::readNoteCount() const
 void AraHostDocument::close()
 {
     if (!impl_->open || !impl_->documentController) {
+        // Фабрику могли уже удержать, а документ — не подняться: счётчик
+        // всё равно надо вернуть, иначе фабрика не деинициализируется
+        if (impl_->factory) {
+            releaseFactory(impl_->factory);
+            impl_->factory = nullptr;
+        }
         impl_->open = false;
         return;
     }
     ARA::Host::DocumentController& controller = *impl_->documentController;
 
-    if (impl_->audioSourceRef) {
-        controller.enableAudioSourceSamplesAccess(impl_->audioSourceRef, false);
-    }
     // Порядок разрушения задан ARA: сверху вниз по модели, потом контроллер
+    for (int i = int(impl_->tracks.size()) - 1; i >= 0; --i) {
+        removeTrack(i);
+    }
+    impl_->tracks.clear();
+
     controller.beginEditing();
-    if (impl_->playbackRegionRef) {
-        controller.destroyPlaybackRegion(impl_->playbackRegionRef);
-    }
-    if (impl_->audioModificationRef) {
-        controller.destroyAudioModification(impl_->audioModificationRef);
-    }
-    if (impl_->audioSourceRef) {
-        controller.destroyAudioSource(impl_->audioSourceRef);
-    }
-    if (impl_->regionSequenceRef) {
-        controller.destroyRegionSequence(impl_->regionSequenceRef);
-    }
     if (impl_->musicalContextRef) {
         controller.destroyMusicalContext(impl_->musicalContextRef);
     }
     controller.endEditing();
     controller.destroyDocumentController();
 
-    impl_->playbackRegionRef = nullptr;
-    impl_->audioModificationRef = nullptr;
-    impl_->audioSourceRef = nullptr;
-    impl_->regionSequenceRef = nullptr;
     impl_->musicalContextRef = nullptr;
     impl_->documentController.reset();
     impl_->hostInstance.reset();
     if (impl_->factory) {
-        impl_->factory->uninitializeARA();
+        releaseFactory(impl_->factory);
         impl_->factory = nullptr;
     }
     impl_->open = false;

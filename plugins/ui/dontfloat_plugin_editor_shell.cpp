@@ -108,6 +108,13 @@ DontfloatPluginEditorShell::DontfloatPluginEditorShell(
     contentScroll_->setWidget(contentWidget_);
     contentScroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     contentScroll_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    // Своего фона у области прокрутки нет: иначе по краям окна светились
+    // серые полосы вместо интерфейса
+    contentScroll_->setStyleSheet(QStringLiteral(
+        "QScrollArea#dontfloatPluginContentScroll { background: transparent; border: none; }"
+        "QScrollArea#dontfloatPluginContentScroll > QWidget > QWidget { background: transparent; }"));
+    contentScroll_->viewport()->setAutoFillBackground(false);
+    contentScroll_->setMinimumSize(0, 0);
     root->addWidget(contentScroll_, 1);
 
     statusBar_ = new QLabel(this);

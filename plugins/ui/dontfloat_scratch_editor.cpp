@@ -102,7 +102,7 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
     root->setSpacing(0);
 
     waveform_ = new WaveformView(this);
-    waveform_->setMinimumHeight(140);
+    waveform_->setMinimumHeight(90);
     waveform_->setBeatsPerBar(beatsPerBar_);
     root->addWidget(waveform_, 1);
 

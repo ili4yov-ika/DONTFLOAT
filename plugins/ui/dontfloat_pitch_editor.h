@@ -148,6 +148,10 @@ private:
     const void* araBinding_ = nullptr;
     /** Ревизия модели ARA, на которой мы последний раз обновлялись. */
     std::uint64_t appliedAraRevision_ = 0;
+    /** Звук из ARA уже отдан сессии — второй раз не копируем. */
+    bool araAudioApplied_ = false;
+    /** Шла ли в прошлый опрос разборка: по ней прячем плашку прогресса. */
+    bool araAnalysisWasRunning_ = false;
 #endif
 
     QString primaryKey_;

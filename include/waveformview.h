@@ -18,6 +18,7 @@
 #include <QtMultimedia/QAudioBuffer>
 #include "bpmanalyzer.h"
 #include "waveformcolors.h"
+#include "waveformpeaks.h"
 #include "timeutils.h"
 #include "beatvisualizer.h"
 #include "markerengine.h"
@@ -191,6 +192,14 @@ protected:
 
 private:
     void drawWaveform(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
+    /**
+     * Пирамида пиков для канала: строится один раз на буфер и переживает
+     * перерисовки. Без неё каждый пиксель волны пересчитывался по сырым
+     * сэмплам с прореживанием (и терял короткие всплески).
+     */
+    const WaveformPeaks* peaksFor(const QVector<float>& samples);
+    /** Аудио сменилось — пики пересчитываем заново. */
+    void invalidateWavePeaks();
     void drawWarpedWaveformPreview(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
     bool needsWarpedWaveformPreview() const;
     void drawWaveformChannel(QPainter& painter, const QVector<float>& samples, const QRectF& rect);
@@ -228,6 +237,14 @@ private:
     // Методы для обработки в реальном времени (фоновый поток, UI не блокируется)
     void scheduleRealtimeProcess(); // Пометить превью устаревшим и запустить фоновый пересчёт
     void startRealtimeStretchJob(); // Запуск фоновой задачи, если она не выполняется
+
+    /** Кеш пиков одного канала: к каким сэмплам он относится. */
+    struct ChannelPeaks {
+        const float* source = nullptr;
+        qint64 size = 0;
+        WaveformPeaks peaks;
+    };
+    QVector<ChannelPeaks> wavePeaks;
 
     QVector<QVector<float>> audioData;        // Текущие данные для визуализации
     QVector<QVector<float>> originalAudioData; // Исходные данные для пересчета в реальном времени
