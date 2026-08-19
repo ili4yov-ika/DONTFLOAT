@@ -15,6 +15,7 @@
 #include <QShortcut>
 #include <QtConcurrent/QtConcurrent>
 #include <QVBoxLayout>
+#include <cstdint>
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -506,8 +507,10 @@ void DontfloatScratchEditor::startAutoAnalysis()
         return;  // содержимое не менялось
     }
 
-    // Тот же материал на новой позиции — клип переехал в DAW: метки едут с ним
-    qint64 shift = 0;
+    // Тот же материал на новой позиции — клип переехал в DAW: метки едут с ним.
+    // Тип именно std::int64_t: ядро плагина живёт без Qt, а на Linux (LP64)
+    // int64_t — это long, qint64 — long long, и qint64* туда не приводится
+    std::int64_t shift = 0;
     if (Dontfloat::PluginCore::detectContentShift(analyzedContent_, print, &shift)) {
         shiftAnnotations(shift);
         analyzedContent_ = print;
