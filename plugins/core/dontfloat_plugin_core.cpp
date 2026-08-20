@@ -318,37 +318,61 @@ TrackToolStatus TrackToolSession::applyCaptureBlock(const HostCaptureQueue::Bloc
 void TrackToolSession::setRenderedOutput(const TrackAudioBuffer& buffer,
                                          std::int64_t timelineStartFrame)
 {
-    renderedOutput_ = buffer;
-    if (renderedOutput_.mono.empty() && !renderedOutput_.left.empty()) {
-        rebuildMonoFromChannels(renderedOutput_);
+    // Готовим новый буфер в стороне и публикуем одним указателем: аудиопоток
+    // либо видит старый результат целиком, либо новый — но никогда не читает
+    // вектор, который прямо сейчас переезжает
+    auto next = std::make_shared<TrackAudioBuffer>(buffer);
+    if (next->mono.empty() && !next->left.empty()) {
+        rebuildMonoFromChannels(*next);
     }
-    renderedOutputStart_ = std::max<std::int64_t>(0, timelineStartFrame);
+    renderedOutputStart_.store(std::max<std::int64_t>(0, timelineStartFrame),
+                               std::memory_order_release);
+    // Прошлый держим у себя: иначе последнюю ссылку мог бы отпустить
+    // аудиопоток, и освобождение памяти случилось бы в реальном времени
+    retiredRenderedOutput_ = std::atomic_load(&renderedOutput_);
+    std::atomic_store(&renderedOutput_, std::shared_ptr<const TrackAudioBuffer>(next));
 }
 
 void TrackToolSession::clearRenderedOutput()
 {
-    renderedOutput_ = {};
-    renderedOutputStart_ = 0;
+    retiredRenderedOutput_ = std::atomic_load(&renderedOutput_);
+    std::atomic_store(&renderedOutput_, std::shared_ptr<const TrackAudioBuffer>());
+    renderedOutputStart_.store(0, std::memory_order_release);
+}
+
+bool TrackToolSession::hasRenderedOutput() const
+{
+    const auto rendered = std::atomic_load(&renderedOutput_);
+    return rendered && !rendered->mono.empty();
+}
+
+std::shared_ptr<const TrackAudioBuffer> TrackToolSession::renderedOutput() const
+{
+    return std::atomic_load(&renderedOutput_);
 }
 
 bool TrackToolSession::readRenderedOutput(float* const* outputs, int channelCount,
                                           int frameCount, std::int64_t timelineFrame) const
 {
-    if (!outputs || channelCount <= 0 || frameCount <= 0 || renderedOutput_.mono.empty()) {
+    // Аудиопоток. Берём указатель себе: пока он у нас, интерфейс может сколько
+    // угодно публиковать новый результат — наш буфер под нами не переедет
+    const std::shared_ptr<const TrackAudioBuffer> rendered = std::atomic_load(&renderedOutput_);
+    if (!outputs || channelCount <= 0 || frameCount <= 0 || !rendered || rendered->mono.empty()) {
         return false;
     }
 
-    const std::int64_t start = (timelineFrame >= 0 ? timelineFrame : 0) - renderedOutputStart_;
-    const std::int64_t total = static_cast<std::int64_t>(renderedOutput_.mono.size());
+    const std::int64_t start = (timelineFrame >= 0 ? timelineFrame : 0)
+        - renderedOutputStart_.load(std::memory_order_acquire);
+    const std::int64_t total = static_cast<std::int64_t>(rendered->mono.size());
     if (start + frameCount <= 0 || start >= total) {
         return false;  // блок не пересекается с результатом
     }
 
     // Левый/правый: если результат моно, оба канала берут его же
     const std::vector<float>& left =
-        renderedOutput_.left.empty() ? renderedOutput_.mono : renderedOutput_.left;
+        rendered->left.empty() ? rendered->mono : rendered->left;
     const std::vector<float>& right =
-        renderedOutput_.right.empty() ? left : renderedOutput_.right;
+        rendered->right.empty() ? left : rendered->right;
 
     for (int i = 0; i < frameCount; ++i) {
         const std::int64_t index = start + i;
