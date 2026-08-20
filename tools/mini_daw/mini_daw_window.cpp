@@ -536,8 +536,10 @@ void Window::buildUi()
 
     formatCombo_ = new QComboBox(topBar);
     formatCombo_->setObjectName(QStringLiteral("miniDawFormatCombo"));
-    formatCombo_->addItem(QStringLiteral("CLAP"), int(PluginFormat::Clap));
+    // VST3 первым и по умолчанию: ARA по-человечески поддерживают только
+    // VST3-хосты, поэтому проверять плагин начинают с него
     formatCombo_->addItem(QStringLiteral("VST3"), int(PluginFormat::Vst3));
+    formatCombo_->addItem(QStringLiteral("CLAP"), int(PluginFormat::Clap));
     formatCombo_->addItem(QStringLiteral("LV2"), int(PluginFormat::Lv2));
     formatCombo_->setFixedWidth(kFormatComboWidth);
     formatCombo_->setFixedHeight(kButtonSize);
@@ -1290,13 +1292,7 @@ int Window::clipAt(int trackIndex, qint64 frame) const
     if (trackIndex < 0 || trackIndex >= kTrackCount) {
         return -1;
     }
-    const QVector<Clip>& clips = tracks_[trackIndex].clips;
-    for (int i = 0; i < clips.size(); ++i) {
-        if (frame >= clips[i].timelineStart && frame < clips[i].timelineEnd()) {
-            return i;
-        }
-    }
-    return -1;
+    return MiniDaw::clipAt(tracks_[trackIndex].clips, frame);
 }
 
 void Window::renderTimeline(int trackIndex)
@@ -1305,51 +1301,9 @@ void Window::renderTimeline(int trackIndex)
         return;
     }
     TrackState& state = tracks_[trackIndex];
-    state.timelineLeft.clear();
-    state.timelineRight.clear();
-    if (state.clips.isEmpty() || state.sourceLeft.isEmpty()) {
-        return;
-    }
-
-    qint64 total = 0;
-    for (const Clip& clip : state.clips) {
-        total = std::max(total, clip.timelineEnd());
-    }
-    if (total <= 0) {
-        return;
-    }
-    state.timelineLeft.assign(int(total), 0.0f);
-    state.timelineRight.assign(int(total), 0.0f);
-
-    const int sourceFrames = int(std::min(state.sourceLeft.size(), state.sourceRight.size()));
-    for (const Clip& clip : state.clips) {
-        const qint64 length = clip.timelineLength();
-        for (qint64 i = 0; i < length; ++i) {
-            const qint64 outIndex = clip.timelineStart + i;
-            if (outIndex < 0 || outIndex >= total) {
-                continue;
-            }
-            // Растяжение — линейная интерполяция по исходному материалу
-            const double sourcePos = double(clip.sourceStart) + double(i) / clip.stretch;
-            const int base = int(sourcePos);
-            if (base < 0 || base >= sourceFrames) {
-                continue;
-            }
-            const int next = std::min(base + 1, sourceFrames - 1);
-            const float t = float(sourcePos - double(base));
-            state.timelineLeft[int(outIndex)] =
-                state.sourceLeft[base] * (1.0f - t) + state.sourceLeft[next] * t;
-            state.timelineRight[int(outIndex)] =
-                state.sourceRight[base] * (1.0f - t) + state.sourceRight[next] * t;
-        }
-    }
-
-    QVector<qint64> boundaries;
-    for (const Clip& clip : state.clips) {
-        boundaries.append(clip.timelineStart);
-        boundaries.append(clip.timelineEnd());
-    }
-    playbackBar_->setClipBoundaries(trackIndex, boundaries);
+    MiniDaw::renderTimeline(state.clips, state.sourceLeft, state.sourceRight,
+                            state.timelineLeft, state.timelineRight);
+    playbackBar_->setClipBoundaries(trackIndex, MiniDaw::clipBoundaries(state.clips));
 }
 
 void Window::applyClipEdit(const QString& statusText)
@@ -1372,12 +1326,13 @@ void Window::nudgeClip(int seconds)
 void Window::onClipMoveRequested(qint64 deltaFrames)
 {
     TrackState& state = track();
-    if (state.clips.isEmpty() || deltaFrames == 0) {
+    if (state.clips.isEmpty()) {
         return;
     }
     state.selectedClip = std::clamp(state.selectedClip, 0, int(state.clips.size()) - 1);
-    Clip& clip = state.clips[state.selectedClip];
-    clip.timelineStart = std::max<qint64>(0, clip.timelineStart + deltaFrames);
+    if (!MiniDaw::moveClip(state.clips, state.selectedClip, deltaFrames)) {
+        return;
+    }
     applyClipEdit(tr("Clip moved — re-streaming through the plugin..."));
 }
 
@@ -1388,71 +1343,32 @@ void Window::splitClipAtPlayhead()
         return;
     }
     const qint64 position = playbackBar_->position();
-    const int index = clipAt(activeTrack_, position);
-    if (index < 0) {
+    if (MiniDaw::clipAt(state.clips, position) < 0) {
         showPluginMessage(tr("No clip under the cursor"), false);
         return;
     }
-
-    constexpr qint64 kMinClipFrames = 256;
-    Clip& clip = state.clips[index];
-    const qint64 offsetInClip = position - clip.timelineStart;
-    if (offsetInClip < kMinClipFrames || clip.timelineLength() - offsetInClip < kMinClipFrames) {
+    const int tail = MiniDaw::splitClipAt(state.clips, position);
+    if (tail < 0) {
         showPluginMessage(tr("The cut is too close to the clip edge"), false);
         return;
     }
-
-    // Правая половина начинается там, где закончилась левая — и по дорожке,
-    // и по исходному материалу (с учётом растяжения)
-    const qint64 sourceOffset = qint64(double(offsetInClip) / clip.stretch);
-    Clip tail = clip;
-    tail.timelineStart = position;
-    tail.sourceStart = clip.sourceStart + sourceOffset;
-    tail.sourceLength = clip.sourceLength - sourceOffset;
-    clip.sourceLength = sourceOffset;
-    state.clips.insert(index + 1, tail);
-    state.selectedClip = index + 1;
-
+    state.selectedClip = tail;
     applyClipEdit(tr("Clip split — re-streaming through the plugin..."));
 }
 
 void Window::trimSelectedClip(bool startEdge, qint64 deltaFrames)
 {
     TrackState& state = track();
-    if (state.clips.isEmpty() || deltaFrames == 0) {
+    if (state.clips.isEmpty()) {
         return;
     }
     state.selectedClip = std::clamp(state.selectedClip, 0, int(state.clips.size()) - 1);
-    Clip& clip = state.clips[state.selectedClip];
-    constexpr qint64 kMinClipFrames = 256;
     const qint64 sourceFrames =
         qint64(std::min(state.sourceLeft.size(), state.sourceRight.size()));
-
-    if (startEdge) {
-        // Левый край: двигаем и позицию на дорожке, и точку в материале
-        const qint64 sourceDelta = qint64(double(deltaFrames) / clip.stretch);
-        const qint64 newSourceStart =
-            std::clamp<qint64>(clip.sourceStart + sourceDelta, 0, sourceFrames - kMinClipFrames);
-        const qint64 applied = newSourceStart - clip.sourceStart;
-        if (applied == 0 || clip.sourceLength - applied < kMinClipFrames) {
-            return;
-        }
-        clip.sourceStart = newSourceStart;
-        clip.sourceLength -= applied;
-        clip.timelineStart =
-            std::max<qint64>(0, clip.timelineStart + qint64(double(applied) * clip.stretch));
-    } else {
-        // Правый край: меняем только длину куска материала
-        const qint64 sourceDelta = qint64(double(deltaFrames) / clip.stretch);
-        const qint64 maxLength = sourceFrames - clip.sourceStart;
-        const qint64 newLength =
-            std::clamp<qint64>(clip.sourceLength + sourceDelta, kMinClipFrames, maxLength);
-        if (newLength == clip.sourceLength) {
-            return;
-        }
-        clip.sourceLength = newLength;
+    if (!MiniDaw::trimClip(state.clips, state.selectedClip, startEdge, deltaFrames,
+                           sourceFrames)) {
+        return;
     }
-
     applyClipEdit(startEdge ? tr("Clip start trimmed — re-streaming through the plugin...")
                             : tr("Clip end trimmed — re-streaming through the plugin..."));
 }
@@ -1460,18 +1376,15 @@ void Window::trimSelectedClip(bool startEdge, qint64 deltaFrames)
 void Window::stretchSelectedClip(double factor)
 {
     TrackState& state = track();
-    if (state.clips.isEmpty() || factor <= 0.0) {
+    if (state.clips.isEmpty()) {
         return;
     }
     state.selectedClip = std::clamp(state.selectedClip, 0, int(state.clips.size()) - 1);
-    Clip& clip = state.clips[state.selectedClip];
-    const double stretch = std::clamp(clip.stretch * factor, 0.25, 4.0);
-    if (std::fabs(stretch - clip.stretch) < 1e-6) {
+    if (!MiniDaw::stretchClip(state.clips, state.selectedClip, factor)) {
         return;
     }
-    clip.stretch = stretch;
     applyClipEdit(tr("Clip stretched x%1 — re-streaming through the plugin...")
-                      .arg(stretch, 0, 'f', 2));
+                      .arg(state.clips[state.selectedClip].stretch, 0, 'f', 2));
 }
 
 void Window::tickPosition()

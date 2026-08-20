@@ -37,19 +37,21 @@ void feedClip(TrackToolSession& session, const std::vector<float>& clip, qint64 
     for (std::size_t pos = 0; pos < clip.size(); pos += kBlockSize) {
         const int n = int(std::min<std::size_t>(kBlockSize, clip.size() - pos));
         const float* channels[2] = { clip.data() + pos, clip.data() + pos };
+        // writeHostFrames только кладёт блок в очередь (её зовут из аудиопотока),
+        // а в общий буфер он попадает при разборе — как и в живом плагине
         session.writeHostFrames(channels, 2, n, timelineStart + qint64(pos));
+        session.drainHostCapture();
     }
 }
 
-TrackToolSession makePreparedSession()
+/** Сессия больше не копируется (в ней атомики очереди) — готовим на месте. */
+void prepareSession(TrackToolSession& session)
 {
-    TrackToolSession session;
     TrackAudioInfo info;
     info.sampleRate = kSampleRate;
     info.channelCount = 2;
     info.frameCount = kBlockSize;
     session.prepare(info);
-    return session;
 }
 
 } // namespace
@@ -70,7 +72,8 @@ private slots:
 // Обработанный звук уходит в выход плагина: DAW слышит правки, а не исходник
 void PluginContentShiftTest::testRenderedOutputReplacesInput()
 {
-    TrackToolSession session = makePreparedSession();
+    TrackToolSession session;
+    prepareSession(session);
     const std::vector<float> clip = makeClip(kSampleRate / 4);
     feedClip(session, clip, 0);
 
@@ -104,7 +107,8 @@ void PluginContentShiftTest::testRenderedOutputReplacesInput()
 // Вне диапазона результата выход не трогаем — играет то, что дала DAW
 void PluginContentShiftTest::testRenderedOutputOnlyOnItsRange()
 {
-    TrackToolSession session = makePreparedSession();
+    TrackToolSession session;
+    prepareSession(session);
     Dontfloat::PluginCore::TrackAudioBuffer rendered;
     rendered.sampleRate = kSampleRate;
     rendered.channelCount = 1;
@@ -130,7 +134,8 @@ void PluginContentShiftTest::testRenderedOutputOnlyOnItsRange()
 // Как в жизни: та же сессия, второй проход DAW с клипом на новой позиции
 void PluginContentShiftTest::testMovedClipInSameSession()
 {
-    TrackToolSession session = makePreparedSession();
+    TrackToolSession session;
+    prepareSession(session);
     const std::vector<float> clip = makeClip(kSampleRate / 2);
 
     feedClip(session, clip, kSampleRate);
@@ -151,7 +156,8 @@ void PluginContentShiftTest::testMovedClipInSameSession()
 // Блоки ложатся по позиции таймлайна: до клипа — тишина
 void PluginContentShiftTest::testWriteAtTimelinePosition()
 {
-    TrackToolSession session = makePreparedSession();
+    TrackToolSession session;
+    prepareSession(session);
     const std::vector<float> clip = makeClip(kSampleRate / 2);  // 0.5 с
     const qint64 offset = kSampleRate;                          // клип начинается с 1 с
 
@@ -172,12 +178,14 @@ void PluginContentShiftTest::testMovedClipIsDetectedAsShift()
 {
     const std::vector<float> clip = makeClip(kSampleRate / 2);
 
-    TrackToolSession first = makePreparedSession();
+    TrackToolSession first;
+    prepareSession(first);
     feedClip(first, clip, kSampleRate);
     const auto before = computeContentFingerprint(first.audioBuffer());
 
     // Новый проход DAW с другой позицией клипа: захват начинается заново
-    TrackToolSession second = makePreparedSession();
+    TrackToolSession second;
+    prepareSession(second);
     feedClip(second, clip, 3 * kSampleRate);
     const auto after = computeContentFingerprint(second.audioBuffer());
 
@@ -195,11 +203,13 @@ void PluginContentShiftTest::testMovedClipIsDetectedAsShift()
 // Другой материал сдвигом не считается: нужен полный анализ
 void PluginContentShiftTest::testDifferentContentIsNotAShift()
 {
-    TrackToolSession first = makePreparedSession();
+    TrackToolSession first;
+    prepareSession(first);
     feedClip(first, makeClip(kSampleRate / 2), kSampleRate);
     const auto before = computeContentFingerprint(first.audioBuffer());
 
-    TrackToolSession second = makePreparedSession();
+    TrackToolSession second;
+    prepareSession(second);
     std::vector<float> other = makeClip(kSampleRate / 2);
     for (float& sample : other) {
         sample = -sample * 0.5f;  // тот же размер, другое содержимое

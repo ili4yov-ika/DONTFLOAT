@@ -12,6 +12,7 @@
 #include <memory>
 #include <vector>
 
+#include "mini_daw_clip_model.h"
 #include "mini_daw_player.h"
 #include "mini_daw_plugin_host.h"
 
@@ -158,21 +159,6 @@ private slots:
 
 private:
     /**
-     * Клип на дорожке: кусок исходного файла со своей позицией, длиной и
-     * коэффициентом растяжения. Так мини-DAW умеет то же, что настоящая DAW —
-     * резать, двигать, укорачивать и растягивать, — а плагин видит результат.
-     */
-    struct Clip {
-        qint64 timelineStart = 0;  ///< позиция на дорожке (кадры)
-        qint64 sourceStart = 0;    ///< откуда берётся материал
-        qint64 sourceLength = 0;   ///< сколько исходных кадров занимает
-        double stretch = 1.0;      ///< >1 — растянут во времени (звучит дольше)
-
-        qint64 timelineLength() const { return qint64(double(sourceLength) * stretch); }
-        qint64 timelineEnd() const { return timelineStart + timelineLength(); }
-    };
-
-    /**
      * Одна дорожка мини-DAW со своим файлом, клипами и **своим экземпляром
      * плагина**. Два экземпляра в одном процессе — это и есть та ситуация,
      * ради которой в плагине сделана общая доска нот: соседняя дорожка видит
@@ -191,7 +177,7 @@ private:
         QVector<Clip> clips;
         int selectedClip = 0;
         int sampleRate = 44100;
-        PluginFormat format = PluginFormat::Clap;
+        PluginFormat format = PluginFormat::Vst3;
         PluginProduct product = PluginProduct::Full;
         std::unique_ptr<PluginHost> host;
         QWidget* surface = nullptr;   ///< нативное окно-родитель для редактора

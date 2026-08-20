@@ -48,6 +48,117 @@ TrackAudioInfo audioInfoFromBuffer(const TrackAudioBuffer& buffer)
 
 } // namespace
 
+// ============================================================================
+// HostCaptureQueue — мост между аудиопотоком и потоком интерфейса
+// ============================================================================
+
+HostCaptureQueue::HostCaptureQueue()
+    : samples_(kSampleCapacity, 0.0f)
+    , headers_(kHeaderCapacity)
+{
+}
+
+std::size_t HostCaptureQueue::freeSamples(std::size_t writePos, std::size_t readPos) const noexcept
+{
+    // Одну ячейку держим свободной, иначе полное кольцо неотличимо от пустого
+    const std::size_t used = (writePos + kSampleCapacity - readPos) % kSampleCapacity;
+    return kSampleCapacity - used - 1u;
+}
+
+bool HostCaptureQueue::push(const float* const* inputs, int channelCount, int frameCount,
+                            std::int64_t timelineFrame) noexcept
+{
+    if (!inputs || !inputs[0] || channelCount <= 0 || frameCount <= 0) {
+        return false;
+    }
+    // Больше двух каналов захват не хранит — буфер сессии стерео
+    const int channels = channelCount > 2 ? 2 : channelCount;
+    const std::size_t needed = static_cast<std::size_t>(frameCount) * static_cast<std::size_t>(channels);
+
+    const std::size_t headerWrite = headerWrite_.load(std::memory_order_relaxed);
+    const std::size_t headerNext = (headerWrite + 1u) % kHeaderCapacity;
+    if (headerNext == headerRead_.load(std::memory_order_acquire)) {
+        overflow_.store(true, std::memory_order_relaxed);
+        return false;  // очередь заголовков полна
+    }
+
+    const std::size_t sampleWrite = sampleWrite_.load(std::memory_order_relaxed);
+    if (needed > freeSamples(sampleWrite, sampleRead_.load(std::memory_order_acquire))) {
+        overflow_.store(true, std::memory_order_relaxed);
+        return false;  // не хватает места под сэмплы
+    }
+
+    // Каналы кладём чередуя: так блок занимает один непрерывный кусок кольца
+    std::size_t pos = sampleWrite;
+    for (int i = 0; i < frameCount; ++i) {
+        for (int ch = 0; ch < channels; ++ch) {
+            const float* src = inputs[ch];
+            samples_[pos] = src ? src[i] : 0.0f;
+            pos = (pos + 1u) % kSampleCapacity;
+        }
+    }
+
+    Header& header = headers_[headerWrite];
+    header.timelineFrame = timelineFrame;
+    header.channelCount = channels;
+    header.frameCount = frameCount;
+    header.sampleOffset = sampleWrite;
+
+    // Сначала двигаем сэмплы, потом публикуем заголовок: читатель, увидев
+    // заголовок, обязан увидеть и сэмплы под ним
+    sampleWrite_.store(pos, std::memory_order_release);
+    headerWrite_.store(headerNext, std::memory_order_release);
+    return true;
+}
+
+bool HostCaptureQueue::pop(Block& out)
+{
+    const std::size_t headerRead = headerRead_.load(std::memory_order_relaxed);
+    if (headerRead == headerWrite_.load(std::memory_order_acquire)) {
+        return false;
+    }
+
+    const Header header = headers_[headerRead];
+    out.timelineFrame = header.timelineFrame;
+    out.channelCount = header.channelCount;
+    out.frameCount = header.frameCount;
+
+    const std::size_t frames = static_cast<std::size_t>(header.frameCount);
+    out.left.resize(frames);
+    if (header.channelCount > 1) {
+        out.right.resize(frames);
+    } else {
+        out.right.clear();
+    }
+
+    std::size_t pos = static_cast<std::size_t>(header.sampleOffset);
+    for (std::size_t i = 0; i < frames; ++i) {
+        out.left[i] = samples_[pos];
+        pos = (pos + 1u) % kSampleCapacity;
+        if (header.channelCount > 1) {
+            out.right[i] = samples_[pos];
+            pos = (pos + 1u) % kSampleCapacity;
+        }
+    }
+
+    sampleRead_.store(pos, std::memory_order_release);
+    headerRead_.store((headerRead + 1u) % kHeaderCapacity, std::memory_order_release);
+    return true;
+}
+
+bool HostCaptureQueue::takeOverflow() noexcept
+{
+    return overflow_.exchange(false, std::memory_order_relaxed);
+}
+
+void HostCaptureQueue::clear() noexcept
+{
+    // Читатель двигает свои индексы к писательским: всё непрочитанное теряется
+    headerRead_.store(headerWrite_.load(std::memory_order_acquire), std::memory_order_release);
+    sampleRead_.store(sampleWrite_.load(std::memory_order_acquire), std::memory_order_release);
+    overflow_.store(false, std::memory_order_relaxed);
+}
+
 void TrackToolSession::reset()
 {
     audioInfo_ = {};
@@ -110,15 +221,44 @@ TrackToolStatus TrackToolSession::writeHostFrames(const float* const* inputs,
                                                   int frameCount,
                                                   std::int64_t timelineFrame)
 {
+    // Вызывается из process(), то есть из аудиопотока: здесь нельзя ни
+    // выделять память, ни трогать общий буфер — им владеет поток интерфейса.
+    // Блок просто кладётся в очередь, разбирает её drainHostCapture().
     if (!inputs || channelCount <= 0 || frameCount <= 0) {
         return TrackToolStatus::InvalidAudioInfo;
     }
+    capture_.push(inputs, channelCount, frameCount, timelineFrame);
+    return TrackToolStatus::Ok;
+}
 
-    const float* left = inputs[0];
-    const float* right = channelCount > 1 ? inputs[1] : nullptr;
-    if (!left) {
+bool TrackToolSession::drainHostCapture()
+{
+    // Только поток интерфейса. Здесь и происходит вся работа с audioBuffer_:
+    // размещение по таймлайну, сброс на новом проходе, пересчёт моно.
+    bool changed = false;
+    while (capture_.pop(captureBlock_)) {
+        applyCaptureBlock(captureBlock_);
+        changed = true;
+    }
+    return changed;
+}
+
+bool TrackToolSession::captureOverflowed()
+{
+    return capture_.takeOverflow();
+}
+
+TrackToolStatus TrackToolSession::applyCaptureBlock(const HostCaptureQueue::Block& block)
+{
+    const int channelCount = block.channelCount;
+    const int frameCount = block.frameCount;
+    const std::int64_t timelineFrame = block.timelineFrame;
+    if (channelCount <= 0 || frameCount <= 0 || block.left.empty()) {
         return TrackToolStatus::InvalidAudioInfo;
     }
+
+    const float* left = block.left.data();
+    const float* right = block.right.empty() ? nullptr : block.right.data();
 
     // Host-captured audio must use the sample rate the plugin was activated with,
     // not the TrackAudioBuffer default (44100). Otherwise analysis (BPM/pitch)
@@ -228,6 +368,8 @@ bool TrackToolSession::readRenderedOutput(float* const* outputs, int channelCoun
 
 void TrackToolSession::clearHostCapture()
 {
+    // Незабранные блоки тоже выбрасываем: иначе они всплывут после сброса
+    capture_.clear();
     audioBuffer_ = {};
     pitchAnalysis_ = {};
     clearRenderedOutput();

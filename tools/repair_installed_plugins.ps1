@@ -1,29 +1,54 @@
-# Repairs installed DONTFLOAT DAW plugins:
-# - packs VST3 as Steinberg bundles with Qt runtime next to the .impl.dll
-# - deploys Qt next to CLAP/LV2 impl modules (stub hosts load via LoadLibraryEx)
-# - requires platforms\qwindows.dll (plugin code pumps Qt via Win32 timer)
+﻿# Repairs DONTFLOAT plugins inside the *build tree*, then installs them.
+#
+# Use this when there is no installer payload yet: it stages what
+# build_windows_installer.bat would produce — VST3 packed as Steinberg bundles,
+# Qt (including platforms\qwindows.dll) deployed next to every impl module —
+# and hands the result to install_plugins_windows.ps1, which owns the actual
+# install: replacing bundles, clearing stale copies and resetting DAW caches.
+#
+# Normal path is the installer payload:
+#   tools\build_windows_installer.bat
+#   powershell -File tools\install_plugins_windows.ps1
+#
 # Self-elevates via UAC when not already running as Administrator.
 
 $ErrorActionPreference = "Stop"
-$b = "d:\Devs\C++\DONTFLOAT_exp\build\Desktop_Qt_6_9_3_MSVC2022_64bit-Release"
-$wdq = "C:\Qt\6.9.3\msvc2022_64\bin\windeployqt.exe"
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$build = Join-Path $repoRoot "build\Desktop_Qt_6_9_3_MSVC2022_64bit-Release"
+if ($env:DONTFLOAT_BUILD_DIR) { $build = $env:DONTFLOAT_BUILD_DIR }
+
+function Find-WinDeployQt {
+    foreach ($candidate in @(
+        "C:\Qt\6.9.3\msvc2022_64\bin\windeployqt.exe",
+        "C:\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe"
+    )) {
+        if (Test-Path $candidate) { return $candidate }
+    }
+    $onPath = Get-Command windeployqt -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+    throw "windeployqt не найден — укажите Qt в PATH или поправьте список путей"
+}
 
 function Test-Admin {
-    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $p = New-Object Security.Principal.WindowsPrincipal($id)
-    return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
 if (-not (Test-Admin)) {
-    Write-Host "Requesting Administrator privileges (UAC)..."
-    $args = @(
-        '-NoProfile'
-        '-ExecutionPolicy', 'Bypass'
-        '-File', $PSCommandPath
-    )
-    Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -ArgumentList $args
-    exit $LASTEXITCODE
+    Write-Host "Запрашиваю права администратора (UAC)..."
+    $childArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    # -PassThru обязателен: Start-Process не выставляет $LASTEXITCODE, и без него
+    # скрипт возвращал бы ноль даже после провалившегося прохода
+    $child = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -ArgumentList $childArgs
+    exit $child.ExitCode
 }
+
+if (-not (Test-Path $build)) {
+    throw "Каталог сборки не найден: $build`nЗадайте DONTFLOAT_BUILD_DIR или соберите конфигурацию Release."
+}
+$wdq = Find-WinDeployQt
 
 function Deploy-Qt($dir, $binary) {
     if (-not (Test-Path $binary)) { throw "Missing $binary" }
@@ -36,93 +61,44 @@ function Deploy-Qt($dir, $binary) {
     }
 }
 
-# Ensure VST3 bundles exist: stub (.vst3) + impl (.impl.dll) + Qt beside impl
+# VST3: stub (.vst3) + impl (.impl.dll) + Qt beside impl
 foreach ($n in @("DONTFLOAT", "DONTFLOAT Scratch", "DONTFLOAT Pitcher")) {
-    $arch = "$b\plugins\vst3\$n.vst3\Contents\x86_64-win"
+    $arch = "$build\plugins\vst3\$n.vst3\Contents\x86_64-win"
     New-Item -ItemType Directory -Force -Path $arch | Out-Null
-    Copy-Item (Join-Path "$b\Release" "$n.vst3") (Join-Path $arch "$n.vst3") -Force
-    Copy-Item (Join-Path "$b\Release" "$n.vst3.impl.dll") (Join-Path $arch "$n.vst3.impl.dll") -Force
+    Copy-Item (Join-Path "$build\Release" "$n.vst3") (Join-Path $arch "$n.vst3") -Force
+    Copy-Item (Join-Path "$build\Release" "$n.vst3.impl.dll") (Join-Path $arch "$n.vst3.impl.dll") -Force
     Remove-Item (Join-Path $arch "$n.impl.dll") -Force -ErrorAction SilentlyContinue
     Deploy-Qt $arch (Join-Path $arch "$n.vst3.impl.dll")
+    Write-Host "VST3 staged: $n"
 }
 
-# CLAP: stub .clap + impl.dll + Qt
-$clapStage = "$b\plugin_stage\clap"
+# CLAP: stub .clap + impl.dll + Qt, разложенные как в payload установщика
+$clapStage = "$build\plugin_stage\lib\clap"
+if (Test-Path $clapStage) { Remove-Item $clapStage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $clapStage | Out-Null
 foreach ($n in @("dontfloat", "dontfloat_scratch", "dontfloat_pitcher")) {
-    Copy-Item "$b\Release\$n.clap" $clapStage -Force
-    Copy-Item "$b\Release\${n}_clap.impl.dll" $clapStage -Force
+    Copy-Item "$build\Release\$n.clap" $clapStage -Force
+    Copy-Item "$build\Release\${n}_clap.impl.dll" $clapStage -Force
 }
 Deploy-Qt $clapStage "$clapStage\dontfloat_clap.impl.dll"
+Write-Host "CLAP staged"
 
-# LV2 Qt against UI impl modules
+# LV2: Qt рядом с UI-модулем каждого бандла
 foreach ($pair in @(
-    @{ Bundle = "dontfloat.lv2"; Impl = "dontfloat_ui.impl.dll"; Stub = "dontfloat_ui.dll" },
-    @{ Bundle = "dontfloat_scratch.lv2"; Impl = "dontfloat_scratch_ui.impl.dll"; Stub = "dontfloat_scratch_ui.dll" },
-    @{ Bundle = "dontfloat_pitcher.lv2"; Impl = "dontfloat_pitcher_ui.impl.dll"; Stub = "dontfloat_pitcher_ui.dll" }
+    @{ Bundle = "dontfloat.lv2"; Impl = "dontfloat_ui.impl.dll" },
+    @{ Bundle = "dontfloat_scratch.lv2"; Impl = "dontfloat_scratch_ui.impl.dll" },
+    @{ Bundle = "dontfloat_pitcher.lv2"; Impl = "dontfloat_pitcher_ui.impl.dll" }
 )) {
-    $dir = "$b\plugins\lv2\$($pair.Bundle)"
+    $dir = "$build\plugins\lv2\$($pair.Bundle)"
     Deploy-Qt $dir "$dir\$($pair.Impl)"
+    Write-Host "LV2 staged: $($pair.Bundle)"
 }
 
-$clapDst = "$env:COMMONPROGRAMFILES\CLAP"
-$lv2Dst = "$env:COMMONPROGRAMFILES\LV2"
-$vstDst = "$env:COMMONPROGRAMFILES\VST3"
+# Собираем дерево в раскладке payload и отдаём установщику плагинов: замена
+# бандлов, снос посторонних копий и сброс кэшей DAW живут там, в одном месте
+$stage = "$build\plugin_stage"
+Copy-Item "$build\plugins\vst3" (Join-Path $stage "lib") -Recurse -Force
+Copy-Item "$build\plugins\lv2" (Join-Path $stage "lib") -Recurse -Force
 
-# CLAP install
-Get-ChildItem $clapStage | ForEach-Object {
-    $dest = Join-Path $clapDst $_.Name
-    if ($_.PSIsContainer) {
-        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
-        Copy-Item $_.FullName $dest -Recurse -Force
-    } else {
-        Copy-Item $_.FullName $dest -Force
-    }
-}
-Write-Host "CLAP stub: $(Test-Path (Join-Path $clapDst 'dontfloat.clap')) impl: $(Test-Path (Join-Path $clapDst 'dontfloat_clap.impl.dll')) Qt: $(Test-Path (Join-Path $clapDst 'Qt6Core.dll')) qwindows: $(Test-Path (Join-Path $clapDst 'platforms\qwindows.dll'))"
-
-# LV2 install (replace whole bundles)
-foreach ($n in @("dontfloat.lv2", "dontfloat_scratch.lv2", "dontfloat_pitcher.lv2")) {
-    $src = "$b\plugins\lv2\$n"
-    $dst = Join-Path $lv2Dst $n
-    if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
-    Copy-Item $src $dst -Recurse -Force
-    Write-Host "LV2 $n Qt: $(Test-Path (Join-Path $dst 'Qt6Core.dll')) qwindows: $(Test-Path (Join-Path $dst 'platforms\qwindows.dll'))"
-}
-
-# VST3 install (replace with stub+impl bundles)
-foreach ($n in @("DONTFLOAT", "DONTFLOAT Scratch", "DONTFLOAT Pitcher")) {
-    $flat = Join-Path $vstDst "$n.vst3"
-    if (Test-Path $flat -PathType Leaf) { Remove-Item $flat -Force }
-    $src = "$b\plugins\vst3\$n.vst3"
-    $dst = Join-Path $vstDst "$n.vst3"
-    if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
-    Copy-Item $src $dst -Recurse -Force
-    $qtOk = Test-Path (Join-Path $dst "Contents\x86_64-win\Qt6Core.dll")
-    $qpaOk = Test-Path (Join-Path $dst "Contents\x86_64-win\platforms\qwindows.dll")
-    $implOk = Test-Path (Join-Path $dst "Contents\x86_64-win\$n.vst3.impl.dll")
-    Write-Host "VST3 $n bundle=$([bool](Test-Path $dst -PathType Container)) impl=$implOk Qt=$qtOk qwindows=$qpaOk"
-}
-
-# Remove legacy flat / track tool leftovers
-Remove-Item -Force -ErrorAction SilentlyContinue @(
-    "$vstDst\DONTFLOAT Track Tool.vst3",
-    "$clapDst\dontfloat_track_tool.clap"
-)
-
-# Clear failed Reaper scan cache entries so next launch rescans.
-$reaper = "$env:APPDATA\REAPER"
-foreach ($ini in @(
-    "$reaper\reaper-vstplugins64.ini",
-    "$reaper\reaper-clap-win64.ini"
-)) {
-    if (-not (Test-Path $ini)) { continue }
-    $content = Get-Content $ini -Raw
-    $cleaned = $content -replace '(?m)^.*DONTFLOAT.*\r?\n', '' -replace '(?m)^\[dontfloat[^\]]*\]\r?\n(?:_[^\r\n]*\r?\n)?', ''
-    if ($cleaned -ne $content) {
-        Set-Content -Path $ini -Value $cleaned -NoNewline
-        Write-Host "Cleared DONTFLOAT entries in $(Split-Path $ini -Leaf)"
-    }
-}
-
-Write-Host "Done. Restart Reaper and rescan plugins (Clear cache / re-scan)."
+& (Join-Path $PSScriptRoot "install_plugins_windows.ps1") -Source $stage
+if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) { exit $LASTEXITCODE }

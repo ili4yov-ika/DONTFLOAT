@@ -1,6 +1,8 @@
 #ifndef DONTFLOAT_PLUGIN_CORE_H
 #define DONTFLOAT_PLUGIN_CORE_H
 
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -169,6 +171,71 @@ struct TrackPitchAnalysis {
     bool valid = false;
 };
 
+/**
+ * Очередь захвата: аудиопоток кладёт сюда блоки, поток интерфейса разгребает.
+ *
+ * Зачем: раньше `writeHostFrames` прямо из `process()` делал `resize` и
+ * `clear` на `std::vector` общего буфера, а поток интерфейса в это же время
+ * копировал оттуда сэмплы для отрисовки. Гонка на векторе ломала кучу — DAW
+ * падала с c0000374 (под отладчиком) или с обращением по чужому адресу внутри
+ * Qt (без него). Теперь общий буфер принадлежит только потоку интерфейса, а
+ * аудиопоток пишет в эту очередь: без блокировок и без выделения памяти.
+ *
+ * Один писатель и один читатель — больше и не бывает: аудиопоток у хоста один.
+ * Переполнение (интерфейс надолго завис) роняет блок и поднимает флаг, а не
+ * тормозит аудиопоток: захват — дело наживное, DAW пришлёт материал снова.
+ */
+class HostCaptureQueue {
+public:
+    HostCaptureQueue();
+
+    /** Один разобранный блок; векторы переиспользуются между вызовами pop. */
+    struct Block {
+        std::int64_t timelineFrame = -1;
+        int channelCount = 0;
+        int frameCount = 0;
+        std::vector<float> left;
+        std::vector<float> right;
+    };
+
+    /** Аудиопоток. false — блок не поместился и потерян. */
+    bool push(const float* const* inputs, int channelCount, int frameCount,
+              std::int64_t timelineFrame) noexcept;
+
+    /** Поток интерфейса. false — очередь пуста. */
+    bool pop(Block& out);
+
+    /** Были ли потери с прошлой проверки (флаг сбрасывается). */
+    bool takeOverflow() noexcept;
+
+    /** Выбрасывает всё, что не разобрано (сброс захвата). */
+    void clear() noexcept;
+
+private:
+    /** Заголовок блока; сэмплы лежат в кольце samples_ с этого смещения. */
+    struct Header {
+        std::int64_t timelineFrame;
+        std::int32_t channelCount;
+        std::int32_t frameCount;
+        std::uint64_t sampleOffset;
+    };
+
+    // Секунды стерео на 192 кГц хватает с запасом: интерфейс разгребает
+    // очередь на каждое уведомление, то есть десятки раз в секунду
+    static constexpr std::size_t kSampleCapacity = 192000u * 2u;
+    static constexpr std::size_t kHeaderCapacity = 512u;
+
+    std::size_t freeSamples(std::size_t writePos, std::size_t readPos) const noexcept;
+
+    std::vector<float> samples_;
+    std::vector<Header> headers_;
+    std::atomic<std::size_t> headerWrite_ { 0 };
+    std::atomic<std::size_t> headerRead_ { 0 };
+    std::atomic<std::size_t> sampleWrite_ { 0 };
+    std::atomic<std::size_t> sampleRead_ { 0 };
+    std::atomic<bool> overflow_ { false };
+};
+
 class TrackToolSession {
 public:
     TrackToolSession() = default;
@@ -191,6 +258,15 @@ public:
      */
     TrackToolStatus writeHostFrames(const float* const* inputs, int channelCount, int frameCount,
                                     std::int64_t timelineFrame);
+    /**
+     * Разбирает очередь захвата в общий буфер. **Только поток интерфейса.**
+     * Всё, что раньше делал writeHostFrames (resize, склейка проходов,
+     * пересчёт моно), происходит здесь: аудиопоток общий буфер не трогает.
+     * @return true, если что-то пришло — вид пора обновить.
+     */
+    bool drainHostCapture();
+    /** Были ли потери блоков с прошлой проверки (интерфейс не успевал). */
+    bool captureOverflowed();
     void clearHostCapture();
 
     /**
@@ -230,12 +306,20 @@ public:
     std::uint32_t version() const { return version_; }
 
 private:
+    /** Применяет один разобранный блок к общему буферу (поток интерфейса). */
+    TrackToolStatus applyCaptureBlock(const HostCaptureQueue::Block& block);
+
     TrackAudioInfo audioInfo_;
     TrackAnalysisOptions analysisOptions_;
     TrackAnalysisResult analysis_;
     TrackAlignmentOptions alignment_;
     TrackRenderOptions renderOptions_;
     std::vector<TrackMarker> markers_;
+
+    /** Мост из аудиопотока: пишет push(), разбирает drainHostCapture(). */
+    HostCaptureQueue capture_;
+    /** Переиспользуемый приёмник для pop() — чтобы не выделять на каждый блок. */
+    HostCaptureQueue::Block captureBlock_;
 
     TrackAudioBuffer audioBuffer_;
     /** Обработанный звук, который плагин отдаёт в выход (см. setRenderedOutput). */

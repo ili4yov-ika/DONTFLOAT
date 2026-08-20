@@ -674,6 +674,24 @@ set_tests_properties(waveform_peaks_test PROPERTIES
     DESCRIPTION "Waveform peak pyramid matches brute-force min/max"
 )
 
+# Правки клипов в DAW глазами плагина: рез, обрезка краёв, сжатие и растяжение.
+# Тест гоняет ту же модель клипов, что и окно мини-DAW, поэтому не расходится с ним.
+add_qt_test(mini_daw_clip_edits_test
+    tests/mini_daw_clip_edits_test.cpp
+    tools/mini_daw/mini_daw_clip_model.cpp
+    plugins/core/dontfloat_plugin_core.cpp
+)
+target_include_directories(mini_daw_clip_edits_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/mini_daw
+)
+
+set_tests_properties(mini_daw_clip_edits_test PROPERTIES
+    LABELS "unit;plugins;mini-daw"
+    DESCRIPTION "Clip split/trim/stretch in the DAW as the plugin sees it"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # Выравнивание долей по сетке: метки ведут из доли на сетку, звук остаётся звуком
 add_qt_test(beat_align_test
     tests/beat_align_test.cpp
