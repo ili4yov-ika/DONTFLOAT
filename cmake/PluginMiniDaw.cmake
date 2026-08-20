@@ -109,6 +109,8 @@ function(dontfloat_add_mini_daw_gui)
         tools/mini_daw/mini_daw_gui_main.cpp
         tools/mini_daw/mini_daw_window.cpp
         tools/mini_daw/mini_daw_window.h
+        tools/mini_daw/mini_daw_clip_model.cpp
+        tools/mini_daw/mini_daw_clip_model.h
         tools/mini_daw/mini_daw_player.cpp
         tools/mini_daw/mini_daw_player.h
         tools/mini_daw/mini_daw_plugin_host.cpp

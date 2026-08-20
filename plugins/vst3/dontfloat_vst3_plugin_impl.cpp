@@ -15,6 +15,7 @@ DEF_CLASS_IID(ARA::IPlugInEntryPoint2)
 #endif
 
 #include <QSize>
+#include <QCoreApplication>
 #include <QMetaObject>
 #include <QString>
 
@@ -193,17 +194,23 @@ void notifyEditorsHostAudioAppended()
         return;
     }
 
-    const std::lock_guard<std::mutex> lock(editorsMutex());
-    if (openEditors().empty()) {
+    // Отправляемся в поток Qt через сам QApplication, а не через редактор:
+    // очередь захвата надо разгрести и тогда, когда окна ещё нет, иначе
+    // блоки копились бы в ней до переполнения и терялись
+    QCoreApplication* app = QCoreApplication::instance();
+    if (!app) {
         pending.store(false);
         return;
     }
-    for (DontfloatPluginEditorShell* editor : openEditors()) {
-        QMetaObject::invokeMethod(editor, [editor]() {
-            pending.store(false);
+    QMetaObject::invokeMethod(app, []() {
+        pending.store(false);
+        // Единственное место, где общий буфер меняется, — этот поток
+        sharedSession(product()).drainHostCapture();
+        const std::lock_guard<std::mutex> lock(editorsMutex());
+        for (DontfloatPluginEditorShell* editor : openEditors()) {
             editor->notifyHostAudioAppended();
-        }, Qt::QueuedConnection);
-    }
+        }
+    }, Qt::QueuedConnection);
 }
 
 } // namespace

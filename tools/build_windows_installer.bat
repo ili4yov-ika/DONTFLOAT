@@ -113,6 +113,10 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [3/5] Installing to %INSTALL_DIR%...
+REM cmake --install only adds and overwrites. Without wiping the tree first,
+REM files from an older build (renamed plugin, dropped format, Qt upgrade)
+REM survive here and get packed into the installer.
+if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
 "%CMAKE_CMD%" --install . --config Release
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] Install failed!

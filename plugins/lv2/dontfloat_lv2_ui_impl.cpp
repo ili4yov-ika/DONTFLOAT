@@ -52,6 +52,12 @@ int idleUi(LV2UI_Handle handle)
     if (!ui || !ui->editor) {
         return 0;
     }
+    // Хост зовёт idle из потока интерфейса — здесь и разбираем очередь захвата,
+    // которую наполняет DSP-поток, и сообщаем редактору о новом звуке. Раньше
+    // такого канала не было вовсе: LV2-редактор про свежий захват не узнавал.
+    if (sharedSession(product()).drainHostCapture()) {
+        ui->editor->notifyHostAudioAppended();
+    }
     Dontfloat::Plugins::Ui::pumpQtEvents(16);
     return 0;
 }

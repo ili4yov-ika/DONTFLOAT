@@ -54,6 +54,8 @@ struct ClapPluginInstance {
     uint32_t editorHeight = kEditorHeight;
     clap_id guiTimerId = 0;
     bool guiTimerRegistered = false;
+    /** Уведомление об аудио уже стоит в очереди Qt — новых не ставим. */
+    std::atomic_bool audioNotifyPending { false };
 #if defined(DONTFLOAT_WITH_ARA)
     /** Привязка экземпляра к документу ARA (см. bind_to_document_controller). */
     ARA::PlugIn::PlugInExtension araExtension;
@@ -267,8 +269,20 @@ clap_process_status pluginProcess(const clap_plugin_t* plugin, const clap_proces
         s->session.writeHostFrames(in.data32, int(in.channel_count),
                                    int(process->frames_count),
                                    hostPlayheadSamples(s, process));
-        if (s->editor) {
-            s->editor->notifyHostAudioAppended();
+        // Редактор — виджет Qt, и трогать его из аудиопотока нельзя: раньше
+        // notifyHostAudioAppended звался прямо отсюда. Уходим в поток Qt через
+        // сам редактор: если он умрёт раньше доставки, Qt снимет событие, и
+        // указатель на сессию в лямбде не разыменуется.
+        if (s->editor && !s->audioNotifyPending.exchange(true)) {
+            DontfloatPluginEditorShell* editor = s->editor.get();
+            TrackToolSession* session = &s->session;
+            std::atomic_bool* pending = &s->audioNotifyPending;
+            QMetaObject::invokeMethod(editor, [editor, session, pending]() {
+                pending->store(false);
+                // Общий буфер меняется только здесь, в потоке интерфейса
+                session->drainHostCapture();
+                editor->notifyHostAudioAppended();
+            }, Qt::QueuedConnection);
         }
     }
 

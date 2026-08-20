@@ -23,7 +23,6 @@ enum PortIndex : uint32_t {
 };
 
 struct Lv2PluginInstance {
-    TrackToolSession session;
 
     const float* inL = nullptr;
     const float* inR = nullptr;
@@ -60,7 +59,7 @@ LV2_Handle instantiate(const LV2_Descriptor* descriptor, double sampleRate,
 
     auto* self = new Lv2PluginInstance();
     self->sampleRate = std::max(1, int(sampleRate));
-    self->session.prepare(TrackAudioInfo{self->sampleRate, 2, 0});
+    sharedSession(product()).prepare(TrackAudioInfo{self->sampleRate, 2, 0});
     return self;
 }
 
@@ -83,7 +82,7 @@ void connectPort(LV2_Handle instance, uint32_t port, void* data)
 void activate(LV2_Handle instance)
 {
     if (auto* self = static_cast<Lv2PluginInstance*>(instance)) {
-        self->session.prepare(TrackAudioInfo{self->sampleRate, 2, 0});
+        sharedSession(product()).prepare(TrackAudioInfo{self->sampleRate, 2, 0});
     }
 }
 
@@ -98,8 +97,11 @@ void run(LV2_Handle instance, uint32_t sampleCount)
     copyChannel(self->inR ? self->inR : self->inL, self->outR, sampleCount);
 
     const float* inputs[2] = { self->inL, self->inR ? self->inR : self->inL };
-    self->session.appendHostFrames(inputs, 2, int(sampleCount));
-    sharedSession(product()) = self->session;
+    // Пишем прямо в общую сессию: она кладёт блок в очередь захвата, а разбирает
+    // его поток интерфейса. Раньше здесь копировалась вся сессия целиком — с
+    // векторами, из аудиопотока, пока UI из них читал: ровно та гонка, что
+    // роняла хост.
+    sharedSession(product()).appendHostFrames(inputs, 2, int(sampleCount));
 }
 
 void deactivate(LV2_Handle) {}
