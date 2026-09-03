@@ -298,6 +298,7 @@ if(DONTFLOAT_BUILD_PLUGINS)
         plugins/core/dontfloat_plugin_core.h
         plugins/core/dontfloat_shared_notes.cpp
         plugins/core/dontfloat_shared_notes.h
+        plugins/core/dontfloat_diagnostics.h
         plugins/core/plugin_product.cpp
         plugins/core/plugin_product.h
     )
@@ -759,6 +760,19 @@ set_tests_properties(pitch_compensation_file_test PROPERTIES
     LABELS "timestretch;pitch;integration;files"
     DESCRIPTION "Pitch preservation on pitch-test_C140BPM.mp3 with marker stretch/compress"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# ARA2 и обмен нотами в настоящем REAPER. Без REAPER на машине тест сам себя
+# пропускает, поэтому в CI он молчит.
+add_qt_test(reaper_ara_integration_test
+    tests/reaper_ara_integration_test.cpp
+)
+
+set_tests_properties(reaper_ara_integration_test PROPERTIES
+    LABELS "integration;reaper;ara;plugins;daw"
+    DESCRIPTION "ARA2 clip edits and shared reference notes inside a real REAPER"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    TIMEOUT 420
 )
 
 # Правка высоты нот и её поведение при растяжении дорожки (реальный MP3)

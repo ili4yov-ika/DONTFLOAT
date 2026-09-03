@@ -1,5 +1,9 @@
 #include "dontfloat_shared_notes.h"
 
+#include "dontfloat_diagnostics.h"
+
+#include <cstdio>
+
 #include <map>
 #include <mutex>
 
@@ -54,6 +58,15 @@ void SharedNoteBoard::publish(std::uint64_t instanceId, const std::string& publi
     SharedNoteSet& entry = state.entries[instanceId];
     entry.stamp.publisherId = instanceId;
     entry.stamp.revision = state.nextRevision++;
+    if (Diagnostics::enabled()) {
+        char line[256];
+        std::snprintf(line, sizeof(line),
+                      "notes.publish instance=%llu revision=%llu count=%zu rate=%d name=%s",
+                      static_cast<unsigned long long>(instanceId),
+                      static_cast<unsigned long long>(entry.stamp.revision),
+                      notes.size(), sampleRate, publisherName.c_str());
+        Diagnostics::log(line);
+    }
     entry.publisherName = publisherName;
     entry.sampleRate = sampleRate > 0 ? sampleRate : 44100;
     entry.notes = notes;
@@ -89,6 +102,16 @@ SharedNoteSet SharedNoteBoard::latestFrom(std::uint64_t excludeInstanceId)
         if (entry.stamp.revision > latest.stamp.revision) {
             latest = entry;
         }
+    }
+    if (Diagnostics::enabled() && !latest.empty()) {
+        char line[256];
+        std::snprintf(line, sizeof(line),
+                      "notes.consume instance=%llu from=%llu revision=%llu count=%zu",
+                      static_cast<unsigned long long>(excludeInstanceId),
+                      static_cast<unsigned long long>(latest.stamp.publisherId),
+                      static_cast<unsigned long long>(latest.stamp.revision),
+                      latest.notes.size());
+        Diagnostics::log(line);
     }
     return latest;
 }

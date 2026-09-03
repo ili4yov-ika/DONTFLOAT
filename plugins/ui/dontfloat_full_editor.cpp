@@ -83,6 +83,16 @@ void DontfloatFullEditor::setHostPlayhead(qint64 samplePosition)
     }
 }
 
+void DontfloatFullEditor::setAraBinding(const void* extension)
+{
+    if (scratch_) {
+        scratch_->setAraBinding(extension);
+    }
+    if (pitch_) {
+        pitch_->setAraBinding(extension);
+    }
+}
+
 void DontfloatFullEditor::setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample)
 {
     if (scratch_) {

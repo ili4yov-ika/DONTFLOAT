@@ -1,6 +1,7 @@
 #include "dontfloat_version.h"
 
 #include "../core/dontfloat_plugin_core.h"
+#include "../core/dontfloat_diagnostics.h"
 #include "../core/plugin_host_config.h"
 #include "../ui/dontfloat_plugin_editor_shell.h"
 #include "../ui/dontfloat_qt_hosting.h"
@@ -291,6 +292,7 @@ public:
 
     Steinberg::tresult PLUGIN_API removed() override
     {
+        Dontfloat::PluginCore::Diagnostics::log("shutdown.view.removed.begin");
 #if defined(_WIN32)
 #if defined(DONTFLOAT_WITH_ARA)
         if (const void* extension = boundAraExtension()) {
@@ -307,6 +309,7 @@ public:
             editor_.reset();
         }
 #endif
+        Dontfloat::PluginCore::Diagnostics::log("shutdown.view.removed.end");
         return Steinberg::CPluginView::removed();
     }
 
@@ -469,6 +472,10 @@ public:
 
     Steinberg::tresult PLUGIN_API setActive(Steinberg::TBool state) override
     {
+        if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+            Dontfloat::PluginCore::Diagnostics::log(state ? "shutdown.setActive=1"
+                                                          : "shutdown.setActive=0");
+        }
         if (state) {
             sharedSession(product()).prepare(audioInfo_);
         }
@@ -543,7 +550,16 @@ public:
             data.processContext
             && !(data.processContext->state & Steinberg::Vst::ProcessContext::kPlaying);
 
-        if (data.numInputs > 0 && data.inputs[0].channelBuffers32 && !transportStopped) {
+        // Под ARA дорожка приходит из документа, а на вход хост в роли
+        // ARA-рендерера ничего не кладёт. Захват в этом режиме только портит:
+        // на воспроизведении он затирал волну тишиной, и пики пропадали
+#if defined(DONTFLOAT_WITH_ARA)
+        const bool araBound = boundAraExtension() != nullptr;
+#else
+        const bool araBound = false;
+#endif
+        if (data.numInputs > 0 && data.inputs[0].channelBuffers32 && !transportStopped
+            && !araBound) {
             TrackToolSession& session = sharedSession(product());
             // Позиция блока на таймлайне: захват повторяет дорожку DAW, поэтому
             // перемещение клипа видно плагину как сдвиг содержимого

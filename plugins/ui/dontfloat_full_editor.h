@@ -29,6 +29,12 @@ public:
     void setHostPlayhead(qint64 samplePosition) override;
     /** Тактовая сетка DAW — в обе секции. */
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample) override;
+    /**
+     * Привязку к документу ARA получают оба вложенных редактора: волне нужен
+     * звук, пианороллу — ноты и разметка. Раньше она не доходила ни до
+     * одного: базовая реализация в DontfloatEditorContent пустая.
+     */
+    void setAraBinding(const void* extension) override;
 
     bool hasWaveformTools() const override { return true; }
     void shiftBeatGrid(int beats) override;

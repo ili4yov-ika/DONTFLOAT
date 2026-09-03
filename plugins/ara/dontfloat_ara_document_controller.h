@@ -155,6 +155,21 @@ public:
     AraBeatGrid hostBeatGrid() const noexcept;
 
     /** Клипы (playback regions) этого источника: разрез, перенос, растяжение. */
+    /**
+     * Просит хост начать или остановить воспроизведение.
+     *
+     * Под ARA у плагина нет своего транспорта: дорожку играет DAW. Кнопка
+     * воспроизведения в редакторе поэтому не «слушает кусок у себя», а
+     * управляет транспортом хоста — тогда и каретки совпадают, и слышно то
+     * же, что видно.
+     *
+     * Возвращает false, если хост управление транспортом не отдал.
+     */
+    bool requestHostPlayback(bool start) noexcept;
+
+    /** Просит хост встать в позицию (секунды таймлайна проекта). */
+    bool requestHostPlaybackPosition(double seconds) noexcept;
+
     std::vector<AraClipPlacement> clipsForAudioSource(
         const ARA::PlugIn::AudioSource* audioSource) const noexcept;
 
@@ -231,6 +246,10 @@ protected:
 
     ARA::PlugIn::PlaybackRenderer* doCreatePlaybackRenderer() noexcept override;
     ARA::PlugIn::EditorView* doCreateEditorView() noexcept override;
+
+    /** Пишет положение клипа в дневник диагностики (см. Diagnostics). */
+    static void logRegionToDiagnostics(const char* event,
+                                       const ARA::PlugIn::PlaybackRegion* playbackRegion) noexcept;
 
     /** Клип добавили на дорожку — разбираем его источник, если ещё не разбирали. */
     void didAddPlaybackRegionToRegionSequence(ARA::PlugIn::RegionSequence* regionSequence,

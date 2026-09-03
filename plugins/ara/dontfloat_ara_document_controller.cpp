@@ -1,4 +1,8 @@
 #include "dontfloat_ara_document_controller.h"
+
+#include "../core/dontfloat_diagnostics.h"
+
+#include <cstdio>
 #include "dontfloat_version.h"
 
 #include "../../include/pitchdetector.h"
@@ -310,6 +314,7 @@ ARA::PlugIn::AudioSource* AraDocumentController::doCreateAudioSource(
 
 void AraDocumentController::willDestroyAudioSource(ARA::PlugIn::AudioSource* audioSource) noexcept
 {
+    Dontfloat::PluginCore::Diagnostics::log("shutdown.ara.source-destroy");
     auto* source = static_cast<AraAudioSource*>(audioSource);
     const std::lock_guard<std::mutex> lock(mutex_);
     analyzedOrder_.erase(std::remove(analyzedOrder_.begin(), analyzedOrder_.end(), source),
@@ -406,11 +411,19 @@ void AraDocumentController::collectFinishedAnalyses() noexcept
         source->setNoteSet(std::move(entry.second));
         source->setAnalysisRunning(false);
         source->setAnalysisProgress(100);
+        std::size_t analyzedCount = 0;
         {
             const std::lock_guard<std::mutex> lock(mutex_);
             analyzedOrder_.erase(std::remove(analyzedOrder_.begin(), analyzedOrder_.end(), source),
                                  analyzedOrder_.end());
             analyzedOrder_.push_back(source);
+            analyzedCount = analyzedOrder_.size();
+        }
+        if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+            char line[160];
+            std::snprintf(line, sizeof(line), "ara.notes.parsed count=%zu analyzed=%zu",
+                          source->noteSet().notes.size(), analyzedCount);
+            Dontfloat::PluginCore::Diagnostics::log(line);
         }
         ++modelRevision_;
         notifyAudioSourceContentChanged(source, ARA::ContentUpdateScopes::notesAreAffected());
@@ -430,6 +443,12 @@ AraNoteSet AraDocumentController::referenceNotesExcluding(
     for (auto it = analyzedOrder_.rbegin(); it != analyzedOrder_.rend(); ++it) {
         if (*it == exclude || !(*it)->hasNotes()) {
             continue;
+        }
+        if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+            char line[160];
+            std::snprintf(line, sizeof(line), "ara.notes.reference count=%zu pool=%zu",
+                          (*it)->noteSet().notes.size(), analyzedOrder_.size());
+            Dontfloat::PluginCore::Diagnostics::log(line);
         }
         return (*it)->noteSet();
     }
@@ -470,6 +489,27 @@ void AraDocumentController::didAddAudioSourceToDocument(
     analyzeIfNeeded(static_cast<AraAudioSource*>(audioSource));
 }
 
+// Правки клипов приходят только сюда, и снаружи хоста их не видно: у плагина
+// нет ни параметров, ни своего окна отчётов. Интеграционный тест с настоящей
+// DAW читает эти строки — без них проверить нарезку, перенос и растяжение
+// можно было бы только глазами.
+void AraDocumentController::logRegionToDiagnostics(
+    const char* event, const ARA::PlugIn::PlaybackRegion* playbackRegion) noexcept
+{
+    if (!Dontfloat::PluginCore::Diagnostics::enabled() || !playbackRegion) {
+        return;
+    }
+    char line[256];
+    std::snprintf(line, sizeof(line),
+                  "%s start=%.6f dur=%.6f srcStart=%.6f srcDur=%.6f",
+                  event,
+                  playbackRegion->getStartInPlaybackTime(),
+                  playbackRegion->getDurationInPlaybackTime(),
+                  playbackRegion->getStartInAudioModificationTime(),
+                  playbackRegion->getDurationInAudioModificationTime());
+    Dontfloat::PluginCore::Diagnostics::log(line);
+}
+
 void AraDocumentController::didAddPlaybackRegionToRegionSequence(
     ARA::PlugIn::RegionSequence* /*regionSequence*/,
     ARA::PlugIn::PlaybackRegion* playbackRegion) noexcept
@@ -477,6 +517,7 @@ void AraDocumentController::didAddPlaybackRegionToRegionSequence(
     // Клип положили на дорожку: если его источник ещё не разобран — в очередь.
     // Так новый участок дорожки получает ноты сам по себе
     ++modelRevision_;
+    logRegionToDiagnostics("ara.region.add", playbackRegion);
     if (!playbackRegion || !playbackRegion->getAudioModification()) {
         return;
     }
@@ -491,10 +532,44 @@ void AraDocumentController::didUpdatePlaybackRegionProperties(
     // сам звук не изменился, поменялось только его место на таймлайне,
     // поэтому разбор не перезапускаем — двигается разметка
     ++modelRevision_;
+    logRegionToDiagnostics("ara.region.update", playbackRegion);
     if (playbackRegion) {
         notifyPlaybackRegionContentChanged(playbackRegion,
                                            ARA::ContentUpdateScopes::timelineIsAffected());
     }
+}
+
+bool AraDocumentController::requestHostPlayback(bool start) noexcept
+{
+    auto* playback = getHostPlaybackController();
+    if (!playback) {
+        return false;  // хост управление транспортом не отдал
+    }
+    if (start) {
+        playback->requestStartPlayback();
+    } else {
+        playback->requestStopPlayback();
+    }
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        Dontfloat::PluginCore::Diagnostics::log(start ? "ara.transport.start"
+                                                      : "ara.transport.stop");
+    }
+    return true;
+}
+
+bool AraDocumentController::requestHostPlaybackPosition(double seconds) noexcept
+{
+    auto* playback = getHostPlaybackController();
+    if (!playback) {
+        return false;
+    }
+    playback->requestSetPlaybackPosition(ARA::ARATimePosition(std::max(0.0, seconds)));
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        char line[128];
+        std::snprintf(line, sizeof(line), "ara.transport.seek seconds=%.3f", seconds);
+        Dontfloat::PluginCore::Diagnostics::log(line);
+    }
+    return true;
 }
 
 std::vector<AraClipPlacement> AraDocumentController::clipsForAudioSource(
