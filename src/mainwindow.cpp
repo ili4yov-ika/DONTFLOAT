@@ -512,7 +512,10 @@ MainWindow::MainWindow(QWidget *parent)
     // Таймер для отложенного обновления воспроизведения после перетаскивания меток
     markerPreviewTimer = new QTimer(this);
     markerPreviewTimer->setSingleShot(true);
-    markerPreviewTimer->setInterval(250); // ждем паузы после перетаскивания
+    // Пауза перед пересчётом. 250 мс ставились под рендер всей дорожки; с
+    // кэшем сегментов правка метки считается за доли секунды, и держать
+    // четверть секунды сверху уже незачем
+    markerPreviewTimer->setInterval(120);
     connect(markerPreviewTimer, &QTimer::timeout, this, &MainWindow::updatePlaybackAfterMarkerDrag);
 
     // Initial window title
@@ -2542,7 +2545,12 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
     deviationOptions.gridStartSample = waveformView->getGridStartSample();
     BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate, deviationOptions);
 
-    // Находим неровные доли
+    // Находим неровные доли: порог — из ползунка допуска, метка на каждую долю.
+    // Адаптивный порог и группировка областей (BPMAnalyzer::UnalignedOptions)
+    // остаются в API как opt-in. Включённые здесь, они отменяли ползунок
+    // (порог считался только по MAD) и выбрасывали области со средней
+    // confidence ниже 0.3, а её детектор берёт из энергии доли — на тихом
+    // материале не оставалось ни одной метки, и тянуть было нечего.
     float deviationThreshold = tolerancePercent / 100.0f; // Преобразуем проценты в доли
     QVector<int> unalignedIndices = BPMAnalyzer::findUnalignedBeats(beats, deviationThreshold);
 
@@ -2552,7 +2560,12 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
     }
 
     int markersCreated = 0;
+    int markersSkipped = 0;
     QSet<qint64> addedPositions; // Избегаем дубликатов при последовательных неровных долях
+    // Последняя добавленная пара координат: набор обязан расти по обеим, иначе
+    // растяжение по нему не применится вовсе (см. addCorrectionMarker)
+    qint64 lastOriginal = -1;
+    qint64 lastTarget = -1;
 
     // Создаём метки для интервалов между долями
     // Для каждой неровной доли создаем пару меток:
@@ -2589,11 +2602,34 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
                 return;
             }
             const qint64 target = neutralMarkers ? beat.position : beat.expectedPosition;
+
+            // Проверка против УЖЕ ДОБАВЛЕННОЙ метки, а не только внутри пары.
+            // Соседние доли ловятся условием выше, но пары строятся вокруг
+            // разных неровных долей, и метки из соседних пар между собой никто
+            // не сравнивал. Доли на одну линию сетки садятся штатно — это
+            // BPMAnalyzer::DeviationStats::duplicateCount, — и две такие метки
+            // давали сегмент нулевой длины. Дальше validateMarkers отвергала
+            // весь набор (фактор 0 < 0.1), applyMarkerStretch молча возвращала
+            // исходный звук, и растяжение переставало быть слышно совсем —
+            // при том что волна рисует предпросмотр по меткам и выглядит верно.
+            if (lastOriginal >= 0) {
+                const qint64 originalGap = beat.position - lastOriginal;
+                const qint64 targetGap = target - lastTarget;
+                // Тот же порог, что и у validateMarkers, с запасом на округления
+                const qint64 minTargetGap = qMax<qint64>(1, qint64(originalGap * 0.15));
+                if (originalGap <= 0 || targetGap < minTargetGap) {
+                    ++markersSkipped;
+                    return;
+                }
+            }
+
             Marker marker(target, sampleRate);
             marker.originalPosition = beat.position;
             marker.originalTimeMs = TimeUtils::samplesToMs(beat.position, sampleRate);
             waveformView->addMarker(marker);
             addedPositions.insert(beat.position);
+            lastOriginal = beat.position;
+            lastTarget = target;
             ++markersCreated;
         };
         addCorrectionMarker(prevBeat);
@@ -2602,6 +2638,11 @@ void MainWindow::createDeviationMarkers(float tolerancePercent, bool neutralMark
 
     // Сортируем метки по позиции
     waveformView->sortMarkers();
+
+    if (markersSkipped > 0) {
+        qDebug() << "createDeviationMarkers: пропущено" << markersSkipped
+                 << "меток — доли сели слишком близко по сетке";
+    }
 
     statusBar()->showMessage(
         tr("Created %1 correction markers for %2 irregular beats")
@@ -4150,20 +4191,30 @@ void MainWindow::updatePlaybackAfterMarkerDrag()
     const qint64 epoch = ++markerPreviewEpoch;
     markerPreviewRunning->store(true);
 
+    // Кэш живёт между правками: Rubber Band заново прогоняет только те
+    // сегменты, чьи границы или коэффициент изменились
+    markerPreviewCache->setSourceGeneration(waveformView->audioGeneration());
+    const std::shared_ptr<TimeStretchProcessor::SegmentCache> cache = markerPreviewCache;
+
     auto pending = std::make_shared<QPair<QString, QVector<QVector<float>>>>();
     const QPointer<MainWindow> self(this);
     auto running = markerPreviewRunning;
 
     (void)QtConcurrent::run(
-        [self, epoch, running, sourceData, markerData, sampleRate, hasStretch, notesForRender, pending]() {
+        [self, epoch, running, sourceData, markerData, sampleRate, hasStretch, notesForRender, pending, cache]() {
             bool ok = false;
             try {
                 QVector<QVector<float>> processed = sourceData;
                 bool failed = false;
 
                 if (hasStretch) {
+                    // Предпросмотр считаем быстрым движком: его пересчитывает
+                    // каждая правка метки, и успеть за рукой тут важнее разницы
+                    // в качестве. Итоговое применение идёт через R3
                     const TimeStretchProcessor::StretchResult result =
-                        TimeStretchProcessor::applyMarkerStretch(sourceData, markerData, sampleRate, true);
+                        TimeStretchProcessor::applyMarkerStretch(
+                            sourceData, markerData, sampleRate, true, cache.get(),
+                            TimeStretchProcessor::Quality::Preview);
                     if (result.audioData.isEmpty() || result.audioData[0].isEmpty()) {
                         failed = true;
                     } else {

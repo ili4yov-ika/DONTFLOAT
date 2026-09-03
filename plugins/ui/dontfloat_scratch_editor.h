@@ -83,6 +83,12 @@ private:
     /** Кладёт обработанный звук в выход плагина (его услышит DAW). */
     void publishRenderedOutput(const QVector<QVector<float>>& channels, int sampleRate);
 
+    /** Что вернуло выравнивание: звук и метки растяжения, которыми он сделан. */
+    struct AlignedTake {
+        QVector<QVector<float>> audio;
+        QVector<MarkerData> markers;
+    };
+
     Dontfloat::PluginCore::TrackToolSession* session_ = nullptr;
     QString productName_;
     WaveformView* waveform_ = nullptr;
@@ -93,7 +99,7 @@ private:
     QFutureWatcher<void>* alignWatcher_ = nullptr;
     /** Результаты мимо QFuture::result() (см. runBpmAnalysis). */
     std::shared_ptr<BPMAnalyzer::AnalysisResult> pendingBpm_;
-    std::shared_ptr<QVector<QVector<float>>> pendingAligned_;
+    std::shared_ptr<AlignedTake> pendingAligned_;
     BPMAnalyzer::AnalysisResult lastAnalysis_;
     QTimer* autoAnalysisTimer_ = nullptr;
     QElapsedTimer hostRefreshClock_;

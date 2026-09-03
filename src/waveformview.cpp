@@ -355,6 +355,7 @@ WaveformView::WaveformView(QWidget *parent)
     , realtimeStretchShuttingDown(false)
     , realtimeStretchJobsRunning(0)
     , audioSourceGeneration(0)
+    , realtimeStretchCache(std::make_shared<TimeStretchProcessor::SegmentCache>())
     , realtimeJobGeneration(0)
     , lastTooltipMarkerIndex(-1)
     , renderMode(WaveformRenderMode::Peaks)
@@ -1411,14 +1412,14 @@ void WaveformView::mousePressEvent(QMouseEvent* event)
 
         // Устанавливаем позицию воспроизведения по клику
         if (!audioData.isEmpty()) {
-            // Используем ту же логику, что и в drawPlaybackCursor
-            float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
-            int visibleSamples = int(width() * samplesPerPixel);
-            int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-            int startSample = int(horizontalOffset * maxStartSample);
+            // Ровно та геометрия, по которой каретка рисуется (drawPlaybackCursor).
+            // Считать её здесь по audioData[0].size() было нельзя: при метках,
+            // задающих растяжение, показанный таймлайн длиннее исходного, и
+            // каретка вставала не под курсор, а тем левее, чем больше растяжение
+            const ViewportGeometry vp = getViewportGeometry(displaySampleCount(), width());
 
             // Вычисляем позицию клика в сэмплах
-            qint64 clickSample = startSample + qint64(event->pos().x() * samplesPerPixel);
+            qint64 clickSample = vp.startSample + qint64(event->pos().x() * vp.samplesPerPixel);
             clickSample = qBound(qint64(0), clickSample, qint64(audioData[0].size() - 1));
 
             // Конвертируем сэмплы в миллисекунды для внутреннего использования
@@ -1916,15 +1917,10 @@ void WaveformView::mouseMoveEvent(QMouseEvent* event)
 
         if (isDragging) {
             // Если перетаскиваем с зажатой кнопкой мыши, обновляем позицию воспроизведения
-            if (!audioData.isEmpty()) {
-                // Используем ту же логику, что и в drawPlaybackCursor
-                float samplesPerPixel = float(audioData[0].size()) / (width() * zoomLevel);
-                int visibleSamples = int(width() * samplesPerPixel);
-                int maxStartSample = qMax(0, audioData[0].size() - visibleSamples);
-                int startSample = int(horizontalOffset * maxStartSample);
-
-                // Вычисляем позицию клика в сэмплах
-                qint64 clickSample = startSample + qint64(event->pos().x() * samplesPerPixel);
+            if (hasViewport) {
+                // Та же геометрия, что и у клика с отрисовкой каретки, — она уже
+                // посчитана в начале обработчика
+                qint64 clickSample = vp.startSample + qint64(event->pos().x() * vp.samplesPerPixel);
                 clickSample = qBound(qint64(0), clickSample, qint64(audioData[0].size() - 1));
 
                 qint64 newPosition = (clickSample * 1000) / sampleRate;
@@ -2560,21 +2556,23 @@ int WaveformView::getMarkerIndexAt(const QPoint& pos) const
 {
     if (audioData.isEmpty()) return -1;
 
-    // Используем ту же логику, что и при отрисовке: позиции по текущим данным
-    qint64 referenceSize = audioData[0].size();
-    float samplesPerPixel = float(referenceSize) / (rect().width() * zoomLevel);
-    int visibleSamples = int(rect().width() * samplesPerPixel);
-    int maxStartSample = qMax(0, referenceSize - visibleSamples);
-    int startSample = int(horizontalOffset * maxStartSample);
-    Q_UNUSED(visibleSamples);
+    // Геометрия — ровно та, по которой метки нарисованы (drawMarkers).
+    // Здесь считалось по audioData[0].size(), а рисуется по displaySampleCount():
+    // как только метки задают растяжение, показанный таймлайн длиннее исходного,
+    // и попадание уезжало от видимого ромбика тем дальше, чем больше растяжение.
+    // Метку было не схватить, а вместо неё начинался скраб каретки.
+    const ViewportGeometry vp = getViewportGeometry(displaySampleCount(), rect().width());
 
     const float diamondSize = 10.0f;
+    // Метка нарисована линией во всю высоту — за неё и беремся, а не за один
+    // ромбик в центре: попасть в полоску 20 px посреди волны было нечем
+    const float grabHalfWidth = 6.0f;
     float centerY = rect().height() / 2.0f;
 
     // Проверяем каждую метку
     for (int i = 0; i < markers.size(); ++i) {
         // Вычисляем X позицию метки по текущей позиции
-        float x = (markers[i].position - startSample) / samplesPerPixel;
+        float x = (markers[i].position - vp.startSample) / vp.samplesPerPixel;
 
         // Создаём прямоугольник ромбика
         QRectF diamondRect(x - diamondSize / 2, centerY - diamondSize / 2,
@@ -2583,7 +2581,11 @@ int WaveformView::getMarkerIndexAt(const QPoint& pos) const
         // Увеличиваем область клика для удобства
         QRectF expandedRect = diamondRect.adjusted(-5, -5, 5, 5);
 
-        if (expandedRect.contains(pos)) {
+        // Вся вертикальная линия метки
+        QRectF lineRect(x - grabHalfWidth, 0.0f,
+                        grabHalfWidth * 2.0f, float(rect().height()));
+
+        if (expandedRect.contains(pos) || lineRect.contains(pos)) {
             qDebug() << "Found marker" << i << "at pos:" << pos
                      << "x:" << x << "position:" << markers[i].position;
             return i;
@@ -2958,6 +2960,11 @@ void WaveformView::startRealtimeStretchJob()
     const QVector<MarkerData> markerData = MarkerUtils::toMarkerData(markers);
     realtimeJobMarkers = markerData;
 
+    // Кэш переживает перетаскивание: пересчитываются только те сегменты,
+    // чьи границы или коэффициент изменились
+    realtimeStretchCache->setSourceGeneration(audioSourceGeneration);
+    const std::shared_ptr<TimeStretchProcessor::SegmentCache> cache = realtimeStretchCache;
+
     const QVector<QVector<float>> input = originalAudioData;
     const int rate = sampleRate;
     const quint64 jobGen = realtimeJobGeneration;
@@ -2967,10 +2974,11 @@ void WaveformView::startRealtimeStretchJob()
     std::atomic<int>* jobsCounter = &realtimeStretchJobsRunning;
     jobsCounter->fetch_add(1);
 
-    std::thread([self, jobsCounter, input, markerData, rate, jobGen, audioGen]() {
+    std::thread([self, jobsCounter, input, markerData, rate, jobGen, audioGen, cache]() {
         QVector<QVector<float>> audio;
         if (self && !self->realtimeStretchShuttingDown) {
-            audio = TimeStretchProcessor::applyMarkerStretch(input, markerData, rate, false).audioData;
+            audio = TimeStretchProcessor::applyMarkerStretch(
+                        input, markerData, rate, false, cache.get()).audioData;
         }
 
         jobsCounter->fetch_sub(1);

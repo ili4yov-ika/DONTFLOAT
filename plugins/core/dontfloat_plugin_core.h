@@ -2,6 +2,7 @@
 #define DONTFLOAT_PLUGIN_CORE_H
 
 #include <atomic>
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -277,9 +278,13 @@ public:
      */
     void setRenderedOutput(const TrackAudioBuffer& buffer, std::int64_t timelineStartFrame = 0);
     void clearRenderedOutput();
-    bool hasRenderedOutput() const { return !renderedOutput_.mono.empty(); }
-    const TrackAudioBuffer& renderedOutput() const { return renderedOutput_; }
-    std::int64_t renderedOutputStart() const { return renderedOutputStart_; }
+    bool hasRenderedOutput() const;
+    /** Снимок результата; держит буфер живым, пока живёт возвращённый указатель. */
+    std::shared_ptr<const TrackAudioBuffer> renderedOutput() const;
+    std::int64_t renderedOutputStart() const
+    {
+        return renderedOutputStart_.load(std::memory_order_acquire);
+    }
 
     /**
      * Копирует готовый результат в выходной блок.
@@ -322,9 +327,18 @@ private:
     HostCaptureQueue::Block captureBlock_;
 
     TrackAudioBuffer audioBuffer_;
-    /** Обработанный звук, который плагин отдаёт в выход (см. setRenderedOutput). */
-    TrackAudioBuffer renderedOutput_;
-    std::int64_t renderedOutputStart_ = 0;
+    /**
+     * Обработанный звук, который плагин отдаёт в выход (см. setRenderedOutput).
+     *
+     * Публикуется целиком под новым указателем, а не правится на месте: его
+     * читает аудиопоток в readRenderedOutput, и переаллокация векторов под ним
+     * ломала кучу — DAW падала так же, как на захвате. Аудиопоток берёт
+     * указатель себе, и буфер живёт, пока он с ним работает.
+     */
+    std::shared_ptr<const TrackAudioBuffer> renderedOutput_;
+    /** Прошлый результат: держим, чтобы удалять его в интерфейсе, а не в RT. */
+    std::shared_ptr<const TrackAudioBuffer> retiredRenderedOutput_;
+    std::atomic<std::int64_t> renderedOutputStart_ { 0 };
     TrackPitchAnalysis pitchAnalysis_;
 
     /** Конец последней записи по таймлайну: по нему видно новый проход DAW. */

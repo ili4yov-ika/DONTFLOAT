@@ -52,6 +52,11 @@ private slots:
     void testFindUnalignedBeats();
     void testExpectedPositionInitialization();
 
+    // Адаптивные пороги и группировка
+    void testAdaptiveThreshold();
+    void testRegionGrouping();
+    void testCorrectionSelection();
+
     // Устойчивость поиска неровных долей
     void testMissingBeatDoesNotShiftRest();
     void testSpuriousBeatIsIsolated();
@@ -449,6 +454,95 @@ void BeatDeviationTest::testStatsSummariseDeviations()
     QVERIFY(stats.meanAbsDeviation > 0.0f && stats.meanAbsDeviation < stats.maxAbsDeviation);
     QVERIFY(stats.rmsDeviation > 0.0f && stats.rmsDeviation < stats.maxAbsDeviation);
     QVERIFY(qAbs(stats.gridBPM - bpm) < 0.001f);
+}
+
+void BeatDeviationTest::testAdaptiveThreshold()
+{
+    // Адаптивный порог: трек с естественным джиттером не объявляется неровным целиком
+    const int sampleRate = 44100;
+    const float bpm = 120.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(64, interval);
+    // Добавляем небольшой естественный джиттер ко всем долям
+    for (int i = 1; i < beats.size(); ++i) {
+        beats[i].position += qint64((i % 3 - 1) * interval * 0.005);  // ±0.5%
+    }
+    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate);
+
+    // Фиксированный порог строже джиттера — помечает почти весь трек.
+    // Порог обязан быть НИЖЕ 0.5%, иначе он не ловит ни одной доли:
+    // с 0.01f проверка утверждала обратное тому, что делает поиск.
+    const QVector<int> fixed = BPMAnalyzer::findUnalignedBeats(beats, 0.002f);
+    QVERIFY2(fixed.size() > beats.size() / 2, "фиксированный порог слишком строг");
+
+    // Адаптивный порог учитывает естественный разброс
+    BPMAnalyzer::UnalignedOptions adaptive;
+    adaptive.adaptiveThreshold = true;
+    adaptive.adaptiveFloor = 0.005f;
+    adaptive.adaptiveMultiplier = 2.5f;
+    const QVector<int> smart = BPMAnalyzer::findUnalignedBeats(beats, 0.0f, 0.0f, adaptive);
+    QVERIFY2(smart.size() < beats.size() / 4, "адаптивный порог устойчив к джиттеру");
+}
+
+void BeatDeviationTest::testRegionGrouping()
+{
+    // Группировка: 3 подряд неровные доли → 1 представитель
+    const int sampleRate = 44100;
+    const float bpm = 120.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(64, interval);
+    beats[20].position += qint64(interval * 0.08);
+    beats[21].position += qint64(interval * 0.12);  // наибольшее отклонение
+    beats[22].position += qint64(interval * 0.06);
+    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate);
+
+    // Без группировки — 3 неровные доли
+    const QVector<int> raw = BPMAnalyzer::findUnalignedBeats(beats, 0.02f);
+    QCOMPARE(raw.size(), qsizetype(3));
+
+    // С группировкой — 1 представитель (наиболее отклонённая)
+    BPMAnalyzer::UnalignedOptions grouped;
+    grouped.groupRegions = true;
+    grouped.regionGap = 1;
+    const QVector<int> regions = BPMAnalyzer::findUnalignedBeats(beats, 0.02f, 0.0f, grouped);
+    QCOMPARE(regions.size(), qsizetype(1));
+    QCOMPARE(regions.first(), 21);  // доля с максимальным отклонением
+}
+
+void BeatDeviationTest::testCorrectionSelection()
+{
+    // Приоритетный отбор: сортировка по |deviation| × confidence × sqrt(energy)
+    const int sampleRate = 44100;
+    const float bpm = 120.0f;
+    const double interval = (60.0 * sampleRate) / bpm;
+
+    QVector<BPMAnalyzer::BeatInfo> beats = makeGrid(32, interval);
+    beats[5].position += qint64(interval * 0.10);
+    beats[5].confidence = 0.9f;
+    beats[5].energy = 0.5f;  // тихая доля
+
+    beats[15].position += qint64(interval * 0.08);
+    beats[15].confidence = 1.0f;
+    beats[15].energy = 1.0f;  // громкая доля
+
+    beats[25].position += qint64(interval * 0.06);
+    beats[25].confidence = 0.5f;  // низкая уверенность
+    beats[25].energy = 1.0f;
+
+    BPMAnalyzer::calculateDeviations(beats, bpm, sampleRate);
+
+    BPMAnalyzer::UnalignedOptions options;
+    options.groupRegions = false;
+    const BPMAnalyzer::CorrectionSelection selection =
+        BPMAnalyzer::selectBeatsForCorrection(beats, 0.02f, 0.0f, options);
+
+    QVERIFY(selection.indices.size() >= 3);
+    // Первая по приоритету — beat[15]: большое отклонение, высокая уверенность, высокая энергия
+    QCOMPARE(selection.indices[0], 15);
+    // Вторая — beat[5]: наибольшее отклонение компенсирует низкую энергию
+    QVERIFY(selection.indices.contains(5));
 }
 
 QTEST_MAIN(BeatDeviationTest)

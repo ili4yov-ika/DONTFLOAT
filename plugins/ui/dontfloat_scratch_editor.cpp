@@ -701,13 +701,17 @@ void DontfloatScratchEditor::runBeatAlign()
         beatPositions.append(beat.position);
     }
 
-    pendingAligned_ = std::make_shared<QVector<QVector<float>>>();
+    pendingAligned_ = std::make_shared<AlignedTake>();
     alignWatcher_->setFuture(
         QtConcurrent::run([source, analysis, beatPositions, sampleRate, out = pendingAligned_]() {
             const TimeStretchProcessor::StretchResult aligned =
                 TimeStretchProcessor::alignBeatsToGrid(source, beatPositions, analysis.bpm,
-                                                       sampleRate, analysis.gridStartSample);
-            *out = aligned.audioData.isEmpty() ? source : aligned.audioData;
+                                                       sampleRate, analysis.gridStartSample, true, nullptr);
+            // Метки забираем из результата: они уже стоят на фактических стыках
+            // сегментов растянутого звука, с учётом съеденных кроссфейдом
+            // миллисекунд. Пересобранные по сетке от этих стыков уезжают
+            out->audio = aligned.audioData.isEmpty() ? source : aligned.audioData;
+            out->markers = aligned.newMarkers;
         }));
 }
 
@@ -719,8 +723,8 @@ void DontfloatScratchEditor::onAlignBeatsClicked()
 void DontfloatScratchEditor::onAlignFinished()
 {
     alignRunning_ = false;
-    const QVector<QVector<float>> fixed = pendingAligned_ ? *pendingAligned_
-                                                          : QVector<QVector<float>>();
+    const AlignedTake take = pendingAligned_ ? *pendingAligned_ : AlignedTake();
+    const QVector<QVector<float>>& fixed = take.audio;
     pendingAligned_.reset();
     if (fixed.isEmpty() || !waveform_ || !session_) {
         setStatus(tr("beat alignment error"));
@@ -745,7 +749,12 @@ void DontfloatScratchEditor::onAlignFinished()
     waveform_->setBeatsPerBar(beatsPerBar_);
 
     waveform_->clearMarkers();
-    const QVector<Marker> markers = makeAlignedBeatMarkers(alignedBeats, totalSamples, sampleRate);
+    // Метки растяжения из самого результата; если тянуть было нечего и их нет,
+    // ставим нейтральные по сетке — дорожку всё равно должно быть чем двигать
+    QVector<Marker> markers = MarkerUtils::toMarkers(take.markers);
+    if (markers.size() < 2) {
+        markers = makeAlignedBeatMarkers(alignedBeats, totalSamples, sampleRate);
+    }
     if (markers.size() >= 2) {
         waveform_->setMarkers(markers);
     }

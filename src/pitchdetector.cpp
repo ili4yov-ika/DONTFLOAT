@@ -1,13 +1,12 @@
 #include "../include/pitchdetector.h"
 
-#include <QtCore/QRunnable>
-#include <QtCore/QSemaphore>
-#include <QtCore/QThread>
-#include <QtCore/QThreadPool>
 #include <QtCore/QtMath>
+
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
+#include <thread>
 #include <vector>
 
 namespace PitchDetector {
@@ -302,10 +301,14 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
     cmnd.reserve(layout.maxLag + 1);
 
     // Кадры считаются независимо друг от друга, поэтому раскладываем их по
-    // ядрам. Пул свой, а не глобальный: анализ и сам обычно запущен из
-    // QtConcurrent на глобальном пуле, и на одноядерной машине задачи ждали бы
-    // поток, который занят ими же.
-    const int threadCount = qBound(1, QThread::idealThreadCount(), 16);
+    // ядрам. Потоки — из стандартной библиотеки, а не QThreadPool: анализ
+    // запускается в том числе из ARA, то есть из рабочего потока хоста и
+    // ещё до того, как плагин создал QApplication. Любой QThread/QObject в
+    // такой момент делает «главным» чужой поток, и последующее создание
+    // QApplication в настоящем главном потоке падало внутри платформенного
+    // плагина Qt — DAW вылетала при добавлении плагина на дорожку с клипами.
+    const int hardwareThreads = int(std::thread::hardware_concurrency());
+    const int threadCount = std::clamp(hardwareThreads > 0 ? hardwareThreads : 1, 1, 16);
     constexpr int kMinFramesForThreads = 64;
 
     if (threadCount <= 1 || frameCount < kMinFramesForThreads) {
@@ -322,21 +325,20 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
             }
         }
     } else {
-        QThreadPool pool;
-        pool.setMaxThreadCount(threadCount);
-
         std::atomic<int> processed { 0 };
-        QSemaphore finished;
+        std::atomic<int> finished { 0 };
         const int chunkSize = (frameCount + threadCount - 1) / threadCount;
 
+        std::vector<std::thread> workers;
+        workers.reserve(std::size_t(threadCount));
         for (int chunk = 0; chunk < threadCount; ++chunk) {
             const int from = chunk * chunkSize;
-            const int to = qMin(frameCount, from + chunkSize);
+            const int to = std::min(frameCount, from + chunkSize);
             if (from >= to) {
-                finished.release();
+                finished.fetch_add(1, std::memory_order_release);
                 continue;
             }
-            pool.start(QRunnable::create([&, from, to]() {
+            workers.emplace_back([&, from, to]() {
                 // Буферы разностной функции — свои у каждого потока
                 std::vector<float> localDiff;
                 std::vector<float> localCmnd;
@@ -347,13 +349,14 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
                                               layout, options, localDiff, localCmnd);
                     processed.fetch_add(1, std::memory_order_relaxed);
                 }
-                finished.release();
-            }));
+                finished.fetch_add(1, std::memory_order_release);
+            });
         }
 
         // Ждём и по дороге отдаём прогресс — плашка анализа должна двигаться
         int lastReported = -1;
-        while (!finished.tryAcquire(threadCount, 30)) {
+        while (finished.load(std::memory_order_acquire) < threadCount) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
             if (!onProgress) {
                 continue;
             }
@@ -362,6 +365,9 @@ QVector<PitchNote> detectNotes(const QVector<float>& mono,
                 lastReported = pct;
                 onProgress(pct);
             }
+        }
+        for (std::thread& worker : workers) {
+            worker.join();
         }
         if (onProgress && lastReported != 100) {
             onProgress(100);

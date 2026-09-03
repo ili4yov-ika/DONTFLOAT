@@ -117,11 +117,62 @@ public:
                                               int sampleRate,
                                               const DeviationOptions& options);
 
+    // Настройки отбора неровных долей (см. findUnalignedBeats / selectBeatsForCorrection)
+    struct UnalignedOptions {
+        // Оценивать порог по самому треку, а не брать фиксированный.
+        // Порог = max(minimumFloor, kMultiplier * MAD(отклонений)), где MAD —
+        // медианное абсолютное отклонение. Трек с естественным джиттером не
+        // объявляется неровным целиком, а идеально ровный не ловится порогом 0.
+        bool adaptiveThreshold;
+        // Минимальный порог, до которого адаптивная оценка не опускается.
+        float adaptiveFloor;
+        // Множитель к MAD. 2.5 — «нормальный» разброс внутри доли.
+        float adaptiveMultiplier;
+        // Схлопывать подряд идущие неровные доли в области и возвращать по одной
+        // представительнице (наиболее отклонённой) на область. Полезно, когда
+        // «неровно» место, а не отдельные доли: меньше меток, меньше артефактов.
+        bool groupRegions;
+        // Порог «региона»: подряд идущие неровные доли считаются одной областью,
+        // если расстояние между ними не больше regionGap (по порядку индексов).
+        int regionGap;
+        // Средняя уверенность внутри области, ниже которой область не считается
+        // неровной (мусорные срабатывания детектора не собираются в метки).
+        float minRegionConfidence;
+
+        UnalignedOptions()
+            : adaptiveThreshold(false)
+            , adaptiveFloor(0.01f)
+            , adaptiveMultiplier(2.5f)
+            , groupRegions(false)
+            , regionGap(1)
+            , minRegionConfidence(0.0f)
+        {}
+    };
+
     // Индексы долей с |deviation| строго больше порога. Доли с confidence ниже
     // minConfidence и с нечисловым deviation пропускаются.
+    //
+    // Если deviationThreshold <= 0 или options.adaptiveThreshold — порог
+    // оценивается по самому треку (медиана+МАД), см. UnalignedOptions.
+    // При groupRegions возвращаются индексы-представители областей.
     static QVector<int> findUnalignedBeats(const QVector<BeatInfo>& beats,
                                            float deviationThreshold = 0.02f,
-                                           float minConfidence = 0.0f);
+                                           float minConfidence = 0.0f,
+                                           const UnalignedOptions& options = UnalignedOptions());
+
+    // Кандидаты для коррекции (построение меток выравнивания).
+    struct CorrectionSelection {
+        QVector<int> indices;   // Индексы долей, по убыванию приоритета (|deviation|)
+        int regions;            // Сколько областей неровности объединено
+    };
+
+    // Приоритетный отбор долей для коррекции: сначала области (см. groupRegions),
+    // внутри области — доля с наибольшим |deviation|, с учётом confidence и энергии.
+    // Возвращает индексы в порядке убывания важности исправления.
+    static CorrectionSelection selectBeatsForCorrection(const QVector<BeatInfo>& beats,
+                                                        float deviationThreshold,
+                                                        float minConfidence,
+                                                        const UnalignedOptions& options = UnalignedOptions());
 
     // Методы для работы с предварительно определенным BPM
     static AnalysisResult createBeatGridFromBPM(const QVector<float>& samples,

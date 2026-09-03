@@ -7,7 +7,8 @@
 
 namespace RubberBandOffline {
 
-QVector<float> stretchMono(const QVector<float>& input, float timeRatio, int sampleRate)
+QVector<float> stretchMono(const QVector<float>& input, float timeRatio, int sampleRate,
+                           Quality quality)
 {
     if (input.isEmpty() || timeRatio <= 0.f) {
         return input;
@@ -26,8 +27,11 @@ QVector<float> stretchMono(const QVector<float>& input, float timeRatio, int sam
 
     using namespace RubberBand;
 
+    const RubberBandStretcher::Options engine = (quality == Quality::Final)
+        ? RubberBandStretcher::OptionEngineFiner
+        : RubberBandStretcher::OptionEngineFaster;
     const RubberBandStretcher::Options options =
-        RubberBandStretcher::OptionEngineFiner
+        engine
         | RubberBandStretcher::OptionThreadingNever
         | RubberBandStretcher::OptionChannelsApart;
 

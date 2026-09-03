@@ -289,6 +289,13 @@ private:
     std::shared_ptr<std::atomic_bool> markerPreviewRunning =
         std::make_shared<std::atomic_bool>(false);
     qint64 markerPreviewEpoch = 0;
+    /**
+     * Кэш сегментов растяжения для превью звука. По shared_ptr, потому что
+     * фоновая задача переживает несколько правок подряд; при сдвиге одной
+     * метки пересчитываются только её сегменты, а не вся дорожка.
+     */
+    std::shared_ptr<TimeStretchProcessor::SegmentCache> markerPreviewCache =
+        std::make_shared<TimeStretchProcessor::SegmentCache>();
     qint64 previewRestorePosition;  // Позиция воспроизведения до пересчёта
     qint64 previewOldDuration;      // Длительность до пересчёта (для масштабирования позиции)
     bool previewWasPlaying;         // Продолжить воспроизведение после переключения источника

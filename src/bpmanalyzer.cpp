@@ -1099,16 +1099,91 @@ BPMAnalyzer::DeviationStats BPMAnalyzer::calculateDeviations(QVector<BeatInfo>& 
     return stats;
 }
 
+namespace {
+
+// Медианное абсолютное отклонение (MAD) — устойчивая к выбросам мера разброса
+double medianAbsoluteDeviation(const QVector<BPMAnalyzer::BeatInfo>& beats)
+{
+    if (beats.isEmpty()) {
+        return 0.0;
+    }
+    std::vector<double> magnitudes;
+    magnitudes.reserve(size_t(beats.size()));
+    for (const auto& beat : beats) {
+        if (std::isfinite(beat.deviation)) {
+            magnitudes.push_back(std::abs(double(beat.deviation)));
+        }
+    }
+    if (magnitudes.empty()) {
+        return 0.0;
+    }
+    return medianInPlace(magnitudes);
+}
+
+// Схема области: подряд идущие неровные доли (не дальше regionGap друг от друга)
+struct Region {
+    int start;  // индекс первой неровной доли
+    int end;    // индекс последней (включительно)
+    int worst;  // индекс доли с наибольшим |deviation| внутри области
+};
+
+QVector<Region> groupIntoRegions(const QVector<int>& unalignedIndices,
+                                 const QVector<BPMAnalyzer::BeatInfo>& beats,
+                                 int regionGap)
+{
+    QVector<Region> regions;
+    if (unalignedIndices.isEmpty()) {
+        return regions;
+    }
+    Region current;
+    current.start = unalignedIndices[0];
+    current.end = unalignedIndices[0];
+    current.worst = unalignedIndices[0];
+    float worstDeviation = std::abs(beats[current.worst].deviation);
+
+    for (int k = 1; k < unalignedIndices.size(); ++k) {
+        const int idx = unalignedIndices[k];
+        if (idx - current.end <= regionGap) {
+            current.end = idx;
+            const float magnitude = std::abs(beats[idx].deviation);
+            if (magnitude > worstDeviation) {
+                current.worst = idx;
+                worstDeviation = magnitude;
+            }
+        } else {
+            regions.append(current);
+            current.start = idx;
+            current.end = idx;
+            current.worst = idx;
+            worstDeviation = std::abs(beats[idx].deviation);
+        }
+    }
+    regions.append(current);
+    return regions;
+}
+
+} // namespace
+
 QVector<int> BPMAnalyzer::findUnalignedBeats(const QVector<BeatInfo>& beats,
                                              float deviationThreshold,
-                                             float minConfidence)
+                                             float minConfidence,
+                                             const UnalignedOptions& options)
 {
     QVector<int> unalignedIndices;
     if (beats.isEmpty()) {
         return unalignedIndices;
     }
 
-    const float threshold = std::max(0.0f, deviationThreshold);
+    // Порог: адаптивный или фиксированный
+    float threshold = deviationThreshold;
+    if (options.adaptiveThreshold || threshold <= 0.0f) {
+        const double mad = medianAbsoluteDeviation(beats);
+        threshold = float(std::max(double(options.adaptiveFloor),
+                                   double(options.adaptiveMultiplier) * mad));
+    } else {
+        threshold = std::max(0.0f, threshold);
+    }
+
     unalignedIndices.reserve(beats.size() / 8 + 1);
 
     for (int i = 0; i < beats.size(); ++i) {
@@ -1127,5 +1202,102 @@ QVector<int> BPMAnalyzer::findUnalignedBeats(const QVector<BeatInfo>& beats,
         }
     }
 
+    // Группировка областей: по одному представителю (наиболее отклонённому) на область
+    if (options.groupRegions && !unalignedIndices.isEmpty()) {
+        QVector<Region> regions = groupIntoRegions(unalignedIndices, beats, options.regionGap);
+        unalignedIndices.clear();
+        for (const Region& r : regions) {
+            // Средняя уверенность внутри области: если низкая, не уверены в неровности
+            double sumConfidence = 0.0;
+            int count = 0;
+            for (int i = r.start; i <= r.end && i < beats.size(); ++i) {
+                if (beats[i].confidence >= 0.0f) {
+                    sumConfidence += beats[i].confidence;
+                    ++count;
+                }
+            }
+            const float meanConfidence = (count > 0) ? float(sumConfidence / count) : 0.0f;
+            if (meanConfidence < options.minRegionConfidence) {
+                continue;
+            }
+            unalignedIndices.append(r.worst);
+        }
+    }
+
     return unalignedIndices;
+}
+
+BPMAnalyzer::CorrectionSelection BPMAnalyzer::selectBeatsForCorrection(
+    const QVector<BeatInfo>& beats,
+    float deviationThreshold,
+    float minConfidence,
+    const UnalignedOptions& options)
+{
+    CorrectionSelection result;
+    result.regions = 0;
+
+    if (beats.isEmpty()) {
+        return result;
+    }
+
+    // Сначала находим неровные доли (с группировкой, если включена)
+    UnalignedOptions groupOpts = options;
+    groupOpts.groupRegions = true;  // всегда группируем для приоритетного отбора
+    const QVector<int> unalignedIndices = findUnalignedBeats(
+        beats, deviationThreshold, minConfidence, groupOpts);
+
+    if (unalignedIndices.isEmpty()) {
+        return result;
+    }
+
+    // Сортировка по приоритету: |deviation| × confidence × sqrt(energy)
+    struct Candidate {
+        int index;
+        double priority;
+    };
+    QVector<Candidate> candidates;
+    candidates.reserve(unalignedIndices.size());
+
+    for (int idx : unalignedIndices) {
+        const BeatInfo& beat = beats[idx];
+        const double magnitude = std::abs(double(beat.deviation));
+        const double confidence = std::max(0.0, double(beat.confidence));
+        const double energy = std::max(0.0, double(beat.energy));
+        // sqrt(energy) — чтобы не переоценивать громкие доли
+        const double priority = magnitude * confidence * std::sqrt(energy);
+        candidates.append(Candidate { idx, priority });
+    }
+
+    std::sort(candidates.begin(), candidates.end(),
+              [](const Candidate& a, const Candidate& b) {
+                  return a.priority > b.priority;
+              });
+
+    result.indices.reserve(candidates.size());
+    for (const Candidate& c : candidates) {
+        result.indices.append(c.index);
+    }
+
+    // Количество областей — для статистики UI
+    if (options.groupRegions) {
+        QVector<int> rawUnaligned;
+        for (int i = 0; i < beats.size(); ++i) {
+            const BeatInfo& beat = beats[i];
+            if (!std::isfinite(beat.deviation) || beat.confidence < minConfidence) {
+                continue;
+            }
+            const float threshold = (options.adaptiveThreshold || deviationThreshold <= 0.0f)
+                ? float(std::max(double(options.adaptiveFloor),
+                                double(options.adaptiveMultiplier) * medianAbsoluteDeviation(beats)))
+                : std::max(0.0f, deviationThreshold);
+            if (std::abs(beat.deviation) > threshold) {
+                rawUnaligned.append(i);
+            }
+        }
+        result.regions = groupIntoRegions(rawUnaligned, beats, options.regionGap).size();
+    } else {
+        result.regions = result.indices.size();
+    }
+
+    return result;
 }

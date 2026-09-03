@@ -74,6 +74,8 @@ set(DONTFLOAT_PLUGIN_PITCH_UI_SOURCES
     src/keymodulationstrip.cpp
     src/notepreviewplayer.cpp
     src/timestretchprocessor.cpp
+    # buildSmartAlignmentMarkers отбирает доли через BPMAnalyzer
+    src/bpmanalyzer.cpp
     src/markerengine.cpp
     src/rubberband_offline.cpp
     include/pitchgridwidget.h
