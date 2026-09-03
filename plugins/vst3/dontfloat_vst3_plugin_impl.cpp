@@ -426,6 +426,12 @@ public:
         ARA::ARAPlugInInstanceRoleFlags knownRoles,
         ARA::ARAPlugInInstanceRoleFlags assignedRoles) SMTG_OVERRIDE
     {
+        // Хост зовёт привязку из главного потока — и сразу после неё запускает
+        // разбор нот в фоне. Qt требует, чтобы QApplication создавался первым и
+        // именно в главном потоке, поэтому поднимаем его здесь, а не ждём
+        // открытия редактора: на дорожке с клипами редактора может и не быть.
+        ensureQtApplication(desc().clapName);
+
         const ARA::ARAPlugInExtensionInstance* instance =
             araExtension_.bindToARA(documentControllerRef, knownRoles, assignedRoles);
         if (instance) {

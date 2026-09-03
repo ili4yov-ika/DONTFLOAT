@@ -652,6 +652,8 @@ set_tests_properties(key_analyzer_test PROPERTIES
 add_qt_test(timestretchprocessor_test
     tests/timestretchprocessor_test.cpp
     src/timestretchprocessor.cpp
+    # buildSmartAlignmentMarkers отбирает доли через BPMAnalyzer
+    src/bpmanalyzer.cpp
     src/markerengine.cpp
     src/timeutils.cpp
 )
@@ -696,6 +698,8 @@ set_tests_properties(mini_daw_clip_edits_test PROPERTIES
 add_qt_test(beat_align_test
     tests/beat_align_test.cpp
     src/timestretchprocessor.cpp
+    # buildSmartAlignmentMarkers отбирает доли через BPMAnalyzer
+    src/bpmanalyzer.cpp
     src/rubberband_offline.cpp
     src/markerengine.cpp
     src/timeutils.cpp
@@ -713,6 +717,8 @@ add_qt_test(note_move_render_test
     tests/note_move_render_test.cpp
     src/pitchcorrection.cpp
     src/timestretchprocessor.cpp
+    # buildSmartAlignmentMarkers отбирает доли через BPMAnalyzer
+    src/bpmanalyzer.cpp
     src/rubberband_offline.cpp
     src/markerengine.cpp
     src/timeutils.cpp
@@ -732,6 +738,8 @@ set_tests_properties(note_move_render_test PROPERTIES
 add_qt_test(pitch_compensation_file_test
     tests/pitch_compensation_file_test.cpp
     src/timestretchprocessor.cpp
+    # buildSmartAlignmentMarkers отбирает доли через BPMAnalyzer
+    src/bpmanalyzer.cpp
     src/markerengine.cpp
     src/timeutils.cpp
     src/audiofileservice.cpp
@@ -740,6 +748,25 @@ add_qt_test(pitch_compensation_file_test
 set_tests_properties(pitch_compensation_file_test PROPERTIES
     LABELS "timestretch;pitch;integration;files"
     DESCRIPTION "Pitch preservation on pitch-test_C140BPM.mp3 with marker stretch/compress"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Правка высоты нот и её поведение при растяжении дорожки (реальный MP3)
+add_qt_test(pitch_note_stretch_test
+    tests/pitch_note_stretch_test.cpp
+    src/pitchdetector.cpp
+    src/pitchcorrection.cpp
+    src/timestretchprocessor.cpp
+    # buildSmartAlignmentMarkers отбирает доли через BPMAnalyzer
+    src/bpmanalyzer.cpp
+    src/markerengine.cpp
+    src/timeutils.cpp
+    src/audiofileservice.cpp
+)
+
+set_tests_properties(pitch_note_stretch_test PROPERTIES
+    LABELS "pitch;timestretch;integration;files"
+    DESCRIPTION "Note pitch edits survive marker stretch/compress on a real MP3"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 

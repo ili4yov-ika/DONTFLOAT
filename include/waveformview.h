@@ -104,6 +104,8 @@ public:
         return originalAudioData.isEmpty() ? audioData : originalAudioData;
     }
     bool isRealtimeStretchRunning() const;
+    /** Поколение исходного аудио: растёт при каждой загрузке или замене. */
+    quint64 audioGeneration() const { return audioSourceGeneration; }
     /** Дожидается фонового превью (для тестов и корректного завершения). */
     void drainPendingRealtimeStretch(int timeoutMs = 60000);
     void setLoopStart(qint64 position);
@@ -287,6 +289,11 @@ private:
     bool realtimeStretchShuttingDown;
     std::atomic<int> realtimeStretchJobsRunning;
     quint64 audioSourceGeneration;    // Инкремент при каждой загрузке/замене аудиоданных
+    /**
+     * Кэш сегментов растяжения. Живёт по shared_ptr, потому что фоновая
+     * задача может пережить сам виджет. Сбрасывается по поколению аудио.
+     */
+    std::shared_ptr<TimeStretchProcessor::SegmentCache> realtimeStretchCache;
     quint64 realtimeJobGeneration;    // Поколение данных, с которым запущена текущая задача
     QVector<MarkerData> realtimeJobMarkers; // Метки, с которыми запущена текущая задача
 

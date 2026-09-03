@@ -120,7 +120,7 @@ void BeatAlignTest::testMarkersMapBeatsOntoGrid()
     const int total = 5 * kBeatInterval;
 
     const QVector<MarkerData> markers = TimeStretchProcessor::buildBeatAlignmentMarkers(
-        beats, double(kBeatInterval), 0, total, kSampleRate);
+        beats, double(kBeatInterval), 0, total, kSampleRate, nullptr);
     QVERIFY2(markers.size() >= 4, "меток должно хватить на доли и края");
 
     for (const MarkerData& m : markers) {
@@ -151,7 +151,7 @@ void BeatAlignTest::testMarkersKeepTrackBoundaries()
     const int total = 4 * kBeatInterval;
 
     const QVector<MarkerData> markers = TimeStretchProcessor::buildBeatAlignmentMarkers(
-        beats, double(kBeatInterval), 0, total, kSampleRate);
+        beats, double(kBeatInterval), 0, total, kSampleRate, nullptr);
     QVERIFY(markers.size() >= 3);
 
     QCOMPARE(markers.first().originalPosition, qint64(0));
@@ -171,7 +171,7 @@ void BeatAlignTest::testDuplicateBeatsOnOneGridLineCollapse()
     const int total = 4 * kBeatInterval;
 
     const QVector<MarkerData> markers = TimeStretchProcessor::buildBeatAlignmentMarkers(
-        beats, double(kBeatInterval), 0, total, kSampleRate);
+        beats, double(kBeatInterval), 0, total, kSampleRate, nullptr);
 
     int onFirstLine = 0;
     for (const MarkerData& m : markers) {
@@ -194,7 +194,7 @@ void BeatAlignTest::testAlignmentMovesBeatsCloserToGrid()
     QVERIFY2(errorBefore > 2000, "исходные доли должны быть заметно кривыми");
 
     const TimeStretchProcessor::StretchResult result = TimeStretchProcessor::alignBeatsToGrid(
-        audio, beats, kBpm, kSampleRate, 0);
+        audio, beats, kBpm, kSampleRate, 0, true, nullptr);
     QVERIFY(!result.audioData.isEmpty());
     QVERIFY(!result.audioData[0].isEmpty());
 
@@ -235,7 +235,7 @@ void BeatAlignTest::testAlignmentKeepsAudioAlive()
     const QVector<QVector<float>> audio = makeBeatTrack(beats, total);
 
     const TimeStretchProcessor::StretchResult result = TimeStretchProcessor::alignBeatsToGrid(
-        audio, beats, kBpm, kSampleRate, 0);
+        audio, beats, kBpm, kSampleRate, 0, true, nullptr);
     QVERIFY(!result.audioData.isEmpty());
 
     const double before = rms(audio[0]);
