@@ -18,6 +18,8 @@
 #include <QtCore/QCoreApplication>
 #include <QtWidgets/QApplication>
 #include <QtConcurrent/QtConcurrent>
+// Дневник выгрузки: заголовочный, поэтому доступен и приложению, и плагинам
+#include "../plugins/core/dontfloat_diagnostics.h"
 #include <QtGui/QResizeEvent>
 #include <thread>
 #include <cmath>
@@ -389,6 +391,7 @@ WaveformView::WaveformView(QWidget *parent)
 
 WaveformView::~WaveformView()
 {
+    Dontfloat::PluginCore::Diagnostics::log("shutdown.waveform.begin");
     realtimeStretchShuttingDown = true;
     ++audioSourceGeneration;
 
@@ -396,11 +399,13 @@ WaveformView::~WaveformView()
         spectrogramWatcher->cancel();
         spectrogramWatcher->waitForFinished();
     }
+    Dontfloat::PluginCore::Diagnostics::log("shutdown.waveform.spectrogram-done");
 
     QDeadlineTimer deadline(60000);
     while (realtimeStretchJobsRunning.load() > 0 && !deadline.hasExpired()) {
         QApplication::processEvents(QEventLoop::AllEvents, 50);
     }
+    Dontfloat::PluginCore::Diagnostics::log("shutdown.waveform.end");
 }
 
 bool WaveformView::isRealtimeStretchRunning() const

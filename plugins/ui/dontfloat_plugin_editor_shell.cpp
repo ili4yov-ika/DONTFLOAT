@@ -320,6 +320,11 @@ MetronomeController* DontfloatPluginEditorShell::ensureMetronome()
 
 void DontfloatPluginEditorShell::onPreviewPlayClicked()
 {
+    // Под ARA играет DAW, а не плагин: там кнопка управляет транспортом
+    // хоста. Если управление не отдано, слушаем кусок сами, как раньше
+    if (content_ && content_->requestHostTransport(true)) {
+        return;
+    }
     int sampleRate = 0;
     QVector<float> mono = sessionMonoMix(&sampleRate);
     if (mono.isEmpty() || sampleRate <= 0) {
@@ -347,6 +352,10 @@ void DontfloatPluginEditorShell::onPreviewPlayClicked()
 
 void DontfloatPluginEditorShell::onPreviewStopClicked()
 {
+    // Останавливаем тем же путём, каким запускали (см. onPreviewPlayClicked)
+    if (content_ && content_->requestHostTransport(false)) {
+        return;
+    }
     if (previewPlayer_) {
         previewPlayer_->stop();
     }

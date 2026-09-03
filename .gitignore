@@ -13,3 +13,7 @@ tools/*.tar.gz
 # OS files
 .DS_Store
 Thumbs.db
+
+# REAPER складывает кэш пиков рядом с аудио, когда интеграционный тест
+# открывает фикстуры (tests/reaper_ara_integration_test)
+tests/source4test/peaks/

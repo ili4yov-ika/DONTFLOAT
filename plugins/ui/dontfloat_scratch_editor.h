@@ -13,6 +13,9 @@
 #include <memory>
 
 class WaveformView;
+#if defined(DONTFLOAT_WITH_ARA)
+namespace Dontfloat::Ara { class AraDocumentController; }
+#endif
 class QLabel;
 class QPushButton;
 class QScrollBar;
@@ -38,6 +41,16 @@ public:
     void setHostPlayhead(qint64 samplePosition) override;
     /** Тактовая сетка DAW: волна рисует её же сетку. */
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample) override;
+    /**
+     * Привязка к документу ARA.
+     *
+     * Без неё волна оставалась пустой: сэмплы сюда попадали только из
+     * захвата блоков в process(), а он идёт лишь на играющем транспорте и в
+     * роли ARA-рендерера хостом не наполняется вовсе. Звук дорожки при этом
+     * лежит в документе целиком и доступен сразу — его и берём.
+     */
+    void setAraBinding(const void* extension) override;
+    bool requestHostTransport(bool start) override;
 
     // Инструменты волны из шапки (те же действия, что в главном окне)
     bool hasWaveformTools() const override { return true; }
@@ -80,6 +93,26 @@ private:
                                            qint64 totalSamples,
                                            int sampleRate) const;
     void writeChannelsToSession(const QVector<QVector<float>>& channels, int sampleRate);
+    /** Забирает звук дорожки из документа ARA. true — забрали и показали. */
+    bool pullAudioFromAra();
+    /**
+     * Тактовая сетка хоста и место клипа на таймлайне — из документа ARA.
+     *
+     * Волна показывает источник, а хост живёт во времени проекта. Клип может
+     * стоять не в начале и быть растянут, поэтому и сетка, и каретка
+     * пересчитываются через его размещение.
+     */
+    void pullBeatGridFromAra();
+    /** Время проекта (сэмплы) → время источника (сэмплы). */
+    qint64 projectSampleToSource(qint64 projectSample, int sampleRate) const;
+    /** Обратно: время источника → время проекта, в секундах. */
+    double sourceSampleToProjectSeconds(qint64 sourceSample, int sampleRate) const;
+    /** Просит DAW встать в точку, на которую кликнули в волне. */
+    bool requestHostSeek(qint64 sourceSample);
+#if defined(DONTFLOAT_WITH_ARA)
+    /** Документ ARA, если экземпляр к нему привязан. */
+    Dontfloat::Ara::AraDocumentController* araController() const;
+#endif
     /** Кладёт обработанный звук в выход плагина (его услышит DAW). */
     void publishRenderedOutput(const QVector<QVector<float>>& channels, int sampleRate);
 
@@ -102,6 +135,15 @@ private:
     std::shared_ptr<AlignedTake> pendingAligned_;
     BPMAnalyzer::AnalysisResult lastAnalysis_;
     QTimer* autoAnalysisTimer_ = nullptr;
+    /** Опрос документа ARA: звук появляется в нём не в момент привязки. */
+    QTimer* araPollTimer_ = nullptr;
+    const void* araBinding_ = nullptr;
+    bool araAudioApplied_ = false;
+    /** Размещение клипа на таймлайне DAW: по нему считаются сетка и каретка. */
+    bool araClipValid_ = false;
+    double araClipStartPlaybackSec_ = 0.0;
+    double araClipStartSourceSec_ = 0.0;
+    double araClipStretch_ = 1.0;
     QElapsedTimer hostRefreshClock_;
     bool analysisRunning_ = false;
     bool alignRunning_ = false;
@@ -117,6 +159,8 @@ private:
 
     /** Пауза в потоке аудио от хоста, после которой стартует авто-анализ. */
     static constexpr int kAutoAnalysisDelayMs = 400;
+    /** Как часто спрашиваем документ ARA, появился ли в нём звук. */
+    static constexpr int kAraPollIntervalMs = 400;
     /** Минимальный интервал перерисовки волны при потоке блоков от хоста. */
     static constexpr int kHostRefreshIntervalMs = 200;
 };
