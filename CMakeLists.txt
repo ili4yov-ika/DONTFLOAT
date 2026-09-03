@@ -301,6 +301,13 @@ if(DONTFLOAT_BUILD_PLUGINS)
         plugins/core/plugin_product.cpp
         plugins/core/plugin_product.h
     )
+    # Библиотека уходит внутрь разделяемых модулей плагинов (.clap, .so,
+    # .vst3), поэтому её объекты обязаны быть позиционно-независимыми.
+    # На Windows флаг ничего не меняет, а на Linux без него линковка модуля
+    # падает: «relocation R_X86_64_PC32 ... can not be used when making a
+    # shared object». Всплыло не сразу — ссылку на __libc_single_threaded
+    # притащил std::shared_ptr, которым публикуется результат обработки.
+    set_target_properties(dontfloat_plugin_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_features(dontfloat_plugin_core PUBLIC cxx_std_17)
     target_include_directories(dontfloat_plugin_core PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
@@ -370,6 +377,9 @@ if(EXISTS ${QM_DSP_ROOT})
         ${QM_DSP_CPP_SOURCES}
         ${QM_DSP_C_SOURCES}
     )
+
+    # Тот же случай: qm_dsp линкуется в модули плагинов (см. dontfloat_plugin_core)
+    set_target_properties(qm_dsp PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     # Устанавливаем язык для C файлов
     set_source_files_properties(${QM_DSP_C_SOURCES} PROPERTIES

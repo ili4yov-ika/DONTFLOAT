@@ -60,6 +60,9 @@ function(dontfloat_add_ara_library)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/pitchdetector.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/pitchdetector.h
     )
+    # Слой ARA линкуется в модули плагинов — нужен -fPIC, как и остальным
+    # статическим библиотекам в этой цепочке (см. dontfloat_plugin_core)
+    set_target_properties(dontfloat_ara PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_features(dontfloat_ara PUBLIC cxx_std_17)
     target_include_directories(dontfloat_ara PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
