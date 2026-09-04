@@ -623,6 +623,7 @@ bool AraDocumentController::requestHostPlayback(bool start) noexcept
 {
     auto* playback = getHostPlaybackController();
     if (!playback) {
+        Dontfloat::PluginCore::Diagnostics::log("ara.transport.unavailable");
         return false;  // хост управление транспортом не отдал
     }
     if (start) {
@@ -711,6 +712,38 @@ AraAudioSource* AraDocumentController::audioSourceForInstance(
         if (!renderer->getPlaybackRegions().empty()) {
             return sourceOfRegion(renderer->getPlaybackRegions().front());
         }
+    }
+    // Роль редактора: хост назначает ей клипы дорожки даже тогда, когда
+    // воспроизводящему рендереру ничего не дал. Без этого пути экземпляр
+    // не знает своей дорожки: полная редакция цепляла клип из выделения в
+    // DAW (то есть чужой), а Pitcher не находил ничего
+    if (const auto* editorRenderer = extension.getEditorRenderer<ARA::PlugIn::EditorRenderer>()) {
+        if (!editorRenderer->getPlaybackRegions().empty()) {
+            if (AraAudioSource* source =
+                    sourceOfRegion(editorRenderer->getPlaybackRegions().front())) {
+                return source;
+            }
+        }
+        for (const ARA::PlugIn::RegionSequence* sequence : editorRenderer->getRegionSequences()) {
+            if (!sequence || sequence->getPlaybackRegions().empty()) {
+                continue;
+            }
+            if (AraAudioSource* source = sourceOfRegion(sequence->getPlaybackRegions().front())) {
+                return source;
+            }
+        }
+    }
+
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        const auto* renderer = extension.getPlaybackRenderer<AraPlaybackRenderer>();
+        const auto* editorRenderer = extension.getEditorRenderer<ARA::PlugIn::EditorRenderer>();
+        char line[200];
+        std::snprintf(line, sizeof(line),
+                      "ara.source.unknown playback=%zu editor=%zu sequences=%zu",
+                      renderer ? renderer->getPlaybackRegions().size() : 0,
+                      editorRenderer ? editorRenderer->getPlaybackRegions().size() : 0,
+                      editorRenderer ? editorRenderer->getRegionSequences().size() : 0);
+        Dontfloat::PluginCore::Diagnostics::log(line);
     }
     return nullptr;
 }
