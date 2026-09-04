@@ -78,6 +78,7 @@ private slots:
     void testForeignSelectionDoesNotStealTheTrack();
     void testOwnClipIsFoundForEachInstance();
     void testTransportRequestsReachTheHost();
+    void testHostPlaysEditedAudioNotTheSource();
     void testNeighbourNotesAreAvailableAsReference();
     void testRemovedTrackDisappearsFromDocument();
 
@@ -253,6 +254,57 @@ void MiniDawTwoTracksTest::testTransportRequestsReachTheHost()
     // Клик по волне или пианороллу переставляет каретку DAW тем же путём
     QVERIFY(controller->requestHostPlaybackPosition(1.25));
     QVERIFY(std::fabs(document_->lastRequestedPlaybackPosition() - 1.25) < 1e-9);
+}
+
+// Хост играет то, что насчитал плагин, а не исходник.
+//
+// Под ARA дорожку выдаёт плагин (роль kARAPlaybackRendererRole), и выход
+// плагина хост не слушает вовсе. Пока результат правок не попадал в модель,
+// ноты в пианоролле двигали, а на слух ничего не менялось — рендерер играл
+// исходные сэмплы.
+//
+// Правку берём предельно различимую: тишина вместо звука. Если в блоке
+// осталось хоть что-то, играется исходник.
+void MiniDawTwoTracksTest::testHostPlaysEditedAudioNotTheSource()
+{
+    auto* controller =
+        instances_[0]->getDocumentController<Dontfloat::Ara::AraDocumentController>();
+    QVERIFY(controller != nullptr);
+
+    Dontfloat::Ara::AraAudioSource* own =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*instances_[0]);
+    QVERIFY(own != nullptr);
+
+    auto* renderer = instances_[0]->getPlaybackRenderer<Dontfloat::Ara::AraPlaybackRenderer>();
+    QVERIFY2(renderer != nullptr, "хост не назначил экземпляру роль воспроизведения");
+
+    constexpr int kFrames = 512;
+    std::vector<float> block(kFrames, 0.0f);
+    float* channels[1] = { block.data() };
+
+    const auto peak = [&block]() {
+        float value = 0.0f;
+        for (float sample : block) {
+            value = std::max(value, std::fabs(sample));
+        }
+        return value;
+    };
+
+    // Пока правок нет — играется исходник, и он звучит
+    QVERIFY(renderer->renderBlock(channels, 1, kFrames, 0, kSampleRate));
+    QVERIFY2(peak() > 0.01f, "рендерер не выдал исходный звук");
+
+    // Плагин пересчитал дорожку в тишину — её хост и обязан играть
+    controller->publishEditedAudio(own, std::vector<float>(own->monoSamples().size(), 0.0f));
+    std::fill(block.begin(), block.end(), 0.0f);
+    QVERIFY(renderer->renderBlock(channels, 1, kFrames, 0, kSampleRate));
+    QVERIFY2(peak() < 1e-6f, "хост играет исходник, а не результат правок");
+
+    // Снимаем правку — возвращается исходник (и соседние проверки не страдают)
+    controller->publishEditedAudio(own, {});
+    std::fill(block.begin(), block.end(), 0.0f);
+    QVERIFY(renderer->renderBlock(channels, 1, kFrames, 0, kSampleRate));
+    QVERIFY2(peak() > 0.01f, "после снятия правки исходник не вернулся");
 }
 
 // Ноты соседней дорожки доступны как референс — это и рисует редактор серым

@@ -334,6 +334,11 @@ void DontfloatScratchEditor::publishRenderedOutput(const QVector<QVector<float>>
     rendered.mono = toStdVector(AudioFileService::toMono(channels));
     // Результат покрывает ту же дорожку, что и захват, — с её начала
     session_->setRenderedOutput(rendered, 0);
+#if defined(DONTFLOAT_WITH_ARA)
+    // Под ARA выход плагина хосту не отдаётся: дорожку выдаёт наш рендерер,
+    // и растяжение станет слышно, только если положить результат в модель
+    publishEditedAudioToAra(rendered.mono);
+#endif
     emit renderedOutputChanged();
 }
 
@@ -495,6 +500,25 @@ Dontfloat::Ara::AraDocumentController* DontfloatScratchEditor::araController() c
     return extension->getDocumentController<Dontfloat::Ara::AraDocumentController>();
 }
 #endif
+
+void DontfloatScratchEditor::publishEditedAudioToAra(const std::vector<float>& mono)
+{
+#if defined(DONTFLOAT_WITH_ARA)
+    auto* controller = araController();
+    if (!controller || mono.empty() || !araBinding_) {
+        return;
+    }
+    const auto* extension = static_cast<const ARA::PlugIn::PlugInExtension*>(araBinding_);
+    Dontfloat::Ara::AraAudioSource* source =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
+    if (!source) {
+        source = controller->onlyAudioSource();
+    }
+    controller->publishEditedAudio(source, mono);
+#else
+    Q_UNUSED(mono);
+#endif
+}
 
 bool DontfloatScratchEditor::requestHostTransport(bool start)
 {

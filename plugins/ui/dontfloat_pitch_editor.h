@@ -15,6 +15,11 @@
 #include <QVector>
 #include <atomic>
 #include <memory>
+#include <vector>
+
+#if defined(DONTFLOAT_WITH_ARA)
+namespace Dontfloat::Ara { class AraDocumentController; }
+#endif
 
 class KeyModulationStrip;
 class QUndoStack;
@@ -62,6 +67,13 @@ public:
      * оставались в разных местах.
      */
     void applySourcePlayhead(qint64 sourceSample);
+    /**
+     * Кнопки ▶ ■ в шапке — дублёры транспорта DAW.
+     *
+     * Переопределять обязательно: база возвращает false, и в редакции Pitcher
+     * (там содержимое окна — этот редактор) кнопки просто не работали.
+     */
+    bool requestHostTransport(bool start) override;
 #if defined(DONTFLOAT_WITH_ARA)
     /** Экземпляр привязан к документу ARA — работаем с моделью, а не с захватом. */
     void setAraBinding(const void* extension) override;
@@ -142,6 +154,17 @@ private:
      * окна и волна в DAW остаются там, где были.
      */
     bool requestHostSeek(qint64 sourceSample);
+#if defined(DONTFLOAT_WITH_ARA)
+    /** Document controller этого экземпляра (общий на весь проект DAW). */
+    Dontfloat::Ara::AraDocumentController* araDocumentController() const;
+    /**
+     * Отдаёт исправленный звук в модель ARA — иначе хост играет исходник.
+     *
+     * Под ARA дорожку выдаёт плагин, и без этого шага правки нот было видно,
+     * но не слышно.
+     */
+    void publishEditedAudioToAra(const std::vector<float>& mono);
+#endif
 #if defined(DONTFLOAT_WITH_ARA)
     /**
      * Тянет из модели ARA: свои ноты, тактовую сетку хоста и ноты соседней

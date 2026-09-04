@@ -525,6 +525,32 @@ void DontfloatPitchEditor::setHostPlayhead(qint64 samplePosition)
     applyingHostPlayhead_ = false;
 }
 
+#if defined(DONTFLOAT_WITH_ARA)
+Dontfloat::Ara::AraDocumentController* DontfloatPitchEditor::araDocumentController() const
+{
+    if (!araBinding_) {
+        return nullptr;
+    }
+    const auto* extension = static_cast<const ARA::PlugIn::PlugInExtension*>(araBinding_);
+    return extension->getDocumentController<Dontfloat::Ara::AraDocumentController>();
+}
+
+void DontfloatPitchEditor::publishEditedAudioToAra(const std::vector<float>& mono)
+{
+    auto* controller = araDocumentController();
+    if (!controller || mono.empty()) {
+        return;
+    }
+    const auto* extension = static_cast<const ARA::PlugIn::PlugInExtension*>(araBinding_);
+    Dontfloat::Ara::AraAudioSource* source =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
+    if (!source) {
+        source = controller->onlyAudioSource();
+    }
+    controller->publishEditedAudio(source, mono);
+}
+#endif
+
 void DontfloatPitchEditor::applySourcePlayhead(qint64 sourceSample)
 {
     if (!pitchGrid_ || !session_) {
@@ -543,6 +569,18 @@ void DontfloatPitchEditor::applySourcePlayhead(qint64 sourceSample)
     applyingHostPlayhead_ = false;
 }
 
+bool DontfloatPitchEditor::requestHostTransport(bool start)
+{
+#if defined(DONTFLOAT_WITH_ARA)
+    if (auto* controller = araDocumentController()) {
+        return controller->requestHostPlayback(start);
+    }
+#else
+    Q_UNUSED(start);
+#endif
+    return false;
+}
+
 bool DontfloatPitchEditor::requestHostSeek(qint64 sourceSample)
 {
 #if defined(DONTFLOAT_WITH_ARA)
@@ -553,8 +591,7 @@ bool DontfloatPitchEditor::requestHostSeek(qint64 sourceSample)
     if (sampleRate <= 0) {
         return false;
     }
-    const auto* extension = static_cast<const ARA::PlugIn::PlugInExtension*>(araBinding_);
-    auto* controller = extension->getDocumentController<Dontfloat::Ara::AraDocumentController>();
+    auto* controller = araDocumentController();
     if (!controller) {
         return false;
     }
@@ -1195,6 +1232,11 @@ void DontfloatPitchEditor::onApplyCorrectionClicked()
     baseNotes_ = fromCoreNotes(session_->pitchAnalysis().notes);
     // Результат уходит в выход плагина: без этого DAW играла бы исходный звук
     session_->setRenderedOutput(buffer, 0);
+#if defined(DONTFLOAT_WITH_ARA)
+    // Под ARA выход плагина хосту не отдаётся вовсе: дорожку выдаёт наш
+    // рендерер, и играть он будет ровно то, что положили сюда
+    publishEditedAudioToAra(buffer.mono);
+#endif
     refreshFromSession();
     applyButton_->setEnabled(false);
     setStatus(tr("correction applied — the DAW now plays the corrected audio"));

@@ -302,6 +302,14 @@ void AraAudioSource::setMonoSamples(std::vector<float> samples) noexcept
     samplesReady_.store(!monoSamples_.empty(), std::memory_order_release);
 }
 
+void AraAudioSource::setEditedSamples(std::vector<float> samples) noexcept
+{
+    auto next = samples.empty()
+        ? std::shared_ptr<const std::vector<float>>()
+        : std::make_shared<const std::vector<float>>(std::move(samples));
+    std::atomic_store(&editedSamples_, next);
+}
+
 const ARA::ARAFactory* AraDocumentController::getARAFactory() noexcept
 {
     return ARA::PlugIn::PlugInEntry::getPlugInEntry<AraFactoryConfig, AraDocumentController>()
@@ -586,11 +594,18 @@ bool AraPlaybackRenderer::renderBlock(float* const* outputs, int channelCount, i
 
         const auto* source = static_cast<const AraAudioSource*>(
             region->getAudioModification()->getAudioSource());
-        if (!source || !source->samplesReady()) {
+        if (!source) {
+            continue;
+        }
+        // Правки плагина важнее исходника: ради них он тут и стоит. Указатель
+        // держим до конца блока — правку могут применить прямо сейчас, из
+        // интерфейса, и буфер под нами сменится
+        const std::shared_ptr<const std::vector<float>> edited = source->editedSamples();
+        if (!edited && !source->samplesReady()) {
             continue;  // разбор ещё не отдал сэмплы
         }
 
-        const std::vector<float>& samples = source->monoSamples();
+        const std::vector<float>& samples = edited ? *edited : source->monoSamples();
         const double sourceRate = source->getSampleRate() > 0.0 ? source->getSampleRate()
                                                                 : sampleRate;
         const double sourceStart = region->getStartInAudioModificationTime();
@@ -669,6 +684,28 @@ bool AraDocumentController::requestHostPlaybackPosition(double seconds) noexcept
         Dontfloat::PluginCore::Diagnostics::log(line);
     }
     return true;
+}
+
+void AraDocumentController::publishEditedAudio(AraAudioSource* audioSource,
+                                               std::vector<float> samples) noexcept
+{
+    if (!audioSource) {
+        return;
+    }
+    const std::size_t frames = samples.size();
+    audioSource->setEditedSamples(std::move(samples));
+    ++modelRevision_;
+    // Хосту говорим, что звук клипов изменился: он перечитает то, что кэшировал
+    for (ARA::PlugIn::AudioModification* modification : audioSource->getAudioModifications()) {
+        notifyAudioModificationContentChanged(modification,
+                                              ARA::ContentUpdateScopes::samplesAreAffected());
+    }
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        char line[256];
+        std::snprintf(line, sizeof(line), "ara.audio.edited frames=%zu source=%s",
+                      frames, audioSource->getPersistentID().c_str());
+        Dontfloat::PluginCore::Diagnostics::log(line);
+    }
 }
 
 std::vector<AraClipPlacement> AraDocumentController::clipsForAudioSource(

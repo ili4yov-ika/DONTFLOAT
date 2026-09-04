@@ -336,7 +336,10 @@ Rubber Band зависят от окружения.
   (`testForeignSelectionDoesNotStealTheTrack`);
 - каждый экземпляр находит **свой** клип (`testOwnClipIsFoundForEachInstance`);
 - просьбы транспорта доходят до хоста (`testTransportRequestsReachTheHost`) —
-  это тот самый путь, по которому идут кнопки ▶ ■.
+  это тот самый путь, по которому идут кнопки ▶ ■;
+- хост играет результат правок, а не исходник
+  (`testHostPlaysEditedAudioNotTheSource`). Правка взята предельно различимой:
+  тишина вместо звука — если в блоке осталось хоть что-то, играется исходник.
 
 ## Интеграционный тест с настоящей DAW (REAPER)
 
@@ -381,6 +384,7 @@ $env:DONTFLOAT_DIAG_FILE = "$env:TEMP\dontfloat_diag.txt"
 | `ara.notes.parsed` | разбор источника завершён, ноты в модели |
 | `ara.notes.reference from=… for=…` | чьи ноты отданы соседу и кому |
 | `ara.notes.own count=N source=…` | чей источник экземпляр посчитал своим (синие ноты) |
+| `ara.audio.edited frames=N source=…` | результат правок положен в модель — его хост и играет |
 | `ara.audio.applied` | волна забрала звук из документа ARA |
 | `ara.clip.sync` | размещение клипа перечитано после правки (звук не трогали) |
 | `ara.grid.applied` | тактовая сетка пришла из хоста |

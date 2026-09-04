@@ -85,6 +85,7 @@ private slots:
     void cleanupTestCase();
 
     void testOwnNotesAreEditableAndNeighbourStaysReference();
+    void testTransportButtonsReachTheHost();
 
 private:
     /** Крутит модель и очередь Qt, пока у обоих редакторов не появятся ноты. */
@@ -213,6 +214,24 @@ void PluginReferenceNotesTest::testOwnNotesAreEditableAndNeighbourStaysReference
                      > double(kUpperPitch - kLowerPitch) / 2.0,
                  "рабочие ноты и референс совпали — соседская дорожка стала своей");
     }
+}
+
+// Кнопки транспорта в редакции Pitcher.
+//
+// Содержимое её окна — этот самый редактор, и пока он не переопределял
+// requestHostTransport, база возвращала false: кнопки не работали. В полной
+// редакции того же не было — там запрос уходит в волновую половину.
+void PluginReferenceNotesTest::testTransportButtonsReachTheHost()
+{
+    const int startsBefore = document_->transportStartRequests();
+    const int stopsBefore = document_->transportStopRequests();
+
+    QVERIFY2(editors_[0]->requestHostTransport(true),
+             "редактор не дотянулся до транспорта хоста");
+    QCOMPARE(document_->transportStartRequests(), startsBefore + 1);
+
+    QVERIFY(editors_[0]->requestHostTransport(false));
+    QCOMPARE(document_->transportStopRequests(), stopsBefore + 1);
 }
 
 QTEST_MAIN(PluginReferenceNotesTest)
