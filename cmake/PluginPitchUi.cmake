@@ -105,6 +105,9 @@ function(_dontfloat_link_plugin_ui_common target_name)
         Qt6::Multimedia
         Qt6::Concurrent
     )
+    # dontfloat_qt_hosting.cpp зовёт dladdr: под Linux он живёт в libdl,
+    # и без него цели с оболочкой плагина не линкуются
+    target_link_libraries(${target_name} PRIVATE ${CMAKE_DL_LIBS})
     dontfloat_link_qt_svg(${target_name})
     if(TARGET qm_dsp)
         target_link_libraries(${target_name} PRIVATE qm_dsp)

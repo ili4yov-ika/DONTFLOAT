@@ -44,11 +44,13 @@ public:
         Q_UNUSED(barStartSample);
     }
 
-#if defined(DONTFLOAT_WITH_ARA)
+    // Объявлены всегда, даже в сборке без ARA: типов ARA в сигнатурах нет, а
+    // наследники переопределяют их безусловно. Пока объявления прятались под
+    // #if, сборка без SDK (macOS в CI) падала на «override без virtual»
     /**
      * Экземпляр привязали к документу ARA: дальше ноты, тактовая сетка и
      * референс с соседних дорожек берутся из общей модели, а не из захвата
-     * блоками.  extension — ARA::PlugIn::PlugInExtension этого экземпляра
+     * блоками. \a extension — ARA::PlugIn::PlugInExtension этого экземпляра
      * (тип скрыт за void*, чтобы заголовок не тянул ARA в сборки без неё).
      */
     virtual void setAraBinding(const void* extension) { Q_UNUSED(extension); }
@@ -62,7 +64,6 @@ public:
      * оболочка слушает кусок сама, как раньше.
      */
     virtual bool requestHostTransport(bool start) { Q_UNUSED(start); return false; }
-#endif
 
     /** Есть ли волна с тактовой сеткой и метками (кнопки OD / < / BG / > / A / B). */
     virtual bool hasWaveformTools() const { return false; }

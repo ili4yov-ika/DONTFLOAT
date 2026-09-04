@@ -41,7 +41,6 @@ public:
     /** Позиция каретки DAW (сэмплы дорожки) — двигает каретку редактора. */
     void setHostPlayhead(qint64 samplePosition);
     /** Тактовая сетка DAW: темп, доли в такте и граница такта в сэмплах. */
-#if defined(DONTFLOAT_WITH_ARA)
     /** Проброс привязки ARA в содержимое редактора (см. DontfloatEditorContent). */
     void setAraBinding(const void* extension);
     /**
@@ -52,7 +51,6 @@ public:
      * тоже становится «играет».
      */
     void setHostTransportPlaying(bool playing);
-#endif
 
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample);
     /**
