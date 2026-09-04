@@ -44,6 +44,13 @@ public:
     /** Проброс привязки ARA в содержимое редактора (см. DontfloatEditorContent). */
     void setAraBinding(const void* extension);
     /**
+     * К какому экземпляру привязано это окно.
+     *
+     * По ней обёртка формата решает, чьи позиции каретки окну показывать:
+     * экземпляров в проекте несколько, и раньше окно получало их вперемешку.
+     */
+    const void* araBinding() const { return araBinding_; }
+    /**
      * Транспорт DAW пошёл или встал.
      *
      * Кнопка воспроизведения в плагине — дублёр кнопки хоста, поэтому она
@@ -101,6 +108,7 @@ private:
     QPushButton* playButton_ = nullptr;
     /** Играет ли сейчас транспорт DAW — кнопка показывает именно его. */
     bool hostPlaying_ = false;
+    const void* araBinding_ = nullptr;
     QPushButton* stopButton_ = nullptr;
     QPushButton* metronomeButton_ = nullptr;
     QPushButton* loopButton_ = nullptr;

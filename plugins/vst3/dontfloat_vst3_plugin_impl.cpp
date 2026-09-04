@@ -142,14 +142,37 @@ std::vector<DontfloatPluginEditorShell*>& openEditors()
 
 #if defined(DONTFLOAT_WITH_ARA)
 /**
- * Привязка ARA живёт на процессоре, а редактор — отдельный объект VST3.
- * Держим последнюю привязку модуля, чтобы окно, открытое позже, тоже
- * получило модель, а привязка после открытия окна дошла до редакторов.
+ * Привязки ARA всех экземпляров модуля.
+ *
+ * Привязка живёт на процессоре, а редактор — отдельный объект VST3, и связи
+ * между ними в VST3 нет. Раньше держали **одну** последнюю привязку — с двумя
+ * экземплярами (две дорожки, или разрезанный клип) второй затирал первую, и
+ * оба окна уезжали на одну дорожку.
  */
-const void*& boundAraExtension()
+std::vector<const void*>& boundAraExtensions()
 {
-    static const void* extension = nullptr;
-    return extension;
+    static std::vector<const void*> extensions;
+    return extensions;
+}
+
+/**
+ * Привязка, окно которой ещё не открыто, — её и берёт открывающееся окно.
+ *
+ * Признак «окно открыто» держит сама модель ARA (`AraEditorView`), и мы его
+ * выставляем при открытии и снимаем при закрытии. Получается однозначное
+ * соответствие «окно ↔ экземпляр» без всякого протокола хоста.
+ */
+const void* claimFreeAraExtension()
+{
+    const std::lock_guard<std::mutex> lock(editorsMutex());
+    for (const void* extension : boundAraExtensions()) {
+        const auto* plugIn = static_cast<const ARA::PlugIn::PlugInExtension*>(extension);
+        auto* view = plugIn->getEditorView<Dontfloat::Ara::AraEditorView>();
+        if (!view || !view->isEditorOpen()) {
+            return extension;
+        }
+    }
+    return boundAraExtensions().empty() ? nullptr : boundAraExtensions().back();
 }
 #endif
 
@@ -186,7 +209,31 @@ std::atomic<Steinberg::int64>& lastPlayheadPosition()
  * Поэтому шаг назад принимаем только большой (перемотка, петля, старт с
  * начала), а мелкий отбрасываем.
  */
-void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition, double sampleRate)
+/**
+ * Слушает ли окно этот экземпляр.
+ *
+ * Экземпляров в проекте несколько, и каждый шлёт свою позицию каретки. Пока
+ * рассылка шла всем подряд, окно получало позиции вперемешку — отсюда и рывки
+ * вправо-влево. Сравниваем привязку ARA: она у экземпляра своя.
+ *
+ * Вне ARA привязки нет ни у кого, и рассылка остаётся общей — как раньше.
+ */
+bool editorListensTo(DontfloatPluginEditorShell* editor, const void* sender)
+{
+#if defined(DONTFLOAT_WITH_ARA)
+    if (!sender || !editor) {
+        return editor != nullptr;
+    }
+    const void* own = editor->araBinding();
+    return own == nullptr || own == sender;
+#else
+    Q_UNUSED(sender);
+    return editor != nullptr;
+#endif
+}
+
+void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition, double sampleRate,
+                               const void* sender)
 {
     const Steinberg::int64 backwardJumpLimit =
         Steinberg::int64(std::max(1.0, sampleRate) * kPlayheadBackwardJumpSeconds);
@@ -230,6 +277,9 @@ void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition, double sampleRat
         return;
     }
     for (DontfloatPluginEditorShell* editor : openEditors()) {
+        if (!editorListensTo(editor, sender)) {
+            continue;
+        }
         QMetaObject::invokeMethod(editor, [editor, projectSeconds]() {
             pending.store(false);
             editor->setHostPlayheadSeconds(projectSeconds);
@@ -238,7 +288,8 @@ void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition, double sampleRat
 }
 
 /** Тактовая сетка DAW → сетка редакторов (темп, доли, начало такта). */
-void notifyEditorsHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample)
+void notifyEditorsHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample,
+                               const void* sender)
 {
     static std::atomic_bool pending { false };
     if (pending.exchange(true)) {
@@ -251,6 +302,9 @@ void notifyEditorsHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSampl
         return;
     }
     for (DontfloatPluginEditorShell* editor : openEditors()) {
+        if (!editorListensTo(editor, sender)) {
+            continue;
+        }
         QMetaObject::invokeMethod(editor, [editor, bpm, beatsPerBar, barStartSample]() {
             pending.store(false);
             editor->setHostBeatGrid(bpm, beatsPerBar, barStartSample);
@@ -264,7 +318,7 @@ void notifyEditorsHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSampl
  * Шлём только на смену состояния: process() зовётся на каждый блок, и
  * уведомление на каждый из них забило бы очередь интерфейса.
  */
-void notifyEditorsHostTransport(bool playing)
+void notifyEditorsHostTransport(bool playing, const void* sender)
 {
     static std::atomic<int> lastState { -1 };
     const int state = playing ? 1 : 0;
@@ -274,6 +328,9 @@ void notifyEditorsHostTransport(bool playing)
 
     const std::lock_guard<std::mutex> lock(editorsMutex());
     for (DontfloatPluginEditorShell* editor : openEditors()) {
+        if (!editorListensTo(editor, sender)) {
+            continue;
+        }
         QMetaObject::invokeMethod(editor, [editor, playing]() {
             editor->setHostTransportPlaying(playing);
         }, Qt::QueuedConnection);
@@ -365,7 +422,9 @@ public:
         editor_ = std::make_unique<DontfloatPluginEditorShell>(product());
         editor_->bindSession(&sharedSession(product()));
 #if defined(DONTFLOAT_WITH_ARA)
-        if (const void* extension = boundAraExtension()) {
+        // Берём привязку, окно которой ещё не открыто: экземпляров в проекте
+        // несколько, и «последняя привязка модуля» уводила окно на чужую дорожку
+        if (const void* extension = claimFreeAraExtension()) {
             // Хост шлёт выбор клипов только при открытом окне редактора
             if (auto* view = static_cast<const ARA::PlugIn::PlugInExtension*>(extension)
                                  ->getEditorView<Dontfloat::Ara::AraEditorView>()) {
@@ -429,7 +488,9 @@ public:
         stopHostTimer();
 #endif
 #if defined(DONTFLOAT_WITH_ARA)
-        if (const void* extension = boundAraExtension()) {
+        // Свою привязку окно помнит само — по ней и снимаем признак «открыто»,
+        // иначе следующее окно снова заняло бы чужой экземпляр
+        if (const void* extension = editor_ ? editor_->araBinding() : nullptr) {
             if (auto* view = static_cast<const ARA::PlugIn::PlugInExtension*>(extension)
                                  ->getEditorView<Dontfloat::Ara::AraEditorView>()) {
                 view->setEditorOpenState(false);
@@ -617,13 +678,23 @@ public:
         const ARA::ARAPlugInExtensionInstance* instance =
             araExtension_.bindToARA(documentControllerRef, knownRoles, assignedRoles);
         if (instance) {
-            boundAraExtension() = &araExtension_;
-            // Окна, открытые до привязки, узнают о модели сразу
+            araBound_ = true;
+            const void* own = &araExtension_;
             const std::lock_guard<std::mutex> lock(editorsMutex());
+            auto& extensions = boundAraExtensions();
+            if (std::find(extensions.begin(), extensions.end(), own) == extensions.end()) {
+                extensions.push_back(own);
+            }
+            // Окно, открытое до привязки и ещё ни к кому не привязанное,
+            // узнаёт о модели сразу. Чужие окна не трогаем
             for (DontfloatPluginEditorShell* editor : openEditors()) {
-                QMetaObject::invokeMethod(editor, [editor]() {
-                    editor->setAraBinding(boundAraExtension());
+                if (editor->araBinding() != nullptr) {
+                    continue;
+                }
+                QMetaObject::invokeMethod(editor, [editor, own]() {
+                    editor->setAraBinding(own);
                 }, Qt::QueuedConnection);
+                break;
             }
         }
         return instance;
@@ -636,6 +707,37 @@ public:
     END_DEFINE_INTERFACES(Steinberg::Vst::AudioEffect)
     REFCOUNT_METHODS(Steinberg::Vst::AudioEffect)
 #endif
+
+    /**
+     * Экземпляр уходит — его привязка из списка тоже.
+     *
+     * Иначе в списке остался бы указатель на мёртвый объект, и следующее окно
+     * попыталось бы к нему привязаться.
+     */
+    Steinberg::tresult PLUGIN_API terminate() override
+    {
+#if defined(DONTFLOAT_WITH_ARA)
+        {
+            const std::lock_guard<std::mutex> lock(editorsMutex());
+            auto& extensions = boundAraExtensions();
+            const void* own = &araExtension_;
+            extensions.erase(std::remove(extensions.begin(), extensions.end(), own),
+                             extensions.end());
+        }
+        araBound_ = false;
+#endif
+        return Steinberg::Vst::AudioEffect::terminate();
+    }
+
+    /** Кто шлёт: привязка ARA этого экземпляра. Вне ARA — никто (общая рассылка). */
+    const void* araSender() const
+    {
+#if defined(DONTFLOAT_WITH_ARA)
+        return araBound_ ? static_cast<const void*>(&araExtension_) : nullptr;
+#else
+        return nullptr;
+#endif
+    }
 
     Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) override
     {
@@ -691,10 +793,10 @@ public:
         const bool hostPlaying =
             data.processContext
             && (data.processContext->state & Steinberg::Vst::ProcessContext::kPlaying);
-        notifyEditorsHostTransport(hostPlaying);
+        notifyEditorsHostTransport(hostPlaying, araSender());
         if (hostPlaying) {
             notifyEditorsHostPlayhead(data.processContext->projectTimeSamples,
-                                      data.processContext->sampleRate);
+                                      data.processContext->sampleRate, araSender());
         } else {
             // Транспорт стоит — следующий пуск может начаться откуда угодно
             lastPlayheadPosition().store(-1);
@@ -717,7 +819,7 @@ public:
                 barStartSample =
                     qint64(std::max(0.0, context.barPositionMusic * samplesPerQuarter));
             }
-            notifyEditorsHostBeatGrid(context.tempo, beatsPerBar, barStartSample);
+            notifyEditorsHostBeatGrid(context.tempo, beatsPerBar, barStartSample, araSender());
         }
 
         if (data.numSamples <= 0 || data.numOutputs <= 0 || data.outputs[0].numChannels <= 0) {
@@ -774,7 +876,7 @@ public:
         // ARA-рендерера ничего не кладёт. Захват в этом режиме только портит:
         // на воспроизведении он затирал волну тишиной, и пики пропадали
 #if defined(DONTFLOAT_WITH_ARA)
-        const bool araBound = boundAraExtension() != nullptr;
+        const bool araBound = araBound_;
 #else
         const bool araBound = false;
 #endif
@@ -813,6 +915,7 @@ private:
 #if defined(DONTFLOAT_WITH_ARA)
     /** ARA-часть экземпляра: связь с общим document controller проекта. */
     ARA::PlugIn::PlugInExtension araExtension_;
+    bool araBound_ = false;
 #endif
 };
 
