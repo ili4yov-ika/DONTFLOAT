@@ -9,8 +9,14 @@ name: Release packages
 # нужен, и он один умеет класть файлы в **черновик** релиза.
 #
 # Windows-установщик здесь не собирается: `tools/build_windows_installer.bat`
-# кладёт в него ещё и VST3, для которого нужен проприетарный Steinberg SDK,
-# недоступный на раннере. Его по-прежнему собирают локально.
+# кладёт в него ещё и VST3, для которого нужен Steinberg VST3 SDK и ARA SDK,
+# а их на раннере нет. Его по-прежнему собирают локально.
+#
+# По той же причине пакеты Linux и macOS сейчас несут **только приложение**:
+# единственный поддерживаемый формат плагина — VST3 с ARA. Чтобы он попал и
+# сюда, нужно выкачивать оба SDK на раннере и дописать правила установки
+# бандла VST3 для не-Windows (сейчас install есть только для Windows —
+# см. cmake/PluginProducts.cmake).
 
 on:
   release:
@@ -61,16 +67,19 @@ jobs:
           modules: qtmultimedia
           cache: true
 
-      # Приложение и плагины CLAP/LV2. VST3 требует Steinberg SDK, мини-DAW и
-      # plugin_tester — инструменты разработчика, в пакет им не место.
+      # Только приложение. Плагин под Linux в пакет не кладётся: единственный
+      # поддерживаемый формат — VST3 с ARA, а для него нужны Steinberg VST3 SDK
+      # и ARA SDK, которых на раннере нет. CLAP и LV2 выключены совсем
+      # (см. README): держать их в рабочем состоянии дороже, чем они дают.
+      # Мини-DAW и plugin_tester — инструменты разработчика, в пакет им не место.
       - name: Configure
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr \
-            -DDONTFLOAT_BUILD_PLUGINS=ON \
-            -DDONTFLOAT_BUILD_CLAP=ON \
-            -DDONTFLOAT_BUILD_LV2=ON \
+            -DDONTFLOAT_BUILD_PLUGINS=OFF \
+            -DDONTFLOAT_BUILD_CLAP=OFF \
+            -DDONTFLOAT_BUILD_LV2=OFF \
             -DDONTFLOAT_BUILD_VST3=OFF \
             -DDONTFLOAT_BUILD_MINI_DAW=OFF \
             -DDONTFLOAT_BUILD_PLUGIN_TESTER=OFF
