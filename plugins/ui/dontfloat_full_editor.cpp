@@ -47,6 +47,13 @@ DontfloatFullEditor::DontfloatFullEditor(QWidget* parent)
             this, &DontfloatFullEditor::seekRequested);
     connect(pitch_, &DontfloatPitchEditor::seekRequested,
             this, &DontfloatFullEditor::seekRequested);
+    // Каретка одна на обе половины окна. Просьбы к DAW мало: на стоящем
+    // транспорте хост позицию обратно не присылает, и щелчок по одной
+    // половине оставлял вторую на прежнем месте
+    connect(scratch_, &DontfloatScratchEditor::seekRequested,
+            pitch_, &DontfloatPitchEditor::applySourcePlayhead);
+    connect(pitch_, &DontfloatPitchEditor::seekRequested,
+            scratch_, &DontfloatScratchEditor::applySourcePlayhead);
     // Общий вид таймлайна: волна ведёт масштаб, пианоролл повторяет за ней,
     // прокрутка ходит в обе стороны. Без этого половины окна показывают
     // одну дорожку в разных координатах

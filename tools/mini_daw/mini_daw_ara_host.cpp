@@ -244,14 +244,27 @@ public:
     int contentUpdates = 0;
 };
 
-/** Транспортом из плагина мини-DAW пока не управляет. */
+/**
+ * Транспорт хоста глазами плагина.
+ *
+ * Кнопки воспроизведения в редакторе — дублёры кнопок DAW и ходят сюда.
+ * Счётчики нужны тесту: иначе проверить, дошло ли нажатие до хоста, можно
+ * было бы только в настоящей DAW руками.
+ */
 class AraHostPlayback : public ARA::Host::PlaybackControllerInterface {
 public:
-    void requestStartPlayback() noexcept override {}
-    void requestStopPlayback() noexcept override {}
-    void requestSetPlaybackPosition(ARA::ARATimePosition) noexcept override {}
+    void requestStartPlayback() noexcept override { ++startRequests; }
+    void requestStopPlayback() noexcept override { ++stopRequests; }
+    void requestSetPlaybackPosition(ARA::ARATimePosition position) noexcept override
+    {
+        lastPosition = double(position);
+    }
     void requestSetCycleRange(ARA::ARATimePosition, ARA::ARATimeDuration) noexcept override {}
     void requestEnableCycle(bool) noexcept override {}
+
+    int startRequests = 0;
+    int stopRequests = 0;
+    double lastPosition = -1.0;
 };
 
 struct AraHostDocument::Impl {
@@ -264,6 +277,7 @@ struct AraHostDocument::Impl {
         ARA::ARAAudioModificationRef audioModificationRef = nullptr;
         ARA::ARAPlaybackRegionRef playbackRegionRef = nullptr;
         std::unique_ptr<ARA::Host::PlaybackRenderer> playbackRenderer;
+        std::unique_ptr<ARA::Host::EditorRenderer> editorRenderer;
         std::unique_ptr<ARA::Host::EditorView> editorView;
     };
 
@@ -451,6 +465,7 @@ void AraHostDocument::unbindInstance(int trackIndex)
         state->playbackRenderer->removePlaybackRegion(state->playbackRegionRef);
     }
     state->playbackRenderer.reset();
+    state->editorRenderer.reset();
     state->editorView.reset();
 }
 
@@ -507,6 +522,12 @@ void AraHostDocument::bindInstance(int trackIndex, const void* plugInExtensionIn
         state->playbackRenderer = std::make_unique<ARA::Host::PlaybackRenderer>(instance);
         state->playbackRenderer->addPlaybackRegion(state->playbackRegionRef);
     }
+    // И в роль редактора: настоящий хост назначает ей клипы дорожки даже
+    // тогда, когда роль воспроизведения пуста
+    if (instance->editorRendererInterface) {
+        state->editorRenderer = std::make_unique<ARA::Host::EditorRenderer>(instance);
+        state->editorRenderer->addPlaybackRegion(state->playbackRegionRef);
+    }
     // И в выбор редактора: так плагин показывает именно эту дорожку
     if (instance->editorViewInterface) {
         state->editorView = std::make_unique<ARA::Host::EditorView>(instance);
@@ -516,6 +537,35 @@ void AraHostDocument::bindInstance(int trackIndex, const void* plugInExtensionIn
         };
         state->editorView->notifySelection(&selection);
     }
+}
+
+void AraHostDocument::selectClipOfTrack(int viewTrackIndex, int selectedTrackIndex)
+{
+    Impl::TrackEntry* view = impl_->entry(viewTrackIndex);
+    Impl::TrackEntry* selected = impl_->entry(selectedTrackIndex);
+    if (!view || !selected || !view->editorView || !selected->playbackRegionRef) {
+        return;
+    }
+    const ARA::ARAPlaybackRegionRef regions[] = { selected->playbackRegionRef };
+    const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAViewSelection, timeRange)> selection {
+        ARA::ARASize { 1 }, regions, ARA::ARASize { 0 }, nullptr, nullptr
+    };
+    view->editorView->notifySelection(&selection);
+}
+
+int AraHostDocument::transportStartRequests() const
+{
+    return impl_->playback.startRequests;
+}
+
+int AraHostDocument::transportStopRequests() const
+{
+    return impl_->playback.stopRequests;
+}
+
+double AraHostDocument::lastRequestedPlaybackPosition() const
+{
+    return impl_->playback.lastPosition;
 }
 
 void* AraHostDocument::documentControllerRef() const

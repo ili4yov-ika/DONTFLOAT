@@ -10,6 +10,7 @@
 #include <QFutureWatcher>
 #include <QString>
 #include <QWidget>
+#include <cstdint>
 #include <memory>
 
 class WaveformView;
@@ -57,6 +58,13 @@ public:
     /** Ставит прокрутку таймлайна, не рассылая сигнал обратно. */
     void applyTimelineOffset(float offset);
     bool requestHostTransport(bool start) override;
+    /**
+     * Каретка из соседней половины окна (сэмплы **источника**).
+     *
+     * Клик по пианороллу обязан двигать и каретку волны: без транспорта DAW
+     * ничего не присылает, и половины стояли в разных местах.
+     */
+    void applySourcePlayhead(qint64 sourceSample);
 
     // Инструменты волны из шапки (те же действия, что в главном окне)
     bool hasWaveformTools() const override { return true; }
@@ -151,6 +159,8 @@ private:
     bool araAudioApplied_ = false;
     /** Идёт применение чужого масштаба — обратно его не рассылаем. */
     bool applyingTimelineView_ = false;
+    /** Разметка документа ARA на момент последнего пересчёта размещения. */
+    std::uint64_t appliedAraRevision_ = 0;
     /** Размещение клипа на таймлайне DAW: по нему считаются сетка и каретка. */
     bool araClipValid_ = false;
     double araClipStartPlaybackSec_ = 0.0;
@@ -173,6 +183,16 @@ private:
     static constexpr int kAutoAnalysisDelayMs = 400;
     /** Как часто спрашиваем документ ARA, появился ли в нём звук. */
     static constexpr int kAraPollIntervalMs = 400;
+
+    /**
+     * Перечитывает размещение клипа и тактовую сетку, не трогая звук.
+     *
+     * Разрез, перенос и растяжение клипа звук источника не меняют — меняется
+     * только его место на таймлайне. Раньше размещение читалось один раз
+     * вместе со звуком и после правок клипа устаревало: сетка съезжала, а
+     * каретка вставала не туда, где звучит.
+     */
+    void syncAraClipAndGrid();
     /** Минимальный интервал перерисовки волны при потоке блоков от хоста. */
     static constexpr int kHostRefreshIntervalMs = 200;
 };

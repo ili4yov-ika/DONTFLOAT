@@ -199,13 +199,13 @@ QWidget* DontfloatPluginEditorShell::buildHeader()
         }
     });
 
-    // Транспорт: локальное прослушивание захваченной дорожки
+    // Транспорт: кнопки повторяют транспорт DAW, своего проигрывателя нет
     playButton_ = makeToolButton(header, QString(),
                                  QStringLiteral(":/icons/resources/icons/play.svg"),
-                                 tr("Preview the captured track"));
+                                 tr("Start playback in the DAW"));
     stopButton_ = makeToolButton(header, QString(),
                                  QStringLiteral(":/icons/resources/icons/stop.svg"),
-                                 tr("Stop the preview"));
+                                 tr("Stop playback in the DAW"));
     metronomeButton_ = makeToolButton(header, QString(),
                                       QStringLiteral(":/icons/resources/icons/metronome.svg"),
                                       tr("Metronome (during preview)"), true);
