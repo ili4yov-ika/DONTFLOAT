@@ -22,6 +22,9 @@
 
 #include "ARA_Library/Dispatch/ARAHostDispatch.h"
 
+#include <QScrollBar>
+#include <QWheelEvent>
+
 #include <cmath>
 #include <memory>
 
@@ -85,6 +88,8 @@ private slots:
     void cleanupTestCase();
 
     void testOwnNotesAreEditableAndNeighbourStaysReference();
+    void testTransportButtonsReachTheHost();
+    void testPianoRollZoomsAndScrollsOnItsOwn();
 
 private:
     /** Крутит модель и очередь Qt, пока у обоих редакторов не появятся ноты. */
@@ -213,6 +218,55 @@ void PluginReferenceNotesTest::testOwnNotesAreEditableAndNeighbourStaysReference
                      > double(kUpperPitch - kLowerPitch) / 2.0,
                  "рабочие ноты и референс совпали — соседская дорожка стала своей");
     }
+}
+
+// Кнопки транспорта в редакции Pitcher.
+//
+// Содержимое её окна — этот самый редактор, и пока он не переопределял
+// requestHostTransport, база возвращала false: кнопки не работали. В полной
+// редакции того же не было — там запрос уходит в волновую половину.
+void PluginReferenceNotesTest::testTransportButtonsReachTheHost()
+{
+    const int startsBefore = document_->transportStartRequests();
+    const int stopsBefore = document_->transportStopRequests();
+
+    QVERIFY2(editors_[0]->requestHostTransport(true),
+             "редактор не дотянулся до транспорта хоста");
+    QCOMPARE(document_->transportStartRequests(), startsBefore + 1);
+
+    QVERIFY(editors_[0]->requestHostTransport(false));
+    QCOMPARE(document_->transportStopRequests(), stopsBefore + 1);
+}
+
+// Масштаб и прокрутка в редакции Pitcher.
+//
+// Колесо над пианороллом только просило волну изменить масштаб — а волны в
+// этой редакции нет, и просьбу никто не слушал: приблизить таймлайн было
+// нельзя, полосы прокрутки под пианороллом не было вовсе.
+void PluginReferenceNotesTest::testPianoRollZoomsAndScrollsOnItsOwn()
+{
+    PitchGridWidget* grid = gridOf(0);
+    QVERIFY(grid != nullptr);
+    auto* bar = editors_[0]->findChild<QScrollBar*>(QStringLiteral("dontfloatPianoRollScroll"));
+    QVERIFY2(bar != nullptr, "под пианороллом нет полосы прокрутки");
+
+    QCOMPARE(grid->getZoomLevel(), 1.0f);
+    QCOMPARE(bar->maximum(), 0);
+
+    // Ctrl+колесо вверх — приближение (без Ctrl колесо листает по высоте)
+    QWheelEvent wheel(QPointF(60.0, 40.0), QPointF(60.0, 40.0), QPoint(0, 0),
+                      QPoint(0, 120), Qt::NoButton, Qt::ControlModifier,
+                      Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(grid, &wheel);
+    QCoreApplication::processEvents();
+
+    QVERIFY2(grid->getZoomLevel() > 1.0f, "колесо над пианороллом ничего не приблизило");
+    QVERIFY2(bar->maximum() > 0, "после приближения полосу так и не растянули");
+
+    bar->setValue(bar->maximum());
+    QCoreApplication::processEvents();
+    QVERIFY2(grid->getHorizontalOffset() > 0.9f,
+             "бегунок доехал до конца, а пианоролл остался на месте");
 }
 
 QTEST_MAIN(PluginReferenceNotesTest)

@@ -91,6 +91,23 @@ public:
      */
     bool samplesReady() const noexcept { return samplesReady_.load(std::memory_order_acquire); }
 
+    /**
+     * Звук **после правок** плагина: его хост и играет вместо исходного.
+     *
+     * Держится отдельно от monoSamples(): исходник нужен разбору и волне, а
+     * играть надо результат. Пока правок нет, указатель пуст, и рендерер
+     * берёт исходник.
+     *
+     * Обмен идёт указателем, а не вектором: правку применяют из интерфейса
+     * прямо во время проигрывания, и аудиопоток в этот момент читает буфер.
+     * Подменить указатель целиком безопасно, переписать вектор на месте — нет.
+     */
+    void setEditedSamples(std::vector<float> samples) noexcept;
+    std::shared_ptr<const std::vector<float>> editedSamples() const noexcept
+    {
+        return std::atomic_load(&editedSamples_);
+    }
+
     /** Ход разбора 0..100 — для плашки прогресса в редакторе. */
     int analysisProgress() const noexcept { return analysisProgress_.load(); }
     void setAnalysisProgress(int percent) noexcept { analysisProgress_.store(percent); }
@@ -102,6 +119,7 @@ public:
 private:
     AraNoteSet noteSet_;
     std::vector<float> monoSamples_;
+    std::shared_ptr<const std::vector<float>> editedSamples_;
     std::atomic<bool> samplesReady_ { false };
     std::atomic<int> analysisProgress_ { 0 };
     bool analysisRunning_ = false;
@@ -204,6 +222,16 @@ public:
 
     /** Просит хост встать в позицию (секунды таймлайна проекта). */
     bool requestHostPlaybackPosition(double seconds) noexcept;
+
+    /**
+     * Кладёт результат правок в модель — с этого момента хост играет его.
+     *
+     * Под ARA дорожку выдаёт плагин (роль kARAPlaybackRendererRole), и пока
+     * сюда ничего не положили, он играет исходник: ноты в пианоролле двигали,
+     * а на слух ничего не менялось.
+     */
+    void publishEditedAudio(AraAudioSource* audioSource,
+                            std::vector<float> samples) noexcept;
 
     std::vector<AraClipPlacement> clipsForAudioSource(
         const ARA::PlugIn::AudioSource* audioSource) const noexcept;

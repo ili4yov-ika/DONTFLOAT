@@ -65,6 +65,9 @@ DontfloatFullEditor::DontfloatFullEditor(QWidget* parent)
             scratch_, &DontfloatScratchEditor::applyTimelineOffset);
     connect(pitch_, &DontfloatPitchEditor::timelineZoomRequested,
             scratch_, &DontfloatScratchEditor::zoomTimelineAt);
+    // Волна рядом есть — значит, масштаб её. Сам пианоролл его не трогает,
+    // иначе половины окна разъехались бы на первом же щелчке колеса
+    pitch_->setTimelineLedByPartner(true);
 
     connect(scratch_, &DontfloatScratchEditor::renderedOutputChanged,
             this, &DontfloatFullEditor::renderedOutputChanged);
