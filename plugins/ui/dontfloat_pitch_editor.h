@@ -57,7 +57,7 @@ public:
     void refreshFromSession();
     void notifyHostAudioAppended() override;
     /** Каретка DAW (сэмплы дорожки) — синхронизирует каретку пианоролла. */
-    void setHostPlayhead(qint64 samplePosition) override;
+    void setHostPlayheadSeconds(double projectSeconds) override;
     /** Тактовая сетка DAW: пианоролл рисует её же сетку. */
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample) override;
     /**
@@ -243,6 +243,8 @@ private:
     static constexpr int kAutoAnalysisDelayMs = 400;
     /** Идёт применение чужого масштаба — обратно его не рассылаем. */
     bool applyingTimelineView_ = false;
+    /** Источник, чья разметка сейчас показана: сменился — берём заново. */
+    const void* araAppliedSource_ = nullptr;
     /** Масштаб таймлайна задаёт соседняя волна (полная редакция). */
     bool timelineLedByPartner_ = false;
     QScrollBar* horizontalScrollBar_ = nullptr;

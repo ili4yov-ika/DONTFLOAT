@@ -95,13 +95,13 @@ void DontfloatFullEditor::notifyHostAudioAppended()
     }
 }
 
-void DontfloatFullEditor::setHostPlayhead(qint64 samplePosition)
+void DontfloatFullEditor::setHostPlayheadSeconds(double projectSeconds)
 {
     if (scratch_) {
-        scratch_->setHostPlayhead(samplePosition);
+        scratch_->setHostPlayheadSeconds(projectSeconds);
     }
     if (pitch_) {
-        pitch_->setHostPlayhead(samplePosition);
+        pitch_->setHostPlayheadSeconds(projectSeconds);
     }
 }
 

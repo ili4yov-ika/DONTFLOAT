@@ -26,7 +26,7 @@ public:
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session) override;
     void notifyHostAudioAppended() override;
     /** Каретка DAW (сэмплы дорожки) — в обе секции. */
-    void setHostPlayhead(qint64 samplePosition) override;
+    void setHostPlayheadSeconds(double projectSeconds) override;
     /** Тактовая сетка DAW — в обе секции. */
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample) override;
     /**

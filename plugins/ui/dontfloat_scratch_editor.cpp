@@ -377,7 +377,7 @@ void DontfloatScratchEditor::setAraBinding(const void* extension)
 bool DontfloatScratchEditor::pullAudioFromAra()
 {
 #if defined(DONTFLOAT_WITH_ARA)
-    if (!araBinding_ || araAudioApplied_ || !session_) {
+    if (!araBinding_ || !session_) {
         return false;
     }
 
@@ -387,13 +387,20 @@ bool DontfloatScratchEditor::pullAudioFromAra()
         return false;
     }
 
+    // Единственный источник документа запасным путём больше не берётся:
+    // в начале сеанса он там и правда один, но это не наш — хост ещё не
+    // раздал роли. Так волна и цепляла звук соседней дорожки. Ждём: опрос
+    // повторится, а роли приходят
     Dontfloat::Ara::AraAudioSource* source =
         Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
-    if (!source) {
-        // Роли хост мог назначить позже привязки — на дорожке источник один
-        source = controller->onlyAudioSource();
-    }
     if (!source || source->monoSamples().empty()) {
+        return false;
+    }
+    // Источник сменился (хост переназначил клип) — забираем звук заново
+    if (araAudioApplied_ && source != araAppliedSource_) {
+        araAudioApplied_ = false;
+    }
+    if (araAudioApplied_) {
         return false;
     }
     if (source->analysisRunning()) {
@@ -409,6 +416,7 @@ bool DontfloatScratchEditor::pullAudioFromAra()
     buffer.mono = source->monoSamples();
     session_->setAudioBuffer(buffer);
     araAudioApplied_ = true;
+    araAppliedSource_ = source;
 
     QElapsedTimer applyClock;
     applyClock.start();
@@ -444,9 +452,6 @@ void DontfloatScratchEditor::pullBeatGridFromAra()
 
     Dontfloat::Ara::AraAudioSource* source =
         Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
-    if (!source) {
-        source = controller->onlyAudioSource();
-    }
     if (!source) {
         return;
     }
@@ -515,12 +520,8 @@ void DontfloatScratchEditor::publishEditedAudioToAra(const std::vector<float>& m
         return;
     }
     const auto* extension = static_cast<const ARA::PlugIn::PlugInExtension*>(araBinding_);
-    Dontfloat::Ara::AraAudioSource* source =
-        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
-    if (!source) {
-        source = controller->onlyAudioSource();
-    }
-    controller->publishEditedAudio(source, mono);
+    controller->publishEditedAudio(
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension), mono);
 #else
     Q_UNUSED(mono);
 #endif
@@ -619,18 +620,19 @@ bool DontfloatScratchEditor::requestHostSeek(qint64 sourceSample)
 #endif
 }
 
-qint64 DontfloatScratchEditor::projectSampleToSource(qint64 projectSample, int sampleRate) const
+qint64 DontfloatScratchEditor::projectSecondsToSource(double projectSeconds, int sourceRate) const
 {
+    if (sourceRate <= 0) {
+        return 0;
+    }
+    double sourceSeconds = projectSeconds;
 #if defined(DONTFLOAT_WITH_ARA)
-    if (araClipValid_ && sampleRate > 0) {
-        const double projectSeconds = double(projectSample) / double(sampleRate);
-        const double sourceSeconds = araClipStartSourceSec_
+    if (araClipValid_) {
+        sourceSeconds = araClipStartSourceSec_
             + (projectSeconds - araClipStartPlaybackSec_) / araClipStretch_;
-        return qint64(std::llround(sourceSeconds * double(sampleRate)));
     }
 #endif
-    Q_UNUSED(sampleRate);
-    return projectSample;
+    return qint64(std::llround(sourceSeconds * double(sourceRate)));
 }
 
 void DontfloatScratchEditor::writeChannelsToSession(const QVector<QVector<float>>& channels, int sampleRate)
@@ -652,7 +654,7 @@ void DontfloatScratchEditor::writeChannelsToSession(const QVector<QVector<float>
     session_->setAudioBuffer(buffer);
 }
 
-void DontfloatScratchEditor::setHostPlayhead(qint64 samplePosition)
+void DontfloatScratchEditor::setHostPlayheadSeconds(double projectSeconds)
 {
     if (!waveform_ || !session_) {
         return;
@@ -664,7 +666,7 @@ void DontfloatScratchEditor::setHostPlayhead(qint64 samplePosition)
     // Каретка приходит во времени проекта, а волна показывает источник: под
     // ARA клип может стоять не в начале и быть растянут, поэтому позицию
     // переносим внутрь файла — иначе каретка стояла бы не там, где звучит
-    const qint64 inSource = projectSampleToSource(samplePosition, sampleRate);
+    const qint64 inSource = projectSecondsToSource(projectSeconds, sampleRate);
 
     // Волна принимает позицию в миллисекундах — там же, где каретка DAW.
     // Флаг гасит обратную отправку в DAW — иначе позиция ходила бы по кругу.

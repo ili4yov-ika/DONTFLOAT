@@ -38,8 +38,8 @@ public:
 
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session);
     void notifyHostAudioAppended();
-    /** Позиция каретки DAW (сэмплы дорожки) — двигает каретку редактора. */
-    void setHostPlayhead(qint64 samplePosition);
+    /** Позиция каретки DAW (секунды проекта) — двигает каретку редактора. */
+    void setHostPlayheadSeconds(double projectSeconds);
     /** Тактовая сетка DAW: темп, доли в такте и граница такта в сэмплах. */
     /** Проброс привязки ARA в содержимое редактора (см. DontfloatEditorContent). */
     void setAraBinding(const void* extension);

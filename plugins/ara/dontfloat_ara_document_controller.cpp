@@ -857,15 +857,6 @@ bool AraDocumentController::clipForInstance(const ARA::PlugIn::PlugInExtension& 
     return false;
 }
 
-AraAudioSource* AraDocumentController::onlyAudioSource() const noexcept
-{
-    const ARA::PlugIn::Document* document = getDocument();
-    if (!document || document->getAudioSources().size() != 1) {
-        return nullptr;
-    }
-    return static_cast<AraAudioSource*>(document->getAudioSources().front());
-}
-
 AraBeatGrid AraDocumentController::hostBeatGrid() const noexcept
 {
     AraBeatGrid grid;

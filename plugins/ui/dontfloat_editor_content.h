@@ -30,8 +30,14 @@ public:
     virtual QWidget* widget() = 0;
     virtual void bindSession(Dontfloat::PluginCore::TrackToolSession* session) = 0;
     virtual void notifyHostAudioAppended() = 0;
-    /** Каретка DAW в сэмплах дорожки. */
-    virtual void setHostPlayhead(qint64 samplePosition) = 0;
+    /**
+     * Каретка DAW в **секундах проекта**.
+     *
+     * Не в сэмплах: у проекта своя частота, у файла дорожки своя, и делить
+     * позицию хоста на частоту источника — значит промахнуться на их
+     * отношение (файл 44,1 кГц в проекте 48 кГц — почти 9%).
+     */
+    virtual void setHostPlayheadSeconds(double projectSeconds) = 0;
 
     /**
      * Тактовая сетка DAW: темп, доли в такте и позиция ближайшей границы такта

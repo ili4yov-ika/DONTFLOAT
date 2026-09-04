@@ -157,22 +157,24 @@ void pluginReset(const clap_plugin_t* plugin)
  * Каретка DAW → каретка редактора. Хост зовёт process() из аудиопотока, поэтому
  * позицию отдаём в UI очередью Qt и склеиваем: одно уведомление за раз.
  */
-/** Позиция каретки DAW в сэмплах; -1 — хост её не сообщает. */
-qint64 hostPlayheadSamples(ClapPluginInstance* s, const clap_process_t* process)
+/**
+ * Позиция каретки DAW в секундах проекта; -1 — хост её не сообщает.
+ *
+ * Именно в секундах: частота проекта и частота файла дорожки — разные
+ * величины, и переводить одну через другую значит промахнуться на их
+ * отношение (см. DontfloatEditorContent::setHostPlayheadSeconds).
+ */
+double hostPlayheadSeconds(ClapPluginInstance* s, const clap_process_t* process)
 {
     if (!s || !process || !process->transport) {
-        return -1;
+        return -1.0;
     }
     const clap_event_transport_t& transport = *process->transport;
     if (!(transport.flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE)) {
-        return -1;
+        return -1.0;
     }
     const double seconds = double(transport.song_pos_seconds) / double(CLAP_SECTIME_FACTOR);
-    const int sampleRate = s->session.audioBuffer().sampleRate;
-    if (sampleRate <= 0 || seconds < 0.0) {
-        return -1;
-    }
-    return qint64(seconds * sampleRate);
+    return seconds < 0.0 ? -1.0 : seconds;
 }
 
 void syncEditorPlayhead(ClapPluginInstance* s, const clap_process_t* process)
@@ -180,8 +182,8 @@ void syncEditorPlayhead(ClapPluginInstance* s, const clap_process_t* process)
     if (!s || !s->editor) {
         return;
     }
-    const qint64 samplePosition = hostPlayheadSamples(s, process);
-    if (samplePosition < 0) {
+    const double projectSeconds = hostPlayheadSeconds(s, process);
+    if (projectSeconds < 0.0) {
         return;
     }
 
@@ -190,9 +192,9 @@ void syncEditorPlayhead(ClapPluginInstance* s, const clap_process_t* process)
         return;
     }
     DontfloatPluginEditorShell* editor = s->editor.get();
-    QMetaObject::invokeMethod(editor, [editor, samplePosition]() {
+    QMetaObject::invokeMethod(editor, [editor, projectSeconds]() {
         pending.store(false);
-        editor->setHostPlayhead(samplePosition);
+        editor->setHostPlayheadSeconds(projectSeconds);
     }, Qt::QueuedConnection);
 }
 

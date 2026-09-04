@@ -90,6 +90,7 @@ private slots:
     void testOwnNotesAreEditableAndNeighbourStaysReference();
     void testTransportButtonsReachTheHost();
     void testPianoRollZoomsAndScrollsOnItsOwn();
+    void testEditorWithoutAClipTakesNobodysNotes();
 
 private:
     /** Крутит модель и очередь Qt, пока у обоих редакторов не появятся ноты. */
@@ -267,6 +268,59 @@ void PluginReferenceNotesTest::testPianoRollZoomsAndScrollsOnItsOwn()
     QCoreApplication::processEvents();
     QVERIFY2(grid->getHorizontalOffset() > 0.9f,
              "бегунок доехал до конца, а пианоролл остался на месте");
+}
+
+// Экземпляр без клипа не присваивает чужую дорожку.
+//
+// Хост раздаёт роли не в момент привязки, а позже, и в начале сеанса в
+// документе вполне может быть ровно один источник — чужой. Редактор брал его
+// «запасным путём» (единственный источник документа) и дальше уже не менял:
+// ноты соседа становились своими, синими и правимыми. Ровно это и видно в
+// дневнике настоящего REAPER: первый открывшийся редактор забирал звук чужой
+// дорожки, потому что своей у него ещё не было.
+//
+// Документ здесь свой, с одной дорожкой, — тот самый момент, когда запасной
+// путь и срабатывал. Экземпляру клип не назначен, своих нот у него быть не
+// должно, сколько ни жди.
+void PluginReferenceNotesTest::testEditorWithoutAClipTakesNobodysNotes()
+{
+    AraHostDocument lonely;
+    QString error;
+    QVERIFY2(lonely.open(factory_, makeTone(kLowerPitch, QStringLiteral("lonely")), &error),
+             qUtf8Printable(error));
+
+    ARA::PlugIn::PlugInExtension orphan;
+    QVERIFY(orphan.bindToARA(
+                static_cast<ARA::ARADocumentControllerRef>(lonely.documentControllerRef()),
+                static_cast<ARA::ARAPlugInInstanceRoleFlags>(AraHostDocument::knownRoles()),
+                static_cast<ARA::ARAPlugInInstanceRoleFlags>(AraHostDocument::assignedRoles()))
+            != nullptr);
+
+    QVERIFY2(Dontfloat::Ara::AraDocumentController::audioSourceForInstance(orphan) == nullptr,
+             "экземпляр без клипа всё-таки выбрал себе дорожку");
+
+    TrackToolSession session;
+    {
+        DontfloatPitchEditor editor;
+        editor.bindSession(&session);
+        editor.setAraBinding(&orphan);
+
+        // Ждём столько же, сколько хватило соседям на свои ноты
+        QElapsedTimer clock;
+        clock.start();
+        while (clock.elapsed() < 1500) {
+            lonely.pumpModelUpdates();
+            QTest::qWait(50);
+        }
+
+        auto* grid = editor.findChild<PitchGridWidget*>();
+        QVERIFY(grid != nullptr);
+        QVERIFY2(grid->notes().isEmpty(),
+                 qPrintable(QStringLiteral("экземпляр без клипа набрал %1 своих нот")
+                                .arg(grid->notes().size())));
+        editor.setAraBinding(nullptr);
+    }
+    lonely.close();
 }
 
 QTEST_MAIN(PluginReferenceNotesTest)

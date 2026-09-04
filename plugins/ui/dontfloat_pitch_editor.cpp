@@ -520,7 +520,7 @@ void DontfloatPitchEditor::notifyHostAudioAppended()
     }
 }
 
-void DontfloatPitchEditor::setHostPlayhead(qint64 samplePosition)
+void DontfloatPitchEditor::setHostPlayheadSeconds(double projectSeconds)
 {
     if (!pitchGrid_ || !session_) {
         return;
@@ -535,15 +535,14 @@ void DontfloatPitchEditor::setHostPlayhead(qint64 samplePosition)
     // Каретка приходит во времени проекта: клип может стоять не в начале и
     // быть растянут. Волна пересчитывает так же — иначе две каретки в одном
     // окне показывают разные места и при воспроизведении расходятся
-    qint64 inSource = samplePosition;
+    double sourceSeconds = projectSeconds;
 #if defined(DONTFLOAT_WITH_ARA)
     if (araClipValid_) {
-        const double projectSeconds = double(samplePosition) / double(sampleRate);
-        const double sourceSeconds = araClipStartSourceSec_
+        sourceSeconds = araClipStartSourceSec_
             + (projectSeconds - araClipStartPlaybackSec_) / araClipStretch_;
-        inSource = qint64(std::llround(sourceSeconds * double(sampleRate)));
     }
 #endif
+    const qint64 inSource = qint64(std::llround(sourceSeconds * double(sampleRate)));
 
     const qint64 clamped = std::clamp<qint64>(
         inSource, 0, qint64(session_->audioBuffer().frameCount()));
@@ -569,12 +568,8 @@ void DontfloatPitchEditor::publishEditedAudioToAra(const std::vector<float>& mon
         return;
     }
     const auto* extension = static_cast<const ARA::PlugIn::PlugInExtension*>(araBinding_);
-    Dontfloat::Ara::AraAudioSource* source =
-        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
-    if (!source) {
-        source = controller->onlyAudioSource();
-    }
-    controller->publishEditedAudio(source, mono);
+    controller->publishEditedAudio(
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension), mono);
 }
 #endif
 
@@ -623,7 +618,7 @@ bool DontfloatPitchEditor::requestHostSeek(qint64 sourceSample)
         return false;
     }
     // Сэмплы источника → секунды проекта тем же размещением клипа, каким
-    // каретка хоста переводится к нам (см. setHostPlayhead)
+    // каретка хоста переводится к нам (см. setHostPlayheadSeconds)
     double projectSeconds = double(sourceSample) / double(sampleRate);
     if (araClipValid_) {
         projectSeconds = araClipStartPlaybackSec_
@@ -985,12 +980,20 @@ bool DontfloatPitchEditor::pullFromAraModel()
         return false;
     }
 
+    // Единственный источник документа запасным путём больше не берётся:
+    // в начале сеанса он там и правда один, но это не наш — хост ещё не
+    // раздал роли. Так пианоролл и подхватывал ноты соседней дорожки как
+    // свои: синими и правимыми. Ждём: опрос повторится, а роли приходят
     Dontfloat::Ara::AraAudioSource* ownSource =
         Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*extension);
-    if (!ownSource) {
-        // Роли хост мог назначить позже привязки — на одной дорожке источник
-        // всё равно один, берём его
-        ownSource = controller->onlyAudioSource();
+    // Источник сменился (хост переназначил клип) — разметку берём заново
+    if (ownSource && araAppliedSource_ && ownSource != araAppliedSource_) {
+        araAudioApplied_ = false;
+        baseNotes_.clear();
+        appliedAraRevision_ = 0;
+    }
+    if (ownSource) {
+        araAppliedSource_ = ownSource;
     }
 
     // Плашка прогресса: разбор идёт сразу после появления дорожки, и пианоролл
@@ -1042,7 +1045,7 @@ bool DontfloatPitchEditor::pullFromAraModel()
             // Время проекта → время источника: где начало такта 1 внутри файла
             gridStartInSource = clip.startInSourceSeconds
                 + (grid.gridStartSeconds - clip.startInPlaybackSeconds) / clip.stretchFactor();
-            // Тем же размещением переводится и каретка (см. setHostPlayhead)
+            // Тем же размещением переводится и каретка (см. setHostPlayheadSeconds)
             araClipStartPlaybackSec_ = clip.startInPlaybackSeconds;
             araClipStartSourceSec_ = clip.startInSourceSeconds;
             araClipStretch_ = clip.stretchFactor() > 0.0 ? clip.stretchFactor() : 1.0;
