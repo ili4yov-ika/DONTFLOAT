@@ -396,7 +396,15 @@ function(dontfloat_add_vst3_product kind)
     set(_module_name "${_DONTFLOAT_VST3_NAME_${kind}}")
     set(_impl_dll "${_module_name}.vst3.impl.dll")
     set(_bundle_dir "${CMAKE_CURRENT_BINARY_DIR}/plugins/vst3/${_bundle_name}")
-    set(_arch_dir "${_bundle_dir}/Contents/x86_64-win")
+    # Раскладка бандла VST3 задана Steinberg и у каждой системы своя
+    if(WIN32)
+        set(_arch_subdir "Contents/x86_64-win")
+    elseif(APPLE)
+        set(_arch_subdir "Contents/MacOS")
+    else()
+        set(_arch_subdir "Contents/x86_64-linux")
+    endif()
+    set(_arch_dir "${_bundle_dir}/${_arch_subdir}")
 
     # Real VST3 module (Qt). Loaded by stub via LoadLibraryEx(ALTERED_SEARCH_PATH).
     add_library(${_impl} MODULE
@@ -407,22 +415,55 @@ function(dontfloat_add_vst3_product kind)
         DONTFLOAT_HAS_VST3_SDK
         DONTFLOAT_PLUGIN_PRODUCT_INDEX=${_index}
     )
+    # Под Linux хост владеет циклом событий и зовёт плагин по своему
+    # таймеру (Linux::IRunLoop). Без этого окно Qt в DAW замирает
+    if(NOT WIN32 AND NOT APPLE)
+        target_compile_definitions(${_impl} PRIVATE DONTFLOAT_VST3_X11)
+    endif()
     target_include_directories(${_impl} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/ui
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/core
         ${CMAKE_CURRENT_SOURCE_DIR}/plugins/vst3
         ${DONTFLOAT_VST3_SDK_ROOT}
     )
-    set_target_properties(${_impl} PROPERTIES
-        PREFIX ""
-        OUTPUT_NAME "${_module_name}.vst3.impl"
-        SUFFIX ".dll"
-    )
+    if(WIN32)
+        # Под Windows модуль грузит тонкий стаб (см. ниже), поэтому у него
+        # своё имя: рядом с бандлом лежат и стаб, и настоящий модуль
+        set_target_properties(${_impl} PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "${_module_name}.vst3.impl"
+            SUFFIX ".dll"
+        )
+    else()
+        # Стаба нет: модуль и есть плагин. Имя внутри бандла задано Steinberg —
+        # `<имя>.so` под Linux и `<имя>` без расширения под macOS.
+        # SUFFIX генераторные выражения не понимает, поэтому обычный if
+        if(APPLE)
+            set(_module_suffix "")
+        else()
+            set(_module_suffix ".so")
+        endif()
+        set_target_properties(${_impl} PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "${_module_name}"
+            SUFFIX "${_module_suffix}"
+        )
+    endif()
     target_link_libraries(${_impl} PRIVATE sdk)
     dontfloat_link_plugin_ui(${_impl} ${kind})
+    # Точка входа модуля своя у каждой системы: без неё хост не найдёт
+    # ни фабрику, ни инициализацию
     if(WIN32)
         target_sources(${_impl} PRIVATE
             "${DONTFLOAT_VST3_SDK_ROOT}/public.sdk/source/main/dllmain.cpp"
+        )
+    elseif(APPLE)
+        target_sources(${_impl} PRIVATE
+            "${DONTFLOAT_VST3_SDK_ROOT}/public.sdk/source/main/macmain.cpp"
+        )
+    else()
+        target_sources(${_impl} PRIVATE
+            "${DONTFLOAT_VST3_SDK_ROOT}/public.sdk/source/main/linuxmain.cpp"
         )
     endif()
 
@@ -478,17 +519,33 @@ function(dontfloat_add_vst3_product kind)
             message(STATUS \"Installed VST3 stub+impl: \${_dst_dir}\")
         " COMPONENT Runtime)
     else()
-        set_target_properties(${_impl} PROPERTIES
-            OUTPUT_NAME "${_module_name}"
-            SUFFIX ".vst3"
-        )
         add_custom_command(TARGET ${_impl} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_arch_dir}"
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "$<TARGET_FILE:${_impl}>"
-                "${_arch_dir}/${_module_name}.vst3"
+                "${_arch_dir}/$<TARGET_FILE_NAME:${_impl}>"
             COMMENT "Packaging ${_bundle_name} VST3 bundle"
             VERBATIM
+        )
+        # Под macOS бандл без Info.plist хост не откроет вовсе
+        if(APPLE)
+            add_custom_command(TARGET ${_impl} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "${_bundle_dir}/Contents"
+                COMMAND ${CMAKE_COMMAND}
+                    -DBUNDLE_DIR="${_bundle_dir}"
+                    -DMODULE_NAME="${_module_name}"
+                    -DBUNDLE_VERSION="${PROJECT_VERSION}"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Vst3MacBundle.cmake"
+                COMMENT "Writing Info.plist for ${_bundle_name}"
+                VERBATIM
+            )
+        endif()
+        # Хосты ищут VST3 строго в lib/vst3 (спецификация Steinberg), а не в
+        # каталоге триплета вроде lib/x86_64-linux-gnu: туда никто не заглянет
+        install(DIRECTORY "${_bundle_dir}"
+            DESTINATION "lib/vst3"
+            COMPONENT Runtime
+            USE_SOURCE_PERMISSIONS
         )
     endif()
 endfunction()

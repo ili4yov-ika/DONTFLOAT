@@ -9,14 +9,11 @@ name: Release packages
 # нужен, и он один умеет класть файлы в **черновик** релиза.
 #
 # Windows-установщик здесь не собирается: `tools/build_windows_installer.bat`
-# кладёт в него ещё и VST3, для которого нужен Steinberg VST3 SDK и ARA SDK,
-# а их на раннере нет. Его по-прежнему собирают локально.
+# требует NSIS и локально установленный Qt. Его по-прежнему собирают локально.
 #
-# По той же причине пакеты Linux и macOS сейчас несут **только приложение**:
-# единственный поддерживаемый формат плагина — VST3 с ARA. Чтобы он попал и
-# сюда, нужно выкачивать оба SDK на раннере и дописать правила установки
-# бандла VST3 для не-Windows (сейчас install есть только для Windows —
-# см. cmake/PluginProducts.cmake).
+# Плагин (VST3 с ARA) собирается и здесь: оба SDK открытые, поэтому джобы
+# выкачивают их прямо на раннере. Клонируем поверхностно и вместе с
+# подмодулями — без них SDK не конфигурируется.
 
 on:
   release:
@@ -67,25 +64,43 @@ jobs:
           modules: qtmultimedia
           cache: true
 
-      # Только приложение. Плагин под Linux в пакет не кладётся: единственный
-      # поддерживаемый формат — VST3 с ARA, а для него нужны Steinberg VST3 SDK
-      # и ARA SDK, которых на раннере нет. CLAP и LV2 выключены совсем
-      # (см. README): держать их в рабочем состоянии дороже, чем они дают.
-      # Мини-DAW и plugin_tester — инструменты разработчика, в пакет им не место.
+      # Оба SDK открытые; поверхностный клон с подмодулями — иначе VST3 SDK
+      # не конфигурируется, а ARA не находит своих заголовков
+      - name: Fetch VST3 and ARA SDKs
+        run: |
+          git clone --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git clone --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/Celemony/ARA_SDK.git "$RUNNER_TEMP/ARA_SDK"
+
+      # Приложение и плагин VST3 с ARA. CLAP и LV2 выключены совсем (см. README):
+      # держать их в рабочем состоянии дороже, чем они дают. Мини-DAW и
+      # plugin_tester — инструменты разработчика, в пакет им не место.
       - name: Configure
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr \
-            -DDONTFLOAT_BUILD_PLUGINS=OFF \
+            -DDONTFLOAT_BUILD_PLUGINS=ON \
             -DDONTFLOAT_BUILD_CLAP=OFF \
             -DDONTFLOAT_BUILD_LV2=OFF \
-            -DDONTFLOAT_BUILD_VST3=OFF \
+            -DDONTFLOAT_BUILD_VST3=ON \
+            -DDONTFLOAT_VST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DDONTFLOAT_ARA_SDK_ROOT="$RUNNER_TEMP/ARA_SDK" \
             -DDONTFLOAT_BUILD_MINI_DAW=OFF \
             -DDONTFLOAT_BUILD_PLUGIN_TESTER=OFF
 
       - name: Build
         run: cmake --build build --parallel
+
+      # Бандл VST3 обязан попасть в пакет: молча собрать приложение без
+      # плагина — худший исход, поэтому шаг падает, если бандла нет
+      - name: Check the VST3 bundle is installed
+        run: |
+          cmake --install build --prefix "$RUNNER_TEMP/checkroot" > /dev/null
+          found=$(find "$RUNNER_TEMP/checkroot/lib/vst3" -name '*.so' | sort)
+          echo "$found"
+          test -n "$found" || { echo '::error::Бандл VST3 не установился'; exit 1; }
 
       # Все три генератора, что объявлены в CPack для Linux: пакеты для
       # dpkg и rpm плюс переносимый архив для всего остального
@@ -129,12 +144,27 @@ jobs:
       - name: Install Ninja
         run: brew install ninja
 
+      - name: Fetch VST3 and ARA SDKs
+        run: |
+          git clone --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git clone --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/Celemony/ARA_SDK.git "$RUNNER_TEMP/ARA_SDK"
+
       # Тот же скрипт, которым собирают локально:
       # сборка → macdeployqt → pkgbuild (.pkg) и hdiutil (.dmg)
+      #
+      # SDK передаются через окружение (их читает CMakeLists), поэтому плагин
+      # здесь **собирается**, но в .pkg и .dmg пока не кладётся: бандлу нужен
+      # свой развёрнутый Qt, а проверить это без настоящего Mac негде.
+      # Сборка при этом ловит ошибки компиляции под macOS — ради этого шаг и
+      # держит SDK.
       - name: Build and package (.pkg, .dmg)
         run: bash tools/macos_build.sh release pkg dmg
         env:
           CMAKE_PREFIX_PATH: ${{ steps.qt.outputs.QT_ROOT_DIR }}
+          DONTFLOAT_VST3_SDK_ROOT: ${{ runner.temp }}/vst3sdk
+          DONTFLOAT_ARA_SDK_ROOT: ${{ runner.temp }}/ARA_SDK
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
