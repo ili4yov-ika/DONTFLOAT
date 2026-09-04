@@ -447,9 +447,15 @@ AraNoteSet AraDocumentController::referenceNotesExcluding(
             continue;
         }
         if (Dontfloat::PluginCore::Diagnostics::enabled()) {
-            char line[160];
-            std::snprintf(line, sizeof(line), "ara.notes.reference count=%zu pool=%zu",
-                          (*it)->noteSet().notes.size(), analyzedOrder_.size());
+            // Источник пишем оба: и чей референс отдали, и кому. По этой паре
+            // сразу видно случай «один файл на двух дорожках» — у ARA это один
+            // источник, и своих нот у соседа тогда попросту нет
+            char line[256];
+            std::snprintf(line, sizeof(line),
+                          "ara.notes.reference count=%zu pool=%zu from=%s for=%s",
+                          (*it)->noteSet().notes.size(), analyzedOrder_.size(),
+                          (*it)->getPersistentID().c_str(),
+                          exclude ? exclude->getPersistentID().c_str() : "<none>");
             Dontfloat::PluginCore::Diagnostics::log(line);
         }
         return (*it)->noteSet();
