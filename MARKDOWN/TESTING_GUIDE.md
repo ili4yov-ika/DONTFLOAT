@@ -391,6 +391,7 @@ $env:DONTFLOAT_DIAG_FILE = "$env:TEMP\dontfloat_diag.txt"
 | `ara.notes.reference from=… for=…` | чьи ноты отданы соседу и кому |
 | `ara.notes.own count=N source=…` | чей источник экземпляр посчитал своим (синие ноты) |
 | `ara.audio.edited frames=N source=…` | результат правок положен в модель — его хост и играет |
+| `host.playhead pos=… prev=… forward/back/dropped` | решения о каретке (первые 400) — по ним видно, откуда рывки |
 | `ara.audio.applied` | волна забрала звук из документа ARA |
 | `ara.clip.sync` | размещение клипа перечитано после правки (звук не трогали) |
 | `ara.grid.applied` | тактовая сетка пришла из хоста |

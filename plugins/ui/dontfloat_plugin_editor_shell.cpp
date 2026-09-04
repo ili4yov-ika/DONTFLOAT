@@ -405,10 +405,10 @@ void DontfloatPluginEditorShell::notifyHostAudioAppended()
     }
 }
 
-void DontfloatPluginEditorShell::setHostPlayhead(qint64 samplePosition)
+void DontfloatPluginEditorShell::setHostPlayheadSeconds(double projectSeconds)
 {
     if (content_) {
-        content_->setHostPlayhead(samplePosition);
+        content_->setHostPlayheadSeconds(projectSeconds);
     }
 }
 

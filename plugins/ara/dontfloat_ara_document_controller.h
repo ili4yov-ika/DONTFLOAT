@@ -258,12 +258,6 @@ public:
     static bool clipForInstance(const ARA::PlugIn::PlugInExtension& extension,
                                 AraClipPlacement* placement) noexcept;
 
-    /**
-     * Единственный источник документа — запасной путь, когда хост ещё не
-     * назначил экземпляру клипы (роли приходят позже привязки).
-     */
-    AraAudioSource* onlyAudioSource() const noexcept;
-
 protected:
     ARA::PlugIn::AudioSource* doCreateAudioSource(ARA::PlugIn::Document* document,
                                                  ARA::ARAAudioSourceHostRef hostRef) noexcept override;

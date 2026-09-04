@@ -104,6 +104,9 @@ constexpr Steinberg::int32 kEditorMinHeight = 420;
  */
 constexpr double kPlayheadBackwardJumpSeconds = 0.5;
 
+/** Сколько решений о каретке пишем в дневник, прежде чем замолчать. */
+constexpr int kPlayheadLogLimit = 400;
+
 /** Тип окна, который хост передаёт в attached(): у каждой системы свой. */
 #if defined(_WIN32)
 const Steinberg::FIDString kEditorPlatformType = Steinberg::kPlatformTypeHWND;
@@ -188,11 +191,33 @@ void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition, double sampleRat
     const Steinberg::int64 backwardJumpLimit =
         Steinberg::int64(std::max(1.0, sampleRate) * kPlayheadBackwardJumpSeconds);
     const Steinberg::int64 previous = lastPlayheadPosition().load();
-    if (previous >= 0 && samplePosition < previous
-        && (previous - samplePosition) < backwardJumpLimit) {
+    const bool backwards = previous >= 0 && samplePosition < previous;
+    const bool dropped = backwards && (previous - samplePosition) < backwardJumpLimit;
+
+    // Дневник каретки: первые несколько сотен решений. Без него о рывках
+    // можно только гадать — позиции приходят из аудиопотока хоста и снаружи
+    // не видны. Счётчик держит объём в узде: писать каждый блок нельзя
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        static std::atomic<int> logged { 0 };
+        if (logged.fetch_add(1) < kPlayheadLogLimit) {
+            char line[160];
+            std::snprintf(line, sizeof(line), "host.playhead pos=%lld prev=%lld %s",
+                          static_cast<long long>(samplePosition),
+                          static_cast<long long>(previous),
+                          dropped ? "dropped" : (backwards ? "back" : "forward"));
+            Dontfloat::PluginCore::Diagnostics::log(line);
+        }
+    }
+
+    if (dropped) {
         return;  // блок из опережающей обработки, каретка уже дальше
     }
     lastPlayheadPosition().store(samplePosition);
+
+    // Дальше идут **секунды проекта**: у проекта своя частота, у файла
+    // дорожки своя, и делить позицию хоста на частоту источника — значит
+    // промахнуться на их отношение (44,1 кГц в проекте 48 кГц — почти 9%)
+    const double projectSeconds = double(samplePosition) / std::max(1.0, sampleRate);
 
     static std::atomic_bool pending { false };
     if (pending.exchange(true)) {
@@ -205,9 +230,9 @@ void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition, double sampleRat
         return;
     }
     for (DontfloatPluginEditorShell* editor : openEditors()) {
-        QMetaObject::invokeMethod(editor, [editor, samplePosition]() {
+        QMetaObject::invokeMethod(editor, [editor, projectSeconds]() {
             pending.store(false);
-            editor->setHostPlayhead(static_cast<qint64>(samplePosition));
+            editor->setHostPlayheadSeconds(projectSeconds);
         }, Qt::QueuedConnection);
     }
 }

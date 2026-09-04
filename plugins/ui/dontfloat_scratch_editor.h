@@ -38,8 +38,8 @@ public:
     void bindSession(Dontfloat::PluginCore::TrackToolSession* session) override;
     void refreshFromSession();
     void notifyHostAudioAppended() override;
-    /** Каретка DAW (сэмплы дорожки) — синхронизирует каретку волны. */
-    void setHostPlayhead(qint64 samplePosition) override;
+    /** Каретка DAW (секунды проекта) — синхронизирует каретку волны. */
+    void setHostPlayheadSeconds(double projectSeconds) override;
     /** Тактовая сетка DAW: волна рисует её же сетку. */
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample) override;
     /**
@@ -122,7 +122,7 @@ private:
      */
     void pullBeatGridFromAra();
     /** Время проекта (сэмплы) → время источника (сэмплы). */
-    qint64 projectSampleToSource(qint64 projectSample, int sampleRate) const;
+    qint64 projectSecondsToSource(double projectSeconds, int sourceRate) const;
     /** Обратно: время источника → время проекта, в секундах. */
     double sourceSampleToProjectSeconds(qint64 sourceSample, int sampleRate) const;
     /** Просит DAW встать в точку, на которую кликнули в волне. */
@@ -157,6 +157,8 @@ private:
     QTimer* araPollTimer_ = nullptr;
     const void* araBinding_ = nullptr;
     bool araAudioApplied_ = false;
+    /** Источник, из которого взят звук: сменился — забираем заново. */
+    const void* araAppliedSource_ = nullptr;
     /** Идёт применение чужого масштаба — обратно его не рассылаем. */
     bool applyingTimelineView_ = false;
     /** Разметка документа ARA на момент последнего пересчёта размещения. */

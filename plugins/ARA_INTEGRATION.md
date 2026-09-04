@@ -48,7 +48,7 @@ with the facilities that *are* available in plain CLAP/LV2/VST3:
 |----------------|-------------------------------|------|
 | Random access to track audio | Capture the host audio streamed to `process()` into the plug‑in session (`appendHostFrames`), so the editor works on the **DAW track**, not an imported file | `plugins/core/dontfloat_plugin_core.cpp`, format `*_impl.cpp` |
 | Musical info channel (tempo/playhead) | Read the host **transport** (`clap_event_transport`) each block and drive the editor | `plugins/clap/dontfloat_clap_plugin_impl.cpp` |
-| Synchronized playhead / caret | Transport → editor playback cursor (`setHostPlayhead`), updated on the GUI thread via the host timer | `plugins/ui/*editor*.cpp` |
+| Synchronized playhead / caret | Transport → editor playback cursor (`setHostPlayheadSeconds`), updated on the GUI thread via the host timer | `plugins/ui/*editor*.cpp` |
 | Host reflects plug‑in edits (waveform) | **Not possible without ARA** — a plain plug‑in cannot repaint the host's track. The plug‑in's own editor waveform reflects marker moves; the processed result is available on the plug‑in's audio output / export | see roadmap |
 
 ### Threading note (important, ARA‑style)
