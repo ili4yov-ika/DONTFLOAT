@@ -186,6 +186,28 @@ void notifyEditorsHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSampl
     }
 }
 
+/**
+ * Транспорт DAW → кнопка воспроизведения в редакторе.
+ *
+ * Шлём только на смену состояния: process() зовётся на каждый блок, и
+ * уведомление на каждый из них забило бы очередь интерфейса.
+ */
+void notifyEditorsHostTransport(bool playing)
+{
+    static std::atomic<int> lastState { -1 };
+    const int state = playing ? 1 : 0;
+    if (lastState.exchange(state) == state) {
+        return;
+    }
+
+    const std::lock_guard<std::mutex> lock(editorsMutex());
+    for (DontfloatPluginEditorShell* editor : openEditors()) {
+        QMetaObject::invokeMethod(editor, [editor, playing]() {
+            editor->setHostTransportPlaying(playing);
+        }, Qt::QueuedConnection);
+    }
+}
+
 void notifyEditorsHostAudioAppended()
 {
     // Склейка: пока предыдущее уведомление не разобрано, новых не ставим —
@@ -475,6 +497,20 @@ public:
         if (Dontfloat::PluginCore::Diagnostics::enabled()) {
             Dontfloat::PluginCore::Diagnostics::log(state ? "shutdown.setActive=1"
                                                           : "shutdown.setActive=0");
+#if defined(DONTFLOAT_WITH_ARA)
+            // Деактивация — не аудиопоток, здесь можно писать в файл
+            if (!state) {
+                if (auto* renderer =
+                        araExtension_.getPlaybackRenderer<Dontfloat::Ara::AraPlaybackRenderer>()) {
+                    char line[128];
+                    std::snprintf(line, sizeof(line),
+                                  "ara.render frames=%lld regions=%zu",
+                                  static_cast<long long>(renderer->renderedFrames()),
+                                  renderer->assignedRegionCount());
+                    Dontfloat::PluginCore::Diagnostics::log(line);
+                }
+            }
+#endif
         }
         if (state) {
             sharedSession(product()).prepare(audioInfo_);
@@ -495,8 +531,11 @@ public:
     {
         // Транспорт читаем и на пустых блоках: так хост шлёт чистые тики
         // позиции каретки, не добавляя аудио в сессию
-        if (data.processContext
-            && (data.processContext->state & Steinberg::Vst::ProcessContext::kPlaying)) {
+        const bool hostPlaying =
+            data.processContext
+            && (data.processContext->state & Steinberg::Vst::ProcessContext::kPlaying);
+        notifyEditorsHostTransport(hostPlaying);
+        if (hostPlaying) {
             notifyEditorsHostPlayhead(data.processContext->projectTimeSamples);
         }
 
@@ -529,6 +568,26 @@ public:
         const Steinberg::int32 outputChannels = data.outputs[0].numChannels;
         const Steinberg::int32 channelCount = std::min(inputChannels, outputChannels);
 
+#if defined(DONTFLOAT_WITH_ARA)
+        // В роли ARA-рендерера дорожку выдаёт плагин: хост исходный звук на
+        // вход не кладёт и ждёт готовый результат. Пока этого не было, под ARA
+        // дорожка молчала — роль заявлена, а выход пустой
+        auto* araRenderer = araExtension_.getPlaybackRenderer<Dontfloat::Ara::AraPlaybackRenderer>();
+        if (araRenderer) {
+            for (Steinberg::int32 ch = 0; ch < outputChannels; ++ch) {
+                if (float* out = data.outputs[0].channelBuffers32[ch]) {
+                    std::fill(out, out + data.numSamples, 0.0f);
+                }
+            }
+            const std::int64_t timelineFrame =
+                data.processContext ? std::int64_t(data.processContext->projectTimeSamples) : 0;
+            const double hostRate = data.processContext && data.processContext->sampleRate > 0.0
+                ? data.processContext->sampleRate
+                : double(audioInfo_.sampleRate);
+            araRenderer->renderBlock(data.outputs[0].channelBuffers32, int(outputChannels),
+                                     int(data.numSamples), timelineFrame, hostRate);
+        } else
+#endif
         for (Steinberg::int32 ch = 0; ch < outputChannels; ++ch) {
             float* out = data.outputs[0].channelBuffers32[ch];
             if (!out) {

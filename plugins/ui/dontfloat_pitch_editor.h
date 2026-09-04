@@ -57,6 +57,12 @@ public:
 #if defined(DONTFLOAT_WITH_ARA)
     /** Экземпляр привязан к документу ARA — работаем с моделью, а не с захватом. */
     void setAraBinding(const void* extension) override;
+    /** Ставит масштаб таймлайна, не рассылая сигнал обратно. */
+    void applyTimelineZoom(float zoom);
+    /** Ставит прокрутку таймлайна, не рассылая сигнал обратно. */
+    void applyTimelineOffset(float offset);
+    /** Длина таймлайна в сэмплах — чтобы сетка пианоролла совпала с волной. */
+    void applyTimelineSampleCount(qint64 samples);
 #endif
 
 signals:
@@ -67,6 +73,10 @@ signals:
     void seekRequested(qint64 samplePosition);
     /** Плагин пересчитал звук — хосту стоит прогнать дорожку заново. */
     void renderedOutputChanged();
+    /** Прокрутку таймлайна сменили здесь — волна должна повторить. */
+    void timelineOffsetChanged(float offset);
+    /** Колесо зума над пианороллом: масштаб задаёт волна, мы лишь просим. */
+    void timelineZoomRequested(int angleDeltaY, float timelinePixelX);
 
 private slots:
     /** Разрез ноты по каретке / клику — как в главном окне. */
@@ -180,6 +190,19 @@ private:
 
     /** Пауза в потоке аудио от хоста, после которой стартует авто-анализ. */
     static constexpr int kAutoAnalysisDelayMs = 400;
+    /** Идёт применение чужого масштаба — обратно его не рассылаем. */
+    bool applyingTimelineView_ = false;
+    /**
+     * Размещение клипа на таймлайне DAW.
+     *
+     * Каретка приходит во времени проекта, а пианоролл живёт во времени
+     * дорожки. Без пересчёта каретки волны и пианоролла стоят в разных
+     * координатах и при воспроизведении расходятся.
+     */
+    bool araClipValid_ = false;
+    double araClipStartPlaybackSec_ = 0.0;
+    double araClipStartSourceSec_ = 0.0;
+    double araClipStretch_ = 1.0;
     /** Минимальный интервал перерисовки вида при потоке блоков от хоста. */
     static constexpr int kHostRefreshIntervalMs = 200;
     /** Как часто спрашиваем доску, не появились ли ноты на соседней дорожке. */

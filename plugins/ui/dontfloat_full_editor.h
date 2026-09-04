@@ -35,6 +35,13 @@ public:
      * одного: базовая реализация в DontfloatEditorContent пустая.
      */
     void setAraBinding(const void* extension) override;
+    /**
+     * Транспорт DAW — через волновую половину: ARA-привязка живёт там.
+     *
+     * Без этого проброса база возвращала false, оболочка считала, что хост
+     * управление не отдал, и играла кусок сама — из референсного канала.
+     */
+    bool requestHostTransport(bool start) override;
 
     bool hasWaveformTools() const override { return true; }
     void shiftBeatGrid(int beats) override;

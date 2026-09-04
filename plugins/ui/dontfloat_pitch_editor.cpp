@@ -250,6 +250,21 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     connect(analysisWatcher_, &QFutureWatcher<void>::finished,
             this, &DontfloatPitchEditor::onPitchAnalysisFinished);
 
+    // Масштаб и прокрутка общие с волной: обе половины окна показывают одну
+    // дорожку, и разъехавшиеся таймлайны читать невозможно
+    connect(pitchGrid_, &PitchGridWidget::horizontalOffsetChanged, this,
+            [this](float offset) {
+                if (!applyingTimelineView_) {
+                    emit timelineOffsetChanged(offset);
+                }
+            });
+    connect(pitchGrid_, &PitchGridWidget::timelineZoomRequested, this,
+            [this](int angleDeltaY, float timelinePixelX) {
+                // Масштаб задаёт волна, мы только просим: так он остаётся
+                // в одних руках и не расходится
+                emit timelineZoomRequested(angleDeltaY, timelinePixelX);
+            });
+
     connect(pitchGrid_, &PitchGridWidget::notePitchEdited,
             this, &DontfloatPitchEditor::onNotePitchEdited);
     connect(pitchGrid_, &PitchGridWidget::notePreviewRequested,
@@ -308,6 +323,17 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     // Отмена/повтор внутри плагина: правки высот и разрезы нот. Клавиши ловим
     // только при фокусе в редакторе, чтобы не отбирать Ctrl+Z у DAW
     undoStack_ = new QUndoStack(this);
+    // Рез ноты по S на всё окно плагина: сам пианоролл режет только когда
+    // фокус на нём, а в плагине он легко уходит на кнопки панели. Двойного
+    // реза не будет — виджет перехватывает клавишу через ShortcutOverride
+    auto* splitShortcut = new QShortcut(QKeySequence(Qt::Key_S), this);
+    splitShortcut->setContext(Qt::WindowShortcut);
+    connect(splitShortcut, &QShortcut::activated, this, [this]() {
+        if (pitchGrid_) {
+            pitchGrid_->splitNoteAtPlaybackCursor();
+        }
+    });
+
     auto* undoShortcut = new QShortcut(QKeySequence::Undo, this);
     undoShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(undoShortcut, &QShortcut::activated, this, [this]() {
@@ -468,8 +494,21 @@ void DontfloatPitchEditor::setHostPlayhead(qint64 samplePosition)
     // Пианоролл живёт в миллисекундах дорожки: каретка встаёт туда же, где
     // каретка DAW (setPlaybackPosition сам пересчитает её в пиксели).
     // Флаг гасит обратную отправку в DAW — иначе позиция ходила бы по кругу.
+    // Каретка приходит во времени проекта: клип может стоять не в начале и
+    // быть растянут. Волна пересчитывает так же — иначе две каретки в одном
+    // окне показывают разные места и при воспроизведении расходятся
+    qint64 inSource = samplePosition;
+#if defined(DONTFLOAT_WITH_ARA)
+    if (araClipValid_) {
+        const double projectSeconds = double(samplePosition) / double(sampleRate);
+        const double sourceSeconds = araClipStartSourceSec_
+            + (projectSeconds - araClipStartPlaybackSec_) / araClipStretch_;
+        inSource = qint64(std::llround(sourceSeconds * double(sampleRate)));
+    }
+#endif
+
     const qint64 clamped = std::clamp<qint64>(
-        samplePosition, 0, qint64(session_->audioBuffer().frameCount()));
+        inSource, 0, qint64(session_->audioBuffer().frameCount()));
     applyingHostPlayhead_ = true;
     pitchGrid_->setPlaybackPosition((clamped * 1000) / sampleRate);
     applyingHostPlayhead_ = false;
@@ -749,6 +788,35 @@ void DontfloatPitchEditor::applyReferenceNotes(const QVector<PitchDetector::Pitc
     syncReferenceKeyStrip();
 }
 
+void DontfloatPitchEditor::applyTimelineZoom(float zoom)
+{
+    if (!pitchGrid_ || zoom <= 0.0f) {
+        return;
+    }
+    applyingTimelineView_ = true;
+    pitchGrid_->setZoomLevel(zoom);
+    applyingTimelineView_ = false;
+}
+
+void DontfloatPitchEditor::applyTimelineOffset(float offset)
+{
+    if (!pitchGrid_) {
+        return;
+    }
+    applyingTimelineView_ = true;
+    pitchGrid_->setHorizontalOffset(offset);
+    applyingTimelineView_ = false;
+}
+
+void DontfloatPitchEditor::applyTimelineSampleCount(qint64 samples)
+{
+    if (pitchGrid_ && samples > 0) {
+        // Длина таймлайна общая: иначе одна и та же секунда попадает на
+        // разные пиксели в волне и в пианоролле
+        pitchGrid_->setTimelineSampleCount(samples);
+    }
+}
+
 void DontfloatPitchEditor::publishNotesToBoard()
 {
     // Свои ноты — соседним экземплярам плагина в этом же DAW
@@ -840,6 +908,11 @@ bool DontfloatPitchEditor::pullFromAraModel()
             const Dontfloat::Ara::AraClipPlacement& clip = clips.front();
             gridStartInSource = clip.startInSourceSeconds
                 + (grid.gridStartSeconds - clip.startInPlaybackSeconds) / clip.stretchFactor();
+            // Тем же размещением переводится и каретка (см. setHostPlayhead)
+            araClipStartPlaybackSec_ = clip.startInPlaybackSeconds;
+            araClipStartSourceSec_ = clip.startInSourceSeconds;
+            araClipStretch_ = clip.stretchFactor() > 0.0 ? clip.stretchFactor() : 1.0;
+            araClipValid_ = true;
         }
         setHostBeatGrid(grid.tempoBpm, grid.beatsPerBar,
                         qint64(gridStartInSource * double(sampleRate)));

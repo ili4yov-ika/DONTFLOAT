@@ -326,6 +326,8 @@ void PitchGridWidget::setNotes(const QVector<PitchDetector::PitchNote>& newNotes
     if (selectedNoteIndex >= pitchNotes.size()) {
         selectedNoteIndex = -1;
     }
+    // Ноты пересобрали — прежние индексы группы больше ничего не значат
+    selectedNotes.clear();
     // Индексы нот сместились (например, после разреза) — подсветку реза сбрасываем
     splitPreviewNoteIndex = -1;
     splitPreviewValid = false;
@@ -336,6 +338,7 @@ void PitchGridWidget::clearNotes()
 {
     pitchNotes.clear();
     selectedNoteIndex = -1;
+    selectedNotes.clear();
     isNoteDragging = false;
     splitPreviewNoteIndex = -1;
     splitPreviewValid = false;
@@ -752,7 +755,7 @@ void PitchGridWidget::drawNoteBlocks(QPainter& painter, const QRect& rect) const
         }
 
         painter.setBrush(fill);
-        if (i == selectedNoteIndex) {
+        if (i == selectedNoteIndex || selectedNotes.contains(i)) {
             painter.setPen(QPen(theme.noteSelectedBorder, 1.5));
         } else {
             painter.setPen(QPen(theme.noteBorder, 1.0));
@@ -803,20 +806,39 @@ int PitchGridWidget::noteIndexAt(const QPoint& pos) const
 
 void PitchGridWidget::changeSelectedNotePitch(int semitoneDelta)
 {
-    if (selectedNoteIndex < 0 || selectedNoteIndex >= pitchNotes.size()) {
+    // Правка идёт по всей выделенной группе: одиночный выбор — её частный
+    // случай из одной ноты
+    QList<int> targets;
+    if (!selectedNotes.isEmpty()) {
+        targets = selectedNotes.values();
+        std::sort(targets.begin(), targets.end());
+    } else if (selectedNoteIndex >= 0) {
+        targets.append(selectedNoteIndex);
+    }
+    if (targets.isEmpty()) {
         return;
     }
-    PitchDetector::PitchNote& note = pitchNotes[selectedNoteIndex];
-    const float oldPitch = note.midiPitch;
-    // Клавиши двигают по полутонам от ближайшего целого (как snap-сетка).
-    const float base = std::round(oldPitch);
-    const float newPitch = qBound(0.0f, base + float(semitoneDelta), 127.0f);
-    if (std::abs(newPitch - oldPitch) < 1.0e-4f) {
-        return;
+
+    bool changed = false;
+    for (int index : targets) {
+        if (index < 0 || index >= pitchNotes.size()) {
+            continue;
+        }
+        PitchDetector::PitchNote& note = pitchNotes[index];
+        const float oldPitch = note.midiPitch;
+        // Клавиши двигают по полутонам от ближайшего целого (как snap-сетка).
+        const float base = std::round(oldPitch);
+        const float newPitch = qBound(0.0f, base + float(semitoneDelta), 127.0f);
+        if (std::abs(newPitch - oldPitch) < 1.0e-4f) {
+            continue;
+        }
+        note.midiPitch = newPitch;
+        changed = true;
+        emit notePitchEdited(index, oldPitch, newPitch);
     }
-    note.midiPitch = newPitch;
-    update();
-    emit notePitchEdited(selectedNoteIndex, oldPitch, newPitch);
+    if (changed) {
+        update();
+    }
 }
 
 float PitchGridWidget::pitchToContentY(float midiPitch) const
@@ -886,6 +908,23 @@ void PitchGridWidget::mousePressEvent(QMouseEvent *event)
         // Alt + ЛКМ — свободный (дробный) питч мимо полутоновой сетки, как в Melodyne.
         const int noteIndex = noteIndexAt(event->pos());
         if (noteIndex >= 0) {
+            // Группа выделения: Shift добавляет ноту, Ctrl исключает —
+            // как Shift работает с метками растяжения на волне. Обычный клик
+            // начинает группу заново
+            if (event->modifiers() & Qt::ShiftModifier) {
+                selectedNotes.insert(noteIndex);
+            } else if (event->modifiers() & Qt::ControlModifier) {
+                selectedNotes.remove(noteIndex);
+                if (selectedNoteIndex == noteIndex) {
+                    selectedNoteIndex = selectedNotes.isEmpty()
+                        ? -1 : *selectedNotes.constBegin();
+                }
+                update();
+                return;  // исключение из группы ноту не двигает
+            } else {
+                selectedNotes.clear();
+                selectedNotes.insert(noteIndex);
+            }
             selectedNoteIndex = noteIndex;
             isNoteDragging = true;
             noteDragFreePitch = (event->modifiers() & Qt::AltModifier) != 0;

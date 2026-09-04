@@ -30,6 +30,7 @@ local PROJECT    = [[@@PROJECT@@]]
 -- Дорожки и индексы плагинов: окна редакторов нужно закрыть перед выходом,
 -- иначе REAPER остаётся с открытым окном плагина и не закрывается
 local tracks = {}
+local takes = {}
 local fxIndex = {}
 
 local report = io.open(REPORT, "w")
@@ -42,8 +43,8 @@ end
 
 local function closeEditors()
     for i = 1, #tracks do
-        if fxIndex[i] then
-            reaper.TrackFX_Show(tracks[i], fxIndex[i], 2) -- 2 = скрыть плавающее окно
+        if fxIndex[i] and takes[i] then
+            reaper.TakeFX_Show(takes[i], fxIndex[i], 2) -- 2 = скрыть плавающее окно
         end
     end
 end
@@ -88,14 +89,20 @@ end
 -- ------------------------------------------------------------- плагины ---
 local added = 0
 for i = 1, 2 do
-    local fx = reaper.TrackFX_AddByName(tracks[i], i == 1 and FX_NAME or FX_NAME2, false, -1)
+    -- Плагин вешаем на КЛИП, а не на дорожку: только тогда REAPER назначает
+    -- ARA-рендереру регионы. На дорожке их ноль, и экземпляр не знает ни
+    -- своего звука, ни своей разметки
+    local item = reaper.GetTrackMediaItem(tracks[i], 0)
+    local take = item and reaper.GetActiveTake(item)
+    local fx = take and reaper.TakeFX_AddByName(take, i == 1 and FX_NAME or FX_NAME2, -1) or -1
     if fx >= 0 then
         added = added + 1
-        local _, name = reaper.TrackFX_GetFXName(tracks[i], fx)
+        takes[i] = take
         fxIndex[i] = fx
+        local _, name = reaper.TakeFX_GetFXName(take, fx)
         say("fx" .. i .. "=" .. tostring(name))
         -- Окно редактора: ноты на общую доску выкладывает именно он
-        reaper.TrackFX_Show(tracks[i], fx, 3)
+        reaper.TakeFX_Show(take, fx, 3)
     else
         say("fx" .. i .. "=FAILED")
     end

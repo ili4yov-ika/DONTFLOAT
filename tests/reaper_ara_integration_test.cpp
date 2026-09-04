@@ -472,6 +472,31 @@ void ReaperAraIntegrationTest::testPlaybackKeepsWaveform()
             break;
         }
     }
+    // Кнопка воспроизведения в плагине — дублёр кнопки DAW, поэтому плагин
+    // обязан узнавать о запуске транспорта хоста, а не только сам его просить
+    const QStringList transport = diagLines(QStringLiteral("host.transport"));
+    QVERIFY2(!transport.isEmpty(),
+             "плагин не узнал о транспорте DAW — кнопке нечего отражать");
+    QVERIFY2(transport.contains(QStringLiteral("host.transport playing=1")),
+             qPrintable(QStringLiteral("старт транспорта до плагина не дошёл:\n%1")
+                            .arg(transport.join(QStringLiteral("\n")))));
+
+    // Под ARA дорожку выдаёт сам плагин: хост исходный звук на вход не
+    // кладёт. Пока рендерер был пустой заглушкой, роль была заявлена, а
+    // дорожка молчала — при нажатии Play в DAW каретки шли, звука не было
+    const QStringList rendered = diagLines(QStringLiteral("ara.render "));
+    QVERIFY2(!rendered.isEmpty(), "плагин не отчитался о рендеринге");
+    bool sawFrames = false;
+    for (const QString& line : rendered) {
+        bool ok = false;
+        if (fieldOf(line, QStringLiteral("frames"), &ok) > 0.0 && ok) {
+            sawFrames = true;
+            break;
+        }
+    }
+    QVERIFY2(sawFrames,
+             "ARA-рендерер не отдал ни одного кадра — под ARA дорожка молчит");
+
     QVERIFY2(clearedAfter < 0,
              "волну обнулили уже после того, как звук из ARA был получен — "
              "захват снова затирает дорожку");

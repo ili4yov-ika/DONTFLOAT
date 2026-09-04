@@ -297,7 +297,9 @@ void AraAudioSource::setNoteSet(AraNoteSet noteSet) noexcept
 
 void AraAudioSource::setMonoSamples(std::vector<float> samples) noexcept
 {
+    samplesReady_.store(false, std::memory_order_release);
     monoSamples_ = std::move(samples);
+    samplesReady_.store(!monoSamples_.empty(), std::memory_order_release);
 }
 
 const ARA::ARAFactory* AraDocumentController::getARAFactory() noexcept
@@ -539,10 +541,89 @@ void AraDocumentController::didUpdatePlaybackRegionProperties(
     }
 }
 
+bool AraPlaybackRenderer::renderBlock(float* const* outputs, int channelCount, int frameCount,
+                                      std::int64_t timelineStartFrame, double sampleRate) noexcept
+{
+    if (!outputs || channelCount <= 0 || frameCount <= 0 || sampleRate <= 0.0) {
+        return false;
+    }
+
+    const double blockStartSeconds = double(timelineStartFrame) / sampleRate;
+    const double blockEndSeconds = double(timelineStartFrame + frameCount) / sampleRate;
+
+    bool rendered = false;
+
+    for (const ARA::PlugIn::PlaybackRegion* region : getPlaybackRegions()) {
+        if (!region || !region->getAudioModification()) {
+            continue;
+        }
+
+        const double regionStart = region->getStartInPlaybackTime();
+        const double regionDuration = region->getDurationInPlaybackTime();
+        if (regionDuration <= 0.0
+            || blockEndSeconds <= regionStart
+            || blockStartSeconds >= regionStart + regionDuration) {
+            continue;  // клип не пересекается с этим блоком
+        }
+
+        const auto* source = static_cast<const AraAudioSource*>(
+            region->getAudioModification()->getAudioSource());
+        if (!source || !source->samplesReady()) {
+            continue;  // разбор ещё не отдал сэмплы
+        }
+
+        const std::vector<float>& samples = source->monoSamples();
+        const double sourceRate = source->getSampleRate() > 0.0 ? source->getSampleRate()
+                                                                : sampleRate;
+        const double sourceStart = region->getStartInAudioModificationTime();
+        const double sourceDuration = region->getDurationInAudioModificationTime();
+        // Растяжение клипа: длительность в проекте к длительности в источнике
+        const double stretch = (sourceDuration > 0.0) ? (regionDuration / sourceDuration) : 1.0;
+        if (stretch <= 0.0) {
+            continue;
+        }
+
+        for (int i = 0; i < frameCount; ++i) {
+            const double timeSeconds = double(timelineStartFrame + i) / sampleRate;
+            const double offsetInRegion = timeSeconds - regionStart;
+            if (offsetInRegion < 0.0 || offsetInRegion >= regionDuration) {
+                continue;
+            }
+
+            // Место внутри файла с учётом того, что клип могли растянуть
+            const double positionInSource = sourceStart + offsetInRegion / stretch;
+            const double sampleIndex = positionInSource * sourceRate;
+            if (sampleIndex < 0.0) {
+                continue;
+            }
+
+            const std::size_t index = std::size_t(sampleIndex);
+            if (index + 1 >= samples.size()) {
+                continue;
+            }
+
+            // Линейная интерполяция: при растяжении индекс попадает между отсчётами
+            const float fraction = float(sampleIndex - double(index));
+            const float value = samples[index] * (1.0f - fraction) + samples[index + 1] * fraction;
+
+            for (int channel = 0; channel < channelCount; ++channel) {
+                if (outputs[channel]) {
+                    outputs[channel][i] += value;
+                }
+            }
+            rendered = true;
+            renderedFrames_.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+
+    return rendered;
+}
+
 bool AraDocumentController::requestHostPlayback(bool start) noexcept
 {
     auto* playback = getHostPlaybackController();
     if (!playback) {
+        Dontfloat::PluginCore::Diagnostics::log("ara.transport.unavailable");
         return false;  // хост управление транспортом не отдал
     }
     if (start) {
@@ -631,6 +712,38 @@ AraAudioSource* AraDocumentController::audioSourceForInstance(
         if (!renderer->getPlaybackRegions().empty()) {
             return sourceOfRegion(renderer->getPlaybackRegions().front());
         }
+    }
+    // Роль редактора: хост назначает ей клипы дорожки даже тогда, когда
+    // воспроизводящему рендереру ничего не дал. Без этого пути экземпляр
+    // не знает своей дорожки: полная редакция цепляла клип из выделения в
+    // DAW (то есть чужой), а Pitcher не находил ничего
+    if (const auto* editorRenderer = extension.getEditorRenderer<ARA::PlugIn::EditorRenderer>()) {
+        if (!editorRenderer->getPlaybackRegions().empty()) {
+            if (AraAudioSource* source =
+                    sourceOfRegion(editorRenderer->getPlaybackRegions().front())) {
+                return source;
+            }
+        }
+        for (const ARA::PlugIn::RegionSequence* sequence : editorRenderer->getRegionSequences()) {
+            if (!sequence || sequence->getPlaybackRegions().empty()) {
+                continue;
+            }
+            if (AraAudioSource* source = sourceOfRegion(sequence->getPlaybackRegions().front())) {
+                return source;
+            }
+        }
+    }
+
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        const auto* renderer = extension.getPlaybackRenderer<AraPlaybackRenderer>();
+        const auto* editorRenderer = extension.getEditorRenderer<ARA::PlugIn::EditorRenderer>();
+        char line[200];
+        std::snprintf(line, sizeof(line),
+                      "ara.source.unknown playback=%zu editor=%zu sequences=%zu",
+                      renderer ? renderer->getPlaybackRegions().size() : 0,
+                      editorRenderer ? editorRenderer->getPlaybackRegions().size() : 0,
+                      editorRenderer ? editorRenderer->getRegionSequences().size() : 0);
+        Dontfloat::PluginCore::Diagnostics::log(line);
     }
     return nullptr;
 }

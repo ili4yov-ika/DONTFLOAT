@@ -80,7 +80,8 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 cd /d "%BUILD_DIR%"
 
 REM Plugins ON; skip mini-DAW / plugin_tester so installer build does not compile tests/hosts.
-set "PLUGIN_CMAKE_ARGS=-DDONTFLOAT_BUILD_PLUGINS=ON -DDONTFLOAT_BUILD_CLAP=ON -DDONTFLOAT_BUILD_LV2=ON -DDONTFLOAT_BUILD_VST3=ON -DDONTFLOAT_BUILD_MINI_DAW=OFF -DDONTFLOAT_BUILD_PLUGIN_TESTER=OFF"
+REM CLAP and LV2 are off: only VST3 with ARA ships
+set "PLUGIN_CMAKE_ARGS=-DDONTFLOAT_BUILD_PLUGINS=ON -DDONTFLOAT_BUILD_CLAP=OFF -DDONTFLOAT_BUILD_LV2=OFF -DDONTFLOAT_BUILD_VST3=ON -DDONTFLOAT_BUILD_MINI_DAW=OFF -DDONTFLOAT_BUILD_PLUGIN_TESTER=OFF"
 
 REM Auto-detect Steinberg SDK if env not set (same default as CMakeLists.txt).
 if not defined DONTFLOAT_VST3_SDK_ROOT (
@@ -156,13 +157,13 @@ set "QT_ROOT_DIR="
 for %%I in ("%WINDEPLOYQT%") do set "QT_BIN=%%~dpI"
 for %%I in ("%QT_BIN%..") do set "QT_ROOT_DIR=%%~fI"
 
-call :deploy_plugin_qt "%INSTALL_DIR%\lib\clap" "%INSTALL_DIR%\lib\clap\dontfloat_clap.impl.dll" "CLAP" required
+call :deploy_plugin_qt "%INSTALL_DIR%\lib\clap" "%INSTALL_DIR%\lib\clap\dontfloat_clap.impl.dll" "CLAP"
 if errorlevel 1 exit /b 1
-call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat.lv2\dontfloat_ui.impl.dll" "LV2 Full" required
+call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat.lv2\dontfloat_ui.impl.dll" "LV2 Full"
 if errorlevel 1 exit /b 1
-call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2\dontfloat_scratch_ui.impl.dll" "LV2 Scratch" required
+call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat_scratch.lv2\dontfloat_scratch_ui.impl.dll" "LV2 Scratch"
 if errorlevel 1 exit /b 1
-call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2\dontfloat_pitcher_ui.impl.dll" "LV2 Pitcher" required
+call :deploy_plugin_qt "%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2" "%INSTALL_DIR%\lib\lv2\dontfloat_pitcher.lv2\dontfloat_pitcher_ui.impl.dll" "LV2 Pitcher"
 if errorlevel 1 exit /b 1
 if defined DONTFLOAT_VST3_SDK_ROOT (
     call :deploy_plugin_qt "%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win" "%INSTALL_DIR%\lib\vst3\DONTFLOAT.vst3\Contents\x86_64-win\DONTFLOAT.vst3.impl.dll" "VST3 Full" required

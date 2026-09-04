@@ -50,6 +50,12 @@ public:
      * лежит в документе целиком и доступен сразу — его и берём.
      */
     void setAraBinding(const void* extension) override;
+    /** Зум колесом из соседней половины окна: точка — в координатах таймлайна. */
+    void zoomTimelineAt(int angleDeltaY, float timelinePixelX);
+    /** Ставит масштаб таймлайна, не рассылая сигнал обратно. */
+    void applyTimelineZoom(float zoom);
+    /** Ставит прокрутку таймлайна, не рассылая сигнал обратно. */
+    void applyTimelineOffset(float offset);
     bool requestHostTransport(bool start) override;
 
     // Инструменты волны из шапки (те же действия, что в главном окне)
@@ -68,6 +74,10 @@ signals:
     void seekRequested(qint64 samplePosition);
     /** Плагин пересчитал звук — хосту стоит прогнать дорожку заново. */
     void renderedOutputChanged();
+    /** Масштаб таймлайна сменился — вторая половина окна должна повторить. */
+    void timelineZoomChanged(float zoom);
+    /** Прокрутка таймлайна сменилась. */
+    void timelineOffsetChanged(float offset);
 
 private slots:
     /** Анализ при каждом изменении содержимого дорожки — кнопок анализа нет. */
@@ -139,6 +149,8 @@ private:
     QTimer* araPollTimer_ = nullptr;
     const void* araBinding_ = nullptr;
     bool araAudioApplied_ = false;
+    /** Идёт применение чужого масштаба — обратно его не рассылаем. */
+    bool applyingTimelineView_ = false;
     /** Размещение клипа на таймлайне DAW: по нему считаются сетка и каретка. */
     bool araClipValid_ = false;
     double araClipStartPlaybackSec_ = 0.0;

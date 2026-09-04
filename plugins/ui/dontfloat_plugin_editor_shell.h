@@ -44,6 +44,14 @@ public:
 #if defined(DONTFLOAT_WITH_ARA)
     /** Проброс привязки ARA в содержимое редактора (см. DontfloatEditorContent). */
     void setAraBinding(const void* extension);
+    /**
+     * Транспорт DAW пошёл или встал.
+     *
+     * Кнопка воспроизведения в плагине — дублёр кнопки хоста, поэтому она
+     * показывает его состояние, а не своё: нажали Play в DAW — кнопка здесь
+     * тоже становится «играет».
+     */
+    void setHostTransportPlaying(bool playing);
 #endif
 
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample);
@@ -93,6 +101,8 @@ private:
 
     QLabel* statusBar_ = nullptr;
     QPushButton* playButton_ = nullptr;
+    /** Играет ли сейчас транспорт DAW — кнопка показывает именно его. */
+    bool hostPlaying_ = false;
     QPushButton* stopButton_ = nullptr;
     QPushButton* metronomeButton_ = nullptr;
     QPushButton* loopButton_ = nullptr;
