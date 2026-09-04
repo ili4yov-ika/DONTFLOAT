@@ -3,6 +3,7 @@
 #include "../../include/audiofileservice.h"
 #include "../../include/keyanalyzer.h"
 #include "../../include/keymodulationstrip.h"
+#include "../core/dontfloat_diagnostics.h"
 #if defined(DONTFLOAT_WITH_ARA)
 #include "../ara/dontfloat_ara_document_controller.h"
 #endif
@@ -39,6 +40,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 namespace Dontfloat::Plugins::Ui {
@@ -974,10 +976,19 @@ bool DontfloatPitchEditor::pullFromAraModel()
                         qint64(gridStartInSource * double(sampleRate)));
     }
 
-    // Свои ноты: разбор сделал document controller по всему файлу дорожки
+    // Свои ноты: разбор сделал document controller по всему файлу дорожки.
+    // Синими и правимыми они станут только здесь — жалоба «правятся ноты
+    // соседней дорожки» означает, что экземпляр сел на чужой источник,
+    // поэтому в дневник пишем, чей источник он посчитал своим
     if (ownSource && ownSource->hasNotes() && baseNotes_.isEmpty()) {
         const Dontfloat::Ara::AraNoteSet& own = ownSource->noteSet();
         baseNotes_ = fromCoreNotes(own.notes);
+        if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+            char line[256];
+            std::snprintf(line, sizeof(line), "ara.notes.own count=%d source=%s",
+                          int(baseNotes_.size()), ownSource->getPersistentID());
+            Dontfloat::PluginCore::Diagnostics::log(line);
+        }
         refreshPitchGrid();
         applyNotesAfterUndo();
         setStatus(tr("ARA: %1 notes from the host document").arg(baseNotes_.size()));

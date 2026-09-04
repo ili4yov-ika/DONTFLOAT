@@ -731,11 +731,14 @@ AraAudioSource* AraDocumentController::audioSourceForInstance(
                 return source;
             }
         }
-        for (const ARA::PlugIn::RegionSequence* sequence : editorRenderer->getRegionSequences()) {
-            if (!sequence || sequence->getPlaybackRegions().empty()) {
-                continue;
-            }
-            if (AraAudioSource* source = sourceOfRegion(sequence->getPlaybackRegions().front())) {
+        // Дорожку по последовательностям берём, только если она одна: когда
+        // хост отдал редактору несколько, какая из них наша — неизвестно, и
+        // «первая попавшаяся» приводила к нотам соседа под видом своих
+        const auto& sequences = editorRenderer->getRegionSequences();
+        if (sequences.size() == 1 && sequences.front()
+            && !sequences.front()->getPlaybackRegions().empty()) {
+            if (AraAudioSource* source =
+                    sourceOfRegion(sequences.front()->getPlaybackRegions().front())) {
                 return source;
             }
         }
@@ -793,10 +796,12 @@ bool AraDocumentController::clipForInstance(const ARA::PlugIn::PlugInExtension& 
         if (!editorRenderer->getPlaybackRegions().empty()) {
             return fill(editorRenderer->getPlaybackRegions().front());
         }
-        for (const ARA::PlugIn::RegionSequence* sequence : editorRenderer->getRegionSequences()) {
-            if (sequence && !sequence->getPlaybackRegions().empty()) {
-                return fill(sequence->getPlaybackRegions().front());
-            }
+        // Та же осторожность, что и в audioSourceForInstance: несколько
+        // последовательностей — значит, своя неизвестна
+        const auto& sequences = editorRenderer->getRegionSequences();
+        if (sequences.size() == 1 && sequences.front()
+            && !sequences.front()->getPlaybackRegions().empty()) {
+            return fill(sequences.front()->getPlaybackRegions().front());
         }
     }
     if (const auto* view = extension.getEditorView<AraEditorView>();
