@@ -4,6 +4,7 @@
 // Дневник пишется и без ARA (см. refreshWaveform), поэтому заголовок нужен
 // всегда; за #if прячется только слой ARA
 #include "../core/dontfloat_diagnostics.h"
+#include "dontfloat_timeline_scroll.h"
 #if defined(DONTFLOAT_WITH_ARA)
 #include "../ara/dontfloat_ara_document_controller.h"
 #endif
@@ -115,17 +116,17 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
     root->addWidget(waveform_, 1);
 
     horizontalScrollBar_ = new QScrollBar(Qt::Horizontal, this);
+    // В полной редакции полос две — своя у волны и своя у пианоролла
+    horizontalScrollBar_->setObjectName(QStringLiteral("dontfloatWaveformScroll"));
     horizontalScrollBar_->setMinimum(0);
     horizontalScrollBar_->setMaximum(0);
     horizontalScrollBar_->setSingleStep(10);
     horizontalScrollBar_->setPageStep(100);
     horizontalScrollBar_->setFixedHeight(UiConstants::kHorizontalScrollBarHeightPx);
     root->addWidget(horizontalScrollBar_);
-    connect(horizontalScrollBar_, &QScrollBar::valueChanged, this, [this](int value) {
-        if (waveform_ && horizontalScrollBar_->maximum() > 0) {
-            const float offset =
-                qBound(0.0f, float(value) / float(horizontalScrollBar_->maximum()), 1.0f);
-            waveform_->setHorizontalOffset(offset);
+    connect(horizontalScrollBar_, &QScrollBar::valueChanged, this, [this](int) {
+        if (waveform_) {
+            waveform_->setHorizontalOffset(timelineOffsetFromScrollBar(horizontalScrollBar_));
         }
     });
 
@@ -193,11 +194,16 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
     // Масштаб и прокрутка общие с пианороллом: обе половины окна показывают
     // одну дорожку, и разъехавшиеся таймлайны читать невозможно
     connect(waveform_, &WaveformView::zoomChanged, this, [this](float zoom) {
+        // Полоса прокрутки заводилась с нулевым максимумом и таким и
+        // оставалась: тянуть её было некуда, сколько ни приближай
+        applyTimelineZoomToScrollBar(horizontalScrollBar_, zoom);
         if (!applyingTimelineView_) {
             emit timelineZoomChanged(zoom);
         }
     });
     connect(waveform_, &WaveformView::horizontalOffsetChanged, this, [this](float offset) {
+        // Волну можно таскать и мышью — бегунок обязан идти следом
+        applyTimelineOffsetToScrollBar(horizontalScrollBar_, offset);
         if (!applyingTimelineView_) {
             emit timelineOffsetChanged(offset);
         }

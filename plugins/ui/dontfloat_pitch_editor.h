@@ -27,6 +27,7 @@ class KeySelectionMenu;
 class PianoRollToolbar;
 class QLineEdit;
 class QProgressBar;
+class QScrollBar;
 class QPushButton;
 class QLabel;
 class QTimer;
@@ -87,6 +88,13 @@ public:
     void applyTimelineOffset(float offset);
     /** Длина таймлайна в сэмплах — чтобы сетка пианоролла совпала с волной. */
     void applyTimelineSampleCount(qint64 samples);
+    /**
+     * Рядом есть волна, и масштаб таймлайна задаёт она.
+     *
+     * В полной редакции колесо над пианороллом уходит волне: масштаб обязан
+     * быть общим. В редакции Pitcher волны нет, и пианоролл считает сам.
+     */
+    void setTimelineLedByPartner(bool led) { timelineLedByPartner_ = led; }
 
 signals:
     void pitchSessionChanged();
@@ -154,6 +162,8 @@ private:
      * окна и волна в DAW остаются там, где были.
      */
     bool requestHostSeek(qint64 sourceSample);
+    /** Свой масштаб по колесу — когда волны рядом нет (см. setTimelineLedByPartner). */
+    void zoomTimelineHere(int angleDeltaY);
 #if defined(DONTFLOAT_WITH_ARA)
     /** Document controller этого экземпляра (общий на весь проект DAW). */
     Dontfloat::Ara::AraDocumentController* araDocumentController() const;
@@ -233,6 +243,9 @@ private:
     static constexpr int kAutoAnalysisDelayMs = 400;
     /** Идёт применение чужого масштаба — обратно его не рассылаем. */
     bool applyingTimelineView_ = false;
+    /** Масштаб таймлайна задаёт соседняя волна (полная редакция). */
+    bool timelineLedByPartner_ = false;
+    QScrollBar* horizontalScrollBar_ = nullptr;
     /**
      * Размещение клипа на таймлайне DAW.
      *

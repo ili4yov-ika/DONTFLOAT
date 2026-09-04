@@ -42,6 +42,10 @@ public:
     void setHorizontalOffset(float offset);
     void setVerticalOffset(float offset);
     void setZoomLevel(float zoom);
+    /** Текущий масштаб таймлайна: по нему считается длина полосы прокрутки. */
+    float getZoomLevel() const { return zoomLevel; }
+    /** Куда уехал таймлайн: 0 — начало, 1 — конец. */
+    float getHorizontalOffset() const { return horizontalOffset; }
     void setTimelineReferenceWidth(int widthPx);
     void setTimelineSampleCount(qint64 samples);
     /** Длина таймлайна в сэмплах — по ней ставятся полосы над пианороллом. */

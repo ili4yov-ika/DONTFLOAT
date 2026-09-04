@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QLayout>
+#include <QScrollBar>
 #include <QSignalSpy>
 
 #include "../plugins/core/dontfloat_plugin_core.h"
@@ -98,6 +99,7 @@ private slots:
     void testClickOnWaveformMovesThePianoRoll();
     void testClickOnPianoRollMovesTheWaveform();
     void testPlayButtonAsksTheHostAndPlaysNothingItself();
+    void testWaveformScrollBarFollowsZoomAndMovesTheView();
 
 private:
     /** Кнопка шапки по подсказке: своих имён у кнопок транспорта нет. */
@@ -206,6 +208,41 @@ void PluginTransportSyncTest::testPlayButtonAsksTheHostAndPlaysNothingItself()
         }
         QVERIFY2(told, "кнопка транспорта промолчала о том, что хост её не принял");
     }
+}
+
+// Горизонтальная полоса под волной.
+//
+// Заводилась она с нулевым максимумом и такой и оставалась: диапазон никто
+// не пересчитывал, и тянуть бегунок было некуда, сколько ни приближай.
+void PluginTransportSyncTest::testWaveformScrollBarFollowsZoomAndMovesTheView()
+{
+    DontfloatFullEditor editor;
+    editor.bindSession(&session_);
+    editor.resize(1000, 700);
+    layOut(&editor);
+
+    auto* waveform = editor.findChild<WaveformView*>();
+    auto* bar = editor.findChild<QScrollBar*>(QStringLiteral("dontfloatWaveformScroll"));
+    QVERIFY(waveform != nullptr);
+    QVERIFY2(bar != nullptr, "под волной нет полосы прокрутки");
+
+    // Масштаб 1 — прокручивать нечего
+    QCOMPARE(bar->maximum(), 0);
+
+    waveform->setZoomLevel(4.0f);
+    QCoreApplication::processEvents();
+    QVERIFY2(bar->maximum() > 0, "после приближения полосу так и не растянули");
+
+    // Бегунок в конец — волна уезжает вправо
+    bar->setValue(bar->maximum());
+    QCoreApplication::processEvents();
+    QVERIFY2(waveform->getHorizontalOffset() > 0.9f,
+             "бегунок доехал до конца, а волна осталась на месте");
+
+    // И обратно к началу
+    bar->setValue(0);
+    QCoreApplication::processEvents();
+    QVERIFY(waveform->getHorizontalOffset() < 0.1f);
 }
 
 QTEST_MAIN(PluginTransportSyncTest)

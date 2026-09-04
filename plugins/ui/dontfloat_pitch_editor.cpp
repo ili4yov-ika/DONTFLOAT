@@ -4,6 +4,7 @@
 #include "../../include/keyanalyzer.h"
 #include "../../include/keymodulationstrip.h"
 #include "../core/dontfloat_diagnostics.h"
+#include "dontfloat_timeline_scroll.h"
 #if defined(DONTFLOAT_WITH_ARA)
 #include "../ara/dontfloat_ara_document_controller.h"
 #endif
@@ -189,6 +190,25 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     pitchGrid_->setPrimaryKey(QStringLiteral("C Major"));
     root->addWidget(pitchGrid_, 1);
 
+    // Своя полоса прокрутки: в редакции Pitcher волны рядом нет, и таскать
+    // таймлайн можно было только мышью по самому пианороллу
+    horizontalScrollBar_ = new QScrollBar(Qt::Horizontal, this);
+    horizontalScrollBar_->setObjectName(QStringLiteral("dontfloatPianoRollScroll"));
+    horizontalScrollBar_->setMinimum(0);
+    horizontalScrollBar_->setMaximum(0);
+    horizontalScrollBar_->setFixedHeight(UiConstants::kHorizontalScrollBarHeightPx);
+    root->addWidget(horizontalScrollBar_);
+    connect(horizontalScrollBar_, &QScrollBar::valueChanged, this, [this](int) {
+        if (!pitchGrid_) {
+            return;
+        }
+        const float offset = timelineOffsetFromScrollBar(horizontalScrollBar_);
+        pitchGrid_->setHorizontalOffset(offset);
+        if (!applyingTimelineView_) {
+            emit timelineOffsetChanged(offset);
+        }
+    });
+
     // Нижняя полоса — та же, что в главном окне: слева панель разреза, справа
     // «Экспорт MIDI» (макет MARKDOWN/example_plugin_dontfloat.svg).
     // Полоса тянется на всю ширину, поэтому экспорт стоит у правого края
@@ -256,15 +276,22 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     // дорожку, и разъехавшиеся таймлайны читать невозможно
     connect(pitchGrid_, &PitchGridWidget::horizontalOffsetChanged, this,
             [this](float offset) {
+                applyTimelineOffsetToScrollBar(horizontalScrollBar_, offset);
                 if (!applyingTimelineView_) {
                     emit timelineOffsetChanged(offset);
                 }
             });
     connect(pitchGrid_, &PitchGridWidget::timelineZoomRequested, this,
             [this](int angleDeltaY, float timelinePixelX) {
-                // Масштаб задаёт волна, мы только просим: так он остаётся
-                // в одних руках и не расходится
-                emit timelineZoomRequested(angleDeltaY, timelinePixelX);
+                // Когда рядом есть волна, масштаб задаёт она: так он остаётся
+                // в одних руках и половины окна не расходятся. В редакции
+                // Pitcher волны нет, и просить некого — считаем сами, иначе
+                // колесо над пианороллом не делало вообще ничего
+                if (timelineLedByPartner_) {
+                    emit timelineZoomRequested(angleDeltaY, timelinePixelX);
+                    return;
+                }
+                zoomTimelineHere(angleDeltaY);
             });
 
     connect(pitchGrid_, &PitchGridWidget::notePitchEdited,
@@ -883,6 +910,17 @@ void DontfloatPitchEditor::applyReferenceNotes(const QVector<PitchDetector::Pitc
     syncReferenceKeyStrip();
 }
 
+void DontfloatPitchEditor::zoomTimelineHere(int angleDeltaY)
+{
+    if (!pitchGrid_ || angleDeltaY == 0) {
+        return;
+    }
+    // Шаг тот же, что у волны: щелчок колеса — четверть, вверх приближает
+    const float factor = angleDeltaY > 0 ? 1.25f : 1.0f / 1.25f;
+    const float zoom = qBound(1.0f, pitchGrid_->getZoomLevel() * factor, 64.0f);
+    applyTimelineZoom(zoom);
+}
+
 void DontfloatPitchEditor::applyTimelineZoom(float zoom)
 {
     if (!pitchGrid_ || zoom <= 0.0f) {
@@ -890,6 +928,7 @@ void DontfloatPitchEditor::applyTimelineZoom(float zoom)
     }
     applyingTimelineView_ = true;
     pitchGrid_->setZoomLevel(zoom);
+    applyTimelineZoomToScrollBar(horizontalScrollBar_, zoom);
     applyingTimelineView_ = false;
 }
 
