@@ -986,7 +986,7 @@ bool DontfloatPitchEditor::pullFromAraModel()
         if (Dontfloat::PluginCore::Diagnostics::enabled()) {
             char line[256];
             std::snprintf(line, sizeof(line), "ara.notes.own count=%d source=%s",
-                          int(baseNotes_.size()), ownSource->getPersistentID());
+                          int(baseNotes_.size()), ownSource->getPersistentID().c_str());
             Dontfloat::PluginCore::Diagnostics::log(line);
         }
         refreshPitchGrid();
