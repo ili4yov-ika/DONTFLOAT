@@ -75,6 +75,9 @@ private slots:
     void cleanupTestCase();
 
     void testEachTrackGetsItsOwnAudioAndNotes();
+    void testForeignSelectionDoesNotStealTheTrack();
+    void testOwnClipIsFoundForEachInstance();
+    void testTransportRequestsReachTheHost();
     void testNeighbourNotesAreAvailableAsReference();
     void testRemovedTrackDisappearsFromDocument();
 
@@ -114,6 +117,13 @@ void MiniDawTwoTracksTest::initTestCase()
             static_cast<ARA::ARAPlugInInstanceRoleFlags>(AraHostDocument::assignedRoles()));
         QVERIFY(instance != nullptr);
         document_->bindInstance(trackIndexes_[i], instance);
+
+        // Окно редактора открыто — как в DAW, где выбор клипов плагину виден
+        // только при открытом окне. Без этого шага проверка выбора чужого
+        // клипа ничего бы не проверяла
+        if (auto* view = instances_[i]->getEditorView<Dontfloat::Ara::AraEditorView>()) {
+            view->setEditorOpenState(true);
+        }
     }
     QCOMPARE(document_->trackCount(), 2);
     QVERIFY2(waitForAnalysis(), "плагин не разобрал дорожки за отведённое время");
@@ -176,6 +186,73 @@ void MiniDawTwoTracksTest::testEachTrackGetsItsOwnAudioAndNotes()
 
     // Разный звук — разные ноты: C4 внизу, C5 наверху
     QVERIFY(averagePitch(second->noteSet().notes) > averagePitch(first->noteSet().notes) + 6.0);
+}
+
+// Выделение чужого клипа в DAW не уводит экземпляр с его дорожки.
+//
+// Это ровно та жалоба, с которой всё началось: DONTFLOAT на первой дорожке
+// показывал ноты второй. Выбор клипов в DAW общий на проект, и раньше он
+// стоял в поиске источника **первым** — экземпляр уходил на выделенный клип
+// соседа. Свои клипы экземпляра теперь важнее.
+void MiniDawTwoTracksTest::testForeignSelectionDoesNotStealTheTrack()
+{
+    Dontfloat::Ara::AraAudioSource* own =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*instances_[0]);
+    Dontfloat::Ara::AraAudioSource* neighbour =
+        Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*instances_[1]);
+    QVERIFY(own != nullptr);
+    QVERIFY(neighbour != nullptr);
+
+    // Человек выделил в DAW клип второй дорожки, окно первой открыто
+    document_->selectClipOfTrack(trackIndexes_[0], trackIndexes_[1]);
+    document_->pumpModelUpdates();
+
+    QCOMPARE(Dontfloat::Ara::AraDocumentController::audioSourceForInstance(*instances_[0]),
+             own);
+
+    // Возвращаем выделение на место, чтобы не мешать соседним проверкам
+    document_->selectClipOfTrack(trackIndexes_[0], trackIndexes_[0]);
+    document_->pumpModelUpdates();
+}
+
+// Каждый экземпляр находит **свой** клип: по нему считаются тактовая сетка и
+// каретка, и обе половины окна обязаны брать один и тот же
+void MiniDawTwoTracksTest::testOwnClipIsFoundForEachInstance()
+{
+    Dontfloat::Ara::AraClipPlacement first;
+    Dontfloat::Ara::AraClipPlacement second;
+    QVERIFY(Dontfloat::Ara::AraDocumentController::clipForInstance(*instances_[0], &first));
+    QVERIFY(Dontfloat::Ara::AraDocumentController::clipForInstance(*instances_[1], &second));
+
+    // Клип покрывает всю дорожку и не растянут — так его положил мини-DAW
+    for (const Dontfloat::Ara::AraClipPlacement& clip : { first, second }) {
+        QCOMPARE(clip.startInPlaybackSeconds, 0.0);
+        QVERIFY(clip.durationInPlaybackSeconds > 0.0);
+        QVERIFY(std::fabs(clip.stretchFactor() - 1.0) < 1e-6);
+    }
+}
+
+// Кнопки воспроизведения плагина — дублёры кнопок DAW: нажатие обязано
+// дойти до хоста, своего проигрывателя у плагина под ARA нет
+void MiniDawTwoTracksTest::testTransportRequestsReachTheHost()
+{
+    auto* controller =
+        instances_[0]->getDocumentController<Dontfloat::Ara::AraDocumentController>();
+    QVERIFY(controller != nullptr);
+
+    const int startsBefore = document_->transportStartRequests();
+    const int stopsBefore = document_->transportStopRequests();
+
+    QVERIFY2(controller->requestHostPlayback(true),
+             "хост не отдал плагину управление транспортом");
+    QCOMPARE(document_->transportStartRequests(), startsBefore + 1);
+
+    QVERIFY(controller->requestHostPlayback(false));
+    QCOMPARE(document_->transportStopRequests(), stopsBefore + 1);
+
+    // Клик по волне или пианороллу переставляет каретку DAW тем же путём
+    QVERIFY(controller->requestHostPlaybackPosition(1.25));
+    QVERIFY(std::fabs(document_->lastRequestedPlaybackPosition() - 1.25) < 1e-9);
 }
 
 // Ноты соседней дорожки доступны как референс — это и рисует редактор серым

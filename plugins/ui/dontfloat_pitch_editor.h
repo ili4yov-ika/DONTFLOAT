@@ -54,6 +54,14 @@ public:
     void setHostPlayhead(qint64 samplePosition) override;
     /** Тактовая сетка DAW: пианоролл рисует её же сетку. */
     void setHostBeatGrid(double bpm, int beatsPerBar, qint64 barStartSample) override;
+    /**
+     * Каретка из соседней половины окна (сэмплы **источника**).
+     *
+     * Клик по волне обязан двигать и каретку пианоролла: на стоящем
+     * транспорте хост позицию обратно не присылает, и половины окна
+     * оставались в разных местах.
+     */
+    void applySourcePlayhead(qint64 sourceSample);
 #if defined(DONTFLOAT_WITH_ARA)
     /** Экземпляр привязан к документу ARA — работаем с моделью, а не с захватом. */
     void setAraBinding(const void* extension) override;
@@ -124,6 +132,13 @@ private:
     void publishNotesToBoard();
     /** Забирает ноты соседней дорожки, если они изменились. */
     void pullSharedReferenceNotes();
+    /**
+     * Просит DAW встать в позицию (сэмплы источника).
+     *
+     * Каретку под ARA ведёт хост: пока он не переставлен, вторая половина
+     * окна и волна в DAW остаются там, где были.
+     */
+    bool requestHostSeek(qint64 sourceSample);
 #if defined(DONTFLOAT_WITH_ARA)
     /**
      * Тянет из модели ARA: свои ноты, тактовую сетку хоста и ноты соседней

@@ -488,6 +488,18 @@ void AraDocumentController::didAddAudioSourceToDocument(
     // Новый клип с новым файлом на дорожке — разбираем сразу, не дожидаясь
     // ни проигрывания, ни просьбы хоста (так работает Melodyne)
     ++modelRevision_;
+    // Один раз за сеанс пишем, отдал ли хост управление транспортом: без
+    // этого интерфейса кнопки воспроизведения в плагине бессильны, и по
+    // дневнику сразу видно, в плагине дело или в DAW
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        static std::atomic<bool> logged { false };
+        if (!logged.exchange(true)) {
+            char line[64];
+            std::snprintf(line, sizeof(line), "ara.host.playback=%d",
+                          getHostPlaybackController() != nullptr ? 1 : 0);
+            Dontfloat::PluginCore::Diagnostics::log(line);
+        }
+    }
     analyzeIfNeeded(static_cast<AraAudioSource*>(audioSource));
 }
 
@@ -697,20 +709,15 @@ AraAudioSource* AraDocumentController::audioSourceForInstance(
         return static_cast<AraAudioSource*>(region->getAudioModification()->getAudioSource());
     };
 
-    // Редактор знает выбранные клипы; если хост роли редактора не дал —
-    // берём клипы роли воспроизведения
-    if (const auto* view = extension.getEditorView<AraEditorView>();
-        view && view->isEditorOpen()) {
-        const auto& selection = view->getViewSelection();
-        if (!selection.getPlaybackRegions().empty()) {
-            if (AraAudioSource* source = sourceOfRegion(selection.getPlaybackRegions().front())) {
-                return source;
-            }
-        }
-    }
+    // Порядок здесь и есть ответ на «почему плагин показывал ноты соседней
+    // дорожки»: сначала клипы собственных ролей экземпляра, и только если их
+    // нет — выбор в DAW. Раньше выбор стоял первым, и экземпляр на первой
+    // дорожке цеплял клип, выделенный на второй
     if (const auto* renderer = extension.getPlaybackRenderer<AraPlaybackRenderer>()) {
         if (!renderer->getPlaybackRegions().empty()) {
-            return sourceOfRegion(renderer->getPlaybackRegions().front());
+            if (AraAudioSource* source = sourceOfRegion(renderer->getPlaybackRegions().front())) {
+                return source;
+            }
         }
     }
     // Роль редактора: хост назначает ей клипы дорожки даже тогда, когда
@@ -734,6 +741,18 @@ AraAudioSource* AraDocumentController::audioSourceForInstance(
         }
     }
 
+    // Выбор в DAW — последняя надежда: он про то, что выделил человек, а не
+    // про то, на каком клипе висит этот экземпляр
+    if (const auto* view = extension.getEditorView<AraEditorView>();
+        view && view->isEditorOpen()) {
+        const auto& selection = view->getViewSelection();
+        if (!selection.getPlaybackRegions().empty()) {
+            if (AraAudioSource* source = sourceOfRegion(selection.getPlaybackRegions().front())) {
+                return source;
+            }
+        }
+    }
+
     if (Dontfloat::PluginCore::Diagnostics::enabled()) {
         const auto* renderer = extension.getPlaybackRenderer<AraPlaybackRenderer>();
         const auto* editorRenderer = extension.getEditorRenderer<ARA::PlugIn::EditorRenderer>();
@@ -746,6 +765,48 @@ AraAudioSource* AraDocumentController::audioSourceForInstance(
         Dontfloat::PluginCore::Diagnostics::log(line);
     }
     return nullptr;
+}
+
+bool AraDocumentController::clipForInstance(const ARA::PlugIn::PlugInExtension& extension,
+                                            AraClipPlacement* placement) noexcept
+{
+    if (!placement) {
+        return false;
+    }
+    const auto fill = [placement](const ARA::PlugIn::PlaybackRegion* region) {
+        if (!region) {
+            return false;
+        }
+        placement->startInPlaybackSeconds = region->getStartInPlaybackTime();
+        placement->durationInPlaybackSeconds = region->getDurationInPlaybackTime();
+        placement->startInSourceSeconds = region->getStartInAudioModificationTime();
+        placement->durationInSourceSeconds = region->getDurationInAudioModificationTime();
+        return true;
+    };
+
+    if (const auto* renderer = extension.getPlaybackRenderer<AraPlaybackRenderer>()) {
+        if (!renderer->getPlaybackRegions().empty()) {
+            return fill(renderer->getPlaybackRegions().front());
+        }
+    }
+    if (const auto* editorRenderer = extension.getEditorRenderer<ARA::PlugIn::EditorRenderer>()) {
+        if (!editorRenderer->getPlaybackRegions().empty()) {
+            return fill(editorRenderer->getPlaybackRegions().front());
+        }
+        for (const ARA::PlugIn::RegionSequence* sequence : editorRenderer->getRegionSequences()) {
+            if (sequence && !sequence->getPlaybackRegions().empty()) {
+                return fill(sequence->getPlaybackRegions().front());
+            }
+        }
+    }
+    if (const auto* view = extension.getEditorView<AraEditorView>();
+        view && view->isEditorOpen()) {
+        const auto& selection = view->getViewSelection();
+        if (!selection.getPlaybackRegions().empty()) {
+            return fill(selection.getPlaybackRegions().front());
+        }
+    }
+    return false;
 }
 
 AraAudioSource* AraDocumentController::onlyAudioSource() const noexcept

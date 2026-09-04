@@ -1029,6 +1029,18 @@ if(DONTFLOAT_ARA_AVAILABLE AND TARGET dontfloat_ara)
     )
 endif()
 
+# Каретка в окне плагина одна на обе половины, а Play — дублёр кнопки DAW
+add_qt_test(plugin_transport_sync_test
+    tests/plugin_transport_sync_test.cpp
+)
+dontfloat_link_plugin_ui(plugin_transport_sync_test full)
+
+set_tests_properties(plugin_transport_sync_test PROPERTIES
+    LABELS "unit;plugins;ui"
+    DESCRIPTION "Playheads of both editor halves follow each other; transport asks the host"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 # Иконки кнопок: SVG рисуется без плагина движка иконок Qt
 add_qt_test(svg_icon_test
     tests/svg_icon_test.cpp

@@ -100,8 +100,10 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [2/5] Building app + plugins ^(not tests / mini-DAW^)...
-REM Stub targets pull *_impl via add_dependencies. LV2 UI stub pulls ui_impl.
-set "BUILD_TARGETS=DONTFLOAT dontfloat_full_clap dontfloat_scratch_clap dontfloat_pitcher_clap dontfloat_full_lv2 dontfloat_scratch_lv2 dontfloat_pitcher_lv2 dontfloat_full_lv2_ui dontfloat_scratch_lv2_ui dontfloat_pitcher_lv2_ui"
+REM Stub targets pull *_impl via add_dependencies.
+REM CLAP and LV2 are off (see PLUGIN_CMAKE_ARGS above): their targets are not
+REM generated at all, and naming them here failed the build outright.
+set "BUILD_TARGETS=DONTFLOAT"
 if defined DONTFLOAT_VST3_SDK_ROOT (
     set "BUILD_TARGETS=!BUILD_TARGETS! dontfloat_full_vst3 dontfloat_scratch_vst3 dontfloat_pitcher_vst3"
 ) else (

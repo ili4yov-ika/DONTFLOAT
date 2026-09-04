@@ -141,6 +141,8 @@ private slots:
     void testReaperClosesByItself();
     void testAraSeesClipEdits();
     void testWaveformGetsAudioFromAra();
+    void testClipEditsDoNotRedrawTheWaveform();
+    void testHostHandsOverItsTransport();
     void testBeatGridComesFromHost();
     void testPlaybackKeepsWaveform();
     void testReferenceNotesTravelBetweenInstances();
@@ -413,6 +415,48 @@ void ReaperAraIntegrationTest::testWaveformGetsAudioFromAra()
     QVERIFY2(sawFrames,
              qPrintable(QStringLiteral("звук пришёл пустым:\n%1")
                             .arg(applied.join(QStringLiteral("\n")))));
+}
+
+// Правки клипов не перезаливают волну.
+//
+// Разрез, перенос и растяжение клипа звук источника не меняют — меняется
+// только его место на таймлайне. Значит, звук в редактор заливается один раз,
+// а дальше перечитывается лишь размещение клипа: иначе на каждой правке
+// волна перерисовывалась бы с нуля, теряя метки.
+void ReaperAraIntegrationTest::testClipEditsDoNotRedrawTheWaveform()
+{
+    requireRun();
+
+    const QStringList applied = diagLines(QStringLiteral("ara.audio.applied"));
+    const QStringList synced = diagLines(QStringLiteral("ara.clip.sync"));
+
+    // Экземпляров с волной в сценарии один (на второй дорожке — Pitcher),
+    // но при разрезе REAPER копирует цепочку на новый клип: два залива —
+    // это ещё два разных экземпляра, а не перерисовка у одного
+    QVERIFY2(applied.size() <= 2,
+             qPrintable(QStringLiteral("волну перезаливали на каждой правке клипа:\n%1")
+                            .arg(applied.join(QStringLiteral("\n")))));
+
+    QVERIFY2(synced.size() >= 2,
+             qPrintable(QStringLiteral("размещение клипа не перечитывалось после правок:\n%1")
+                            .arg(synced.join(QStringLiteral("\n")))));
+}
+
+// Хост отдаёт плагину управление транспортом.
+//
+// Кнопки воспроизведения в плагине — дублёры кнопок DAW и ходят через
+// ARAPlaybackControllerInterface. Нажать их из сценария нельзя (окно плагина
+// рисует Qt, а ReaScript до его кнопок не дотягивается), зато видно главное:
+// отдал ли хост сам интерфейс. Без него кнопки бессильны, и дело не в плагине.
+void ReaperAraIntegrationTest::testHostHandsOverItsTransport()
+{
+    requireRun();
+
+    const QStringList lines = diagLines(QStringLiteral("ara.host.playback="));
+    QVERIFY2(!lines.isEmpty(), "плагин не записал, отдал ли хост транспорт");
+    QVERIFY2(lines.first().contains(QStringLiteral("ara.host.playback=1")),
+             qPrintable(QStringLiteral("REAPER не отдал плагину управление транспортом:\n%1")
+                            .arg(lines.join(QStringLiteral("\n")))));
 }
 
 // Тактовая сетка берётся из DAW, а не считается плагином заново.

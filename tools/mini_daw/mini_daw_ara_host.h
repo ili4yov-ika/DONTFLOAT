@@ -121,6 +121,23 @@ public:
     /** Сколько нот плагин отдал хосту по дорожке \a trackIndex. */
     int readNoteCount(int trackIndex = 0) const;
 
+    /**
+     * Выделяет в редакторе экземпляра \a viewTrackIndex клип **чужой**
+     * дорожки \a selectedTrackIndex.
+     *
+     * Так ведёт себя настоящая DAW: выбор клипов общий на проект, и окно
+     * плагина первой дорожки получает выделение, сделанное на второй.
+     * Экземпляр обязан остаться при своей дорожке.
+     */
+    void selectClipOfTrack(int viewTrackIndex, int selectedTrackIndex);
+
+    /** Сколько раз плагин просил хост начать воспроизведение. */
+    int transportStartRequests() const;
+    /** Сколько раз плагин просил хост остановиться. */
+    int transportStopRequests() const;
+    /** Последняя позиция (секунды проекта), о которой просил плагин. */
+    double lastRequestedPlaybackPosition() const;
+
     /** Закрывает документ: сначала объекты модели, потом контроллер. */
     void close();
 

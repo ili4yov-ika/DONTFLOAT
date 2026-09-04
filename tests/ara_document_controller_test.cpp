@@ -354,6 +354,12 @@ ARA::ARAAudioSourceRef AraDocumentControllerTest::addAnalyzedSource(HostAudioTra
 {
     const ARA::ARAAudioSourceHostRef hostRef = toHostRef(track);
 
+    // Ссылка хоста — адрес дорожки на стеке теста, и у дорожек из разных
+    // проверок он совпадает. Старый счётчик разборов по этому адресу заставлял
+    // waitForAnalysis вернуться сразу, до того как разбор действительно прошёл:
+    // ноты у источника ещё пусты, а тест уже идёт дальше
+    modelUpdates_.completedAnalyses.erase(hostRef);
+
     documentController_->beginEditing();
     const ARA::SizedStruct<ARA_STRUCT_MEMBER(ARAAudioSourceProperties, merits64BitSamples)>
         sourceProperties {

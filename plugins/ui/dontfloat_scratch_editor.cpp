@@ -147,7 +147,10 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
     // Хост отдаёт аудио блоками; анализ запускаем, когда поток утих
     araPollTimer_ = new QTimer(this);
     araPollTimer_->setInterval(kAraPollIntervalMs);
-    connect(araPollTimer_, &QTimer::timeout, this, [this]() { pullAudioFromAra(); });
+    connect(araPollTimer_, &QTimer::timeout, this, [this]() {
+        pullAudioFromAra();
+        syncAraClipAndGrid();
+    });
 
     autoAnalysisTimer_ = new QTimer(this);
     autoAnalysisTimer_->setSingleShot(true);
@@ -177,7 +180,9 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
         if (sampleRate > 0) {
             const qint64 sourceSample = (positionMs * sampleRate) / 1000;
             // Под ARA каретку ведёт DAW: просим её встать туда же, куда
-            // кликнули в волне, иначе каретки разъедутся
+            // кликнули в волне, иначе каретки разъедутся. Сигнал идёт и
+            // соседней половине окна — на стоящем транспорте хост позицию
+            // обратно не присылает, и пианоролл оставался бы на месте
             requestHostSeek(sourceSample);
             emit seekRequested(sourceSample);
         }
@@ -341,9 +346,14 @@ void DontfloatScratchEditor::setAraBinding(const void* extension)
         }
         return;
     }
+    appliedAraRevision_ = 0;
     // В момент привязки документ обычно ещё пуст: хост заводит источник и
-    // разрешает доступ к сэмплам позже, поэтому дальше опрашиваем
-    if (!pullAudioFromAra() && araPollTimer_) {
+    // разрешает доступ к сэмплам позже, поэтому дальше опрашиваем. Таймер
+    // не останавливается и после загрузки звука: он же следит за правками
+    // клипа — разрезом, переносом и растяжением
+    pullAudioFromAra();
+    syncAraClipAndGrid();
+    if (araPollTimer_) {
         araPollTimer_->start();
     }
 #else
@@ -386,9 +396,6 @@ bool DontfloatScratchEditor::pullAudioFromAra()
     buffer.mono = source->monoSamples();
     session_->setAudioBuffer(buffer);
     araAudioApplied_ = true;
-    if (araPollTimer_) {
-        araPollTimer_->stop();
-    }
 
     QElapsedTimer applyClock;
     applyClock.start();
@@ -431,12 +438,11 @@ void DontfloatScratchEditor::pullBeatGridFromAra()
         return;
     }
 
-    // Где клип стоит на таймлайне и насколько растянут — по первому клипу
-    // этого источника: каретка и сетка обязаны считаться в одних координатах
-    const std::vector<Dontfloat::Ara::AraClipPlacement> clips =
-        controller->clipsForAudioSource(source);
-    if (!clips.empty()) {
-        const Dontfloat::Ara::AraClipPlacement& clip = clips.front();
+    // Где клип стоит на таймлайне и насколько растянут — по клипу **этого**
+    // экземпляра: каретка и сетка обязаны считаться в одних координатах, а у
+    // источника после разреза клипов несколько
+    Dontfloat::Ara::AraClipPlacement clip;
+    if (Dontfloat::Ara::AraDocumentController::clipForInstance(*extension, &clip)) {
         araClipStartPlaybackSec_ = clip.startInPlaybackSeconds;
         araClipStartSourceSec_ = clip.startInSourceSeconds;
         araClipStretch_ = clip.stretchFactor() > 0.0 ? clip.stretchFactor() : 1.0;
@@ -498,6 +504,50 @@ bool DontfloatScratchEditor::requestHostTransport(bool start)
     Q_UNUSED(start);
 #endif
     return false;
+}
+
+void DontfloatScratchEditor::applySourcePlayhead(qint64 sourceSample)
+{
+    if (!waveform_ || !session_) {
+        return;
+    }
+    const int sampleRate = session_->audioBuffer().sampleRate;
+    if (sampleRate <= 0) {
+        return;
+    }
+    const qint64 clamped = std::clamp<qint64>(
+        sourceSample, 0, qint64(session_->audioBuffer().frameCount()));
+    // Тот же флаг, что и для каретки хоста: иначе клик в пианоролле вернулся
+    // бы сюда, отсюда — обратно в пианоролл, и так по кругу
+    applyingHostPlayhead_ = true;
+    waveform_->setPlaybackPosition((clamped * 1000) / sampleRate);
+    applyingHostPlayhead_ = false;
+}
+
+void DontfloatScratchEditor::syncAraClipAndGrid()
+{
+#if defined(DONTFLOAT_WITH_ARA)
+    auto* controller = araController();
+    if (!controller) {
+        return;
+    }
+    const std::uint64_t revision = controller->modelRevision();
+    if (revision == appliedAraRevision_) {
+        return;  // разметка не менялась — перечитывать нечего
+    }
+    appliedAraRevision_ = revision;
+    // Звук при этом не трогаем: разрез и перенос клипа его не меняют, а
+    // перезалив буфера стирал бы метки и перерисовывал волну на ровном месте
+    pullBeatGridFromAra();
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        char line[160];
+        std::snprintf(line, sizeof(line),
+                      "ara.clip.sync revision=%llu start=%.6f srcStart=%.6f stretch=%.4f",
+                      static_cast<unsigned long long>(revision), araClipStartPlaybackSec_,
+                      araClipStartSourceSec_, araClipStretch_);
+        Dontfloat::PluginCore::Diagnostics::log(line);
+    }
+#endif
 }
 
 double DontfloatScratchEditor::sourceSampleToProjectSeconds(qint64 sourceSample,

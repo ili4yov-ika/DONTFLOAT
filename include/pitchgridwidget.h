@@ -36,6 +36,8 @@ public:
     void setAudioData(const QVector<QVector<float>>& data);
     void setSampleRate(int rate);
     void setPlaybackPosition(qint64 position);
+    /** Где сейчас каретка (мс). Обе половины окна плагина обязаны совпадать. */
+    qint64 getPlaybackPosition() const { return playbackPosition; }
     void setCursorPosition(float xPosition);
     void setHorizontalOffset(float offset);
     void setVerticalOffset(float offset);

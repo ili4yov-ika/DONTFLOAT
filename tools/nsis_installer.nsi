@@ -75,24 +75,10 @@ Section "DONTFLOAT application" SEC_APP
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall ${PRODUCT_NAME}.lnk" "$INSTDIR\Uninstall.exe"
 SectionEnd
 
+; CLAP и LV2 больше не собираются (см. README): формат один — VST3 с ARA.
+; Их разделы убраны отсюда, но удаление прошлых установок в деинсталляторе
+; оставлено: иначе старые модули так и лежали бы в системных папках.
 SectionGroup /e "DAW plugins" SEC_PLUGINS
-  ; CLAP: stub .clap + *.impl.dll + Qt runtime рядом
-  Section "CLAP plugins (DONTFLOAT, Scratch, Pitcher)" SEC_CLAP
-    SetOutPath "${CLAP_INSTALL_DIR}"
-    File /nonfatal /r "${BUILD_DIR}\lib\clap\*.*"
-  SectionEnd
-
-  ; LV2: каждый bundle — DSP + UI stub/impl + Qt (включая platforms\qwindows.dll).
-  ; Без platforms DAW: "no Qt platform plugin could be initialized".
-  Section "LV2 plugins (DONTFLOAT, Scratch, Pitcher)" SEC_LV2
-    SetOutPath "${LV2_INSTALL_DIR}\dontfloat.lv2"
-    File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat.lv2\*.*"
-    SetOutPath "${LV2_INSTALL_DIR}\dontfloat_scratch.lv2"
-    File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat_scratch.lv2\*.*"
-    SetOutPath "${LV2_INSTALL_DIR}\dontfloat_pitcher.lv2"
-    File /nonfatal /r "${BUILD_DIR}\lib\lv2\dontfloat_pitcher.lv2\*.*"
-  SectionEnd
-
   ; VST3: Steinberg bundles (DONTFLOAT.vst3/Contents/x86_64-win/...)
   ; Qt + platforms\qwindows.dll рядом с *.impl.dll (не в корне VST3).
   ; UI pump живёт в коде плагина (ensureQtApplication); без Qt runtime DAW зависает/пусто.

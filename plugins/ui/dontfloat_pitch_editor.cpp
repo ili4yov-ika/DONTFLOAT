@@ -274,14 +274,23 @@ DontfloatPitchEditor::DontfloatPitchEditor(QWidget* parent, const QString& produ
     connect(pitchGrid_, &PitchGridWidget::notePreviewStopped,
             this, &DontfloatPitchEditor::onNotePreviewStopped);
 
-    // Каретку двигают в плагине — просим DAW встать туда же
+    // Каретку двигают в плагине — просим DAW встать туда же. Раньше отсюда
+    // уходил только сигнал наверх, а сам хост никто не двигал: щелчок по
+    // пианороллу каретку DAW не трогал, и половины окна расходились
     connect(pitchGrid_, &PitchGridWidget::positionChanged, this, [this](qint64 positionMs) {
         if (applyingHostPlayhead_ || !session_) {
             return;
         }
         const int sampleRate = session_->audioBuffer().sampleRate;
         if (sampleRate > 0) {
-            emit seekRequested((positionMs * sampleRate) / 1000);
+            // Виджет по клику двигает только рисованную каретку, а свою
+            // позицию оставляет прежней: в главном окне её ставит окно.
+            // В плагине этого не делал никто — пианоролл щёлкали, а каретка
+            // оставалась там, где была
+            pitchGrid_->setPlaybackPosition(positionMs);
+            const qint64 sourceSample = (positionMs * sampleRate) / 1000;
+            requestHostSeek(sourceSample);
+            emit seekRequested(sourceSample);
         }
     });
 
@@ -512,6 +521,53 @@ void DontfloatPitchEditor::setHostPlayhead(qint64 samplePosition)
     applyingHostPlayhead_ = true;
     pitchGrid_->setPlaybackPosition((clamped * 1000) / sampleRate);
     applyingHostPlayhead_ = false;
+}
+
+void DontfloatPitchEditor::applySourcePlayhead(qint64 sourceSample)
+{
+    if (!pitchGrid_ || !session_) {
+        return;
+    }
+    const int sampleRate = session_->audioBuffer().sampleRate;
+    if (sampleRate <= 0) {
+        return;
+    }
+    const qint64 clamped = std::clamp<qint64>(
+        sourceSample, 0, qint64(session_->audioBuffer().frameCount()));
+    // Тот же флаг, что и для каретки хоста: иначе позиция ходила бы по кругу
+    // между половинами окна
+    applyingHostPlayhead_ = true;
+    pitchGrid_->setPlaybackPosition((clamped * 1000) / sampleRate);
+    applyingHostPlayhead_ = false;
+}
+
+bool DontfloatPitchEditor::requestHostSeek(qint64 sourceSample)
+{
+#if defined(DONTFLOAT_WITH_ARA)
+    if (!araBinding_ || !session_) {
+        return false;
+    }
+    const int sampleRate = session_->audioBuffer().sampleRate;
+    if (sampleRate <= 0) {
+        return false;
+    }
+    const auto* extension = static_cast<const ARA::PlugIn::PlugInExtension*>(araBinding_);
+    auto* controller = extension->getDocumentController<Dontfloat::Ara::AraDocumentController>();
+    if (!controller) {
+        return false;
+    }
+    // Сэмплы источника → секунды проекта тем же размещением клипа, каким
+    // каретка хоста переводится к нам (см. setHostPlayhead)
+    double projectSeconds = double(sourceSample) / double(sampleRate);
+    if (araClipValid_) {
+        projectSeconds = araClipStartPlaybackSec_
+            + (projectSeconds - araClipStartSourceSec_) * araClipStretch_;
+    }
+    return controller->requestHostPlaybackPosition(projectSeconds);
+#else
+    Q_UNUSED(sourceSample);
+    return false;
+#endif
 }
 
 void DontfloatPitchEditor::startAutoAnalysis()
@@ -901,11 +957,11 @@ bool DontfloatPitchEditor::pullFromAraModel()
             ? session_->audioBuffer().sampleRate
             : 44100;
         double gridStartInSource = grid.gridStartSeconds;
-        const std::vector<Dontfloat::Ara::AraClipPlacement> clips =
-            controller->clipsForAudioSource(ownSource);
-        if (!clips.empty()) {
+        // Клип берём **свой**, а не первый клип источника: после разреза их
+        // несколько, и половины окна начинали считать в разных координатах
+        Dontfloat::Ara::AraClipPlacement clip;
+        if (Dontfloat::Ara::AraDocumentController::clipForInstance(*extension, &clip)) {
             // Время проекта → время источника: где начало такта 1 внутри файла
-            const Dontfloat::Ara::AraClipPlacement& clip = clips.front();
             gridStartInSource = clip.startInSourceSeconds
                 + (grid.gridStartSeconds - clip.startInPlaybackSeconds) / clip.stretchFactor();
             // Тем же размещением переводится и каретка (см. setHostPlayhead)

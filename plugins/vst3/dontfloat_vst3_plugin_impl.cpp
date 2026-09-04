@@ -95,6 +95,15 @@ constexpr Steinberg::int32 kEditorMinWidth = 640;
 constexpr Steinberg::int32 kEditorMinHeight = 420;
 
 /**
+ * Насколько назад каретка может прыгнуть, чтобы это считалось перемоткой.
+ *
+ * Всё, что ближе, — блок из опережающей обработки хоста, и его позиция уже
+ * устарела. Полсекунды: короче любой осмысленной перемотки и длиннее любого
+ * разумного опережения.
+ */
+constexpr double kPlayheadBackwardJumpSeconds = 0.5;
+
+/**
  * Открытые редакторы этого модуля. Процессор и вьюха — разные объекты VST3,
  * поэтому о приходе аудио редактор узнаёт через этот список (в CLAP плагин
  * держит редактор прямо в экземпляре). Уведомление уходит очередью Qt:
@@ -141,12 +150,34 @@ void unregisterEditor(DontfloatPluginEditorShell* editor)
     editors.erase(std::remove(editors.begin(), editors.end(), editor), editors.end());
 }
 
+/** Сброс фильтра каретки: транспорт тронули, порядок блоков начинается заново. */
+std::atomic<Steinberg::int64>& lastPlayheadPosition()
+{
+    static std::atomic<Steinberg::int64> position { -1 };
+    return position;
+}
+
 /**
  * Каретка DAW → каретки редакторов. process() зовётся из аудиопотока, поэтому
  * позиция уходит в UI очередью Qt и склеивается: одно уведомление за раз.
+ *
+ * Позиции приходят не по порядку: REAPER считает эффекты с опережением и на
+ * фоновых потоках, поэтому за блоком на 12-й секунде запросто идёт блок на
+ * 11-й. Показывать их как есть — это и были рывки каретки вправо-влево.
+ * Поэтому шаг назад принимаем только большой (перемотка, петля, старт с
+ * начала), а мелкий отбрасываем.
  */
-void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition)
+void notifyEditorsHostPlayhead(Steinberg::int64 samplePosition, double sampleRate)
 {
+    const Steinberg::int64 backwardJumpLimit =
+        Steinberg::int64(std::max(1.0, sampleRate) * kPlayheadBackwardJumpSeconds);
+    const Steinberg::int64 previous = lastPlayheadPosition().load();
+    if (previous >= 0 && samplePosition < previous
+        && (previous - samplePosition) < backwardJumpLimit) {
+        return;  // блок из опережающей обработки, каретка уже дальше
+    }
+    lastPlayheadPosition().store(samplePosition);
+
     static std::atomic_bool pending { false };
     if (pending.exchange(true)) {
         return;
@@ -536,7 +567,11 @@ public:
             && (data.processContext->state & Steinberg::Vst::ProcessContext::kPlaying);
         notifyEditorsHostTransport(hostPlaying);
         if (hostPlaying) {
-            notifyEditorsHostPlayhead(data.processContext->projectTimeSamples);
+            notifyEditorsHostPlayhead(data.processContext->projectTimeSamples,
+                                      data.processContext->sampleRate);
+        } else {
+            // Транспорт стоит — следующий пуск может начаться откуда угодно
+            lastPlayheadPosition().store(-1);
         }
 
         // Тактовая сетка хоста: темп, доли в такте и начало текущего такта.
