@@ -16,6 +16,7 @@ DEF_CLASS_IID(ARA::IPlugInEntryPoint2)
 #endif
 
 #include <QSize>
+#include <QWindow>
 #include <QCoreApplication>
 #include <QMetaObject>
 #include <QString>
@@ -102,6 +103,21 @@ constexpr Steinberg::int32 kEditorMinHeight = 420;
  * разумного опережения.
  */
 constexpr double kPlayheadBackwardJumpSeconds = 0.5;
+
+/** Тип окна, который хост передаёт в attached(): у каждой системы свой. */
+#if defined(_WIN32)
+const Steinberg::FIDString kEditorPlatformType = Steinberg::kPlatformTypeHWND;
+#elif defined(__APPLE__)
+const Steinberg::FIDString kEditorPlatformType = Steinberg::kPlatformTypeNSView;
+#else
+const Steinberg::FIDString kEditorPlatformType =
+    Steinberg::kPlatformTypeX11EmbedWindowID;
+#endif
+
+#if defined(DONTFLOAT_VST3_X11)
+/** Как часто крутим очередь Qt из таймера хоста (мс). */
+constexpr Steinberg::Linux::TimerInterval kQtPumpIntervalMs = 16;
+#endif
 
 /**
  * Открытые редакторы этого модуля. Процессор и вьюха — разные объекты VST3,
@@ -269,7 +285,13 @@ void notifyEditorsHostAudioAppended()
 
 } // namespace
 
-class ProductEditorView final : public Steinberg::CPluginView {
+class ProductEditorView final : public Steinberg::CPluginView
+#if defined(DONTFLOAT_VST3_X11)
+    // Под Linux циклом событий владеет хост, и Qt сам себя не прокручивает:
+    // просим хост звать нас по таймеру и на каждый тик крутим очередь Qt
+    , public Steinberg::Linux::ITimerHandler
+#endif
+{
 public:
     ProductEditorView()
         : Steinberg::CPluginView()
@@ -277,22 +299,39 @@ public:
         setRect(Steinberg::ViewRect(0, 0, kEditorWidth, kEditorHeight));
     }
 
+#if defined(DONTFLOAT_VST3_X11)
+    // FUnknown вида уже реализован CPluginView; добавляем только свою роль
+    Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID iid,
+                                                 void** obj) override
+    {
+        QUERY_INTERFACE(iid, obj, Steinberg::Linux::ITimerHandler::iid,
+                        Steinberg::Linux::ITimerHandler)
+        return Steinberg::CPluginView::queryInterface(iid, obj);
+    }
+    Steinberg::uint32 PLUGIN_API addRef() override
+    {
+        return Steinberg::CPluginView::addRef();
+    }
+    Steinberg::uint32 PLUGIN_API release() override
+    {
+        return Steinberg::CPluginView::release();
+    }
+
+    void PLUGIN_API onTimer() override
+    {
+        Dontfloat::Plugins::Ui::pumpQtEvents(2);
+    }
+#endif
+
     Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) override
     {
-#if defined(_WIN32)
-        return std::strcmp(type, Steinberg::kPlatformTypeHWND) == 0
-            ? Steinberg::kResultTrue
-            : Steinberg::kResultFalse;
-#else
-        (void)type;
-        return Steinberg::kResultFalse;
-#endif
+        return std::strcmp(type, kEditorPlatformType) == 0 ? Steinberg::kResultTrue
+                                                          : Steinberg::kResultFalse;
     }
 
     Steinberg::tresult PLUGIN_API attached(void* parent, Steinberg::FIDString type) override
     {
-#if defined(_WIN32)
-        if (!parent || std::strcmp(type, Steinberg::kPlatformTypeHWND) != 0) {
+        if (!parent || std::strcmp(type, kEditorPlatformType) != 0) {
             return Steinberg::kInvalidArgument;
         }
 
@@ -318,6 +357,7 @@ public:
         editor_->setAttribute(Qt::WA_DontCreateNativeAncestors, true);
         editor_->resize(kEditorWidth, kEditorHeight);
 
+#if defined(_WIN32)
         // Native HWND first, parent into host, then show — avoids reentrancy hangs
         // when the host waits for attached() while Qt waits for a message pump.
         (void)editor_->winId();
@@ -331,22 +371,38 @@ public:
         SetParent(child, hostParent);
         MoveWindow(child, 0, 0, kEditorWidth, kEditorHeight, TRUE);
         ShowWindow(child, SW_SHOW);
+#else
+        // X11 и NSView встраиваем одинаково: QWindow::fromWinId оборачивает
+        // чужое окно хоста, и окно редактора становится его потомком. Xlib и
+        // Objective-C для этого не нужны — всё делает платформенный слой Qt
+        (void)editor_->winId();
+        hostWindow_ = QWindow::fromWinId(reinterpret_cast<WId>(parent));
+        if (!hostWindow_) {
+            Dontfloat::PluginCore::Diagnostics::log("view.attach.foreign-window-failed");
+            editor_.reset();
+            return Steinberg::kResultFalse;
+        }
+        if (QWindow* window = editor_->windowHandle()) {
+            window->setParent(hostWindow_);
+            window->setPosition(0, 0);
+        }
+#endif
         editor_->show();
         registerEditor(editor_.get());
         Dontfloat::Plugins::Ui::pumpQtEvents(8);
+#if defined(DONTFLOAT_VST3_X11)
+        startHostTimer();
+#endif
 
         return Steinberg::CPluginView::attached(parent, type);
-#else
-        (void)parent;
-        (void)type;
-        return Steinberg::kNotImplemented;
-#endif
     }
 
     Steinberg::tresult PLUGIN_API removed() override
     {
         Dontfloat::PluginCore::Diagnostics::log("shutdown.view.removed.begin");
-#if defined(_WIN32)
+#if defined(DONTFLOAT_VST3_X11)
+        stopHostTimer();
+#endif
 #if defined(DONTFLOAT_WITH_ARA)
         if (const void* extension = boundAraExtension()) {
             if (auto* view = static_cast<const ARA::PlugIn::PlugInExtension*>(extension)
@@ -358,9 +414,20 @@ public:
         if (editor_) {
             unregisterEditor(editor_.get());
             editor_->hide();
+#if defined(_WIN32)
             SetParent(reinterpret_cast<HWND>(editor_->winId()), nullptr);
+#else
+            // Сначала отвязываем окно от чужого, потом отпускаем обёртку:
+            // иначе Qt подчистит потомка уже мёртвого родителя
+            if (QWindow* window = editor_->windowHandle()) {
+                window->setParent(nullptr);
+            }
+#endif
             editor_.reset();
         }
+#if !defined(_WIN32)
+        delete hostWindow_;
+        hostWindow_ = nullptr;
 #endif
         Dontfloat::PluginCore::Diagnostics::log("shutdown.view.removed.end");
         return Steinberg::CPluginView::removed();
@@ -399,7 +466,6 @@ public:
     Steinberg::tresult PLUGIN_API onSize(Steinberg::ViewRect* newSize) override
     {
         const Steinberg::tresult result = Steinberg::CPluginView::onSize(newSize);
-#if defined(_WIN32)
         if (editor_ && newSize) {
             const int width = std::max<int>(newSize->getWidth(), kEditorMinWidth);
             const int height = std::max<int>(newSize->getHeight(), kEditorMinHeight);
@@ -410,15 +476,50 @@ public:
                 : 1.0;
             editor_->resize(int(std::lround(double(width) / dpr)),
                             int(std::lround(double(height) / dpr)));
+#if defined(_WIN32)
             MoveWindow(reinterpret_cast<HWND>(editor_->winId()), 0, 0, width, height, TRUE);
-        }
 #endif
+        }
         return result;
     }
 
     void bindSession(TrackToolSession*) {}
 
 private:
+#if defined(DONTFLOAT_VST3_X11)
+    /** Просит хост звать onTimer: без этого интерфейс Qt под Linux замирает. */
+    void startHostTimer()
+    {
+        if (runLoop_ || !plugFrame) {
+            return;
+        }
+        Steinberg::Linux::IRunLoop* loop = nullptr;
+        if (plugFrame->queryInterface(Steinberg::Linux::IRunLoop::iid,
+                                      reinterpret_cast<void**>(&loop)) != Steinberg::kResultOk
+            || !loop) {
+            Dontfloat::PluginCore::Diagnostics::log("view.runloop.unavailable");
+            return;
+        }
+        runLoop_ = loop;
+        runLoop_->registerTimer(this, kQtPumpIntervalMs);
+    }
+
+    void stopHostTimer()
+    {
+        if (!runLoop_) {
+            return;
+        }
+        runLoop_->unregisterTimer(this);
+        runLoop_->release();
+        runLoop_ = nullptr;
+    }
+
+    Steinberg::Linux::IRunLoop* runLoop_ = nullptr;
+#endif
+#if !defined(_WIN32)
+    /** Обёртка над окном хоста: её потомком становится окно редактора. */
+    QWindow* hostWindow_ = nullptr;
+#endif
     std::unique_ptr<DontfloatPluginEditorShell> editor_;
 };
 
