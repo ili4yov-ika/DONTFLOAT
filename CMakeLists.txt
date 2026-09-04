@@ -1027,6 +1027,20 @@ if(DONTFLOAT_ARA_AVAILABLE AND TARGET dontfloat_ara)
         LABELS "unit;plugins;ara"
         DESCRIPTION "Two mini-DAW tracks in one ARA document: own audio, notes and reference"
     )
+
+    # Ноты соседней дорожки остаются референсом: серыми, а не правимыми
+    add_qt_test(plugin_reference_notes_test
+        tests/plugin_reference_notes_test.cpp
+        tools/mini_daw/mini_daw_ara_host.cpp
+        tools/mini_daw/mini_daw_ara_host.h
+    )
+    dontfloat_link_plugin_ui(plugin_reference_notes_test pitcher)
+    target_link_libraries(plugin_reference_notes_test PRIVATE ARA_Host_Library)
+    set_tests_properties(plugin_reference_notes_test PROPERTIES
+        LABELS "unit;plugins;ara;pitch"
+        DESCRIPTION "Neighbour track notes stay a grey reference, never the editable set"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
 endif()
 
 # Каретка в окне плагина одна на обе половины, а Play — дублёр кнопки DAW.
