@@ -269,6 +269,7 @@ QPushButton* DontfloatPluginEditorShell::makeToolButton(QWidget* parent, const Q
 
 void DontfloatPluginEditorShell::setAraBinding(const void* extension)
 {
+    araBinding_ = extension;
     if (content_) {
         content_->setAraBinding(extension);
     }
