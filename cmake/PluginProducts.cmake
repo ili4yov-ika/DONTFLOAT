@@ -443,10 +443,14 @@ function(dontfloat_add_vst3_product kind)
         else()
             set(_module_suffix ".so")
         endif()
+        # Собираем сразу внутрь бандла. Под macOS модуль называется ровно как
+        # приложение («DONTFLOAT», без расширения), и в общем каталоге сборки
+        # Ninja получал два правила на один и тот же файл
         set_target_properties(${_impl} PROPERTIES
             PREFIX ""
             OUTPUT_NAME "${_module_name}"
             SUFFIX "${_module_suffix}"
+            LIBRARY_OUTPUT_DIRECTORY "${_arch_dir}"
         )
     endif()
     target_link_libraries(${_impl} PRIVATE sdk)
@@ -519,14 +523,7 @@ function(dontfloat_add_vst3_product kind)
             message(STATUS \"Installed VST3 stub+impl: \${_dst_dir}\")
         " COMPONENT Runtime)
     else()
-        add_custom_command(TARGET ${_impl} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${_arch_dir}"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "$<TARGET_FILE:${_impl}>"
-                "${_arch_dir}/$<TARGET_FILE_NAME:${_impl}>"
-            COMMENT "Packaging ${_bundle_name} VST3 bundle"
-            VERBATIM
-        )
+        file(MAKE_DIRECTORY "${_arch_dir}")
         # Под macOS бандл без Info.plist хост не откроет вовсе
         if(APPLE)
             add_custom_command(TARGET ${_impl} POST_BUILD
