@@ -83,6 +83,13 @@ public:
      */
     void setMonoSamples(std::vector<float> samples) noexcept;
     const std::vector<float>& monoSamples() const noexcept { return monoSamples_; }
+    /**
+     * Готовы ли сэмплы для чтения из аудиопотока.
+     *
+     * Вектор наполняется один раз в главном потоке и дальше не меняется,
+     * но пока он наполняется, читать его нельзя — отсюда флаг.
+     */
+    bool samplesReady() const noexcept { return samplesReady_.load(std::memory_order_acquire); }
 
     /** Ход разбора 0..100 — для плашки прогресса в редакторе. */
     int analysisProgress() const noexcept { return analysisProgress_.load(); }
@@ -95,6 +102,7 @@ public:
 private:
     AraNoteSet noteSet_;
     std::vector<float> monoSamples_;
+    std::atomic<bool> samplesReady_ { false };
     std::atomic<int> analysisProgress_ { 0 };
     bool analysisRunning_ = false;
 };
@@ -106,6 +114,33 @@ private:
 class AraPlaybackRenderer : public ARA::PlugIn::PlaybackRenderer {
 public:
     using ARA::PlugIn::PlaybackRenderer::PlaybackRenderer;
+
+    /**
+     * Отдаёт звук назначенных клипов в выходной блок.
+     *
+     * В роли ARA-рендерера хост не подаёт исходный звук на вход и ждёт, что
+     * дорожку выдаст плагин. Пока этого не было, под ARA дорожка молчала:
+     * роль заявлена, а выход пустой.
+     *
+     * Вызывается из аудиопотока: ничего не выделяет и не блокирует.
+     *
+     * timelineStartFrame — начало блока на таймлайне проекта в кадрах,
+     * sampleRate — частота хоста. Возвращает true, если что-то отдал.
+     */
+    bool renderBlock(float* const* outputs, int channelCount, int frameCount,
+                     std::int64_t timelineStartFrame, double sampleRate) noexcept;
+
+    /** Сколько клипов назначил хост этому рендереру. */
+    std::size_t assignedRegionCount() const noexcept { return getPlaybackRegions().size(); }
+
+    /** Сколько кадров реально отдано в выход — для диагностики (см. Diagnostics). */
+    std::int64_t renderedFrames() const noexcept
+    {
+        return renderedFrames_.load(std::memory_order_relaxed);
+    }
+
+private:
+    std::atomic<std::int64_t> renderedFrames_ { 0 };
 };
 
 /** Роль редактора: выбор в хосте и связь с клипами дорожки. */

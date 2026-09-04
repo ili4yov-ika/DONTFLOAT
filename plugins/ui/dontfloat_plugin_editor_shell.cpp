@@ -1,5 +1,7 @@
 #include "dontfloat_plugin_editor_shell.h"
 
+#include "../core/dontfloat_diagnostics.h"
+
 #ifndef DONTFLOAT_PLUGIN_PRODUCT_INDEX
 #error "DONTFLOAT_PLUGIN_PRODUCT_INDEX must be defined for plugin UI targets"
 #endif
@@ -318,52 +320,47 @@ MetronomeController* DontfloatPluginEditorShell::ensureMetronome()
     return metronome_;
 }
 
+void DontfloatPluginEditorShell::setHostTransportPlaying(bool playing)
+{
+    if (hostPlaying_ == playing) {
+        return;
+    }
+    hostPlaying_ = playing;
+    if (Dontfloat::PluginCore::Diagnostics::enabled()) {
+        Dontfloat::PluginCore::Diagnostics::log(playing ? "host.transport playing=1"
+                                                        : "host.transport playing=0");
+    }
+    if (!playButton_) {
+        return;
+    }
+    // Кнопка повторяет транспорт хоста: играет — показываем паузу
+    playButton_->setIcon(SvgIcons::load(
+        playing ? QStringLiteral(":/icons/resources/icons/pause.svg")
+                : QStringLiteral(":/icons/resources/icons/play.svg"),
+        kToolIconSizePx, playButton_->devicePixelRatioF()));
+    playButton_->setToolTip(playing ? tr("Stop playback in the DAW")
+                                    : tr("Start playback in the DAW"));
+}
+
 void DontfloatPluginEditorShell::onPreviewPlayClicked()
 {
-    // Под ARA играет DAW, а не плагин: там кнопка управляет транспортом
-    // хоста. Если управление не отдано, слушаем кусок сами, как раньше
-    if (content_ && content_->requestHostTransport(true)) {
+    // Кнопка — дубликат кнопки воспроизведения в DAW, и ничего больше:
+    // играет — останавливаем, стоит — запускаем. Своего проигрывателя тут нет
+    // намеренно. Раньше при недоступном транспорте кнопка слушала кусок сама и
+    // в полной редакции выдавала звук референсного канала — не того, что видно
+    if (content_ && content_->requestHostTransport(!hostPlaying_)) {
         return;
     }
-    int sampleRate = 0;
-    QVector<float> mono = sessionMonoMix(&sampleRate);
-    if (mono.isEmpty() || sampleRate <= 0) {
-        showStatus(tr("No audio captured from the DAW yet."));
-        return;
-    }
-
-    // Включённый цикл A—B ограничивает прослушивание своим куском
-    qint64 loopStartMs = 0;
-    qint64 loopEndMs = 0;
-    if (content_ && content_->loopRegionMs(&loopStartMs, &loopEndMs)) {
-        const qint64 from = qBound<qint64>(0, (loopStartMs * sampleRate) / 1000, mono.size());
-        const qint64 to = qBound<qint64>(from, (loopEndMs * sampleRate) / 1000, mono.size());
-        if (to > from) {
-            mono = mono.mid(int(from), int(to - from));
-        }
-    }
-
-    ensurePreviewPlayer()->start(mono, sampleRate, 0.0f);
-    if (metronomeButton_ && metronomeButton_->isChecked()) {
-        ensureMetronome()->setPlaying(true);
-    }
-    showStatus(tr("Preview: playing the captured track."));
+    showStatus(tr("The DAW did not hand over transport control."));
 }
 
 void DontfloatPluginEditorShell::onPreviewStopClicked()
 {
-    // Останавливаем тем же путём, каким запускали (см. onPreviewPlayClicked)
+    // Останавливаем тем же путём, каким запускали
     if (content_ && content_->requestHostTransport(false)) {
         return;
     }
-    if (previewPlayer_) {
-        previewPlayer_->stop();
-    }
-    if (metronome_) {
-        metronome_->setPlaying(false);
-        metronome_->reset();
-    }
-    showStatus(tr("Preview stopped."));
+    showStatus(tr("The DAW did not hand over transport control."));
 }
 
 void DontfloatPluginEditorShell::onMetronomeToggled(bool enabled)

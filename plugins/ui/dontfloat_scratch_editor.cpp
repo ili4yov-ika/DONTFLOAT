@@ -183,7 +183,48 @@ DontfloatScratchEditor::DontfloatScratchEditor(QWidget* parent, const QString& p
         }
     });
 
+    // Масштаб и прокрутка общие с пианороллом: обе половины окна показывают
+    // одну дорожку, и разъехавшиеся таймлайны читать невозможно
+    connect(waveform_, &WaveformView::zoomChanged, this, [this](float zoom) {
+        if (!applyingTimelineView_) {
+            emit timelineZoomChanged(zoom);
+        }
+    });
+    connect(waveform_, &WaveformView::horizontalOffsetChanged, this, [this](float offset) {
+        if (!applyingTimelineView_) {
+            emit timelineOffsetChanged(offset);
+        }
+    });
+
     updateActionButtons();
+}
+
+void DontfloatScratchEditor::zoomTimelineAt(int angleDeltaY, float timelinePixelX)
+{
+    if (waveform_) {
+        // Зум ведёт волна, а пианоролл повторяет за ней через zoomChanged
+        waveform_->zoomAtPixelX(angleDeltaY, timelinePixelX);
+    }
+}
+
+void DontfloatScratchEditor::applyTimelineZoom(float zoom)
+{
+    if (!waveform_ || zoom <= 0.0f) {
+        return;
+    }
+    applyingTimelineView_ = true;
+    waveform_->setZoomLevel(zoom);
+    applyingTimelineView_ = false;
+}
+
+void DontfloatScratchEditor::applyTimelineOffset(float offset)
+{
+    if (!waveform_) {
+        return;
+    }
+    applyingTimelineView_ = true;
+    waveform_->setHorizontalOffset(offset);
+    applyingTimelineView_ = false;
 }
 
 void DontfloatScratchEditor::setProductName(const QString& productName)

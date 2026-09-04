@@ -2,6 +2,7 @@
 #define PITCHGRIDWIDGET_H
 
 #include <QtWidgets/QWidget>
+#include <QtCore/QSet>
 #include <QtCore/QVector>
 #include <QtGui/QKeySequence>
 #include <QtGui/QPainter>
@@ -225,7 +226,15 @@ private:
     QPoint lastMousePos;
     Theme theme;
     int selectedPitch;
+    /** Активная нота: её ведёт перетаскивание и с неё начинается группа. */
     int selectedNoteIndex;
+    /**
+     * Группа выделенных нот: правки высоты идут по всей группе сразу.
+     *
+     * Shift+ЛКМ добавляет ноту в группу, Ctrl+ЛКМ исключает — так же, как
+     * Shift работает с метками растяжения на волне.
+     */
+    QSet<int> selectedNotes;
     bool isNoteDragging;
     float noteDragStartPitch;
     bool noteDragFreePitch;

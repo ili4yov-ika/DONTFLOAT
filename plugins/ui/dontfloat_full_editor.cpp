@@ -47,6 +47,18 @@ DontfloatFullEditor::DontfloatFullEditor(QWidget* parent)
             this, &DontfloatFullEditor::seekRequested);
     connect(pitch_, &DontfloatPitchEditor::seekRequested,
             this, &DontfloatFullEditor::seekRequested);
+    // Общий вид таймлайна: волна ведёт масштаб, пианоролл повторяет за ней,
+    // прокрутка ходит в обе стороны. Без этого половины окна показывают
+    // одну дорожку в разных координатах
+    connect(scratch_, &DontfloatScratchEditor::timelineZoomChanged,
+            pitch_, &DontfloatPitchEditor::applyTimelineZoom);
+    connect(scratch_, &DontfloatScratchEditor::timelineOffsetChanged,
+            pitch_, &DontfloatPitchEditor::applyTimelineOffset);
+    connect(pitch_, &DontfloatPitchEditor::timelineOffsetChanged,
+            scratch_, &DontfloatScratchEditor::applyTimelineOffset);
+    connect(pitch_, &DontfloatPitchEditor::timelineZoomRequested,
+            scratch_, &DontfloatScratchEditor::zoomTimelineAt);
+
     connect(scratch_, &DontfloatScratchEditor::renderedOutputChanged,
             this, &DontfloatFullEditor::renderedOutputChanged);
     connect(pitch_, &DontfloatPitchEditor::renderedOutputChanged,
@@ -81,6 +93,11 @@ void DontfloatFullEditor::setHostPlayhead(qint64 samplePosition)
     if (pitch_) {
         pitch_->setHostPlayhead(samplePosition);
     }
+}
+
+bool DontfloatFullEditor::requestHostTransport(bool start)
+{
+    return scratch_ ? scratch_->requestHostTransport(start) : false;
 }
 
 void DontfloatFullEditor::setAraBinding(const void* extension)

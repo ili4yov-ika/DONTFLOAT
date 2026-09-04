@@ -83,8 +83,10 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(DONTFLOAT_BUILD_PLUGINS "Build DAW plugin targets" ON)
-option(DONTFLOAT_BUILD_CLAP "Build CLAP plugin target when plugins are enabled" ON)
-option(DONTFLOAT_BUILD_LV2 "Build LV2 plugin target when plugins are enabled" ON)
+# CLAP и LV2 выключены: развитие идёт на VST3 с ARA, а держать три формата в
+# рабочем состоянии дороже, чем они дают. Включаются флагом при сборке.
+option(DONTFLOAT_BUILD_CLAP "Build CLAP plugin target when plugins are enabled" OFF)
+option(DONTFLOAT_BUILD_LV2 "Build LV2 plugin target when plugins are enabled" OFF)
 option(DONTFLOAT_BUILD_VST3 "Build VST3 plugin target when SDK is available" ON)
 option(DONTFLOAT_BUILD_PLUGIN_TESTER "Build plugin host probe GUI tool" ON)
 option(DONTFLOAT_BUILD_MINI_DAW "Build minimal in-process plugin hosts (mini-DAW) per format/product" ON)
