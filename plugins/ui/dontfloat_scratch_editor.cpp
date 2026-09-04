@@ -1,9 +1,11 @@
 #include "dontfloat_scratch_editor.h"
 
 #include "../../include/audiofileservice.h"
+// Дневник пишется и без ARA (см. refreshWaveform), поэтому заголовок нужен
+// всегда; за #if прячется только слой ARA
+#include "../core/dontfloat_diagnostics.h"
 #if defined(DONTFLOAT_WITH_ARA)
 #include "../ara/dontfloat_ara_document_controller.h"
-#include "../core/dontfloat_diagnostics.h"
 #endif
 #include "../../include/markerengine.h"
 #include "../../include/timeutils.h"

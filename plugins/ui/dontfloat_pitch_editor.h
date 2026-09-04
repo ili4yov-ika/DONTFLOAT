@@ -65,13 +65,16 @@ public:
 #if defined(DONTFLOAT_WITH_ARA)
     /** Экземпляр привязан к документу ARA — работаем с моделью, а не с захватом. */
     void setAraBinding(const void* extension) override;
+#endif
+    // Общий вид таймлайна с волной к ARA отношения не имеет: половины окна
+    // держат один масштаб и в сборке без SDK. Пока объявления прятались под
+    // #if, такая сборка не собиралась вовсе
     /** Ставит масштаб таймлайна, не рассылая сигнал обратно. */
     void applyTimelineZoom(float zoom);
     /** Ставит прокрутку таймлайна, не рассылая сигнал обратно. */
     void applyTimelineOffset(float offset);
     /** Длина таймлайна в сэмплах — чтобы сетка пианоролла совпала с волной. */
     void applyTimelineSampleCount(qint64 samples);
-#endif
 
 signals:
     void pitchSessionChanged();
